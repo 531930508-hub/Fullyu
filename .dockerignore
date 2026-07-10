@@ -1,0 +1,28 @@
+# 依赖与构建产物（镜像内重新安装/编译）
+**/node_modules
+**/dist
+**/.turbo
+
+# 环境与密钥（严禁进入镜像上下文）
+**/.env
+**/.env.*
+!**/.env.example
+
+# 版本控制与 IDE
+.git
+.gitignore
+.vscode
+.idea
+
+# 前端应用源码（server 镜像仅需其 package.json 参与 workspace 解析）
+apps/admin/*
+!apps/admin/package.json
+apps/miniprogram/*
+!apps/miniprogram/package.json
+
+# 杂项
+**/*.log
+**/.DS_Store
+**/coverage
+**/*.local
+docker-compose.yml

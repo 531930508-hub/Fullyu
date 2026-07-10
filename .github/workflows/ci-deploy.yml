@@ -1,0 +1,79 @@
+# Full愈 CI/CD（可选）
+# 触发：push 到 main 或手动。先做类型检查与构建校验，通过后 SSH 到 ECS 执行部署。
+#
+# 需在仓库 Settings → Secrets 配置：
+#   ECS_HOST / ECS_USER / ECS_SSH_KEY   （部署目标与私钥）
+#   DEPLOY_PATH                          （ECS 上仓库路径，如 /opt/fullyu）
+# ECS 前置：已安装 docker + docker compose，已 git clone 本仓库，
+#           已在 apps/server/.env.local 配置好生产环境变量（指向阿里云 RDS/Redis）。
+#
+# 备选：阿里云用户可用「云效流水线」等价编排（安装依赖→构建→构建镜像→部署 ECS）。
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cicd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-check:
+    name: 类型检查与构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared (CJS)
+        run: pnpm --filter @fullyu/shared build
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @fullyu/server db:generate
+
+      - name: Build server
+        run: pnpm --filter @fullyu/server build
+
+      - name: Build admin
+        run: pnpm --filter @fullyu/admin build
+
+      - name: Type-check miniprogram
+        run: pnpm --filter @fullyu/miniprogram exec vue-tsc --noEmit -p tsconfig.json
+
+  deploy:
+    name: 部署到 ECS
+    needs: build-check
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ECS_HOST }}
+          username: ${{ secrets.ECS_USER }}
+          key: ${{ secrets.ECS_SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_PATH }}
+            git pull --ff-only
+            # 应用数据库迁移（生产使用 migrate deploy，绝不使用 dev migrate）
+            docker compose --profile migrate run --rm migrate
+            # 重新构建并滚动更新后端
+            docker compose up -d --build server
+            docker image prune -f

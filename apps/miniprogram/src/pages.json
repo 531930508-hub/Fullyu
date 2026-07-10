@@ -1,0 +1,68 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/course-detail/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/my-courses/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/member/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/assets/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/profile/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-home/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-workspace/index",
+      "style": { "navigationStyle": "custom" }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "Full愈",
+    "navigationBarBackgroundColor": "#F5E8D8",
+    "backgroundColor": "#F5E8D8",
+    "backgroundColorTop": "#F5E8D8",
+    "backgroundColorBottom": "#F5E8D8"
+  },
+  "tabBar": {
+    "color": "#A08A72",
+    "selectedColor": "#6B463C",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/my-courses/index",
+        "text": "课程"
+      },
+      {
+        "pagePath": "pages/member/index",
+        "text": "会员"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的"
+      }
+    ]
+  }
+}

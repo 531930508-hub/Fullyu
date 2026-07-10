@@ -1,0 +1,62 @@
+/** 课程相关 API */
+import { get } from '@/utils/request'
+
+export interface CourseListItem {
+  id: string
+  title: string
+  coverImage: string
+  type: string
+  categories: string[]
+  startDate: string
+  startTime: string
+  endTime: string
+  originalPrice: number
+  maxCapacity: number
+  currentEnrolled: number
+  trainer?: { displayName: string; avatar?: string; level?: number }
+  venue?: { name: string; address?: string }
+}
+
+export interface CourseListResult {
+  items: CourseListItem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface CourseDetail extends CourseListItem {
+  gallery?: string[]
+  description?: string
+  targetAudience?: string[]
+  learningGoals?: string
+  endDate?: string
+  minCapacity?: number
+  waitlistEnabled?: boolean
+  waitlistDeadlineHours?: number
+  memberWaitlistSeats?: number
+  allowDeduction?: boolean
+  priceTiers?: { seatFrom: number; seatTo: number; price: number }[]
+  refundRules?: { hoursFrom: number; hoursTo: number | null; refundPercent: number }[]
+  trainer?: any
+  venue?: any
+}
+
+export interface CourseListQuery {
+  page?: number
+  pageSize?: number
+  time?: 'today' | 'week' | 'month'
+  category?: string
+  sortPrice?: 'asc' | 'desc'
+  memberOnly?: boolean
+}
+
+/** 课程列表（公开） */
+export function listCourses(query: CourseListQuery = {}) {
+  return get<CourseListResult>('/courses', query, { auth: false })
+}
+
+/** 课程详情（公开） */
+export function getCourseDetail(id: string) {
+  return get<CourseDetail>(`/courses/${id}`, undefined, { auth: false })
+}

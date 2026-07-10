@@ -1,0 +1,281 @@
+import { Injectable, Logger } from '@nestjs/common'
+import { PrismaService } from '../../common/prisma.service'
+import { RedisService } from '../../common/redis.service'
+import { PricingService } from '../pricing/pricing.service'
+import { NotificationService } from '../../common/notification/notification.service'
+import { BusinessException } from '../../common/exceptions/business.exception'
+import { SEAT_LOCK_DURATION_MINUTES } from '@fullyu/shared'
+import { WaitlistSeatType } from '@prisma/client'
+
+/**
+ * 候补双队列服务（预付模式）：
+ * - 会员候补席（memberWaitlistSeats，默认 3）优先，普通席不限量
+ * - 退课/扩容触发递补：会员整体优先，按 position 递补转正
+ * - 全流程使用与报名相同的课程锁，避免与正常报名争抢座位
+ */
+@Injectable()
+export class WaitlistService {
+  private readonly logger = new Logger('WaitlistService')
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+    private readonly pricing: PricingService,
+    private readonly notification: NotificationService,
+  ) {}
+
+  /**
+   * 候补询价：返回将进入的队列类型、位置、锁定价格
+   */
+  async quote(courseId: string, userId: string) {
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId },
+      include: { priceTiers: true },
+    })
+    if (!course) throw new BusinessException('课程不存在', 4004)
+    if (!course.waitlistEnabled) throw new BusinessException('该课程未开启候补', 4020)
+
+    const seatType = await this.decideSeatType(courseId, userId, course.memberWaitlistSeats)
+    const position = await this.nextPosition(this.prisma, courseId, seatType)
+    const { basePrice, priceAfterDiscount, discountAmount, cardType } =
+      await this.computeLockedPrice(course, userId)
+
+    const memberSeatsLeft = await this.memberSeatsLeft(courseId, course.memberWaitlistSeats)
+
+    return {
+      courseId,
+      seatType,
+      position,
+      basePrice,
+      discountAmount,
+      lockedPrice: priceAfterDiscount,
+      memberCardType: cardType,
+      memberSeatsLeft,
+    }
+  }
+
+  /**
+   * 加入候补：锁定队列位置 + 锁价 + 生成待支付候补订单
+   */
+  async join(courseId: string, userId: string) {
+    return this.redis.withLock(`enroll:${courseId}`, async () => {
+      return this.prisma.$transaction(async (tx) => {
+        const course = await tx.course.findUnique({
+          where: { id: courseId },
+          include: { priceTiers: true },
+        })
+        if (!course) throw new BusinessException('课程不存在', 4004)
+        if (!course.waitlistEnabled) throw new BusinessException('该课程未开启候补', 4020)
+
+        // 未满不允许候补
+        if (course.currentEnrolled < course.maxCapacity) {
+          throw new BusinessException('课程仍有名额，请直接报名', 4021)
+        }
+
+        // 防重复候补
+        const dup = await tx.waitlistEntry.findFirst({
+          where: {
+            courseId,
+            userId,
+            status: { in: ['PENDING_PAYMENT', 'WAITING', 'CONVERTED'] },
+          },
+        })
+        if (dup) throw new BusinessException('您已在候补队列中', 4022)
+
+        const seatType = await this.decideSeatType(courseId, userId, course.memberWaitlistSeats, tx)
+        const position = await this.nextPosition(tx, courseId, seatType)
+        const { basePrice, priceAfterDiscount, discountAmount, cardType } =
+          await this.computeLockedPrice(course, userId)
+
+        // 预付订单
+        const order = await tx.order.create({
+          data: {
+            userId,
+            courseId,
+            orderType: 'WAITLIST',
+            originalPrice: basePrice,
+            discountAmount,
+            actualPaid: priceAfterDiscount,
+            status: 'PENDING_PAYMENT',
+            cardType: cardType ?? undefined,
+          },
+        })
+
+        // 候补条目
+        await tx.waitlistEntry.create({
+          data: {
+            courseId,
+            userId,
+            seatType,
+            position,
+            orderId: order.id,
+            lockedPrice: priceAfterDiscount,
+            status: 'PENDING_PAYMENT',
+          },
+        })
+
+        return {
+          orderId: order.id,
+          seatType,
+          position,
+          lockedPrice: priceAfterDiscount,
+          expireInSeconds: SEAT_LOCK_DURATION_MINUTES * 60,
+        }
+      })
+    })
+  }
+
+  /**
+   * 递补：课程释放名额（退课/扩容）后调用。
+   * 会员队列整体优先，按 position 升序转正为正式报名。
+   */
+  async promote(courseId: string): Promise<number> {
+    const promotedUsers: { userId: string; orderId: string | null }[] = []
+    const result = await this.redis.withLock(`enroll:${courseId}`, async () => {
+      return this.prisma.$transaction(async (tx) => {
+        const course = await tx.course.findUnique({ where: { id: courseId } })
+        if (!course) return 0
+
+        let free = course.maxCapacity - course.currentEnrolled
+        if (free <= 0) return 0
+
+        const waiting = await tx.waitlistEntry.findMany({
+          where: { courseId, status: 'WAITING' },
+        })
+        // 会员席优先，其次普通席；各自按 position 升序
+        waiting.sort((a, b) => {
+          if (a.seatType !== b.seatType) {
+            return a.seatType === WaitlistSeatType.MEMBER ? -1 : 1
+          }
+          return a.position - b.position
+        })
+
+        let promoted = 0
+        for (const entry of waiting) {
+          if (free <= 0) break
+          await tx.waitlistEntry.update({
+            where: { id: entry.id },
+            data: { status: 'CONVERTED', convertedAt: new Date() },
+          })
+          // 预付订单已支付，转正即视为正式报名
+          if (entry.orderId) {
+            await tx.order.update({
+              where: { id: entry.orderId },
+              data: { status: 'COMPLETED' },
+            })
+          }
+          promotedUsers.push({ userId: entry.userId, orderId: entry.orderId })
+          free--
+          promoted++
+        }
+
+        if (promoted > 0) {
+          await tx.course.update({
+            where: { id: courseId },
+            data: { currentEnrolled: { increment: promoted } },
+          })
+        }
+        return promoted
+      })
+    })
+
+    // 事务外下发递补成功通知（不阻断主流程）
+    if (promotedUsers.length > 0) {
+      const course = await this.prisma.course.findUnique({
+        where: { id: courseId },
+        select: { title: true, startDate: true },
+      })
+      const deadline = course?.startDate
+        ? new Date(course.startDate).toISOString().slice(0, 10)
+        : '请尽快确认'
+      for (const u of promotedUsers) {
+        await this.notification.waitlistPromoted(u.userId, {
+          courseName: course?.title ?? '课程',
+          orderId: u.orderId ?? '',
+          deadline,
+        })
+      }
+    }
+    return result
+  }
+
+  /**
+   * 我的候补条目
+   */
+  async findByUser(userId: string) {
+    return this.prisma.waitlistEntry.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        course: { select: { title: true, coverImage: true, startDate: true, startTime: true } },
+      },
+    })
+  }
+
+  // ============ 内部辅助 ============
+
+  /** 判定进入会员席还是普通席 */
+  private async decideSeatType(
+    courseId: string,
+    userId: string,
+    memberSeats: number,
+    client: any = this.prisma,
+  ): Promise<WaitlistSeatType> {
+    const now = new Date()
+    const card = await client.memberCard.findFirst({
+      where: { userId, status: 'ACTIVE', endDate: { gt: now } },
+    })
+    if (!card) return WaitlistSeatType.NORMAL
+
+    const memberCount = await client.waitlistEntry.count({
+      where: {
+        courseId,
+        seatType: WaitlistSeatType.MEMBER,
+        status: { in: ['PENDING_PAYMENT', 'WAITING'] },
+      },
+    })
+    return memberCount < memberSeats ? WaitlistSeatType.MEMBER : WaitlistSeatType.NORMAL
+  }
+
+  /** 队列下一个位置（同队列非终态计数 + 1） */
+  private async nextPosition(
+    client: any,
+    courseId: string,
+    seatType: WaitlistSeatType,
+  ): Promise<number> {
+    const count = await client.waitlistEntry.count({
+      where: { courseId, seatType, status: { in: ['PENDING_PAYMENT', 'WAITING'] } },
+    })
+    return count + 1
+  }
+
+  /** 剩余会员候补席位 */
+  private async memberSeatsLeft(courseId: string, memberSeats: number): Promise<number> {
+    const memberCount = await this.prisma.waitlistEntry.count({
+      where: {
+        courseId,
+        seatType: WaitlistSeatType.MEMBER,
+        status: { in: ['PENDING_PAYMENT', 'WAITING'] },
+      },
+    })
+    return Math.max(0, memberSeats - memberCount)
+  }
+
+  /** 计算锁定价格（阶梯价 + 会员折扣） */
+  private async computeLockedPrice(course: any, userId: string) {
+    // 候补锁价按满员后下一顺位取阶梯价，无匹配区间回退原价
+    const basePrice = this.pricing.getTierPrice(
+      course.priceTiers ?? [],
+      course.maxCapacity + 1,
+      course.originalPrice,
+    )
+    const member = await this.pricing.getMemberDiscount(userId, course.id, basePrice)
+    const priceAfterDiscount = Math.max(0, basePrice - member.discountAmount)
+    return {
+      basePrice,
+      priceAfterDiscount,
+      discountAmount: member.discountAmount,
+      cardType: member.cardType,
+    }
+  }
+}

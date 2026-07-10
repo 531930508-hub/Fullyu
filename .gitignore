@@ -1,0 +1,43 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+dist-ssr/
+.output/
+.nuxt/
+build/
+
+# 环境变量（保留示例模板）
+.env
+.env.*
+!.env.example
+*.local
+
+# 系统 / 编辑器
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# 商业敏感材料（不提交，避免公开）
+*.pptx
+*.pdf
+*.zip
+dist-share/
+
+# IDE / AI 工具生成目录（非项目源码）
+# 注意：.github/ 保留用于 GitHub Actions，不在忽略之列
+.qoder/
+.agents/
+skills/
+skills-lock.json
+node_modules
+dist
+.output
+.nuxt
+.DS_Store
+*.local
+.env
+.env.*
+!.env.example
