@@ -279,6 +279,41 @@ model CourseMemberDiscount {
   @@map("course_member_discounts")
 }
 
+// ========== 会员卡分时段折扣 ==========
+
+enum TimeDiscountActionType {
+  PERCENT // 百分比折扣率
+  FIXED_BY_DURATION // 按服务时长取固定价
+}
+
+enum TimeDiscountRuleStatus {
+  ENABLED
+  DISABLED
+}
+
+// 会员卡时段折扣规则（门店/卡类型多选，空=全部；手动优先级 + 门店特异性匹配）
+model MemberTimeDiscountRule {
+  id              String                 @id @default(cuid())
+  name            String // 规则名（后台识别用，如"周末峰值"）
+  orgIds          Json                   @default("[]") @map("org_ids") // string[]；空=全部门店（兜底）
+  cardTypes       Json                   @default("[]") @map("card_types") // MemberCardType[]；空=全部卡类型
+  priority        Int                    @default(0) // 越小越优先（同特异性分组内），后台调序
+  weekdays        Json                   @default("[]") // number[] [1-7]（1=周一…7=周日）；空=不限
+  timeRanges      Json                   @default("[]") @map("time_ranges") // [{start:"HH:mm",end:"HH:mm"}] 含头不含尾；空=全天
+  validFrom       DateTime?              @map("valid_from") // 生效起始日（含）；空=不限
+  validTo         DateTime?              @map("valid_to") // 生效截止日（含）；空=长期
+  actionType      TimeDiscountActionType @map("action_type")
+  discountPercent Int?                   @map("discount_percent") // PERCENT 必填：50–200（100=原价，>100 加价）
+  fixedPrices     Json?                  @map("fixed_prices") // FIXED_BY_DURATION 必填：[{minutes:Int, price:Number(元)}]
+  status          TimeDiscountRuleStatus @default(ENABLED)
+  remark          String?
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+
+  @@index([status, priority])
+  @@map("member_time_discount_rules")
+}
+
 // 候补队列（预付模式 + 双队列：会员席位 + 普通席位）
 model WaitlistEntry {
   id          String           @id @default(cuid())
@@ -456,6 +491,7 @@ model Order {
   refundAmount        Decimal?        @map("refund_amount")
   refundTime          DateTime?       @map("refund_time")
   voucherId           String?         @map("voucher_id")
+  hitTimeRuleId       String?         @map("hit_time_rule_id") // 命中的时段折扣规则（对账/排查用）
   createdAt           DateTime        @default(now()) @map("created_at")
   updatedAt           DateTime        @updatedAt @map("updated_at")
 

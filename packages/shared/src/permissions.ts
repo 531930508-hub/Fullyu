@@ -93,6 +93,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { code: 'membercard:view', name: '会员卡查看', module: 'sales', level: 'MENU', group: '会员卡' },
   { code: 'membercard:create', name: '会员卡商品创建', module: 'sales', level: 'ACTION', group: '会员卡' },
   { code: 'membercard:update', name: '会员卡管理', module: 'sales', level: 'ACTION', group: '会员卡' },
+  { code: 'membercard:timediscount', name: '时段折扣管理', module: 'sales', level: 'ACTION', group: '会员卡' },
   { code: 'order:view', name: '订单查看', module: 'sales', level: 'MENU', group: '订单与用户' },
   { code: 'order:update', name: '订单管理', module: 'sales', level: 'ACTION', group: '订单与用户' },
   { code: 'order:refund', name: '订单强制退款', module: 'sales', level: 'ACTION', group: '订单与用户' },
