@@ -1,6 +1,7 @@
 <template>
   <view class="page">
     <!-- 顶部导航栏 -->
+    <view class="status-bar-placeholder" :style="{ height: statusBarHeight + 'px' }"></view>
     <view class="nav-bar">
       <view class="nav-left" @tap="switchLang">
         <text class="lang-btn">{{ language === 'zh' ? '中' : 'En' }}</text>
@@ -9,24 +10,84 @@
         <image class="nav-logo" src="/static/logo.png" mode="heightFix" />
       </view>
       <view class="nav-right">
-        <view class="nav-icon" @tap="goMessages">
-          <text class="icon-bell">🔔</text>
-          <view v-if="hasUnread" class="badge"></view>
+        <!-- 双视角切换：仅导师身份可见 -->
+        <view v-if="isTrainer" class="view-switch">
+          <view class="view-opt" :class="{ active: activeView === 'student' }" @tap="setView('student')">
+            <text>选课</text>
+          </view>
+          <view class="view-opt" :class="{ active: activeView === 'trainer' }" @tap="setView('trainer')">
+            <text>导师</text>
+          </view>
         </view>
       </view>
     </view>
 
+    <!-- 导师视角：经营我的社群（Skool 式落地页） -->
+    <template v-if="activeView === 'trainer'">
+      <view class="trainer-hero">
+        <text class="trainer-hero-title serif">你好，{{ userStore.userInfo?.nickname || '导师' }}</text>
+        <text class="trainer-hero-sub">在这里经营你的社群：发动态、上架课程、创建活动</text>
+      </view>
+      <view class="section-head">
+        <text class="section-title">我管理的社群</text>
+        <text class="section-more" @tap="goCommunityList">去广场 ›</text>
+      </view>
+      <view class="trainer-comm-list">
+        <view v-for="c in managedCommunities" :key="c.id" class="trainer-comm-card" @tap="goCommunityWorkspace(c.id)">
+          <view class="trainer-comm-cover" :style="{ background: c.coverFallback }">
+            <image class="trainer-comm-img" :src="c.cover" mode="aspectFill" />
+          </view>
+          <view class="trainer-comm-info">
+            <text class="trainer-comm-name">{{ c.name }}</text>
+            <text class="trainer-comm-meta">{{ c.memberCount }} 成员 · 今日活跃 {{ c.activeToday }}</text>
+          </view>
+          <view class="trainer-comm-go"><text>管理 ›</text></view>
+        </view>
+        <view v-if="!managedCommunities.length" class="trainer-empty">
+          <text>你还没有社群，创建后就可以在这里经营你的学员了</text>
+        </view>
+      </view>
+      <view class="trainer-actions">
+        <view class="trainer-btn primary" @tap="goCommunityCreate"><text>＋ 创建社群</text></view>
+        <view class="trainer-btn" @tap="goCommunityMine"><text>我的社群</text></view>
+      </view>
+    </template>
+
+    <!-- 学员视角：课程 + 社群入口 -->
+    <template v-else>
     <!-- Banner 区域 -->
     <view class="banner-section">
       <swiper class="banner" autoplay circular :interval="4000">
         <swiper-item v-for="item in banners" :key="item.id">
-          <view class="banner-card" :style="{ background: item.bg }">
-            <text class="banner-title">{{ item.title }}</text>
-            <text class="banner-desc">{{ item.desc }}</text>
+          <view
+            class="banner-card"
+            :style="item.imageUrl ? { backgroundImage: `url(${item.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { background: item.bg }"
+            @tap="onBannerTap(item)"
+          >
+            <text class="banner-title serif">{{ item.title }}</text>
+            <text class="banner-desc">{{ item.subtitle }}</text>
           </view>
         </swiper-item>
       </swiper>
     </view>
+
+    <!-- 社群推荐：课程视角的第二入口 -->
+    <view class="section-head">
+      <text class="section-title">导师社群</text>
+      <text class="section-more" @tap="goCommunityList">全部 ›</text>
+    </view>
+    <scroll-view scroll-x class="community-scroll" :show-scrollbar="false">
+      <view v-for="c in hotCommunities" :key="c.id" class="community-mini" @tap="goCommunityDetail(c.id)">
+        <view class="community-mini-cover" :style="{ background: c.coverFallback }">
+          <image class="community-mini-img" :src="c.cover" mode="aspectFill" />
+        </view>
+        <view class="community-mini-body">
+          <text class="community-mini-name">{{ c.name }}</text>
+          <text class="community-mini-owner">{{ c.owner.name }} · {{ c.category }}</text>
+          <text class="community-mini-meta">{{ c.memberCount }} 成员{{ c.yearlyFee === 0 ? ' · 免费' : '' }}</text>
+        </view>
+      </view>
+    </scroll-view>
 
     <!-- 筛选栏 -->
     <view class="filter-bar">
@@ -37,7 +98,7 @@
         :class="{ active: currentTimeFilter === filter.value }"
         @tap="setTimeFilter(filter.value)"
       >
-        <text>{{ language === 'zh' ? filter.labelZh : filter.labelEn }}</text>
+        <text>{{ t(filter.labelKey) }}</text>
       </view>
     </view>
 
@@ -61,54 +122,142 @@
         <view class="card-body">
           <view class="card-row-top">
             <text class="card-title">{{ course.title }}</text>
-            <text class="card-price">¥{{ course.originalPrice }}</text>
+            <text class="card-price latin">¥{{ toYuan(course.originalPrice) }}</text>
           </view>
           <view class="card-tags">
-            <text class="card-type-tag" :style="{ background: getCoverColor(course.type) }">{{ course.type }}</text>
-            <text class="card-difficulty">{{ course.difficulty }}</text>
+            <text class="card-type-tag">{{ typeLabel(course.type) }}</text>
+            <text class="card-difficulty">{{ difficultyLabel(course.difficulty) }}</text>
           </view>
-          <text class="card-meta">📅 {{ formatDate(course.startDate) }} {{ course.startTime }} · {{ course.venue.name }}</text>
+          <text class="card-meta">{{ formatDate(course.startDate) }} {{ course.startTime }} · {{ course.venue.name }}</text>
           <view class="card-row-bottom">
             <view class="card-trainer">
-              <view class="card-trainer-dot">{{ course.trainer.displayName.charAt(0) }}</view>
+              <image v-if="course.trainer.avatar" class="card-trainer-img" :src="course.trainer.avatar" mode="aspectFill" />
+              <view v-else class="card-trainer-dot">{{ course.trainer.displayName.charAt(0) }}</view>
               <text class="card-trainer-name">{{ course.trainer.displayName }}</text>
             </view>
             <view class="card-seats" :class="{ full: course.currentEnrolled >= course.maxCapacity }">
-              <text>{{ course.currentEnrolled >= course.maxCapacity ? '已满' : `余${course.maxCapacity - course.currentEnrolled}位` }}</text>
+              <text>{{ course.currentEnrolled >= course.maxCapacity ? '满员' : `余${course.maxCapacity - course.currentEnrolled}位` }}</text>
             </view>
           </view>
         </view>
       </view>
 
       <view v-if="filteredCourses.length === 0" class="empty">
-        <text>{{ language === 'zh' ? '暂无课程' : 'No courses available' }}</text>
+        <text>{{ t('home.noCourses') }}</text>
       </view>
     </view>
+    </template>
+
+    <!-- 悬浮 TabBar 预留空间 -->
+    <view class="tabbar-space"></view>
+    <floating-tab-bar active="home" />
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import { storeToRefs } from 'pinia'
 import { useUserStore } from '../../stores/user'
 import { listCourses } from '@/api/course'
+import { listBanners, type BannerItem } from '@/api/banner'
+import { fetchCommunities, fetchMine, type Community } from '@/api/skool'
+import { t, updateTabBarLanguage } from '@/locale'
+import FloatingTabBar from '@/components/FloatingTabBar.vue'
 
 const userStore = useUserStore()
+const { isTrainer, activeView } = storeToRefs(userStore)
+
+function setView(mode: 'student' | 'trainer') {
+  userStore.setViewMode(mode)
+}
+
+// 社群
+const hotCommunities = ref<Community[]>([])
+const managedCommunities = ref<Community[]>([])
+async function loadCommunities() {
+  try {
+    const res = await fetchCommunities()
+    hotCommunities.value = (Array.isArray(res) ? res : []).slice(0, 4)
+  } catch (e) { /* 静默 */ }
+  if (uni.getStorageSync('token')) {
+    try {
+      const mine = await fetchMine()
+      managedCommunities.value = mine?.managed || []
+    } catch (e) {
+      managedCommunities.value = []
+    }
+  } else {
+    managedCommunities.value = []
+  }
+}
+function goCommunityList() {
+  uni.navigateTo({ url: '/pages/community-list/index' })
+}
+function goCommunityDetail(id: string) {
+  uni.navigateTo({ url: `/pages/community-detail/index?id=${id}` })
+}
+function goCommunityWorkspace(id: string) {
+  uni.navigateTo({ url: `/pages/community-workspace/index?id=${id}` })
+}
+function goCommunityCreate() {
+  uni.navigateTo({ url: '/pages/community-create/index' })
+}
+function goCommunityMine() {
+  uni.navigateTo({ url: '/pages/community-mine/index' })
+}
+
+// 分→元转换
+function toYuan(fen: number) {
+  return (fen / 100).toFixed(fen % 100 === 0 ? 0 : 2)
+}
+
+// 课程类型/难度枚举→中文
+function typeLabel(v: string) {
+  const map: Record<string, string> = { SINGLE: '单次课程', SERIES: '系列课程' }
+  return map[v] || v
+}
+function difficultyLabel(v: string) {
+  const map: Record<string, string> = { BEGINNER: '入门', INTERMEDIATE: '进阶', ADVANCED: '高级' }
+  return map[v] || v
+}
 const language = ref(userStore.language)
-const hasUnread = ref(true)
+const statusBarHeight = ref(44)
+try {
+  const sysInfo = uni.getSystemInfoSync()
+  statusBarHeight.value = sysInfo.statusBarHeight || 44
+} catch (e) { /* fallback */ }
 const currentTimeFilter = ref<'' | 'today' | 'week' | 'month'>('')
 
-const banners = ref([
-  { id: '1', title: '夏日疗愈季', desc: '正念 · 声疗 · 舞动 三大主题课程上新', bg: 'linear-gradient(135deg, #6B463C, #A07060)' },
-  { id: '2', title: '新人专享', desc: '首次体验课仅 ¥79 起', bg: 'linear-gradient(135deg, #4A6741, #7BAF72)' },
-  { id: '3', title: '会员权益升级', desc: '年卡尊享每节立减¥50', bg: 'linear-gradient(135deg, #5C4B8A, #9B7FCF)' },
-])
+// 默认运营位：暖棕统一，禁用蓝紫渐变
+const DEFAULT_BANNERS: BannerItem[] = [
+  { id: '1', title: '秋日疗愈季', subtitle: '正念 · 声疗 · 舞动 三大主题课程上新', bg: 'linear-gradient(135deg, #584219, #6D5934)' },
+  { id: '2', title: '新人专享', subtitle: '首次体验课仅 ¥79 起', bg: 'linear-gradient(135deg, #3F2F10, #584219)' },
+  { id: '3', title: '会员权益升级', subtitle: '年卡尊享每节立减¥50', bg: 'linear-gradient(135deg, #6D5934, #C9A35C)' },
+]
+
+const banners = ref<BannerItem[]>(DEFAULT_BANNERS)
+
+async function loadBanners() {
+  try {
+    const rows = await listBanners()
+    if (rows && rows.length) banners.value = rows
+  } catch (e) {
+    // 加载失败时保留默认运营位
+  }
+}
+
+function onBannerTap(item: BannerItem) {
+  if (item.linkType === 'course' && item.linkValue) {
+    uni.navigateTo({ url: `/pages/course-detail/index?id=${item.linkValue}` })
+  }
+}
 
 const timeFilters = [
-  { value: '', labelZh: '全部', labelEn: 'All' },
-  { value: 'today', labelZh: '今日', labelEn: 'Today' },
-  { value: 'week', labelZh: '本周', labelEn: 'Week' },
-  { value: 'month', labelZh: '本月', labelEn: 'Month' },
+  { value: '', labelKey: 'home.all' },
+  { value: 'today', labelKey: 'home.today' },
+  { value: 'week', labelKey: 'home.week' },
+  { value: 'month', labelKey: 'home.month' },
 ]
 
 const courses = ref<any[]>([])
@@ -129,16 +278,18 @@ async function loadCourses() {
 
 onShow(() => {
   language.value = userStore.language
+  updateTabBarLanguage()
   loadCourses()
+  loadBanners()
+  loadCommunities()
 })
 
 function getCoverColor(type: string) {
   const map: Record<string, string> = {
-    '团课': 'linear-gradient(135deg, #6B463C, #8B6354)',
-    '工作坊': 'linear-gradient(135deg, #4A6741, #6B8F62)',
-    '体验课': 'linear-gradient(135deg, #5C4B8A, #8B73B8)',
+    SINGLE: '#6D5934',
+    SERIES: '#584219',
   }
-  return map[type] || 'linear-gradient(135deg, #6B463C, #8B6354)'
+  return map[type] || '#584219'
 }
 
 function setTimeFilter(value: string) {
@@ -149,14 +300,11 @@ function setTimeFilter(value: string) {
 function switchLang() {
   userStore.switchLanguage()
   language.value = userStore.language
+  updateTabBarLanguage()
 }
 
 function goDetail(id: string) {
   uni.navigateTo({ url: `/pages/course-detail/index?id=${id}` })
-}
-
-function goMessages() {
-  uni.showToast({ title: '暂无新消息', icon: 'none' })
 }
 
 function previewImage(url: string) {
@@ -173,8 +321,11 @@ function formatDate(date: string) {
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #F5E8D8;
-  padding-bottom: 120rpx;
+  background: #EAE0D7;
+}
+
+.status-bar-placeholder {
+  background: #EAE0D7;
 }
 
 .nav-bar {
@@ -183,7 +334,7 @@ function formatDate(date: string) {
   justify-content: space-between;
   padding: 0 32rpx;
   height: 88rpx;
-  background: #F5E8D8;
+  background: #EAE0D7;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -196,101 +347,99 @@ function formatDate(date: string) {
 
 .lang-btn {
   font-size: 24rpx;
-  color: #6B463C;
-  border: 2rpx solid #6B463C;
-  border-radius: 8rpx;
-  padding: 4rpx 12rpx;
+  color: #584219;
+  border: 2rpx solid rgba(88, 66, 25, 0.35);
+  border-radius: 999rpx;
+  padding: 4rpx 20rpx;
+  letter-spacing: 1rpx;
 }
 
-.nav-icon {
-  position: relative;
-}
-
-.badge {
-  position: absolute;
-  top: -4rpx;
-  right: -4rpx;
-  width: 16rpx;
-  height: 16rpx;
-  background: #C0392B;
-  border-radius: 50%;
-}
-
+/* ===== Banner ===== */
 .banner-section {
-  padding: 0 32rpx 24rpx;
+  padding: 16rpx 32rpx 32rpx;
 }
 
 .banner {
-  height: 280rpx;
-  border-radius: 24rpx;
+  height: 300rpx;
+  border-radius: 44rpx;
   overflow: hidden;
 }
 
 .banner-card {
   width: 100%;
-  height: 280rpx;
-  border-radius: 24rpx;
+  height: 300rpx;
+  border-radius: 44rpx;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 40rpx;
+  padding: 48rpx;
 }
 
 .banner-title {
-  font-size: 36rpx;
-  font-weight: 700;
-  color: #FFFFFF;
-  margin-bottom: 12rpx;
+  font-size: 40rpx;
+  color: #F7F2E9;
+  margin-bottom: 16rpx;
 }
 
 .banner-desc {
   font-size: 26rpx;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(247, 242, 233, 0.8);
+  letter-spacing: 1rpx;
 }
 
+/* ===== 模块标题（衬线 + 右侧灰字）由全局 .section-head 提供 ===== */
+.section-head {
+  padding: 0 32rpx;
+}
+
+/* ===== 筛选栏：胶囊 ===== */
 .filter-bar {
   display: flex;
-  padding: 0 32rpx 24rpx;
+  padding: 8rpx 32rpx 28rpx;
   gap: 16rpx;
 }
 
 .filter-item {
-  padding: 12rpx 28rpx;
-  border-radius: 32rpx;
-  background: #FFFFFF;
+  padding: 10rpx 32rpx;
+  border-radius: 999rpx;
+  background: #F4EEE6;
   font-size: 26rpx;
-  color: #6B463C;
+  color: #6D5934;
+  letter-spacing: 1rpx;
 }
 
 .filter-item.active {
-  background: #6B463C;
-  color: #FFFFFF;
+  background: #584219;
+  color: #F7F2E9;
 }
 
+/* ===== 课程卡片（22px 圆角） ===== */
 .course-list {
   padding: 0 32rpx;
 }
 
 .course-card {
-  background: #FFFFFF;
-  border-radius: 16rpx;
+  background: #FBF8F3;
+  border-radius: 44rpx;
   overflow: hidden;
-  margin-bottom: 16rpx;
-  box-shadow: 0px 2px 6px rgba(107, 70, 60, 0.06);
+  margin-bottom: 28rpx;
+  box-shadow: 0 6rpx 24rpx rgba(88, 66, 25, 0.05);
   display: flex;
   align-items: stretch;
 }
+.course-card:active {
+  transform: scale(0.98);
+}
 
 .card-cover {
-  width: 160rpx;
-  min-height: 160rpx;
+  width: 180rpx;
+  min-height: 180rpx;
   flex-shrink: 0;
   overflow: hidden;
-  border-radius: 16rpx 0 0 16rpx;
 }
 
 .card-cover-img {
-  width: 160rpx;
+  width: 180rpx;
   height: 100%;
   display: block;
 }
@@ -298,16 +447,16 @@ function formatDate(date: string) {
 .card-cover-fallback {
   width: 100%;
   height: 100%;
-  min-height: 160rpx;
+  min-height: 180rpx;
 }
 
 .card-body {
   flex: 1;
-  padding: 16rpx 20rpx;
+  padding: 22rpx 24rpx;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 6rpx;
+  gap: 8rpx;
 }
 
 .card-row-top {
@@ -317,9 +466,10 @@ function formatDate(date: string) {
 }
 
 .card-title {
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 600;
-  color: #4B3621;
+  color: #3F2F10;
+  letter-spacing: 1rpx;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -327,9 +477,9 @@ function formatDate(date: string) {
 }
 
 .card-price {
-  font-size: 28rpx;
-  font-weight: 700;
-  color: #6B463C;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #584219;
   flex-shrink: 0;
   margin-left: 12rpx;
 }
@@ -337,24 +487,26 @@ function formatDate(date: string) {
 .card-tags {
   display: flex;
   align-items: center;
-  gap: 8rpx;
+  gap: 10rpx;
 }
 
 .card-type-tag {
   font-size: 20rpx;
-  color: #FFF;
-  padding: 2rpx 12rpx;
-  border-radius: 8rpx;
+  color: #B06A3F;
+  background: rgba(211, 149, 110, 0.16);
+  padding: 2rpx 16rpx;
+  border-radius: 999rpx;
+  letter-spacing: 1rpx;
 }
 
 .card-difficulty {
   font-size: 20rpx;
-  color: #A08A72;
+  color: #A78E70;
 }
 
 .card-meta {
   font-size: 22rpx;
-  color: #7D665C;
+  color: #6D5934;
 }
 
 .card-row-bottom {
@@ -369,12 +521,19 @@ function formatDate(date: string) {
   gap: 8rpx;
 }
 
+.card-trainer-img {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .card-trainer-dot {
   width: 36rpx;
   height: 36rpx;
   border-radius: 50%;
-  background: #6B463C;
-  color: #FFF;
+  background: #584219;
+  color: #F7F2E9;
   font-size: 18rpx;
   display: flex;
   align-items: center;
@@ -383,26 +542,205 @@ function formatDate(date: string) {
 
 .card-trainer-name {
   font-size: 22rpx;
-  color: #A08A72;
+  color: #A78E70;
 }
 
 .card-seats {
   font-size: 20rpx;
-  color: #A08A72;
-  background: #FFF3E0;
-  padding: 4rpx 12rpx;
-  border-radius: 12rpx;
+  color: #B06A3F;
+  background: rgba(211, 149, 110, 0.16);
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
 }
 
 .card-seats.full {
-  background: #FFEBEE;
-  color: #C0392B;
+  background: rgba(88, 66, 25, 0.08);
+  color: #A78E70;
 }
 
 .empty {
   text-align: center;
-  padding: 80rpx;
-  color: #A08A72;
+  padding: 100rpx 0;
+  color: #A78E70;
   font-size: 28rpx;
+  letter-spacing: 1rpx;
+}
+
+/* ===== 双视角切换 ===== */
+.nav-right {
+  width: auto;
+  display: flex;
+  justify-content: flex-end;
+}
+.view-switch {
+  display: flex;
+  background: rgba(88, 66, 25, 0.08);
+  border-radius: 999rpx;
+  padding: 4rpx;
+}
+.view-opt {
+  padding: 6rpx 22rpx;
+  border-radius: 999rpx;
+}
+.view-opt text {
+  font-size: 22rpx;
+  color: #6D5934;
+}
+.view-opt.active {
+  background: #584219;
+}
+.view-opt.active text {
+  color: #F7F2E9;
+}
+
+/* ===== 导师视角落地页 ===== */
+.trainer-hero {
+  padding: 16rpx 32rpx 28rpx;
+  display: flex;
+  flex-direction: column;
+}
+.trainer-hero-title {
+  font-size: 44rpx;
+  color: #3F2F10;
+}
+.trainer-hero-sub {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #A78E70;
+  letter-spacing: 1rpx;
+}
+.trainer-comm-list {
+  padding: 0 32rpx;
+}
+.trainer-comm-card {
+  display: flex;
+  align-items: center;
+  background: #FBF8F3;
+  border-radius: 44rpx;
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 6rpx 24rpx rgba(88, 66, 25, 0.05);
+}
+.trainer-comm-cover {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 28rpx;
+  overflow: hidden;
+  margin-right: 24rpx;
+}
+.trainer-comm-img {
+  width: 96rpx;
+  height: 96rpx;
+  display: block;
+}
+.trainer-comm-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.trainer-comm-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  color: #3F2F10;
+}
+.trainer-comm-meta {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #A78E70;
+}
+.trainer-comm-go {
+  padding: 12rpx 28rpx;
+  border-radius: 999rpx;
+  background: #584219;
+}
+.trainer-comm-go text {
+  color: #F7F2E9;
+  font-size: 24rpx;
+  letter-spacing: 1rpx;
+}
+.trainer-empty {
+  background: #FBF8F3;
+  border-radius: 44rpx;
+  padding: 60rpx 36rpx;
+  text-align: center;
+}
+.trainer-empty text {
+  font-size: 24rpx;
+  color: #A78E70;
+  line-height: 1.9;
+}
+.trainer-actions {
+  display: flex;
+  gap: 20rpx;
+  padding: 28rpx 32rpx;
+}
+.trainer-btn {
+  flex: 1;
+  border-radius: 999rpx;
+  padding: 24rpx 0;
+  text-align: center;
+  background: transparent;
+  border: 2rpx solid #584219;
+}
+.trainer-btn text {
+  font-size: 28rpx;
+  color: #584219;
+  letter-spacing: 2rpx;
+}
+.trainer-btn.primary {
+  background: #584219;
+  border: none;
+}
+.trainer-btn.primary text {
+  color: #F7F2E9;
+}
+
+/* ===== 学员视角：社群推荐横滑 ===== */
+.community-scroll {
+  white-space: nowrap;
+  padding: 0 32rpx 32rpx;
+}
+.community-mini {
+  display: inline-flex;
+  flex-direction: column;
+  width: 300rpx;
+  border-radius: 36rpx;
+  margin-right: 20rpx;
+  vertical-align: top;
+  background: #FBF8F3;
+  overflow: hidden;
+  box-shadow: 0 6rpx 24rpx rgba(88, 66, 25, 0.05);
+}
+.community-mini-cover {
+  width: 300rpx;
+  height: 169rpx; /* 16:9 */
+}
+.community-mini-img {
+  width: 300rpx;
+  height: 169rpx;
+  display: block;
+}
+.community-mini-body {
+  padding: 22rpx 26rpx 26rpx;
+}
+.community-mini-name {
+  font-size: 28rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  color: #3F2F10;
+  white-space: normal;
+}
+.community-mini-owner {
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  color: #A78E70;
+  display: block;
+}
+.community-mini-meta {
+  margin-top: 12rpx;
+  font-size: 20rpx;
+  color: #6D5934;
+  display: block;
 }
 </style>

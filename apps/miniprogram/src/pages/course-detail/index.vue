@@ -4,8 +4,8 @@
     <view class="cover" :style="{ background: course.coverImage ? 'none' : getCoverBg() }">
       <image v-if="course.coverImage" class="cover-image" :src="course.coverImage" mode="aspectFill" @tap="previewGallery(0)" />
       <view class="cover-overlay">
-        <text class="cover-type">{{ course.type }}</text>
-        <text class="cover-title">{{ course.title }}</text>
+        <text class="cover-type">{{ typeLabel(course.type) }}</text>
+        <text class="cover-title serif">{{ course.title }}</text>
         <text class="cover-subtitle">{{ course.subtitle }}</text>
       </view>
       <view class="back-btn" @tap="goBack">
@@ -25,39 +25,55 @@
       <text class="gallery-hint">左右滑动查看更多 · 点击查看大图</text>
     </view>
 
+    <!-- 课程状态横幅（非 PUBLISHED 时显示） -->
+    <view v-if="course.status === 'CANCELLED'" class="status-banner cancelled">
+      <view class="status-dot"></view>
+      <text class="status-text">该课程因未达成团人数已取消，已报名学员将获全额退款</text>
+    </view>
+    <view v-else-if="course.status === 'COMPLETED'" class="status-banner completed">
+      <view class="status-dot"></view>
+      <text class="status-text">该课程已结束</text>
+    </view>
+    <view v-else-if="course.status === 'EXPIRED'" class="status-banner cancelled">
+      <view class="status-dot"></view>
+      <text class="status-text">该课程已过期</text>
+    </view>
+
     <!-- 课程信息 -->
     <view class="content">
       <!-- 基本信息 -->
       <view class="section">
         <view class="tags">
           <text v-for="tag in course.tags" :key="tag" class="tag">{{ tag }}</text>
-          <text class="tag difficulty">{{ course.difficulty }}</text>
+          <text class="tag difficulty">{{ difficultyLabel(course.difficulty) }}</text>
         </view>
 
         <view class="info-row">
-          <text class="info-icon">📅</text>
+          <view class="info-dot"></view>
           <text class="info-text">{{ formatDate(course.startDate) }} {{ course.startTime }}-{{ course.endTime }}</text>
         </view>
         <view class="info-row">
-          <text class="info-icon">📍</text>
+          <view class="info-dot"></view>
           <text class="info-text">{{ course.venue.name }}（{{ course.venue.address }}）</text>
         </view>
         <view class="info-row">
-          <text class="info-icon">👥</text>
+          <view class="info-dot"></view>
           <text class="info-text">{{ course.currentEnrolled }}/{{ course.maxCapacity }}人 · 余{{ course.maxCapacity - course.currentEnrolled }}位</text>
         </view>
       </view>
 
       <!-- 导师信息 -->
       <view class="section" @tap="goTrainer">
-        <text class="section-title">导师</text>
+        <text class="section-title serif">导师</text>
         <view class="trainer-card">
-          <view class="trainer-avatar">{{ course.trainer.displayName.charAt(0) }}</view>
+          <image v-if="course.trainer.avatar" class="trainer-avatar-img" :src="course.trainer.avatar" mode="aspectFill" />
+          <view v-else class="trainer-avatar">{{ course.trainer.displayName.charAt(0) }}</view>
           <view class="trainer-info">
             <view class="trainer-row">
               <text class="trainer-name">{{ course.trainer.displayName }}</text>
               <text class="trainer-level">LV{{ course.trainer.level }}</text>
-              <text class="trainer-title">{{ course.trainer.title }}</text>
+              <text v-if="course.trainer.seedifyCert" class="trainer-cert">Seedify认证</text>
+              <text v-if="course.trainer.title" class="trainer-title">{{ course.trainer.title }}</text>
             </view>
             <text class="trainer-bio">{{ course.trainer.bio }}</text>
           </view>
@@ -67,7 +83,7 @@
 
       <!-- 多节课程安排 -->
       <view v-if="course.sessions.length > 1" class="section">
-        <text class="section-title">课程安排（{{ course.sessions.length }}节）</text>
+        <text class="section-title serif">课程安排（{{ course.sessions.length }}节）</text>
         <view class="session-list">
           <view v-for="session in course.sessions" :key="session.index" class="session-item">
             <view class="session-dot"></view>
@@ -81,49 +97,43 @@
 
       <!-- 价格 -->
       <view class="section">
-        <text class="section-title">价格</text>
+        <text class="section-title serif">价格</text>
         <view class="price-display">
-          <text class="price-current">¥{{ getUserPrice() }}</text>
+          <text class="price-current latin">¥{{ toYuan(getUserPrice()) }}</text>
           <text class="price-label">/人</text>
         </view>
-        <view class="discount-section">
+        <view class="discount-section" v-if="memberDiscountList.length">
           <text class="discount-title">会员优惠</text>
-          <view class="discount-row">
-            <text class="discount-label">年卡会员</text>
-            <text class="discount-value" v-if="course.yearlyDiscount">每节立减 ¥{{ course.yearlyDiscount }}</text>
-            <text class="discount-value muted" v-else>无折扣</text>
+          <view class="discount-row" v-for="md in memberDiscountList" :key="md.label">
+            <text class="discount-label">{{ md.label }}</text>
+            <text class="discount-value" v-if="md.percent < 100">{{ (md.percent / 10).toFixed(1) }}折</text>
+            <text class="discount-value muted" v-else>无优惠</text>
           </view>
-          <view class="discount-row">
-            <text class="discount-label">季卡会员</text>
-            <text class="discount-value" v-if="course.quarterlyDiscount">每节立减 ¥{{ course.quarterlyDiscount }}</text>
-            <text class="discount-value muted" v-else>¥0</text>
-          </view>
-          <view class="discount-row">
-            <text class="discount-label">月卡会员</text>
-            <text class="discount-value" v-if="course.monthlyDiscount">每节立减 ¥{{ course.monthlyDiscount }}</text>
-            <text class="discount-value muted" v-else>¥0</text>
-          </view>
+        </view>
+        <view class="discount-section" v-else>
+          <text class="discount-title">会员优惠</text>
+          <text class="discount-value muted">暂无会员优惠</text>
         </view>
       </view>
 
       <!-- Seeds 奖励 -->
       <view class="section">
-        <text class="section-title">Seeds 奖励</text>
+        <text class="section-title serif">Seeds 奖励</text>
         <view class="reward-list">
           <view class="reward-item">
-            <text class="reward-icon">🌱</text>
-            <text class="reward-text">完课奖励 +{{ course.completionSeeds }} Seeds</text>
+            <view class="reward-dot"></view>
+            <text class="reward-text">完课奖励 +<text class="latin">{{ course.completionSeeds }}</text> Seeds</text>
           </view>
           <view class="reward-item">
-            <text class="reward-icon">⭐</text>
-            <text class="reward-text">评价奖励 +{{ course.reviewSeeds }} Seeds（每人限一次）</text>
+            <view class="reward-dot"></view>
+            <text class="reward-text">评价奖励 +<text class="latin">{{ course.reviewSeeds }}</text> Seeds（每人限一次）</text>
           </view>
         </view>
       </view>
 
       <!-- 退款规则 -->
       <view class="section">
-        <text class="section-title">退款政策</text>
+        <text class="section-title serif">退款政策</text>
         <view class="refund-list">
           <view v-for="rule in course.refundRules" :key="rule.hoursFrom" class="refund-item">
             <text class="refund-time">{{ formatRefundTime(rule) }}</text>
@@ -136,7 +146,7 @@
 
       <!-- 已报名学员 -->
       <view class="section">
-        <text class="section-title">已报名</text>
+        <text class="section-title serif">已报名</text>
         <view class="enrolled-section">
           <view class="avatar-wall">
             <view v-for="(name, i) in course.enrolledAvatars" :key="i" class="enrolled-avatar" :style="{ marginLeft: i > 0 ? '-12rpx' : '0' }">
@@ -148,11 +158,11 @@
       </view>
     </view>
 
-    <!-- 底部报名按钮 -->
-    <view class="bottom-bar safe-area-bottom">
+    <!-- 底部报名按钮（仅 PUBLISHED 状态显示） -->
+    <view v-if="course.status === 'PUBLISHED'" class="bottom-bar safe-area-bottom">
       <view class="bottom-left">
-        <text class="bottom-price">¥{{ getUserPrice() }}</text>
-        <text class="bottom-original" v-if="course.yearlyDiscount">年卡价 ¥{{ getUserPrice() - course.yearlyDiscount }}</text>
+        <text class="bottom-price latin">¥{{ toYuan(getUserPrice()) }}</text>
+        <text class="bottom-original" v-if="bestDiscount">会员价 ¥{{ toYuan(Math.round(getUserPrice() * bestDiscount / 100)) }}</text>
       </view>
       <!-- 正常报名 -->
       <view v-if="course.currentEnrolled < course.maxCapacity" class="book-btn" @tap="handleBook">
@@ -167,18 +177,19 @@
     <!-- 候补弹窗 -->
     <view v-if="waitlistVisible" class="popup-mask" @tap="waitlistVisible = false">
       <view class="popup-content" @tap.stop>
-        <text class="popup-title">候补报名</text>
+        <view class="popup-handle"></view>
+        <text class="popup-title serif">候补报名</text>
         <text class="popup-desc">当前课程已满员。候补需先预付锁价并锁定排队顺序，如有人取消将按队列顺序自动补位。</text>
 
         <!-- 双队列席位情况 -->
         <view class="queue-cards">
           <view class="queue-card member">
-            <text class="queue-card-title">👑 会员优先席</text>
+            <text class="queue-card-title">会员优先席</text>
             <text class="queue-card-num">余 {{ memberSeatsLeft }} 位</text>
             <text class="queue-card-tip">会员整体优先于普通队列递补</text>
           </view>
           <view class="queue-card normal">
-            <text class="queue-card-title">👥 普通候补席</text>
+            <text class="queue-card-title">普通候补席</text>
             <text class="queue-card-num">不限量</text>
             <text class="queue-card-tip">当前排在第 {{ course.currentEnrolled - course.maxCapacity + 1 }} 位</text>
           </view>
@@ -195,15 +206,15 @@
 
         <view class="waitlist-info">
           <view class="waitlist-rule">
-            <text class="rule-icon">⏰</text>
+            <view class="rule-dot"></view>
             <text class="rule-text">候补截止：到期未补上自动取消并全额退款</text>
           </view>
           <view class="waitlist-rule">
-            <text class="rule-icon">❌</text>
+            <view class="rule-dot"></view>
             <text class="rule-text">主动取消：按课程退款政策退款</text>
           </view>
           <view class="waitlist-rule">
-            <text class="rule-icon">✅</text>
+            <view class="rule-dot"></view>
             <text class="rule-text">候补成功：自动占位并短信通知您</text>
           </view>
         </view>
@@ -238,18 +249,49 @@ import { payOrder } from '@/utils/wechat'
 
 const userStore = useUserStore()
 
+// 分→元转换
+function toYuan(fen: number) {
+  return (fen / 100).toFixed(fen % 100 === 0 ? 0 : 2)
+}
+
+// 课程类型/难度枚举→中文
+function typeLabel(v: string) {
+  const map: Record<string, string> = { SINGLE: '单次课程', SERIES: '系列课程' }
+  return map[v] || v
+}
+function difficultyLabel(v: string) {
+  const map: Record<string, string> = { BEGINNER: '入门', INTERMEDIATE: '进阶', ADVANCED: '高级' }
+  return map[v] || v
+}
+
 // 带默认值的课程对象，避免模板访问 undefined
 const course = ref<any>({
-  id: '', title: '', subtitle: '', type: '', coverImage: '', gallery: [],
+  id: '', title: '', subtitle: '', type: '', coverImage: '', gallery: [], status: 'PUBLISHED',
   startDate: '', startTime: '', endTime: '',
   venue: { name: '', address: '' },
-  trainer: { id: '', displayName: '', level: 0, title: '', bio: '' },
+  trainer: { id: '', displayName: '', level: 0, title: '', bio: '', avatar: '', seedifyCert: false },
   currentEnrolled: 0, maxCapacity: 0,
   tags: [], difficulty: '', sessions: [],
   priceTiers: [], originalPrice: 0,
-  yearlyDiscount: 0, quarterlyDiscount: 0, monthlyDiscount: 0,
+  memberDiscounts: [],
   completionSeeds: 0, reviewSeeds: 0,
   refundRules: [], enrolledAvatars: [], memberWaitlistSeats: 3,
+})
+
+// 会员折扣列表（从 memberDiscounts 数组计算）
+const CARD_LABELS: Record<string, string> = { YEARLY: '年卡会员', QUARTERLY: '季卡会员', MONTHLY: '月卡会员' }
+const memberDiscountList = computed(() => {
+  const discounts = course.value.memberDiscounts || []
+  return discounts.map((d: any) => ({
+    label: CARD_LABELS[d.cardType] || d.cardType,
+    percent: d.discountPercent,
+  }))
+})
+// 最优折扣百分比（用于底部栏显示会员价）
+const bestDiscount = computed(() => {
+  const discounts = course.value.memberDiscounts || []
+  if (!discounts.length) return 0
+  return Math.min(...discounts.map((d: any) => d.discountPercent))
 })
 const waitlistVisible = ref(false)
 const waitlistDeadline = ref(24)
@@ -285,6 +327,7 @@ async function loadDetail(id: string) {
         tags: (data as any).tags ?? [],
         sessions: (data as any).sessions ?? [],
         priceTiers: (data as any).priceTiers ?? [],
+        memberDiscounts: (data as any).memberDiscounts ?? [],
         refundRules: (data as any).refundRules ?? [],
         enrolledAvatars: (data as any).enrolledAvatars ?? [],
       }
@@ -320,10 +363,10 @@ function ensureLogin() {
 
 function getCoverBg() {
   const map: Record<string, string> = {
-    '单次课程': 'linear-gradient(135deg, #6B463C, #8B6354)',
-    '系列课程': 'linear-gradient(135deg, #4A6741, #6B8F62)',
+    SINGLE: 'linear-gradient(135deg, #584219, #6D5934)',
+    SERIES: 'linear-gradient(135deg, #3F2F10, #6D5934)',
   }
-  return map[course.value.type] || 'linear-gradient(135deg, #6B463C, #8B6354)'
+  return map[course.value.type] || 'linear-gradient(135deg, #584219, #6D5934)'
 }
 
 function goMember() {
@@ -332,7 +375,12 @@ function goMember() {
 }
 
 function goBack() {
-  uni.navigateBack()
+  const pages = getCurrentPages()
+  if (pages.length > 1) {
+    uni.navigateBack()
+  } else {
+    uni.switchTab({ url: '/pages/index/index' })
+  }
 }
 
 function previewGallery(startIdx: number) {
@@ -371,9 +419,9 @@ async function handleBook() {
     const quote = await quoteEnroll(course.value.id)
     uni.showModal({
       title: '确认报名',
-      content: `${course.value.title}\n${formatDate(course.value.startDate)} ${course.value.startTime}\n应付 ¥${quote.priceAfterDiscount}`,
+      content: `${course.value.title}\n${formatDate(course.value.startDate)} ${course.value.startTime}\n应付 ¥${toYuan(quote.priceAfterDiscount)}`,
       confirmText: '确认支付',
-      confirmColor: '#6B463C',
+      confirmColor: '#584219',
       success: async (res) => {
         if (!res.confirm) return
         try {
@@ -422,126 +470,139 @@ function formatRefundTime(rule: any) {
 </script>
 
 <style scoped>
-.page { background: #F5E8D8; min-height: 100vh; padding-bottom: 160rpx; }
+.page { background: #EAE0D7; min-height: 100vh; padding-bottom: 200rpx; }
 
-.cover { position: relative; height: 400rpx; display: flex; align-items: flex-end; overflow: hidden; }
+.cover { position: relative; height: 420rpx; display: flex; align-items: flex-end; overflow: hidden; }
 .cover-image { position: absolute; inset: 0; width: 100%; height: 100%; }
-.cover-overlay { padding: 40rpx; width: 100%; position: relative; z-index: 1; background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%); }
-.cover-type { font-size: 22rpx; color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.2); padding: 4rpx 16rpx; border-radius: 16rpx; display: inline-block; margin-bottom: 12rpx; }
-.cover-title { display: block; font-size: 40rpx; font-weight: 700; color: #FFF; margin-bottom: 8rpx; }
-.cover-subtitle { display: block; font-size: 26rpx; color: rgba(255,255,255,0.85); }
-.back-btn { position: absolute; top: 24rpx; left: 24rpx; width: 64rpx; height: 64rpx; background: rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 36rpx; color: #FFF; z-index: 2; }
+.cover-overlay { padding: 40rpx; width: 100%; position: relative; z-index: 1; background: linear-gradient(to top, rgba(63, 47, 16, 0.55) 0%, transparent 100%); }
+.cover-type { font-size: 22rpx; color: #F7F2E9; background: rgba(247, 242, 233, 0.22); padding: 6rpx 22rpx; border-radius: 999rpx; display: inline-block; margin-bottom: 12rpx; letter-spacing: 1rpx; }
+.cover-title { display: block; font-size: 44rpx; color: #F7F2E9; margin-bottom: 8rpx; }
+.cover-subtitle { display: block; font-size: 26rpx; color: rgba(247, 242, 233, 0.85); letter-spacing: 1rpx; }
+.back-btn { position: absolute; top: calc(24rpx + env(safe-area-inset-top, 0px)); left: 24rpx; width: 64rpx; height: 64rpx; background: rgba(251, 248, 243, 0.35); backdrop-filter: blur(12px); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 36rpx; color: #F7F2E9; z-index: 2; }
 
-/* 图集滚动 */
-.gallery-section { padding: 24rpx 0 0; background: #FFF; margin-bottom: -16rpx; }
+.gallery-section { padding: 24rpx 0 0; background: transparent; }
+
+.status-banner { display: flex; align-items: center; gap: 14rpx; padding: 24rpx 32rpx; margin: 0; }
+.status-banner.cancelled { background: rgba(211, 149, 110, 0.16); }
+.status-banner.completed { background: rgba(88, 66, 25, 0.08); }
+.status-dot { width: 12rpx; height: 12rpx; border-radius: 50%; background: #D3956E; flex-shrink: 0; }
+.status-banner.completed .status-dot { background: #6D5934; }
+.status-text { font-size: 26rpx; color: #3F2F10; flex: 1; }
 .gallery-scroll { width: 100%; }
 .gallery-list { display: flex; gap: 16rpx; padding: 0 32rpx; }
-.gallery-item { flex-shrink: 0; width: 280rpx; height: 200rpx; border-radius: 16rpx; overflow: hidden; }
+.gallery-item { flex-shrink: 0; width: 280rpx; height: 200rpx; border-radius: 26rpx; overflow: hidden; }
 .gallery-img { width: 100%; height: 100%; }
-.gallery-hint { display: block; text-align: center; font-size: 22rpx; color: #A08A72; margin-top: 12rpx; padding-bottom: 16rpx; }
+.gallery-hint { display: block; text-align: center; font-size: 22rpx; color: #A78E70; margin-top: 12rpx; padding-bottom: 16rpx; }
 
-.content { padding: 0 32rpx; margin-top: -40rpx; position: relative; z-index: 1; }
+.content { padding: 0 32rpx; position: relative; z-index: 1; }
 
-.section { background: #FFF; border-radius: 24rpx; padding: 32rpx; margin-bottom: 24rpx; }
-.section-title { font-size: 30rpx; font-weight: 700; color: #4B3621; margin-bottom: 20rpx; display: block; }
+.section { background: #FBF8F3; border-radius: 44rpx; padding: 36rpx 32rpx; margin-bottom: 28rpx; box-shadow: 0 6rpx 24rpx rgba(88, 66, 25, 0.05); }
+.section-title { font-size: 32rpx; color: #584219; margin-bottom: 24rpx; display: block; }
 
-.tags { display: flex; flex-wrap: wrap; gap: 12rpx; margin-bottom: 20rpx; }
-.tag { font-size: 22rpx; color: #6B463C; background: #F5E8D8; padding: 6rpx 16rpx; border-radius: 16rpx; }
-.tag.difficulty { background: #6B463C; color: #FFF; }
+.tags { display: flex; flex-wrap: wrap; gap: 12rpx; margin-bottom: 24rpx; }
+.tag { font-size: 22rpx; color: #584219; background: rgba(88, 66, 25, 0.08); padding: 6rpx 22rpx; border-radius: 999rpx; letter-spacing: 1rpx; }
+.tag.difficulty { background: #584219; color: #F7F2E9; }
 
-.info-row { display: flex; align-items: center; gap: 12rpx; margin-bottom: 12rpx; }
-.info-icon { font-size: 28rpx; }
-.info-text { font-size: 26rpx; color: #7D665C; }
+.info-row { display: flex; align-items: center; gap: 16rpx; margin-bottom: 14rpx; }
+.info-dot { width: 10rpx; height: 10rpx; border-radius: 50%; background: #A78E70; flex-shrink: 0; }
+.info-text { font-size: 26rpx; color: #6D5934; }
 
-.trainer-card { display: flex; align-items: center; gap: 16rpx; padding: 16rpx; background: #FAF5F0; border-radius: 16rpx; }
-.trainer-avatar { width: 80rpx; height: 80rpx; border-radius: 50%; background: #6B463C; color: #FFF; font-size: 32rpx; display: flex; align-items: center; justify-content: center; }
+.trainer-card { display: flex; align-items: center; gap: 20rpx; padding: 24rpx; background: #F4EEE6; border-radius: 32rpx; }
+.trainer-avatar-img { width: 88rpx; height: 88rpx; border-radius: 50%; flex-shrink: 0; }
+.trainer-avatar { width: 88rpx; height: 88rpx; border-radius: 50%; background: #584219; color: #F7F2E9; font-size: 34rpx; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .trainer-info { flex: 1; }
 .trainer-row { display: flex; align-items: center; gap: 12rpx; margin-bottom: 8rpx; }
-.trainer-name { font-size: 28rpx; font-weight: 600; color: #4B3621; }
-.trainer-level { font-size: 20rpx; color: #6B463C; background: #F5E8D8; padding: 2rpx 10rpx; border-radius: 8rpx; }
-.trainer-title { font-size: 22rpx; color: #A08A72; }
-.trainer-bio { font-size: 24rpx; color: #7D665C; }
-.arrow { font-size: 36rpx; color: #A08A72; }
+.trainer-name { font-size: 28rpx; font-weight: 600; color: #3F2F10; letter-spacing: 1rpx; }
+.trainer-level { font-size: 20rpx; color: #584219; background: rgba(88, 66, 25, 0.08); padding: 2rpx 14rpx; border-radius: 999rpx; }
+.trainer-cert { font-size: 20rpx; color: #8C7335; background: rgba(201, 163, 92, 0.18); padding: 2rpx 14rpx; border-radius: 999rpx; }
+.trainer-title { font-size: 22rpx; color: #A78E70; }
+.trainer-bio { font-size: 24rpx; color: #6D5934; line-height: 1.6; }
+.arrow { font-size: 36rpx; color: #A78E70; }
 
 .session-list { padding-left: 8rpx; }
-.session-item { display: flex; align-items: flex-start; gap: 16rpx; margin-bottom: 16rpx; }
-.session-dot { width: 16rpx; height: 16rpx; border-radius: 50%; background: #6B463C; margin-top: 8rpx; flex-shrink: 0; }
+.session-item { display: flex; align-items: flex-start; gap: 18rpx; margin-bottom: 18rpx; }
+.session-dot { width: 14rpx; height: 14rpx; border-radius: 50%; background: #D3956E; margin-top: 10rpx; flex-shrink: 0; }
 .session-content { flex: 1; }
-.session-name { font-size: 26rpx; color: #4B3621; display: block; }
-.session-date { font-size: 22rpx; color: #A08A72; }
+.session-name { font-size: 26rpx; color: #3F2F10; display: block; }
+.session-date { font-size: 22rpx; color: #A78E70; }
 
-.price-display { display: flex; align-items: baseline; gap: 4rpx; margin-bottom: 24rpx; }
-.price-current { font-size: 48rpx; font-weight: 700; color: #6B463C; }
-.price-label { font-size: 24rpx; color: #A08A72; }
+.price-display { display: flex; align-items: baseline; gap: 6rpx; margin-bottom: 28rpx; }
+.price-current { font-size: 52rpx; font-weight: 600; color: #584219; }
+.price-label { font-size: 24rpx; color: #A78E70; }
 
-.discount-section { border-top: 1rpx solid #F0E6DC; padding-top: 20rpx; }
-.discount-title { font-size: 24rpx; color: #A08A72; margin-bottom: 12rpx; display: block; }
-.discount-row { display: flex; justify-content: space-between; margin-bottom: 8rpx; }
-.discount-label { font-size: 26rpx; color: #4B3621; }
-.discount-value { font-size: 26rpx; color: #6B463C; font-weight: 500; }
-.discount-value.muted { color: #A08A72; }
+.discount-section { border-top: 2rpx dashed rgba(88, 66, 25, 0.14); padding-top: 24rpx; }
+.discount-title { font-size: 24rpx; color: #A78E70; margin-bottom: 14rpx; display: block; letter-spacing: 1rpx; }
+.discount-row { display: flex; justify-content: space-between; margin-bottom: 10rpx; }
+.discount-label { font-size: 26rpx; color: #3F2F10; }
+.discount-value { font-size: 26rpx; color: #8C7335; font-weight: 500; }
+.discount-value.muted { color: #A78E70; }
 
-.reward-list { display: flex; flex-direction: column; gap: 12rpx; }
-.reward-item { display: flex; align-items: center; gap: 12rpx; }
-.reward-icon { font-size: 28rpx; }
-.reward-text { font-size: 26rpx; color: #4B3621; }
+.reward-list { display: flex; flex-direction: column; gap: 16rpx; }
+.reward-item { display: flex; align-items: center; gap: 16rpx; }
+.reward-dot { width: 12rpx; height: 12rpx; border-radius: 50%; background: #D3956E; flex-shrink: 0; }
+.reward-text { font-size: 26rpx; color: #3F2F10; }
 
-.refund-list { display: flex; flex-direction: column; gap: 12rpx; }
-.refund-item { display: flex; justify-content: space-between; align-items: center; padding: 12rpx 16rpx; background: #FAF5F0; border-radius: 12rpx; }
-.refund-time { font-size: 26rpx; color: #4B3621; }
-.refund-percent { font-size: 26rpx; color: #27AE60; font-weight: 500; }
-.refund-percent.zero { color: #C0392B; }
+.refund-list { display: flex; flex-direction: column; gap: 14rpx; }
+.refund-item { display: flex; justify-content: space-between; align-items: center; padding: 16rpx 24rpx; background: #F4EEE6; border-radius: 24rpx; }
+.refund-time { font-size: 26rpx; color: #3F2F10; }
+.refund-percent { font-size: 26rpx; color: #584219; font-weight: 500; }
+.refund-percent.zero { color: #A78E70; }
 
-.enrolled-section { display: flex; align-items: center; gap: 16rpx; }
+.enrolled-section { display: flex; align-items: center; gap: 20rpx; }
 .avatar-wall { display: flex; }
-.enrolled-avatar { width: 56rpx; height: 56rpx; border-radius: 50%; background: #6B463C; color: #FFF; font-size: 22rpx; display: flex; align-items: center; justify-content: center; border: 3rpx solid #FFF; }
-.enrolled-count { font-size: 24rpx; color: #A08A72; }
+.enrolled-avatar { width: 60rpx; height: 60rpx; border-radius: 50%; background: #6D5934; color: #F7F2E9; font-size: 22rpx; display: flex; align-items: center; justify-content: center; border: 3rpx solid #FBF8F3; }
+.enrolled-count { font-size: 24rpx; color: #A78E70; }
 
-.bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 120rpx; background: #FFF; display: flex; align-items: center; justify-content: space-between; padding: 0 32rpx; box-shadow: 0 -2px 8px rgba(0,0,0,0.05); z-index: 100; }
+/* 底部报名栏：悬浮胶囊 */
+.bottom-bar { position: fixed; bottom: calc(24rpx + env(safe-area-inset-bottom)); left: 32rpx; right: 32rpx; background: #FBF8F3; display: flex; align-items: center; justify-content: space-between; padding: 24rpx 36rpx; border-radius: 999rpx; box-shadow: 0 12rpx 36rpx rgba(63, 47, 16, 0.16); z-index: 100; }
 .bottom-left { display: flex; flex-direction: column; }
-.bottom-price { font-size: 40rpx; font-weight: 700; color: #6B463C; }
-.bottom-original { font-size: 22rpx; color: #A08A72; }
-.book-btn { background: #6B463C; padding: 20rpx 60rpx; border-radius: 40rpx; }
-.book-btn.disabled { background: #B8A49A; }
-.book-btn.waitlist-btn { background: linear-gradient(135deg, #E67E22, #D35400); }
-.book-text { color: #FFF; font-size: 30rpx; font-weight: 600; }
+.bottom-price { font-size: 42rpx; font-weight: 600; color: #584219; }
+.bottom-original { font-size: 22rpx; color: #A78E70; }
+.book-btn { background: #584219; padding: 22rpx 64rpx; border-radius: 999rpx; }
+.book-btn:active { transform: scale(0.96); }
+.book-btn.disabled { background: #A78E70; }
+.book-btn.waitlist-btn { background: #6D5934; }
+.book-text { color: #F7F2E9; font-size: 30rpx; font-weight: 600; letter-spacing: 2rpx; }
 
-/* 候补弹窗 */
-.popup-mask { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 999; display: flex; align-items: flex-end; justify-content: center; }
-.popup-content { width: 100%; background: #FFF; border-radius: 32rpx 32rpx 0 0; padding: 48rpx 40rpx; padding-bottom: calc(48rpx + env(safe-area-inset-bottom)); }
-.popup-title { font-size: 34rpx; font-weight: 700; color: #4B3621; display: block; margin-bottom: 8rpx; }
-.popup-desc { font-size: 24rpx; color: #A08A72; display: block; margin-bottom: 24rpx; line-height: 1.5; }
+/* 候补弹窗 Bottom Sheet */
+.popup-mask { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(63, 47, 16, 0.4); z-index: 999; display: flex; align-items: flex-end; justify-content: center; }
+.popup-content { width: 100%; background: #F4EEE6; border-radius: 52rpx 52rpx 0 0; padding: 48rpx 40rpx; padding-bottom: calc(48rpx + env(safe-area-inset-bottom)); animation: sheet-up 0.3s ease; }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.popup-handle { width: 72rpx; height: 8rpx; border-radius: 999rpx; background: rgba(88, 66, 25, 0.14); margin: 0 auto 32rpx; }
+.popup-title { font-size: 36rpx; color: #3F2F10; display: block; margin-bottom: 8rpx; }
+.popup-desc { font-size: 24rpx; color: #A78E70; display: block; margin-bottom: 28rpx; line-height: 1.7; }
 
 /* 双队列席位卡 */
-.queue-cards { display: flex; gap: 16rpx; margin-bottom: 20rpx; }
-.queue-card { flex: 1; border-radius: 16rpx; padding: 20rpx; }
-.queue-card.member { background: linear-gradient(135deg, #FBF0DC, #F5E1C0); border: 2rpx solid #E8C88A; }
-.queue-card.normal { background: #FAF5F0; border: 2rpx solid #EADFD4; }
-.queue-card-title { font-size: 24rpx; font-weight: 600; color: #4B3621; display: block; margin-bottom: 8rpx; }
-.queue-card-num { font-size: 30rpx; font-weight: 700; color: #6B463C; display: block; margin-bottom: 6rpx; }
-.queue-card-tip { font-size: 20rpx; color: #A08A72; line-height: 1.3; }
+.queue-cards { display: flex; gap: 20rpx; margin-bottom: 24rpx; }
+.queue-card { flex: 1; border-radius: 32rpx; padding: 24rpx; }
+.queue-card.member { background: rgba(201, 163, 92, 0.16); border: 2rpx solid rgba(201, 163, 92, 0.5); }
+.queue-card.normal { background: #FBF8F3; border: 2rpx solid rgba(88, 66, 25, 0.14); }
+.queue-card-title { font-size: 24rpx; font-weight: 600; color: #3F2F10; display: block; margin-bottom: 8rpx; letter-spacing: 1rpx; }
+.queue-card-num { font-size: 30rpx; font-weight: 600; color: #584219; display: block; margin-bottom: 6rpx; }
+.queue-card-tip { font-size: 20rpx; color: #A78E70; line-height: 1.5; }
 
 /* 非会员引流 */
-.member-promo { display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #6B463C, #A07060); border-radius: 16rpx; padding: 20rpx 24rpx; margin-bottom: 24rpx; }
+.member-promo { display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #3F2F10, #584219); border-radius: 32rpx; padding: 24rpx 28rpx; margin-bottom: 28rpx; }
 .promo-left { flex: 1; }
-.promo-title { font-size: 26rpx; font-weight: 600; color: #FFF; display: block; margin-bottom: 6rpx; }
-.promo-desc { font-size: 20rpx; color: rgba(255,255,255,0.85); line-height: 1.3; }
-.promo-btn { font-size: 24rpx; color: #FFF; font-weight: 600; background: rgba(255,255,255,0.2); padding: 10rpx 20rpx; border-radius: 24rpx; margin-left: 16rpx; flex-shrink: 0; }
+.promo-title { font-size: 26rpx; font-weight: 600; color: #EAD9B8; display: block; margin-bottom: 6rpx; letter-spacing: 1rpx; }
+.promo-desc { font-size: 20rpx; color: rgba(247, 242, 233, 0.8); line-height: 1.5; }
+.promo-btn { font-size: 24rpx; color: #F7F2E9; font-weight: 600; background: rgba(201, 163, 92, 0.3); padding: 10rpx 24rpx; border-radius: 999rpx; margin-left: 16rpx; flex-shrink: 0; }
 
-.waitlist-info { background: #FAF5F0; border-radius: 16rpx; padding: 24rpx; margin-bottom: 28rpx; }
-.waitlist-rule { display: flex; align-items: flex-start; gap: 12rpx; margin-bottom: 16rpx; }
+.waitlist-info { background: #FBF8F3; border-radius: 32rpx; padding: 28rpx; margin-bottom: 32rpx; }
+.waitlist-rule { display: flex; align-items: flex-start; gap: 16rpx; margin-bottom: 18rpx; }
 .waitlist-rule:last-child { margin-bottom: 0; }
-.rule-icon { font-size: 28rpx; }
-.rule-text { font-size: 24rpx; color: #4B3621; line-height: 1.4; }
+.rule-dot { width: 10rpx; height: 10rpx; border-radius: 50%; background: #A78E70; margin-top: 16rpx; flex-shrink: 0; }
+.rule-text { font-size: 24rpx; color: #3F2F10; line-height: 1.6; }
 
-.form-item { margin-bottom: 24rpx; }
-.form-label { font-size: 26rpx; color: #4B3621; font-weight: 500; display: block; margin-bottom: 12rpx; }
+.form-item { margin-bottom: 28rpx; }
+.form-label { font-size: 26rpx; color: #3F2F10; font-weight: 500; display: block; margin-bottom: 14rpx; letter-spacing: 1rpx; }
 .deadline-options { display: flex; flex-wrap: wrap; gap: 16rpx; }
-.deadline-option { padding: 16rpx 28rpx; border: 2rpx solid #E8DDD4; border-radius: 16rpx; font-size: 24rpx; color: #7D665C; }
-.deadline-option.active { border-color: #E67E22; background: #FFF5EE; color: #E67E22; font-weight: 600; }
+.deadline-option { padding: 14rpx 28rpx; border: 2rpx solid rgba(88, 66, 25, 0.14); background: #FBF8F3; border-radius: 999rpx; font-size: 24rpx; color: #6D5934; }
+.deadline-option.active { border-color: #584219; background: rgba(88, 66, 25, 0.06); color: #584219; font-weight: 600; }
 
-.popup-actions { display: flex; gap: 20rpx; margin-top: 24rpx; }
-.popup-cancel { flex: 1; height: 88rpx; border: 2rpx solid #E8DDD4; border-radius: 44rpx; display: flex; align-items: center; justify-content: center; font-size: 30rpx; color: #7D665C; }
-.popup-confirm { flex: 2; height: 88rpx; background: #6B463C; border-radius: 44rpx; display: flex; align-items: center; justify-content: center; }
-.popup-confirm text { color: #FFF; font-size: 28rpx; font-weight: 600; }
+.popup-actions { display: flex; gap: 20rpx; margin-top: 28rpx; }
+.popup-cancel { flex: 1; height: 92rpx; border: 2rpx solid #584219; border-radius: 999rpx; display: flex; align-items: center; justify-content: center; font-size: 30rpx; color: #584219; }
+.popup-confirm { flex: 2; height: 92rpx; background: #584219; border-radius: 999rpx; display: flex; align-items: center; justify-content: center; }
+.popup-confirm:active { transform: scale(0.96); }
+.popup-confirm text { color: #F7F2E9; font-size: 28rpx; font-weight: 600; letter-spacing: 2rpx; }
 </style>

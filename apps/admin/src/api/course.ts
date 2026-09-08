@@ -1,10 +1,12 @@
-import { get, post, put } from './request'
+import { get, post, put, del } from './request'
 
 export interface CourseListParams {
   page?: number
   pageSize?: number
   status?: string
   keyword?: string
+  startDateFrom?: string
+  startDateTo?: string
 }
 
 /** 后台课程列表（全部状态） */
@@ -30,6 +32,11 @@ export function updateCourse(id: string, body: any) {
 /** 发布/下架/取消课程 */
 export function setCourseStatus(id: string, status: string) {
   return post(`/courses/${id}/status`, { status })
+}
+
+/** 删除课程（仅草稿且无报名/候补） */
+export function deleteCourse(id: string) {
+  return del(`/courses/${id}`)
 }
 
 /** 保存课程阶梯价 */

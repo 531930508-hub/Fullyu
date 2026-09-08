@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common'
-import { ApiTags, ApiOperation } from '@nestjs/swagger'
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request } from '@nestjs/common'
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
+import { AuthGuard } from '@nestjs/passport'
 import { TrainerService } from './trainer.service'
 import { AdminAuth } from '../../common/decorators/admin-auth.decorator'
 
@@ -10,8 +11,16 @@ export class TrainerController {
 
   @Get()
   @ApiOperation({ summary: '导师列表' })
-  async list(@Query('keyword') keyword?: string, @Query('level') level?: number) {
-    return this.trainerService.list({ keyword, level })
+  async list(@Query('keyword') keyword?: string, @Query('level') level?: number, @Query('status') status?: string) {
+    return this.trainerService.list({ keyword, level, status })
+  }
+
+  @Get('me/workspace')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '导师工作台' })
+  async workspace(@Request() req: any) {
+    return this.trainerService.workspace(req.user.userId)
   }
 
   @Get(':id')

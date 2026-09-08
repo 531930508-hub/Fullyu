@@ -32,6 +32,7 @@ function goLogin() {
   localStorage.removeItem('admin_token')
   localStorage.removeItem('admin_name')
   localStorage.removeItem('admin_permissions')
+  localStorage.removeItem('admin_profile')
   if (redirecting) return
   redirecting = true
   const hash = window.location.hash

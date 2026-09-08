@@ -38,6 +38,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+      // 权限码定义与后端共用同一份源文件
+      '@fullyu/shared': resolve(__dirname, '../../packages/shared/src/index.ts'),
     },
   },
   server: {

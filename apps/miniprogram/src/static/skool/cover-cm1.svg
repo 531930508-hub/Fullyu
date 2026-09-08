@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6B463C"/>
+      <stop offset="55%" stop-color="#8B7355"/>
+      <stop offset="100%" stop-color="#A98F6F"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#FDF0DC" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#FDF0DC" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect width="1600" height="900" fill="url(#glow)"/>
+  <!-- 颂钵声波涟漪 -->
+  <g fill="none" stroke="#FDF0DC" stroke-opacity="0.28" stroke-width="3">
+    <circle cx="1180" cy="500" r="120"/>
+    <circle cx="1180" cy="500" r="200"/>
+    <circle cx="1180" cy="500" r="290"/>
+    <circle cx="1180" cy="500" r="390"/>
+  </g>
+  <!-- 颂钵 -->
+  <g>
+    <path d="M1080 500 q100 120 200 0 z" fill="#E8C9A0"/>
+    <ellipse cx="1180" cy="500" rx="100" ry="18" fill="#F5E1C4"/>
+    <rect x="1290" y="380" width="8" height="120" rx="4" fill="#FDF0DC" transform="rotate(28 1294 440)"/>
+  </g>
+  <!-- 莲花 -->
+  <g transform="translate(240 640)" fill="#FDF0DC" fill-opacity="0.9">
+    <path d="M0 0 C -30 -70 -10 -120 0 -140 C 10 -120 30 -70 0 0 Z"/>
+    <path d="M0 0 C -70 -40 -100 -90 -96 -118 C -60 -104 -24 -60 0 0 Z" fill-opacity="0.7"/>
+    <path d="M0 0 C 70 -40 100 -90 96 -118 C 60 -104 24 -60 0 0 Z" fill-opacity="0.7"/>
+    <ellipse cx="0" cy="10" rx="70" ry="14" fill-opacity="0.4"/>
+  </g>
+  <!-- 星光 -->
+  <g fill="#FDF0DC" fill-opacity="0.6">
+    <circle cx="420" cy="180" r="4"/><circle cx="640" cy="120" r="3"/><circle cx="860" cy="200" r="3"/>
+    <circle cx="330" cy="330" r="3"/><circle cx="1420" cy="150" r="4"/><circle cx="1500" cy="700" r="3"/>
+  </g>
+  <text x="120" y="400" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="96" font-weight="700" fill="#FFFFFF">正念疗愈空间</text>
+  <text x="124" y="480" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="40" fill="#FDF0DC" fill-opacity="0.92">每天 10 分钟，把注意力还给自己</text>
+  <g font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="28" fill="#FDF0DC">
+    <rect x="120" y="520" width="150" height="52" rx="26" fill="#FFFFFF" fill-opacity="0.16"/>
+    <text x="150" y="556">正念共修</text>
+    <rect x="286" y="520" width="150" height="52" rx="26" fill="#FFFFFF" fill-opacity="0.16"/>
+    <text x="316" y="556">声音疗愈</text>
+    <rect x="452" y="520" width="180" height="52" rx="26" fill="#FFFFFF" fill-opacity="0.16"/>
+    <text x="482" y="556">每周 2 场直播</text>
+  </g>
+</svg>

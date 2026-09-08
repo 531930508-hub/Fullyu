@@ -8,7 +8,7 @@
           <a-select-option value="ON_SHELF">已上架</a-select-option>
           <a-select-option value="OFF_SHELF">已下架</a-select-option>
         </a-select>
-        <a-button type="primary" @click="openAdd">+ 发布商品</a-button>
+        <a-button v-perm="'membercard:create'" type="primary" @click="openAdd">+ 发布商品</a-button>
       </a-space>
     </div>
 
@@ -44,9 +44,9 @@
           </template>
           <template v-if="column.dataIndex === 'action'">
             <a-space>
-              <a @click="openEdit(record)">编辑</a>
-              <a v-if="record.status === 'OFF_SHELF'" style="color: #27AE60;" @click="toggleShelf(record)">上架</a>
-              <a-popconfirm v-else title="确定下架该商品？下架后用户将无法购买" @confirm="toggleShelf(record)">
+              <a v-perm="'membercard:update'" @click="openEdit(record)">编辑</a>
+              <a v-perm="'membercard:update'" v-if="record.status === 'OFF_SHELF'" style="color: #27AE60;" @click="toggleShelf(record)">上架</a>
+              <a-popconfirm v-perm="'membercard:update'" v-else title="确定下架该商品？下架后用户将无法购买" @confirm="toggleShelf(record)">
                 <a style="color: #F39C12;">下架</a>
               </a-popconfirm>
             </a-space>

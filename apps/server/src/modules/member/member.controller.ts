@@ -29,8 +29,8 @@ export class MemberController {
   }
 
   @Post('purchase')
-  @ApiOperation({ summary: '购买/续费会员卡（生成待支付订单）' })
-  async purchase(@Request() req: any, @Body() body: { productId: string }) {
-    return this.memberService.purchase(req.user.userId, body.productId)
+  @ApiOperation({ summary: '购买/续费会员卡（生成待支付订单，首次开卡需上传个人照片）' })
+  async purchase(@Request() req: any, @Body() body: { productId: string; photo?: string }) {
+    return this.memberService.purchase(req.user.userId, body.productId, body.photo)
   }
 }

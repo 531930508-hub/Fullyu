@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { PrismaService } from '../../common/prisma.service'
+import { RedisService } from '../../common/redis.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
+import { generateOrderNo } from '../../common/order-no.helper'
 
 /** 连续/累计缺席达到该阈值则冻结会员卡 */
 const MEMBER_FREEZE_THRESHOLD = 3
@@ -9,7 +11,10 @@ const MEMBER_FREEZE_THRESHOLD = 3
 export class MemberService {
   private readonly logger = new Logger('MemberService')
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
 
   /** 上架的会员卡商品列表 */
   async listProducts() {
@@ -39,8 +44,10 @@ export class MemberService {
   /**
    * 购买/续费会员卡：创建 MEMBER_CARD 待支付订单
    * 支付成功后由 PaymentService.fulfillMemberCard 生成/续期会员卡
+   * 个人核验照片规则：首次开卡必须上传照片；续期/重新购买可选择不改或修改一次（传则覆盖）。
+   * 照片仅可经本链路或后台录入，用户无法在有效期内自助修改。
    */
-  async purchase(userId: string, productId: string) {
+  async purchase(userId: string, productId: string, photo?: string) {
     const product = await this.prisma.memberCardProduct.findUnique({
       where: { id: productId },
     })
@@ -48,8 +55,19 @@ export class MemberService {
       throw new BusinessException('会员卡商品不存在或已下架', 4030)
     }
 
+    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (!user) throw new BusinessException('用户不存在', 4033)
+    const trimmedPhoto = typeof photo === 'string' ? photo.trim() : ''
+    if (!user.photo && !trimmedPhoto) {
+      throw new BusinessException('开卡需上传个人照片用于线下签到核验', 4034)
+    }
+    if (trimmedPhoto) {
+      await this.prisma.user.update({ where: { id: userId }, data: { photo: trimmedPhoto } })
+    }
+
     const order = await this.prisma.order.create({
       data: {
+        orderNo: await generateOrderNo(this.redis, 'MEMBER_CARD'),
         userId,
         orderType: 'MEMBER_CARD',
         memberCardProductId: product.id,
@@ -127,11 +145,26 @@ export class MemberService {
   }
 
   async createProduct(data: any) {
-    return this.prisma.memberCardProduct.create({ data })
+    return this.prisma.memberCardProduct.create({ data: this.buildProductData(data, true) })
   }
 
   async updateProduct(id: string, data: any) {
-    return this.prisma.memberCardProduct.update({ where: { id }, data })
+    return this.prisma.memberCardProduct.update({ where: { id }, data: this.buildProductData(data, false) })
+  }
+
+  /** 白名单构建会员卡商品数据，避免前端未知字段直通 Prisma。价格单位为元 */
+  private buildProductData(data: any, isCreate: boolean) {
+    const out: any = {}
+    if (data.type !== undefined) out.type = data.type
+    if (data.name !== undefined) out.name = data.name
+    if (data.price !== undefined) out.price = Number(data.price)
+    if (data.durationDays !== undefined) out.durationDays = Number(data.durationDays)
+    if (data.description !== undefined) out.description = data.description
+    if (data.benefits !== undefined) out.benefits = Array.isArray(data.benefits) ? data.benefits : []
+    if (data.status !== undefined) out.status = data.status
+    if (data.sort !== undefined) out.sort = Number(data.sort)
+    if (isCreate && out.benefits === undefined) out.benefits = []
+    return out
   }
 
   /** 上架/下架商品 */
@@ -147,7 +180,7 @@ export class MemberService {
     return this.prisma.memberCard.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: { user: { select: { phone: true, nickname: true } } },
+      include: { user: { select: { id: true, phone: true, nickname: true, photo: true } } },
     })
   }
 }

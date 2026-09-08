@@ -6,20 +6,33 @@ import { BusinessException } from '../../common/exceptions/business.exception'
 export class CheckinService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 某课程报名学员 + 签到状态 */
+  /** 某课程报名学员 + 签到状态 + 报名日期 + 有效会员卡 */
   async courseRoster(courseId: string) {
+    const now = new Date()
     const [orders, checkIns] = await Promise.all([
       this.prisma.order.findMany({
         where: { courseId, orderType: 'COURSE', status: { in: ['PAID', 'COMPLETED'] } },
-        include: { user: { select: { id: true, phone: true, nickname: true, avatar: true } } },
+        include: { user: { select: { id: true, phone: true, nickname: true, avatar: true, photo: true } } },
+        orderBy: { createdAt: 'asc' },
       }),
       this.prisma.checkIn.findMany({ where: { courseId } }),
     ])
     const checkedUserIds = new Set(checkIns.map((c) => c.userId))
+    const userIds = orders.map((o) => o.userId)
+    const cards = userIds.length
+      ? await this.prisma.memberCard.findMany({
+          where: { userId: { in: userIds }, status: 'ACTIVE', endDate: { gt: now } },
+          select: { userId: true, type: true },
+          orderBy: { endDate: 'desc' },
+        })
+      : []
+    const cardMap = new Map(cards.map((c) => [c.userId, c.type]))
     return orders.map((o) => ({
       orderId: o.id,
       user: o.user,
       checkedIn: checkedUserIds.has(o.userId),
+      enrolledAt: o.createdAt,
+      cardType: cardMap.get(o.userId) ?? null,
     }))
   }
 
@@ -46,5 +59,63 @@ export class CheckinService {
       .delete({ where: { userId_courseId: { userId, courseId } } })
       .catch(() => undefined)
     return { success: true }
+  }
+
+  /** 由 startDate（日期）+ startTime（HH:mm）拼出课程实际开课时刻 */
+  private courseStartAt(course: { startDate: Date; startTime: string }): Date {
+    const d = new Date(course.startDate)
+    const [h, m] = (course.startTime || '00:00').split(':').map((v) => Number(v))
+    d.setHours(Number.isFinite(h) ? h : 0, Number.isFinite(m) ? m : 0, 0, 0)
+    return d
+  }
+
+  /**
+   * 签到首页默认：开课时刻落在 [now-1h, now+2h] 的课程 + 各自报名名单（含个人照片）
+   * 便于员工在开课前后线下核对人脸并签到
+   */
+  async upcomingCheckins() {
+    const now = new Date()
+    const from = new Date(now.getTime() - 60 * 60 * 1000)
+    const to = new Date(now.getTime() + 120 * 60 * 1000)
+    const dayFrom = new Date(from)
+    dayFrom.setHours(0, 0, 0, 0)
+    const dayTo = new Date(to)
+    dayTo.setHours(23, 59, 59, 999)
+    const courses = await this.prisma.course.findMany({
+      where: {
+        status: { in: ['PUBLISHED', 'COMPLETED'] },
+        startDate: { gte: dayFrom, lte: dayTo },
+      },
+      orderBy: { startDate: 'asc' },
+      select: { id: true, title: true, startDate: true, startTime: true, endTime: true, status: true },
+    })
+    const inWindow = courses.filter((c) => {
+      const s = this.courseStartAt(c)
+      return s >= from && s <= to
+    })
+    const result = []
+    for (const c of inWindow) {
+      const roster = await this.courseRoster(c.id)
+      result.push({ course: c, roster })
+    }
+    return result
+  }
+
+  /**
+   * 签到管理可检索的课程范围：尚未结课 + 近3日内结课（endDate >= now-3d），排除草稿/已下架
+   */
+  async checkinCourses(keyword?: string) {
+    const now = new Date()
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+    const where: any = {
+      status: { notIn: ['DRAFT', 'CANCELLED'] },
+      endDate: { gte: threeDaysAgo },
+    }
+    if (keyword) where.title = { contains: keyword }
+    return this.prisma.course.findMany({
+      where,
+      orderBy: { startDate: 'desc' },
+      select: { id: true, title: true, startDate: true, startTime: true, endDate: true, status: true },
+    })
   }
 }

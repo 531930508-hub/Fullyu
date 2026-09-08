@@ -5,12 +5,13 @@ import {
   Injectable,
 } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
+import { hasAllPermissions } from '@fullyu/shared'
 import { PERMISSION_KEY } from '../decorators/require-permission.decorator'
 
 /**
  * 权限守卫：读取 @RequirePermission() 声明的权限点，
  * 与当前登录管理员（req.user.permissions）比对。
- * 超级管理员（permissions 含 '*'）放行所有。
+ * 声明多个权限点时需全部满足；支持 '*' 与 'scm:*' 这类通配。
  * 需与 AdminJwtGuard 一起使用（先鉴权后校验权限）。
  */
 @Injectable()
@@ -27,10 +28,7 @@ export class PermissionGuard implements CanActivate {
     const req = context.switchToHttp().getRequest()
     const permissions: string[] = req.user?.permissions ?? []
 
-    if (permissions.includes('*')) return true
-
-    const ok = required.every((code) => permissions.includes(code))
-    if (!ok) {
+    if (!hasAllPermissions(permissions, required)) {
       throw new ForbiddenException('无权限执行该操作')
     }
     return true

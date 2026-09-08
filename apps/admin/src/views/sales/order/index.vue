@@ -59,6 +59,13 @@
           </template>
           <template v-if="column.dataIndex === 'action'">
             <a-button type="link" size="small" @click="showOrderDetail(record)">详情</a-button>
+            <a-button v-perm="'order:refund'"
+              v-if="record.status === 'PAID' || record.status === 'COMPLETED'"
+              type="link"
+              size="small"
+              danger
+              @click="openForceRefund(record)"
+            >强制退款</a-button>
           </template>
         </template>
       </a-table>
@@ -93,13 +100,34 @@
         </a-timeline>
       </template>
     </a-drawer>
+
+    <!-- 强制退款弹窗 -->
+    <a-modal v-model:open="refundVisible" title="强制退款" :confirm-loading="refunding" @ok="confirmForceRefund">
+      <a-alert
+        type="warning"
+        show-icon
+        message="强制退款用于处理特殊客诉，将原路退回微信，不受课程退款规则限制。若已配置审批人，需审批通过后才会执行退款。"
+        style="margin-bottom: 16px;"
+      />
+      <a-form layout="vertical">
+        <a-form-item label="订单">
+          <span>{{ refundForm.orderNo }}（实付 ¥{{ refundForm.paid.toFixed(2) }}）</span>
+        </a-form-item>
+        <a-form-item label="退款金额（元）">
+          <a-input-number v-model:value="refundForm.amount" prefix="¥" style="width: 100%" :min="0" :max="refundForm.paid" placeholder="留空则全额退" />
+        </a-form-item>
+        <a-form-item label="退款原因" required>
+          <a-input v-model:value="refundForm.reason" placeholder="如：客诉处理、重复支付" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { adminListOrders } from '@/api/order'
+import { adminListOrders, forceRefundOrder } from '@/api/order'
 
 const loading = ref(false)
 const searchText = ref('')
@@ -134,7 +162,7 @@ function mapOrder(o: any) {
   const actualPaid = toYuan(o, o.actualPaid)
   return {
     id: o.id,
-    orderNo: o.id,
+    orderNo: o.orderNo || o.id, // 优先使用自定义订单号
     orderType: o.orderType,
     typeLabel: typeLabelMap[o.orderType] || o.orderType,
     userName: o.user?.nickname || o.user?.phone || '用户',
@@ -175,4 +203,39 @@ const refundCount = computed(() => orders.value.filter(o => o.status === 'REFUND
 const detailVisible = ref(false)
 const currentOrder = ref<any>(null)
 function showOrderDetail(record: any) { currentOrder.value = record; detailVisible.value = true }
+
+// 强制退款
+const refundVisible = ref(false)
+const refunding = ref(false)
+const refundForm = ref({ id: '', orderNo: '', paid: 0, amount: null as number | null, reason: '' })
+
+function openForceRefund(record: any) {
+  refundForm.value = { id: record.id, orderNo: record.orderNo, paid: record.actualPaid, amount: null, reason: '' }
+  refundVisible.value = true
+}
+
+async function confirmForceRefund() {
+  if (!refundForm.value.reason) {
+    message.warning('请填写退款原因')
+    return
+  }
+  refunding.value = true
+  try {
+    const res: any = await forceRefundOrder(refundForm.value.id, {
+      amount: refundForm.value.amount ?? undefined,
+      reason: refundForm.value.reason,
+    })
+    if (res?.pendingApproval) {
+      message.success('退款申请已提交，需审批通过后执行')
+    } else {
+      message.success('已发起强制退款')
+    }
+    refundVisible.value = false
+    loadOrders()
+  } catch (e) {
+    // 错误已由拦截器统一提示
+  } finally {
+    refunding.value = false
+  }
+}
 </script>

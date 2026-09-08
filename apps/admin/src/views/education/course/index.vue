@@ -5,28 +5,30 @@
       <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
         <h2 class="page-title">课程管理</h2>
         <a-space>
-          <a-input-search placeholder="搜索课程" style="width: 200px" v-model:value="searchText" />
-          <a-select v-model:value="filterType" style="width: 120px" placeholder="课程类型">
-            <a-select-option value="">全部</a-select-option>
-            <a-select-option value="SINGLE">单次课程</a-select-option>
-            <a-select-option value="SERIES">系列课程</a-select-option>
-          </a-select>
-          <a-select v-model:value="filterStatus" style="width: 120px" placeholder="状态">
-            <a-select-option value="">全部</a-select-option>
+          <a-input-search placeholder="搜索课程名称" style="width: 200px" v-model:value="searchText" allow-clear @search="loadCourses" @change="onSearchChange" />
+          <a-range-picker v-model:value="dateRange" style="width: 240px" :placeholder="['开课起', '开课止']" @change="onDateRangeChange" />
+          <a-radio-group v-model:value="datePreset" @change="onDatePresetChange">
+            <a-radio-button value="today">今天</a-radio-button>
+            <a-radio-button value="near">近几天</a-radio-button>
+            <a-radio-button value="week">本周</a-radio-button>
+            <a-radio-button value="all">全部</a-radio-button>
+          </a-radio-group>
+          <a-select v-model:value="filterStatus" style="width: 120px" placeholder="状态" @change="loadCourses">
+            <a-select-option value="">全部状态</a-select-option>
             <a-select-option value="PUBLISHED">已发布</a-select-option>
             <a-select-option value="DRAFT">草稿</a-select-option>
-            <a-select-option value="ENDED">已结束</a-select-option>
+            <a-select-option value="CANCELLED">已下架</a-select-option>
           </a-select>
-          <a-button type="primary" @click="currentView = 'create'">+ 创建课程</a-button>
+          <a-button v-perm="'course:create'" type="primary" @click="openCreate">+ 创建课程</a-button>
         </a-space>
       </div>
 
       <!-- 课程统计 -->
       <a-row :gutter="24" style="margin-bottom: 24px">
-        <a-col :span="6"><a-card><a-statistic title="课程总数" :value="courses.length" /></a-card></a-col>
-        <a-col :span="6"><a-card><a-statistic title="进行中" :value="courses.filter(c => c.status === 'PUBLISHED').length" :value-style="{ color: '#27AE60' }" /></a-card></a-col>
-        <a-col :span="6"><a-card><a-statistic title="本周开课" :value="18" suffix="节" /></a-card></a-col>
-        <a-col :span="6"><a-card><a-statistic title="平均满员率" :value="78" suffix="%" :value-style="{ color: '#6B463C' }" /></a-card></a-col>
+        <a-col :span="6"><a-card><a-statistic title="课程总数" :value="filteredCourses.length" /></a-card></a-col>
+        <a-col :span="6"><a-card><a-statistic title="进行中" :value="filteredCourses.filter(c => c.status === 'PUBLISHED').length" :value-style="{ color: '#27AE60' }" /></a-card></a-col>
+        <a-col :span="6"><a-card><a-statistic title="本周开课" :value="weekCourseCount" suffix="节" /></a-card></a-col>
+        <a-col :span="6"><a-card><a-statistic title="平均满员率" :value="avgFillRate" suffix="%" :value-style="{ color: '#6B463C' }" /></a-card></a-col>
       </a-row>
 
       <a-row :gutter="[24, 24]">
@@ -56,8 +58,9 @@
             </div>
             <template #actions>
               <a-button type="link" size="small" @click.stop="viewCourseDetail(course)">详情</a-button>
-              <a-button type="link" size="small" @click.stop="handleCopy(course)">复制</a-button>
-              <a-button type="link" size="small" danger @click.stop="handleUnpublish(course)">下架</a-button>
+              <a-button v-perm="'course:create'" type="link" size="small" @click.stop="handleCopy(course)">复制</a-button>
+              <a-button v-perm="'course:delete'" v-if="course.status === 'DRAFT'" type="link" size="small" danger @click.stop="handleDelete(course)">删除</a-button>
+              <a-button v-perm="'course:update'" v-else type="link" size="small" danger @click.stop="handleUnpublish(course)">下架</a-button>
             </template>
           </a-card>
         </a-col>
@@ -182,20 +185,12 @@
               </div>
               <div class="gallery-add" @click="addGalleryImage">
                 <span style="font-size: 20px;">+</span>
-                <div style="font-size: 11px;">添加图片</div>
+                <div style="font-size: 11px;">上传图片</div>
               </div>
             </div>
+            <input ref="galleryInputRef" type="file" accept="image/*" multiple style="display: none" @change="onGalleryFilesSelected" />
             <div style="color: #999; font-size: 12px; margin-top: 8px;">
-              课程详情页滚动展示的图片，建议3-8张。下次创建相同导师的课程时，系统会优先推荐已有图片。
-            </div>
-            <div v-if="suggestedImages.length > 0" style="margin-top: 12px;">
-              <div style="font-size: 12px; color: #6B463C; margin-bottom: 8px;">💡 推荐图片（来自相同导师/类似课程）：</div>
-              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <div v-for="(simg, si) in suggestedImages" :key="si" class="gallery-suggest" @click="useSuggestedImage(simg)">
-                  <img :src="simg" />
-                  <div class="gallery-suggest-add">+</div>
-                </div>
-              </div>
+              课程详情页滚动展示的图片，由你自行上传，建议3-8张（可一次选择多张）。
             </div>
           </a-form-item>
         </a-form>
@@ -235,11 +230,7 @@
               <a-col :span="8">
                 <a-form-item label="课程时长">
                   <a-select v-model:value="form.duration" placeholder="选择时长">
-                    <a-select-option :value="45">45 分钟</a-select-option>
-                    <a-select-option :value="60">60 分钟</a-select-option>
-                    <a-select-option :value="90">90 分钟</a-select-option>
-                    <a-select-option :value="120">120 分钟</a-select-option>
-                    <a-select-option :value="180">180 分钟（半日）</a-select-option>
+                    <a-select-option v-for="d in durationOptions" :key="d.value" :value="Number(d.value)">{{ d.label }}</a-select-option>
                   </a-select>
                 </a-form-item>
               </a-col>
@@ -260,9 +251,9 @@
           </template>
           <template v-if="form.scheduleType === 'SINGLE'">
             <a-row :gutter="24">
-              <a-col :span="8"><a-form-item label="活动日期"><a-date-picker style="width: 100%" /></a-form-item></a-col>
-              <a-col :span="8"><a-form-item label="开始时间"><a-time-picker format="HH:mm" style="width: 100%" /></a-form-item></a-col>
-              <a-col :span="8"><a-form-item label="时长"><a-select v-model:value="form.duration"><a-select-option :value="120">120分钟</a-select-option><a-select-option :value="180">180分钟</a-select-option><a-select-option :value="360">全天</a-select-option></a-select></a-form-item></a-col>
+              <a-col :span="8"><a-form-item label="活动日期"><a-date-picker v-model:value="form.startDate" style="width: 100%" placeholder="选择活动日期" @change="(v: any) => { form.endDate = v }" /></a-form-item></a-col>
+              <a-col :span="8"><a-form-item label="开始时间"><a-time-picker v-model:value="form.startTime" format="HH:mm" placeholder="开始时间" style="width: 100%" /></a-form-item></a-col>
+              <a-col :span="8"><a-form-item label="时长"><a-select v-model:value="form.duration" placeholder="选择时长"><a-select-option v-for="d in durationOptions" :key="d.value" :value="Number(d.value)">{{ d.label }}</a-select-option></a-select></a-form-item></a-col>
             </a-row>
           </template>
           <a-form-item label="上课场地" required>
@@ -481,8 +472,8 @@
           <a-tag :color="currentCourse.status === 'PUBLISHED' ? 'green' : 'default'">{{ currentCourse.statusLabel }}</a-tag>
         </a-space>
         <a-space>
-          <a-button @click="handleEditCourse">编辑课程</a-button>
-          <a-button type="primary" danger ghost @click="handleUnpublishCurrent">下架</a-button>
+          <a-button v-perm="'course:update'" @click="handleEditCourse">编辑课程</a-button>
+          <a-button v-perm="'course:update'" type="primary" danger ghost @click="handleUnpublishCurrent">下架</a-button>
         </a-space>
       </div>
 
@@ -511,30 +502,15 @@
                 <a-progress :percent="Math.round(currentCourse.enrolled / currentCourse.capacity * 100)" :stroke-color="'#6B463C'" />
                 <a-divider />
                 <a-statistic title="总收入" :value="currentCourse.enrolled * currentCourse.price" prefix="¥" style="margin-bottom: 12px;" />
-                <a-statistic title="平均评分" :value="4.8" :precision="1" suffix="/ 5" />
+                <a-statistic title="平均评分" :value="avgRating" :precision="1" suffix="/ 5" />
               </a-card>
             </a-col>
           </a-row>
         </a-tab-pane>
 
-        <a-tab-pane key="schedule" tab="排期记录">
-          <a-card>
-            <a-table :columns="scheduleColumns" :data-source="courseScheduleData" size="small">
-              <template #bodyCell="{ column, record }">
-                <template v-if="column.dataIndex === 'status'">
-                  <a-tag :color="record.status === '已完成' ? 'green' : record.status === '进行中' ? 'blue' : 'default'">{{ record.status }}</a-tag>
-                </template>
-                <template v-if="column.dataIndex === 'checkin'">
-                  <a-progress :percent="record.checkinRate" size="small" :stroke-color="'#6B463C'" style="width: 100px;" />
-                </template>
-              </template>
-            </a-table>
-          </a-card>
-        </a-tab-pane>
-
         <a-tab-pane key="students" tab="学员列表">
           <a-card>
-            <a-table :columns="studentColumns" :data-source="courseStudentData" size="small">
+            <a-table :columns="studentColumns" :data-source="courseStudentData" :loading="studentsLoading" size="small">
               <template #bodyCell="{ column, record }">
                 <template v-if="column.dataIndex === 'name'">
                   <a-space>
@@ -542,8 +518,8 @@
                     <span>{{ record.name }}</span>
                   </a-space>
                 </template>
-                <template v-if="column.dataIndex === 'attendance'">
-                  <a-progress :percent="record.attendance" size="small" :stroke-color="record.attendance >= 80 ? '#27AE60' : '#F39C12'" style="width: 100px" />
+                <template v-if="column.dataIndex === 'checkedIn'">
+                  <a-tag :color="record.checkedIn ? 'green' : 'default'">{{ record.checkedIn ? '已签到' : '未签到' }}</a-tag>
                 </template>
               </template>
             </a-table>
@@ -555,10 +531,10 @@
             <a-alert style="margin-bottom: 16px" type="info" show-icon
               message="候补即预付：支付成功才进入队列排队；递补顺序「会员候补席位优先 → 普通候补席位」，轮到直接上课；未轮上或主动退出全额退款，未支付超时自动取消。" />
             <a-space style="margin-bottom: 12px">
-              <a-tag color="#6B463C">会员候补席位：{{ waitlistData.filter(w => w.seatType === 'MEMBER' && ['待支付','排队中'].includes(w.status)).length }}/{{ currentCourse?.memberWaitlistSeats || 3 }}</a-tag>
+              <a-tag color="#6B463C">会员候补席位：{{ waitlistData.filter(w => w.seatType === 'MEMBER' && ['PENDING_PAYMENT','WAITING'].includes(w.status)).length }}/{{ currentCourse?.raw?.memberWaitlistSeats || 3 }}</a-tag>
               <a-tag color="#8B6354">普通候补席位：不限量</a-tag>
             </a-space>
-            <a-table :columns="waitlistColumns" :data-source="waitlistData" size="small" :pagination="false">
+            <a-table :columns="waitlistColumns" :data-source="waitlistData" :loading="waitlistLoading" size="small" :pagination="false">
               <template #bodyCell="{ column, record }">
                 <template v-if="column.dataIndex === 'position'">
                   <a-tag color="#6B463C">第 {{ record.position }} 位</a-tag>
@@ -567,12 +543,12 @@
                   <a-tag :color="record.seatType === 'MEMBER' ? 'gold' : 'default'">{{ record.seatType === 'MEMBER' ? '会员席位' : '普通席位' }}</a-tag>
                 </template>
                 <template v-if="column.dataIndex === 'status'">
-                  <a-tag :color="waitlistStatusColor(record.status)">{{ record.status }}</a-tag>
+                  <a-tag :color="waitlistStatusColor(record.status)">{{ waitlistStatusLabel(record.status) }}</a-tag>
                 </template>
                 <template v-if="column.dataIndex === 'action'">
                   <a-space>
-                    <a-button type="link" size="small" :disabled="record.status !== '排队中'" @click="promoteWaitlist(record)">手动递补</a-button>
-                    <a-button type="link" size="small" danger :disabled="!['待支付','排队中'].includes(record.status)" @click="cancelWaitlist(record)">退出退款</a-button>
+                    <a-button v-perm="'waitlist:manage'" type="link" size="small" :disabled="record.status !== 'WAITING'" @click="promoteWaitlist(record)">手动递补</a-button>
+                    <a-button v-perm="'waitlist:manage'" type="link" size="small" danger :disabled="!['PENDING_PAYMENT','WAITING'].includes(record.status)" @click="cancelWaitlist(record)">退出退款</a-button>
                   </a-space>
                 </template>
               </template>
@@ -603,13 +579,16 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import ImageCropper from '@/components/ImageCropper.vue'
-import { adminListCourses, getCourse, createCourse, setCourseStatus, savePriceTiers, saveMemberDiscounts } from '@/api/course'
+import { adminListCourses, getCourse, createCourse, updateCourse, setCourseStatus, deleteCourse, savePriceTiers, saveMemberDiscounts } from '@/api/course'
+import { listCourseWaitlist, promoteWaitlistEntry, cancelWaitlistEntry } from '@/api/waitlist'
 import { listTrainers } from '@/api/trainer'
 import { listVenues } from '@/api/venue'
 import { courseReviews as fetchCourseReviews } from '@/api/review'
+import { courseRoster } from '@/api/checkin'
+import { useDictStore } from '@/stores/dict'
 
 const currentView = ref<'list' | 'create' | 'detail'>('list')
 const loading = ref(false)
@@ -621,7 +600,28 @@ const detailTab = ref('info')
 const searchText = ref('')
 const filterType = ref('')
 const filterStatus = ref('')
+/** 日期快捷预设：today|near(前一天~后三天)|week|all，默认 near */
+const datePreset = ref<'today' | 'near' | 'week' | 'all' | ''>('near')
+/** 开课日期范围 [起, 止]（dayjs），默认前一天到后三天 */
+function presetToRange(preset: string): any {
+  const now = dayjs()
+  if (preset === 'today') return [now.startOf('day'), now.endOf('day')]
+  if (preset === 'near') return [now.subtract(1, 'day').startOf('day'), now.add(3, 'day').endOf('day')]
+  if (preset === 'week') {
+    const dow = now.day() || 7
+    const monday = now.subtract(dow - 1, 'day').startOf('day')
+    return [monday, monday.add(6, 'day').endOf('day')]
+  }
+  return null
+}
+const dateRange = ref<any>(presetToRange('near'))
 const currentCourse = ref<any>(null)
+/** 编辑中的课程 ID（null=新建） */
+const editingId = ref<string | null>(null)
+
+const dictStore = useDictStore()
+/** 课程时长选项（单次/多次共用 course_duration 值集） */
+const durationOptions = computed(() => dictStore.getItems('course_duration'))
 
 const difficultyMap: Record<string, string> = { BEGINNER: '入门', INTERMEDIATE: '进阶', ADVANCED: '高级' }
 
@@ -633,7 +633,8 @@ const coverColors = [
   'linear-gradient(135deg, #3D5A6E, #5A8A9E)',
 ]
 
-const form = ref({
+function createDefaultForm() {
+  return {
   name: '', type: '', description: '', detailDesc: '', difficulty: '', targetAudience: [] as string[],
   tags: [] as string[], trainerId: '', assistantId: '', coverType: 'upload', coverColor: coverColors[0], coverImage: '',
   gallery: [] as string[],
@@ -652,11 +653,14 @@ const form = ref({
     { hoursFrom: 2, hoursTo: 24, refundPercent: 50 },
     { hoursFrom: 0, hoursTo: 2, refundPercent: 0 },
   ],
-})
+  }
+}
+
+const form = ref(createDefaultForm())
 
 const courses = ref<any[]>([])
 
-const statusLabelMap: Record<string, string> = { PUBLISHED: '已发布', DRAFT: '草稿', ENDED: '已结束', ON_SHELF: '已上架', OFF_SHELF: '已下架' }
+const statusLabelMap: Record<string, string> = { PUBLISHED: '已发布', DRAFT: '草稿', CANCELLED: '已下架', COMPLETED: '已结束', EXPIRED: '已过期', ENDED: '已下架', ON_SHELF: '已上架', OFF_SHELF: '已下架' }
 
 function trainerName(id: string) {
   return trainerOptions.value.find(t => t.id === id)?.displayName || ''
@@ -680,6 +684,7 @@ function mapCourse(c: any) {
     status: c.status,
     statusLabel: statusLabelMap[c.status] || c.status,
     coverImage: c.coverImage || '',
+    gallery: Array.isArray(c.gallery) ? c.gallery : [],
     coverColor: coverColors[0],
     desc: c.description || '',
     raw: c,
@@ -689,7 +694,17 @@ function mapCourse(c: any) {
 async function loadCourses() {
   loading.value = true
   try {
-    const data: any = await adminListCourses({ page: 1, pageSize: 100, keyword: searchText.value || undefined, status: filterStatus.value || undefined })
+    const range = Array.isArray(dateRange.value) ? dateRange.value : null
+    const startDateFrom = range && range[0] ? range[0].startOf('day').toISOString() : undefined
+    const startDateTo = range && range[1] ? range[1].endOf('day').toISOString() : undefined
+    const data: any = await adminListCourses({
+      page: 1,
+      pageSize: 100,
+      keyword: searchText.value || undefined,
+      status: filterStatus.value || undefined,
+      startDateFrom,
+      startDateTo,
+    })
     const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : [])
     courses.value = items.map(mapCourse)
   } catch (e: any) {
@@ -697,6 +712,23 @@ async function loadCourses() {
   } finally {
     loading.value = false
   }
+}
+
+/** 切换日期快捷预设：同步日期范围并重新拉取 */
+function onDatePresetChange() {
+  dateRange.value = presetToRange(datePreset.value)
+  loadCourses()
+}
+
+/** 手动选择日期范围：清除预设高亮并重新拉取 */
+function onDateRangeChange() {
+  datePreset.value = ''
+  loadCourses()
+}
+
+/** 搜索框清空时自动刷新（避免逐字请求，非空时依赖回车/搜索按钮触发） */
+function onSearchChange(e: any) {
+  if (!e?.target?.value) loadCourses()
 }
 
 async function loadOptions() {
@@ -712,6 +744,7 @@ async function loadOptions() {
 onMounted(() => {
   loadCourses()
   loadOptions()
+  dictStore.load()
 })
 
 const filteredCourses = computed(() => {
@@ -724,38 +757,34 @@ const filteredCourses = computed(() => {
 })
 
 // 课程详情数据
-const scheduleColumns = [
-  { title: '日期', dataIndex: 'date', width: 120 },
-  { title: '时间', dataIndex: 'time', width: 120 },
-  { title: '场地', dataIndex: 'venue', width: 120 },
-  { title: '报名', dataIndex: 'enrolled', width: 80 },
-  { title: '签到率', dataIndex: 'checkin', width: 140 },
-  { title: '状态', dataIndex: 'status', width: 80 },
-]
-const courseScheduleData = ref([
-  { date: '2025-06-23', time: '09:00-10:30', venue: '冥想室A', enrolled: '6/8', checkinRate: 83, status: '已完成' },
-  { date: '2025-06-21', time: '09:00-10:30', venue: '冥想室A', enrolled: '7/8', checkinRate: 100, status: '已完成' },
-  { date: '2025-06-20', time: '09:00-10:30', venue: '冥想室A', enrolled: '5/8', checkinRate: 80, status: '已完成' },
-  { date: '2025-06-25', time: '09:00-10:30', venue: '冥想室A', enrolled: '4/8', checkinRate: 0, status: '待开始' },
-  { date: '2025-06-27', time: '09:00-10:30', venue: '冥想室A', enrolled: '6/8', checkinRate: 0, status: '待开始' },
-])
-
 const studentColumns = [
   { title: '学员', dataIndex: 'name', width: 150 },
-  { title: '手机号', dataIndex: 'phone', width: 130 },
+  { title: '手机号', dataIndex: 'phone', width: 140 },
   { title: '报名日期', dataIndex: 'enrollDate', width: 120 },
-  { title: '已上课', dataIndex: 'attended', width: 80 },
-  { title: '出勤率', dataIndex: 'attendance', width: 150 },
-  { title: '会员卡', dataIndex: 'card', width: 80 },
+  { title: '会员卡', dataIndex: 'card', width: 100 },
+  { title: '签到状态', dataIndex: 'checkedIn', width: 110 },
 ]
-const courseStudentData = ref([
-  { name: '张敏', phone: '138****1234', enrollDate: '2025-06-01', attended: '8/10', attendance: 80, card: '季卡' },
-  { name: '李悦', phone: '139****5678', enrollDate: '2025-06-03', attended: '9/10', attendance: 90, card: '月卡' },
-  { name: '赵雪', phone: '137****3456', enrollDate: '2025-06-01', attended: '10/10', attendance: 100, card: '季卡' },
-  { name: '陈思涵', phone: '135****7890', enrollDate: '2025-06-05', attended: '7/10', attendance: 70, card: '-' },
-  { name: '林小雨', phone: '158****1111', enrollDate: '2025-06-08', attended: '6/8', attendance: 75, card: '月卡' },
-  { name: '孙思琪', phone: '186****5555', enrollDate: '2025-06-10', attended: '5/6', attendance: 83, card: '季卡' },
-])
+const CARD_TYPE_LABEL: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
+const courseStudentData = ref<any[]>([])
+const studentsLoading = ref(false)
+
+async function loadStudents(courseId: string) {
+  studentsLoading.value = true
+  try {
+    const rows: any = await courseRoster(courseId)
+    courseStudentData.value = (Array.isArray(rows) ? rows : []).map((r: any) => ({
+      name: r.user?.nickname || '匿名用户',
+      phone: r.user?.phone || '-',
+      enrollDate: r.enrolledAt ? dayjs(r.enrolledAt).format('YYYY-MM-DD') : '-',
+      card: CARD_TYPE_LABEL[r.cardType] || '-',
+      checkedIn: !!r.checkedIn,
+    }))
+  } catch (e: any) {
+    message.error(e?.message || '加载学员列表失败')
+  } finally {
+    studentsLoading.value = false
+  }
+}
 
 const courseReviews = ref([
   { id: '1', name: '张敏', rating: 5, date: '2025-06-22', content: '王老师的引导非常温柔，第一次体验正念冥想就感受到内心的平静。课后整个人状态都好了很多！' },
@@ -769,7 +798,41 @@ function viewCourseDetail(course: any) {
   currentView.value = 'detail'
   detailTab.value = 'info'
   loadCourseReviews(course.id)
+  loadWaitlist(course.id)
+  loadStudents(course.id)
 }
+
+/** 本周开课数（基于当前筛选结果，startDate 落在本周一~周日的课程数） */
+const weekCourseCount = computed(() => {
+  const now = new Date()
+  const day = now.getDay() || 7
+  const monday = new Date(now)
+  monday.setHours(0, 0, 0, 0)
+  monday.setDate(now.getDate() - day + 1)
+  const nextMonday = new Date(monday)
+  nextMonday.setDate(monday.getDate() + 7)
+  return filteredCourses.value.filter((c) => {
+    const raw = c.raw || {}
+    const d = raw.startDate ? new Date(raw.startDate) : null
+    return d && d >= monday && d < nextMonday
+  }).length
+})
+
+/** 平均满员率（基于当前筛选结果，仅统计有容量的课程，报名/容量取平均，封顶100%） */
+const avgFillRate = computed(() => {
+  const valid = filteredCourses.value.filter((c) => Number(c.capacity) > 0)
+  if (!valid.length) return 0
+  const sum = valid.reduce((s, c) => s + Math.min(Number(c.enrolled) / Number(c.capacity), 1), 0)
+  return Math.round((sum / valid.length) * 100)
+})
+
+/** 当前课程平均评分（基于已加载的真实评价） */
+const avgRating = computed(() => {
+  const list = courseReviews.value
+  if (!list.length) return 0
+  const sum = list.reduce((s, r) => s + Number(r.rating || 0), 0)
+  return sum / list.length
+})
 
 async function loadCourseReviews(courseId: string) {
   try {
@@ -794,41 +857,98 @@ function buildCoursePayload(status: string) {
     ? start.add(form.value.duration, 'minute').format('HH:mm')
     : undefined
   const basePrice = Math.max(0, ...form.value.priceTiers.map(t => t.price || 0))
+  const gd = form.value.groupDeadline
   return {
     title: form.value.name,
+    type: form.value.type || 'SINGLE',
     description: form.value.description,
+    detailDesc: form.value.detailDesc || undefined,
+    learningGoals: form.value.objectives || undefined,
+    categories: form.value.tags,
+    targetAudience: form.value.targetAudience,
+    difficulty: form.value.difficulty || undefined,
+    coverType: form.value.coverType,
+    coverColor: form.value.coverColor,
     coverImage: form.value.coverImage || undefined,
+    gallery: form.value.gallery,
     trainerId: form.value.trainerId || undefined,
+    assistantId: form.value.assistantId || undefined,
     venueId: form.value.venueId || undefined,
+    scheduleType: form.value.scheduleType,
+    weekdays: form.value.weekdays.map(d => Number(d)),
     startDate: form.value.startDate && typeof form.value.startDate.format === 'function' ? form.value.startDate.format('YYYY-MM-DD') : undefined,
+    endDate: form.value.endDate && typeof form.value.endDate.format === 'function' ? form.value.endDate.format('YYYY-MM-DD') : undefined,
     startTime: startTimeStr,
     endTime: endTimeStr,
+    duration: form.value.duration ?? undefined,
+    totalSessions: form.value.totalSessions ?? undefined,
+    groupDeadline: gd && typeof gd.format === 'function' ? gd.format('YYYY-MM-DD HH:mm:ss') : (gd || undefined),
+    materials: Array.isArray(form.value.materials) ? form.value.materials : [],
+    minCapacity: form.value.minStudents,
     maxCapacity: form.value.capacity,
     originalPrice: Math.round(basePrice * 100),
+    waitlistEnabled: form.value.waitlistEnabled,
+    waitlistDeadlineHours: form.value.waitlistDeadlineHours,
+    memberWaitlistSeats: form.value.memberWaitlistSeats,
+    voucherPolicy: form.value.voucherPolicy,
+    seedsReward: form.value.seedsReward ?? undefined,
+    reviewSeeds: form.value.reviewSeeds ?? undefined,
+    syllabus: Array.isArray(form.value.syllabus) ? form.value.syllabus.filter(s => s.title || s.content) : [],
+    notice: form.value.notice || undefined,
+    refundRules: form.value.refundRules,
     status,
   }
 }
 
-async function submitCourse(status: string) {
+/** 进入新建：重置表单并清除编辑态 */
+function openCreate() {
+  form.value = createDefaultForm()
+  editingId.value = null
+  currentCourse.value = null
+  createStep.value = 0
+  currentView.value = 'create'
+}
+
+/** 保存阶梯价与会员折扣（新建/编辑共用） */
+async function persistTiersAndDiscounts(id: string) {
+  if (!id) return
+  const tiers = form.value.priceTiers.map(t => ({ seatFrom: t.from, seatTo: t.to, price: Math.round((t.price || 0) * 100) }))
+  const discounts = [
+    { cardType: 'YEARLY', discountPercent: form.value.yearlyDiscount },
+    { cardType: 'QUARTERLY', discountPercent: form.value.quarterlyDiscount },
+    { cardType: 'MONTHLY', discountPercent: form.value.monthlyDiscount },
+  ]
+  await savePriceTiers(id, tiers)
+  await saveMemberDiscounts(id, discounts)
+}
+
+async function submitCourse(target: 'DRAFT' | 'PUBLISHED') {
   if (!form.value.name) { message.warning('请填写课程名称'); return }
   if (!form.value.trainerId) { message.warning('请选择授课导师'); return }
+  if (!form.value.venueId) { message.warning('请选择上课场地'); return }
   submitting.value = true
   try {
-    const created: any = await createCourse(buildCoursePayload(status))
-    const newId = created?.id
-    if (newId) {
-      const tiers = form.value.priceTiers.map(t => ({ seatFrom: t.from, seatTo: t.to, price: Math.round((t.price || 0) * 100) }))
-      const discounts = [
-        { cardType: 'YEARLY', discountPercent: form.value.yearlyDiscount },
-        { cardType: 'QUARTERLY', discountPercent: form.value.quarterlyDiscount },
-        { cardType: 'MONTHLY', discountPercent: form.value.monthlyDiscount },
-      ]
-      await savePriceTiers(newId, tiers)
-      await saveMemberDiscounts(newId, discounts)
+    // 无论发布还是存草稿，都先全量保存字段：新建走 createCourse，编辑走 updateCourse
+    const payload: any = buildCoursePayload('DRAFT')
+    let id = editingId.value
+    if (id) {
+      // 编辑不通过表单改动课程状态，状态仅由状态机（发布/下架）流转
+      delete payload.status
+      await updateCourse(id, payload)
+    } else {
+      const created: any = await createCourse(payload)
+      id = created?.id || null
+      editingId.value = id
     }
-    message.success(status === 'DRAFT' ? '已保存为草稿' : '课程发布成功')
+    if (id) await persistTiersAndDiscounts(id)
+    // 发布：保存完成后再经状态机置为 PUBLISHED（触发场地可用性/冲突校验与占用登记）
+    if (target === 'PUBLISHED' && id) {
+      await setCourseStatus(id, 'PUBLISHED')
+    }
+    message.success(target === 'DRAFT' ? '已保存为草稿' : '课程发布成功')
     currentView.value = 'list'
     createStep.value = 0
+    editingId.value = null
     loadCourses()
   } catch (e: any) {
     message.error(e?.message || '保存失败')
@@ -857,77 +977,105 @@ function onCoverCropped(dataUrl: string) {
   message.success('封面已裁剪')
 }
 
-// ===== 详情图集管理 =====
-// 全局图片库（模拟已上传过的图片）
-const imageLibrary = ref<{ trainerId: string; courseName: string; url: string }[]>([
-  { trainerId: '1', courseName: '正念冒想入门', url: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&h=400&fit=crop' },
-  { trainerId: '1', courseName: '正念冒想入门', url: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&h=400&fit=crop' },
-  { trainerId: '1', courseName: '深度冒想进阶', url: 'https://images.unsplash.com/photo-1593811167562-9cef47bfc4d7?w=600&h=400&fit=crop' },
-  { trainerId: '2', courseName: '声音疗愈工作坊', url: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=600&h=400&fit=crop' },
-  { trainerId: '2', courseName: '颂钵深度体验', url: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=600&h=400&fit=crop' },
-  { trainerId: '3', courseName: '舞动身心体验课', url: 'https://images.unsplash.com/photo-1575052814086-f385e2e2ad1b?w=600&h=400&fit=crop' },
-  { trainerId: '4', courseName: '精油调配工作坊', url: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=600&h=400&fit=crop' },
-])
-
-// 根据当前选择的导师和课程名称推荐图片
-const suggestedImages = computed(() => {
-  const tid = form.value.trainerId
-  const name = form.value.name
-  if (!tid && !name) return []
-  // 优先推荐相同导师+名称相似的，再推荐相同导师其他课程的
-  const sameTrainer = imageLibrary.value.filter(img => img.trainerId === tid)
-  const similar = sameTrainer.filter(img => name && img.courseName.includes(name.slice(0, 2)))
-  const rest = sameTrainer.filter(img => !similar.includes(img))
-  const result = [...similar, ...rest].map(i => i.url).filter(u => !form.value.gallery.includes(u))
-  return result.slice(0, 6)
-})
+// ===== 详情图集管理（用户自定义上传）=====
+const galleryInputRef = ref<HTMLInputElement | null>(null)
 
 function addGalleryImage() {
-  // 模拟上传，实际项目中会调用文件上传API
-  const demoUrls = [
-    'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1593811167562-9cef47bfc4d7?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1575052814086-f385e2e2ad1b?w=600&h=400&fit=crop',
-  ]
-  const unused = demoUrls.filter(u => !form.value.gallery.includes(u))
-  if (unused.length > 0) {
-    form.value.gallery.push(unused[0])
-    // 同时添加到图片库
-    if (form.value.trainerId) {
-      imageLibrary.value.push({ trainerId: form.value.trainerId, courseName: form.value.name || '', url: unused[0] })
+  galleryInputRef.value?.click()
+}
+
+function onGalleryFilesSelected(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = input.files ? Array.from(input.files) : []
+  if (!files.length) return
+  let pending = files.length
+  let added = 0
+  files.forEach(file => {
+    if (!file.type.startsWith('image/')) { pending--; return }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = String(reader.result || '')
+      if (url && !form.value.gallery.includes(url)) { form.value.gallery.push(url); added++ }
+      pending--
+      if (pending === 0 && added > 0) message.success(`已添加 ${added} 张图片`)
     }
-    message.success('图片已添加')
-  } else {
-    message.info('演示图片已用完，实际项目中请上传新图片')
-  }
+    reader.onerror = () => { pending-- }
+    reader.readAsDataURL(file)
+  })
+  // 重置以允许再次选择相同文件
+  input.value = ''
 }
 
 function removeGalleryImage(idx: number) {
   form.value.gallery.splice(idx, 1)
 }
 
-function useSuggestedImage(url: string) {
-  if (!form.value.gallery.includes(url)) {
-    form.value.gallery.push(url)
-    message.success('已引用推荐图片')
+// ===== 复制课程（直接落库） =====
+async function handleCopy(course: any) {
+  try {
+    // 1. 拉取源课程完整数据
+    const c: any = await getCourse(course.id)
+    if (!c) { message.error('源课程不存在'); return }
+    // 2. 组装副本数据：日期置空，标题加后缀，状态为草稿
+    const payload: any = {
+      title: (c.title || '') + '（副本）',
+      coverImage: c.coverImage || '',
+      type: c.type,
+      categories: c.categories || [],
+      description: c.description || '',
+      targetAudience: c.targetAudience || [],
+      learningGoals: c.learningGoals || '',
+      startDate: null,
+      endDate: null,
+      startTime: c.startTime || '',
+      endTime: c.endTime || '',
+      trainerId: c.trainerId,
+      venueId: c.venueId,
+      minCapacity: c.minCapacity,
+      maxCapacity: c.maxCapacity,
+      originalPrice: c.originalPrice,
+      gallery: c.gallery || [],
+      scheduleType: c.scheduleType,
+      weekdays: c.weekdays || [],
+      status: 'DRAFT',
+      waitlistEnabled: c.waitlistEnabled,
+      waitlistDeadlineHours: c.waitlistDeadlineHours,
+      memberWaitlistSeats: c.memberWaitlistSeats,
+      detailDesc: c.detailDesc || '',
+      difficulty: c.difficulty || '',
+      assistantId: c.assistantId || '',
+      coverType: c.coverType || '',
+      coverColor: c.coverColor || '',
+      duration: c.duration,
+      totalSessions: c.totalSessions,
+      materials: c.materials || [],
+      groupDeadline: null,
+      voucherPolicy: c.voucherPolicy || 'ALL',
+      seedsReward: c.seedsReward,
+      reviewSeeds: c.reviewSeeds,
+      syllabus: c.syllabus || [],
+      notice: c.notice || '',
+      refundRules: c.refundRules || [],
+      internalNote: c.internalNote || '',
+      trainerSeeds: c.trainerSeeds,
+      allowDeduction: c.allowDeduction,
+    }
+    // 3. 创建副本课程
+    const created: any = await createCourse(payload)
+    // 4. 复制阶梯价和会员折扣
+    if (created?.id) {
+      if (Array.isArray(c.priceTiers) && c.priceTiers.length) {
+        await savePriceTiers(created.id, c.priceTiers.map((t: any) => ({ seatFrom: t.seatFrom, seatTo: t.seatTo, price: t.price })))
+      }
+      if (Array.isArray(c.memberDiscounts) && c.memberDiscounts.length) {
+        await saveMemberDiscounts(created.id, c.memberDiscounts.map((d: any) => ({ cardType: d.cardType, discountPercent: d.discountPercent })))
+      }
+    }
+    message.success('课程已复制为草稿，请设置日期后发布')
+    loadCourses()
+  } catch (e: any) {
+    message.error(e?.message || '复制失败')
   }
-}
-
-// ===== 复制课程 =====
-function handleCopy(course: any) {
-  const copy = {
-    ...course,
-    id: 'copy-' + Date.now(),
-    name: course.name + '（副本）',
-    status: 'DRAFT',
-    statusLabel: '草稿',
-    enrolled: 0,
-  }
-  courses.value.unshift(copy)
-  message.success(`已复制为草稿课程「${copy.name}」，可继续编辑`)
 }
 
 // ===== 时间格式化 =====
@@ -951,37 +1099,129 @@ const waitlistColumns = [
   { title: '状态', dataIndex: 'status', width: 90 },
   { title: '操作', dataIndex: 'action', width: 180 },
 ]
-const waitlistData = ref([
-  { position: 1, seatType: 'MEMBER', name: '周晓欣', phone: '138****2020', joinTime: '2025-06-23 10:12', deadline: '开课前 24h', paid: '¥299', status: '排队中' },
-  { position: 2, seatType: 'MEMBER', name: '吴磊', phone: '139****3131', joinTime: '2025-06-23 14:30', deadline: '开课前 6h', paid: '¥299', status: '排队中' },
-  { position: 3, seatType: 'MEMBER', name: '郑琪', phone: '137****4242', joinTime: '2025-06-24 09:05', deadline: '开课前 24h', paid: '¥299', status: '待支付' },
-  { position: 4, seatType: 'NORMAL', name: '刘洋', phone: '135****5353', joinTime: '2025-06-24 11:20', deadline: '开课前 24h', paid: '¥299', status: '排队中' },
-])
+const waitlistData = ref<any[]>([])
+const waitlistLoading = ref(false)
+
+const WAITLIST_STATUS_LABEL: Record<string, string> = {
+  PENDING_PAYMENT: '待支付', WAITING: '排队中', CONVERTED: '已递补', CANCELLED: '已取消', REFUNDED: '已退款',
+}
+function waitlistStatusLabel(status: string) {
+  return WAITLIST_STATUS_LABEL[status] || status
+}
 function waitlistStatusColor(status: string) {
   switch (status) {
-    case '待支付': return 'orange'
-    case '排队中': return 'blue'
-    case '已递补': return 'green'
+    case 'PENDING_PAYMENT': return 'orange'
+    case 'WAITING': return 'blue'
+    case 'CONVERTED': return 'green'
+    case 'REFUNDED': return 'red'
     default: return 'default'
   }
 }
-function promoteWaitlist(record: any) {
-  record.status = '已递补'
-  message.success(`${record.name} 已手动递补上课，已发送开课通知`)
+
+async function loadWaitlist(courseId: string) {
+  waitlistLoading.value = true
+  try {
+    const rows: any = await listCourseWaitlist(courseId)
+    const dh = currentCourse.value?.raw?.waitlistDeadlineHours ?? 24
+    waitlistData.value = (Array.isArray(rows) ? rows : []).map((r: any) => ({
+      id: r.id,
+      position: r.position,
+      seatType: r.seatType,
+      name: r.name,
+      phone: r.phone,
+      joinTime: r.createdAt ? String(r.createdAt).replace('T', ' ').slice(0, 16) : '',
+      deadline: `开课前 ${dh}h`,
+      paid: `¥${(Number(r.lockedPrice || 0) / 100).toFixed(2)}`,
+      status: r.status,
+    }))
+  } catch (e: any) {
+    message.error(e?.message || '加载候补名单失败')
+  } finally {
+    waitlistLoading.value = false
+  }
 }
+
+/** 手动递补（二次确认；超额时红色警示，仍允许执行） */
+function promoteWaitlist(record: any) {
+  const cap = Number(currentCourse.value?.capacity || 0)
+  const enrolled = Number(currentCourse.value?.enrolled || 0)
+  const over = cap > 0 && enrolled >= cap
+  Modal.confirm({
+    title: '确认手动递补该学员？',
+    content: over
+      ? `⚠ 当前报名 ${enrolled}/${cap} 已满，递补将【超出最大开课人数】。${record.name} 仍会成功上课并计为订单成功。确认继续？`
+      : `将 ${record.name} 递补为正式报名，并发送递补成功通知。确认继续？`,
+    okText: over ? '已超员，确认递补' : '确认递补',
+    okType: over ? 'danger' : 'primary',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        const res: any = await promoteWaitlistEntry(record.id)
+        message.success(res?.overCapacity ? `${record.name} 已超额递补上课，已发送通知` : `${record.name} 已递补上课，已发送通知`)
+        await loadWaitlist(currentCourse.value.id)
+        if (currentCourse.value) currentCourse.value.enrolled = Number(currentCourse.value.enrolled || 0) + 1
+      } catch (e) {
+        // 错误已由拦截器统一提示
+      }
+    },
+  })
+}
+
+/** 退出退款（二次确认；已支付则全额退回微信） */
 function cancelWaitlist(record: any) {
-  record.status = '已退款'
-  message.success(`${record.name} 已退出候补，锁定金额已全额退款`)
+  const paid = record.status === 'WAITING'
+  Modal.confirm({
+    title: paid ? '确认为该学员退出并全额退款？' : '确认取消该候补？',
+    content: paid
+      ? `${record.name} 的锁定金额将【原路全额退回微信】，操作不可撤销。确认继续？`
+      : `${record.name} 尚未支付，将取消其候补资格。确认继续？`,
+    okText: '确认',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await cancelWaitlistEntry(record.id, paid ? '管理员操作候补退出，全额退款' : '管理员取消候补')
+        message.success(paid ? `${record.name} 已退出候补，锁定金额已全额退款` : `${record.name} 候补已取消`)
+        await loadWaitlist(currentCourse.value.id)
+      } catch (e) {
+        // 错误已由拦截器统一提示
+      }
+    },
+  })
+}
+
+// ===== 删除草稿课程 =====
+async function handleDelete(course: any) {
+  if (course.status !== 'DRAFT') {
+    message.warning('仅草稿状态的课程可删除')
+    return
+  }
+  Modal.confirm({
+    title: '确认删除该草稿课程？',
+    content: `将永久删除课程「${course.name}」及其阶梯价/会员折扣配置，操作不可撤销。仅当无人报名/候补时可删除。确认继续？`,
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await deleteCourse(course.id)
+        message.success(`课程「${course.name}」已删除`)
+        loadCourses()
+      } catch (e: any) {
+        message.error(e?.message || '删除失败')
+      }
+    },
+  })
 }
 
 // ===== 下架课程 =====
 async function handleUnpublish(course: any) {
-  if (course.status === 'ENDED') {
+  if (course.status === 'CANCELLED') {
     message.warning('该课程已下架')
     return
   }
   try {
-    await setCourseStatus(course.id, 'ENDED')
+    await setCourseStatus(course.id, 'CANCELLED')
     message.success(`课程「${course.name}」已下架，小程序端将不再展示`)
     loadCourses()
   } catch (e: any) {
@@ -996,22 +1236,85 @@ async function handleUnpublishCurrent() {
 }
 
 // ===== 编辑课程 =====
-function handleEditCourse() {
+/** 把 'HH:mm' 字符串解析为 dayjs（不依赖 customParseFormat 插件） */
+function parseTimeToDayjs(v: string) {
+  if (!v || !/^\d{1,2}:\d{2}/.test(v)) return null
+  const [hh, mm] = v.split(':').map(Number)
+  return dayjs().hour(hh).minute(mm).second(0).millisecond(0)
+}
+
+/** 排期方式：数据库枚举 → 前端 radio 值 */
+function scheduleTypeToForm(v: string): string {
+  if (v === 'WEEKLY') return 'RECURRING'
+  if (v === 'ONE_TIME') return 'SINGLE'
+  if (v === 'APPOINTMENT') return 'APPOINTMENT'
+  return 'RECURRING'
+}
+
+async function handleEditCourse() {
   if (!currentCourse.value) return
-  const c = currentCourse.value
-  // 预填表单数据
-  form.value.name = c.name
-  form.value.type = c.type || 'SINGLE'
-  form.value.description = c.desc || ''
-  form.value.capacity = c.capacity || 8
-  form.value.coverType = c.coverImage ? 'upload' : 'gradient'
-  form.value.coverColor = c.coverColor || coverColors[0]
-  form.value.coverImage = c.coverImage || ''
-  form.value.gallery = c.gallery ? [...c.gallery] : []
-  form.value.trainerId = c.trainerId || ''
-  createStep.value = 0
-  currentView.value = 'create'
-  message.info(`正在编辑课程「${c.name}」，修改后可保存或重新发布`)
+  const id = currentCourse.value.id
+  if (!id) return
+  try {
+    const c: any = await getCourse(id)
+    const f = createDefaultForm()
+    f.name = c.title || ''
+    f.type = c.type || 'SINGLE'
+    f.description = c.description || ''
+    f.detailDesc = c.detailDesc || ''
+    f.difficulty = c.difficulty || ''
+    f.objectives = c.learningGoals || ''
+    f.targetAudience = Array.isArray(c.targetAudience) ? [...c.targetAudience] : []
+    f.tags = Array.isArray(c.categories) ? [...c.categories] : []
+    f.trainerId = c.trainerId || ''
+    f.assistantId = c.assistantId || ''
+    f.coverType = c.coverType || (c.coverImage ? 'upload' : 'gradient')
+    f.coverColor = c.coverColor || coverColors[0]
+    f.coverImage = c.coverImage || ''
+    f.gallery = Array.isArray(c.gallery) ? [...c.gallery] : []
+    f.scheduleType = scheduleTypeToForm(c.scheduleType)
+    f.weekdays = Array.isArray(c.weekdays) ? c.weekdays.map((d: any) => String(d)) : []
+    f.startDate = c.startDate ? dayjs(c.startDate) : null
+    f.endDate = c.endDate ? dayjs(c.endDate) : null
+    f.startTime = c.startTime ? parseTimeToDayjs(c.startTime) : null
+    f.duration = c.duration ?? 90
+    f.totalSessions = c.totalSessions ?? 12
+    f.venueId = c.venueId || ''
+    f.materials = Array.isArray(c.materials) ? [...c.materials] : []
+    f.capacity = c.maxCapacity ?? 8
+    f.minStudents = c.minCapacity ?? 3
+    f.groupDeadline = c.groupDeadline ? dayjs(c.groupDeadline) : null
+    f.voucherPolicy = c.voucherPolicy || 'ALL'
+    f.seedsReward = c.seedsReward ?? 10
+    f.reviewSeeds = c.reviewSeeds ?? 5
+    f.notice = c.notice || ''
+    if (Array.isArray(c.syllabus) && c.syllabus.length) {
+      f.syllabus = c.syllabus.map((s: any) => ({ title: s.title || '', content: s.content || '' }))
+    }
+    f.waitlistEnabled = c.waitlistEnabled ?? true
+    f.waitlistDeadlineHours = c.waitlistDeadlineHours ?? 24
+    f.memberWaitlistSeats = c.memberWaitlistSeats ?? 3
+    if (Array.isArray(c.refundRules) && c.refundRules.length) {
+      f.refundRules = c.refundRules.map((r: any) => ({ hoursFrom: r.hoursFrom, hoursTo: r.hoursTo, refundPercent: r.refundPercent }))
+    }
+    if (Array.isArray(c.priceTiers) && c.priceTiers.length) {
+      f.priceTiers = c.priceTiers.map((t: any) => ({ from: t.seatFrom, to: t.seatTo, price: (t.price ?? 0) / 100 }))
+    }
+    if (Array.isArray(c.memberDiscounts)) {
+      for (const d of c.memberDiscounts) {
+        if (d.cardType === 'YEARLY') f.yearlyDiscount = d.discountPercent
+        else if (d.cardType === 'QUARTERLY') f.quarterlyDiscount = d.discountPercent
+        else if (d.cardType === 'MONTHLY') f.monthlyDiscount = d.discountPercent
+      }
+    }
+    form.value = f
+    editingId.value = id
+    createStep.value = 0
+    currentView.value = 'create'
+    message.info(`正在编辑课程「${f.name}」，修改后可保存或重新发布`)
+  } catch (e: any) {
+    message.error(e?.message || '加载课程详情失败')
+  }
 }
 </script>
 

@@ -3,7 +3,7 @@
     <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
       <h2 class="page-title">物料管理</h2>
       <a-space>
-        <a-button type="primary" @click="openCreate">添加物料</a-button>
+        <a-button v-perm="'material:create'" type="primary" @click="openCreate">添加物料</a-button>
       </a-space>
     </div>
 
@@ -17,6 +17,15 @@
     <a-card>
       <a-table :columns="columns" :data-source="materials" row-key="id" :loading="loading">
         <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'image'">
+            <a-image v-if="record.image" :src="record.image" :width="48" :height="48" style="object-fit: cover; border-radius: 4px;" />
+            <span v-else style="color: #ccc;">—</span>
+          </template>
+          <template v-if="column.dataIndex === 'usageType'">
+            <a-tag :color="record.usageType === 'REUSABLE' ? 'green' : 'blue'">
+              {{ record.usageType === 'REUSABLE' ? '循环使用' : '一次性消耗' }}
+            </a-tag>
+          </template>
           <template v-if="column.dataIndex === 'quantity'">
             <span :style="{ color: record.quantity <= 5 ? '#C0392B' : '#4B3621', fontWeight: 500 }">
               {{ record.quantity }}
@@ -30,8 +39,8 @@
           </template>
           <template v-if="column.dataIndex === 'action'">
             <a-space>
-              <a-button type="link" size="small" @click="openEdit(record)">编辑</a-button>
-              <a-popconfirm title="确定删除该物料？" @confirm="handleRemove(record)">
+              <a-button v-perm="'material:update'" type="link" size="small" @click="openEdit(record)">编辑</a-button>
+              <a-popconfirm v-perm="'material:delete'" title="确定删除该物料？" @confirm="handleRemove(record)">
                 <a-button type="link" size="small" danger>删除</a-button>
               </a-popconfirm>
             </a-space>
@@ -43,7 +52,22 @@
     <!-- 添加/编辑物料弹窗 -->
     <a-modal v-model:open="modalVisible" :title="isEditing ? '编辑物料' : '添加物料'" @ok="handleSave" :confirm-loading="saving">
       <a-form layout="vertical">
+        <a-form-item label="物料图片">
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <a-image v-if="form.image" :src="form.image" :width="80" :height="80" style="object-fit: cover; border-radius: 6px;" />
+            <div v-else style="width: 80px; height: 80px; border: 1px dashed #d9d9d9; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #999;">+</div>
+            <a-upload :show-upload-list="false" :before-upload="beforeImageUpload" accept="image/*">
+              <a-button>上传图片</a-button>
+            </a-upload>
+          </div>
+        </a-form-item>
         <a-form-item label="物料名称"><a-input v-model:value="form.name" placeholder="输入名称" /></a-form-item>
+        <a-form-item label="物料属性">
+          <a-radio-group v-model:value="form.usageType">
+            <a-radio value="CONSUMABLE">一次性消耗（用完就少）</a-radio>
+            <a-radio value="REUSABLE">循环使用（如瑜伽垫）</a-radio>
+          </a-radio-group>
+        </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12"><a-form-item label="库存数量"><a-input-number v-model:value="form.quantity" :min="0" style="width: 100%" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="单价（元）"><a-input-number v-model:value="form.unitPrice" :min="0" :precision="2" style="width: 100%" /></a-form-item></a-col>
@@ -64,7 +88,9 @@ const saving = ref(false)
 const materials = ref<any[]>([])
 
 const columns = [
+  { title: '图片', dataIndex: 'image', width: 72 },
   { title: '物料名称', dataIndex: 'name' },
+  { title: '物料属性', dataIndex: 'usageType', width: 120 },
   { title: '库存数量', dataIndex: 'quantity', width: 120 },
   { title: '单价', dataIndex: 'unitPrice', width: 120 },
   { title: '所需 Seeds', dataIndex: 'seedsCost', width: 120 },
@@ -91,12 +117,12 @@ onMounted(loadMaterials)
 const modalVisible = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
-const form = ref({ name: '', quantity: 0, unitPrice: 0, seedsCost: 0 })
+const form = ref({ name: '', image: '', quantity: 0, usageType: 'CONSUMABLE', unitPrice: 0, seedsCost: 0 })
 
 function openCreate() {
   isEditing.value = false
   editingId.value = ''
-  form.value = { name: '', quantity: 0, unitPrice: 0, seedsCost: 0 }
+  form.value = { name: '', image: '', quantity: 0, usageType: 'CONSUMABLE', unitPrice: 0, seedsCost: 0 }
   modalVisible.value = true
 }
 
@@ -105,11 +131,47 @@ function openEdit(record: any) {
   editingId.value = record.id
   form.value = {
     name: record.name,
+    image: record.image || '',
     quantity: record.quantity,
+    usageType: record.usageType || 'CONSUMABLE',
     unitPrice: Number(record.unitPrice),
     seedsCost: record.seedsCost,
   }
   modalVisible.value = true
+}
+
+/** 图片上传压缩 */
+function beforeImageUpload(file: File) {
+  if (!file.type.startsWith('image/')) { message.error('请上传图片文件'); return false }
+  if (file.size > 10 * 1024 * 1024) { message.error('图片过大，请选择 10MB 以内的图片'); return false }
+  const reader = new FileReader()
+  reader.onload = e => {
+    const src = e.target?.result as string
+    const img = new Image()
+    img.onload = () => {
+      const MAX = 512
+      let { width, height } = img
+      if (width > MAX || height > MAX) {
+        const ratio = Math.min(MAX / width, MAX / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height)
+        form.value.image = canvas.toDataURL('image/jpeg', 0.85)
+      } else {
+        form.value.image = src
+      }
+    }
+    img.onerror = () => { form.value.image = src }
+    img.src = src
+  }
+  reader.readAsDataURL(file)
+  return false
 }
 
 async function handleSave() {
@@ -118,7 +180,9 @@ async function handleSave() {
   try {
     const payload = {
       name: form.value.name,
+      image: form.value.image || undefined,
       quantity: form.value.quantity,
+      usageType: form.value.usageType,
       unitPrice: form.value.unitPrice,
       seedsCost: form.value.seedsCost,
     }

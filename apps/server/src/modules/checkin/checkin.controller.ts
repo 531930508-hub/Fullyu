@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common'
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import { CheckinService } from './checkin.service'
 import { AdminAuth } from '../../common/decorators/admin-auth.decorator'
@@ -7,6 +7,20 @@ import { AdminAuth } from '../../common/decorators/admin-auth.decorator'
 @Controller('checkin')
 export class CheckinController {
   constructor(private readonly checkinService: CheckinService) {}
+
+  @Get('upcoming')
+  @AdminAuth('checkin:view')
+  @ApiOperation({ summary: '近2小时待开课的课程及报名名单（含个人照片）' })
+  async upcoming() {
+    return this.checkinService.upcomingCheckins()
+  }
+
+  @Get('courses')
+  @AdminAuth('checkin:view')
+  @ApiOperation({ summary: '签到可检索课程（尚未结课 + 近3日内结课）' })
+  async courses(@Query('keyword') keyword?: string) {
+    return this.checkinService.checkinCourses(keyword)
+  }
 
   @Get('course/:courseId')
   @AdminAuth('checkin:view')

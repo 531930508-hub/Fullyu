@@ -7,8 +7,8 @@
  */
 
 // 后端基础地址：mp-weixin 需完整域名并在小程序后台配置合法域名；H5 可走相对路径
-// 生产环境请替换为正式域名，例如 https://api.yourdomain.com/api/v1
-let baseUrl = 'https://api.yourdomain.com/api/v1'
+// 测试阶段指向测试服务器（http 仅限开发者工具勾选「不校验合法域名」）；正式发布需替换为 https 备案域名
+let baseUrl = 'http://120.55.36.3/api/v1'
 // #ifdef H5
 baseUrl = '/api/v1'
 // #endif
@@ -66,7 +66,13 @@ export function request<T = any>(options: RequestOptions): Promise<T> {
 
         // HTTP 层错误
         if (status === 401) {
-          goLogin()
+          // 静默请求（未登录预加载等）不打扰用户，仅清理本地登录态
+          if (silent) {
+            uni.removeStorageSync('token')
+            uni.removeStorageSync('userInfo')
+          } else {
+            goLogin()
+          }
           reject(new Error('未授权'))
           return
         }

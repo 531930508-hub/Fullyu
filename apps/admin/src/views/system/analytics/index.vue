@@ -51,17 +51,82 @@
       </div>
     </a-card>
 
-    <!-- 课程热度/导师评分/用户增长/会员分布：后端暂未提供聚合接口，待后续补充 -->
+    <!-- 课程热度 / 导师评分 -->
+    <a-row :gutter="24" style="margin-bottom: 24px">
+      <a-col :span="12">
+        <a-card title="课程热度（报名 Top 8）" :loading="chartsLoading">
+          <a-empty v-if="!coursePopularity.length" description="暂无课程数据" />
+          <div v-else class="rank-list">
+            <div v-for="(item, i) in coursePopularity" :key="i" class="rank-item">
+              <div class="rank-name" :title="item.name">{{ item.name }}</div>
+              <div class="rank-bar-wrap">
+                <div class="rank-bar" :style="{ width: courseBarWidth(item.value) + '%' }"></div>
+              </div>
+              <div class="rank-value">{{ item.value }}/{{ item.capacity }}</div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+      <a-col :span="12">
+        <a-card title="导师评分（Top 8）" :loading="chartsLoading">
+          <a-empty v-if="!trainerRatings.length" description="暂无评价数据" />
+          <div v-else class="rank-list">
+            <div v-for="(item, i) in trainerRatings" :key="i" class="rank-item">
+              <div class="rank-name" :title="item.name">{{ item.name }}</div>
+              <div class="rank-bar-wrap">
+                <div class="rank-bar rating" :style="{ width: (item.value / 5 * 100) + '%' }"></div>
+              </div>
+              <div class="rank-value">{{ item.value }}分 · {{ item.count }}评</div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+    </a-row>
+
+    <!-- 用户增长 / 会员分布 -->
+    <a-row :gutter="24" style="margin-bottom: 24px">
+      <a-col :span="12">
+        <a-card title="用户增长（近30天新增）" :loading="chartsLoading">
+          <a-empty v-if="!userGrowthData.length" description="暂无新增用户" />
+          <div v-else class="chart-container">
+            <div class="bar-chart">
+              <div v-for="(item, i) in userGrowthData" :key="i" class="bar-item">
+                <div class="bar-wrapper">
+                  <div class="bar" :style="{ height: item.percent + '%' }"></div>
+                </div>
+                <div class="bar-label">{{ item.label }}</div>
+                <div class="bar-value">{{ item.value }}</div>
+              </div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+      <a-col :span="12">
+        <a-card title="会员分布（有效会员卡）" :loading="chartsLoading">
+          <a-empty v-if="!memberDistribution.length" description="暂无会员卡" />
+          <div v-else class="rank-list">
+            <div v-for="(item, i) in memberDistribution" :key="i" class="rank-item">
+              <div class="rank-name">{{ cardTypeLabel(item.type) }}</div>
+              <div class="rank-bar-wrap">
+                <div class="rank-bar" :style="{ width: memberBarWidth(item.count) + '%' }"></div>
+              </div>
+              <div class="rank-value">{{ item.count }}张</div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+    </a-row>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { overview, revenueTrend } from '@/api/analytics'
+import { overview, revenueTrend, charts } from '@/api/analytics'
 
 const timeRange = ref('month')
 const loading = ref(false)
+const chartsLoading = ref(false)
 
 const stats = ref({
   totalRevenue: 0,
@@ -71,6 +136,23 @@ const stats = ref({
 })
 
 const revenueData = ref<{ label: string; value: string; percent: number }[]>([])
+const coursePopularity = ref<{ name: string; value: number; capacity: number }[]>([])
+const trainerRatings = ref<{ name: string; value: number; count: number }[]>([])
+const userGrowthData = ref<{ label: string; value: number; percent: number }[]>([])
+const memberDistribution = ref<{ type: string; count: number }[]>([])
+
+const CARD_TYPE_LABEL: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
+function cardTypeLabel(type: string) {
+  return CARD_TYPE_LABEL[type] || type
+}
+function courseBarWidth(value: number) {
+  const max = Math.max(1, ...coursePopularity.value.map((c) => c.value))
+  return Math.round((value / max) * 100)
+}
+function memberBarWidth(count: number) {
+  const max = Math.max(1, ...memberDistribution.value.map((c) => c.count))
+  return Math.round((count / max) * 100)
+}
 
 function formatAmount(yuan: number) {
   if (yuan >= 1000) return (yuan / 1000).toFixed(1) + 'k'
@@ -104,7 +186,31 @@ async function loadData() {
   }
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadData()
+  loadCharts()
+})
+
+async function loadCharts() {
+  chartsLoading.value = true
+  try {
+    const data: any = await charts()
+    coursePopularity.value = Array.isArray(data?.coursePopularity) ? data.coursePopularity : []
+    trainerRatings.value = Array.isArray(data?.trainerRatings) ? data.trainerRatings : []
+    memberDistribution.value = Array.isArray(data?.memberDistribution) ? data.memberDistribution : []
+    const growth: { date: string; count: number }[] = Array.isArray(data?.userGrowth) ? data.userGrowth : []
+    const gmax = Math.max(1, ...growth.map((d) => d.count))
+    userGrowthData.value = growth.map((d) => ({
+      label: d.date?.slice(5) || '',
+      value: d.count ?? 0,
+      percent: Math.round(((d.count ?? 0) / gmax) * 100),
+    }))
+  } catch (e: any) {
+    message.error(e?.message || '加载图表数据失败')
+  } finally {
+    chartsLoading.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -147,5 +253,46 @@ onMounted(loadData)
   font-size: 12px;
   color: #4B3621;
   font-weight: 500;
+}
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+.rank-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rank-name {
+  width: 120px;
+  font-size: 13px;
+  color: #4B3621;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rank-bar-wrap {
+  flex: 1;
+  height: 14px;
+  background: #f5efe8;
+  border-radius: 7px;
+  overflow: hidden;
+}
+.rank-bar {
+  height: 100%;
+  background: linear-gradient(to right, #8B6354, #6B463C);
+  border-radius: 7px;
+  transition: width 0.3s ease;
+}
+.rank-bar.rating {
+  background: linear-gradient(to right, #E0B872, #C99A3F);
+}
+.rank-value {
+  width: 96px;
+  text-align: right;
+  font-size: 12px;
+  color: #7D665C;
 }
 </style>

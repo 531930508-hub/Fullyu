@@ -22,18 +22,38 @@ export class TaskService {
     return this.prisma.task.findMany({
       where: {
         status: 'PUBLISHED',
-        OR: [{ scope: 'ALL' }, { specificTrainerIds: { has: trainerId } }],
+        OR: [{ scope: 'ALL' }, { specificTrainerIds: { array_contains: trainerId } }],
       },
       orderBy: { createdAt: 'desc' },
     })
   }
 
   async create(data: any) {
-    return this.prisma.task.create({ data })
+    return this.prisma.task.create({
+      data: {
+        title: data.title ?? '未命名任务',
+        description: data.description ?? '',
+        seedsReward: Number(data.seedsReward ?? 0),
+        publisherCost: Number(data.publisherCost ?? 0),
+        maxParticipants: Number(data.maxParticipants ?? 0),
+        scope: data.scope === 'SPECIFIC' ? 'SPECIFIC' : 'ALL',
+        specificTrainerIds: Array.isArray(data.specificTrainerIds) ? data.specificTrainerIds : [],
+        status: data.status ?? 'PUBLISHED',
+      },
+    })
   }
 
   async update(id: string, data: any) {
-    return this.prisma.task.update({ where: { id }, data })
+    const payload: any = {}
+    if (data.title !== undefined) payload.title = data.title
+    if (data.description !== undefined) payload.description = data.description
+    if (data.seedsReward !== undefined) payload.seedsReward = Number(data.seedsReward)
+    if (data.publisherCost !== undefined) payload.publisherCost = Number(data.publisherCost)
+    if (data.maxParticipants !== undefined) payload.maxParticipants = Number(data.maxParticipants)
+    if (data.scope !== undefined) payload.scope = data.scope === 'SPECIFIC' ? 'SPECIFIC' : 'ALL'
+    if (data.specificTrainerIds !== undefined) payload.specificTrainerIds = Array.isArray(data.specificTrainerIds) ? data.specificTrainerIds : []
+    if (data.status !== undefined) payload.status = data.status
+    return this.prisma.task.update({ where: { id }, data: payload })
   }
 
   async cancel(id: string) {

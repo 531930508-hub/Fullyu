@@ -53,7 +53,8 @@ export interface CourseListQuery {
 
 /** 课程列表（公开） */
 export function listCourses(query: CourseListQuery = {}) {
-  return get<CourseListResult>('/courses', query, { auth: false })
+  // silent：后端未启动时静默降级，首页课程列表显示为空
+  return get<CourseListResult>('/courses', query, { auth: false, silent: true })
 }
 
 /** 课程详情（公开） */

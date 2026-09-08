@@ -44,4 +44,13 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  // 仅本地 H5 开发用：把 /api 代理到本地后端，方便手机浏览器/内网穿透联调
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
+  },
 })

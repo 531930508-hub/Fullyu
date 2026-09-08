@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../common/prisma.service'
 
 @Injectable()
@@ -21,7 +22,7 @@ export class UserService {
     if (query.keyword) {
       where.OR = [
         { phone: { contains: query.keyword } },
-        { nickname: { contains: query.keyword, mode: 'insensitive' } },
+        { nickname: { contains: query.keyword } },
       ]
     }
     return this.prisma.user.findMany({
@@ -35,9 +36,20 @@ export class UserService {
   }
 
   async updateProfile(userId: string, data: { nickname?: string; avatar?: string; language?: string }) {
+    // 注意：个人核验照片 photo 不允许用户自助修改，仅后台或购卡链路录入
     return this.prisma.user.update({
       where: { id: userId },
       data,
+    })
+  }
+
+  /** 后台更新用户个人核验照片（用户不可自助修改） */
+  async adminUpdatePhoto(userId: string, photo: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (!user) throw new BadRequestException('用户不存在')
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { photo },
     })
   }
 

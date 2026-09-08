@@ -28,7 +28,7 @@
           <a-list-item>
             <template #actions>
               <a-button v-if="item.rating <= 3" type="link" size="small" @click="openVisit(item)" style="color: #F39C12;">回访</a-button>
-              <a-popconfirm title="确定删除该评价？" @confirm="deleteReview(item)">
+              <a-popconfirm v-perm="'review:delete'" title="确定删除该评价？" @confirm="deleteReview(item)">
                 <a-button type="link" size="small" danger>删除</a-button>
               </a-popconfirm>
             </template>

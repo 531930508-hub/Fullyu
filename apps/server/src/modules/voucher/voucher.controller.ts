@@ -27,8 +27,8 @@ export class VoucherController {
   @Post('grant')
   @AdminAuth('voucher:create')
   @ApiOperation({ summary: '发放代金券' })
-  async grant(@Body() body: any) {
-    return this.voucherService.grant(body)
+  async grant(@Request() req: any, @Body() body: any) {
+    return this.voucherService.grant(body, req.user.adminId)
   }
 
   @Post(':id/revoke')

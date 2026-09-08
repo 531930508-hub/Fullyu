@@ -1,11 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common'
 import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
 import { PricingService } from '../pricing/pricing.service'
 import { NotificationService } from '../../common/notification/notification.service'
+import { PaymentService } from '../payment/payment.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
 import { SEAT_LOCK_DURATION_MINUTES } from '@fullyu/shared'
 import { WaitlistSeatType } from '@prisma/client'
+import { generateOrderNo } from '../../common/order-no.helper'
 
 /**
  * 候补双队列服务（预付模式）：
@@ -22,6 +24,8 @@ export class WaitlistService {
     private readonly redis: RedisService,
     private readonly pricing: PricingService,
     private readonly notification: NotificationService,
+    @Inject(forwardRef(() => PaymentService))
+    private readonly payment: PaymentService,
   ) {}
 
   /**
@@ -67,6 +71,19 @@ export class WaitlistService {
         if (!course) throw new BusinessException('课程不存在', 4004)
         if (!course.waitlistEnabled) throw new BusinessException('该课程未开启候补', 4020)
 
+        // 二次校验：以事务内最新数据为准，兜底课程被改期/改场后仍可候补的并发场景
+        const now = new Date()
+        if (course.enrollEndAt && now > course.enrollEndAt) {
+          throw new BusinessException('报名已截止', 4009)
+        }
+        if (course.startDate && now >= course.startDate) {
+          throw new BusinessException('课程已开课，无法候补', 4019)
+        }
+        const venue = await tx.venue.findUnique({ where: { id: course.venueId } })
+        if (!venue || !venue.isAvailable) {
+          throw new BusinessException('课程场地暂不可用，暂无法候补', 4025)
+        }
+
         // 未满不允许候补
         if (course.currentEnrolled < course.maxCapacity) {
           throw new BusinessException('课程仍有名额，请直接报名', 4021)
@@ -88,8 +105,10 @@ export class WaitlistService {
           await this.computeLockedPrice(course, userId)
 
         // 预付订单
+        const orderNo = await generateOrderNo(this.redis, 'WAITLIST')
         const order = await tx.order.create({
           data: {
+            orderNo,
             userId,
             courseId,
             orderType: 'WAITLIST',
@@ -197,6 +216,138 @@ export class WaitlistService {
       }
     }
     return result
+  }
+
+  // ============ 后台候补管理 ============
+
+  /**
+   * 后台：某课程的候补名单（含学员信息与订单），会员席优先、position 升序
+   */
+  async adminListByCourse(courseId: string) {
+    const entries = await this.prisma.waitlistEntry.findMany({
+      where: { courseId },
+      include: { user: { select: { nickname: true, phone: true } } },
+    })
+    entries.sort((a, b) => {
+      if (a.seatType !== b.seatType) {
+        return a.seatType === WaitlistSeatType.MEMBER ? -1 : 1
+      }
+      return a.position - b.position
+    })
+    return entries.map((e) => ({
+      id: e.id,
+      userId: e.userId,
+      name: e.user?.nickname || e.user?.phone || '用户',
+      phone: e.user?.phone || '',
+      seatType: e.seatType,
+      position: e.position,
+      status: e.status,
+      lockedPrice: Number(e.lockedPrice),
+      orderId: e.orderId,
+      createdAt: e.createdAt,
+      convertedAt: e.convertedAt,
+    }))
+  }
+
+  /**
+   * 后台手动递补单个候补条目：不受课程最大人数限制（可超额开课），
+   * 转正成功后下发递补通知。仅可递补「WAITING（已支付排队中）」的条目。
+   * 返回 overCapacity 标记本次递补是否已超出最大开课人数。
+   */
+  async promoteEntry(entryId: string): Promise<{ promoted: boolean; overCapacity: boolean }> {
+    const entry = await this.prisma.waitlistEntry.findUnique({
+      where: { id: entryId },
+      include: {
+        course: {
+          select: {
+            id: true,
+            title: true,
+            startDate: true,
+            maxCapacity: true,
+            currentEnrolled: true,
+          },
+        },
+      },
+    })
+    if (!entry) throw new BusinessException('候补记录不存在', 4004)
+    if (entry.status !== 'WAITING') {
+      throw new BusinessException('仅可递补「排队中（已支付）」的候补', 4023)
+    }
+
+    const courseId = entry.courseId
+    const overCapacity = entry.course.currentEnrolled >= entry.course.maxCapacity
+
+    await this.redis.withLock(`enroll:${courseId}`, async () => {
+      return this.prisma.$transaction(async (tx) => {
+        await tx.waitlistEntry.update({
+          where: { id: entryId },
+          data: { status: 'CONVERTED', convertedAt: new Date() },
+        })
+        // 预付订单已支付，转正即视为正式报名（不受最大人数限制，可超额）
+        if (entry.orderId) {
+          await tx.order.update({
+            where: { id: entry.orderId },
+            data: { status: 'COMPLETED' },
+          })
+        }
+        await tx.course.update({
+          where: { id: courseId },
+          data: { currentEnrolled: { increment: 1 } },
+        })
+      })
+    })
+
+    // 事务外下发递补成功通知（不阻断主流程）
+    const deadline = entry.course.startDate
+      ? new Date(entry.course.startDate).toISOString().slice(0, 10)
+      : '请尽快确认'
+    await this.notification.waitlistPromoted(entry.userId, {
+      courseName: entry.course.title,
+      orderId: entry.orderId ?? '',
+      deadline,
+    })
+
+    return { promoted: true, overCapacity }
+  }
+
+  /**
+   * 后台候补退出退款：
+   * - WAITING（已支付）→ 全额退款（原路退回微信），标记 REFUNDED
+   * - PENDING_PAYMENT（待支付）→ 取消订单，标记 CANCELLED
+   */
+  async cancelEntry(entryId: string, reason?: string): Promise<{ refundAmount: number }> {
+    const entry = await this.prisma.waitlistEntry.findUnique({ where: { id: entryId } })
+    if (!entry) throw new BusinessException('候补记录不存在', 4004)
+    if (!['PENDING_PAYMENT', 'WAITING'].includes(entry.status)) {
+      throw new BusinessException('该候补状态不可退出退款', 4024)
+    }
+
+    if (entry.status === 'WAITING' && entry.orderId) {
+      await this.payment.refundFull(entry.orderId, reason || '管理员操作候补退出，全额退款')
+      // 退款回调会最终置 REFUNDED；此处先标记，避免界面滞后
+      await this.prisma.waitlistEntry.update({
+        where: { id: entryId },
+        data: { status: 'REFUNDED', refundedAt: new Date() },
+      })
+      return { refundAmount: Number(entry.lockedPrice) }
+    }
+
+    // 待支付：取消订单 + 释放候补
+    if (entry.orderId) {
+      await this.prisma.order.update({
+        where: { id: entry.orderId },
+        data: {
+          status: 'CANCELLED',
+          cancelReason: reason || '管理员取消候补',
+          cancelTime: new Date(),
+        },
+      })
+    }
+    await this.prisma.waitlistEntry.update({
+      where: { id: entryId },
+      data: { status: 'CANCELLED' },
+    })
+    return { refundAmount: 0 }
   }
 
   /**

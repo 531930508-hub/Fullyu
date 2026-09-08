@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5B3A72"/>
+      <stop offset="55%" stop-color="#8A5FA6"/>
+      <stop offset="100%" stop-color="#B78FCB"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <!-- 蜡烛 -->
+  <g transform="translate(1100 380)">
+    <rect x="0" y="60" width="150" height="170" rx="18" fill="#F3E6D0"/>
+    <ellipse cx="75" cy="62" rx="75" ry="16" fill="#FBEFDB"/>
+    <rect x="70" y="10" width="10" height="44" rx="5" fill="#5A3A12"/>
+    <path d="M75 -40 q22 30 0 52 q-22 -22 0 -52 z" fill="#F7C873"/>
+    <circle cx="75" cy="0" r="8" fill="#FDF0DC"/>
+  </g>
+  <!-- 扩香石与线香 -->
+  <g transform="translate(1320 470)">
+    <ellipse cx="60" cy="120" rx="80" ry="22" fill="#3E2A4E" fill-opacity="0.5"/>
+    <circle cx="60" cy="80" r="48" fill="#E8D6F0"/>
+    <rect x="140" y="-60" width="6" height="180" rx="3" fill="#F3E6D0" transform="rotate(12 143 30)"/>
+    <path d="M170 -90 q20 -20 8 -40 q26 10 12 44 q-8 12 -20 -4 z" fill="#FDF0DC" fill-opacity="0.5"/>
+  </g>
+  <g fill="#FDF0DC" fill-opacity="0.55">
+    <circle cx="380" cy="170" r="4"/><circle cx="660" cy="120" r="3"/><circle cx="920" cy="200" r="3"/><circle cx="1500" cy="180" r="4"/><circle cx="240" cy="300" r="3"/>
+  </g>
+  <text x="120" y="400" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="96" font-weight="700" fill="#FFFFFF">手作香薰实验室</text>
+  <text x="124" y="480" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="40" fill="#FDF0DC" fill-opacity="0.92">一起把季节调进香气里</text>
+  <g font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="28" fill="#FDF0DC">
+    <rect x="120" y="520" width="150" height="52" rx="26" fill="#FFFFFF" fill-opacity="0.16"/>
+    <text x="150" y="556">香薰蜡烛</text>
+    <rect x="286" y="520" width="150" height="52" rx="26" fill="#FFFFFF" fill-opacity="0.16"/>
+    <text x="316" y="556">扩香手作</text>
+    <rect x="452" y="520" width="180" height="52" rx="26" fill="#FFFFFF" fill-opacity="0.16"/>
+    <text x="482" y="556">每月材料包</text>
+  </g>
+</svg>

@@ -1,11 +1,11 @@
 # Full愈 编排文件
 #
-# 生产：连接阿里云 RDS PostgreSQL / Redis（在 apps/server/.env.local 配置指向阿里云的
+# 生产：连接阿里云 RDS MySQL / Redis（在 apps/server/.env.local 配置指向阿里云的
 #       DATABASE_URL、REDIS_HOST 等），仅启动 server：
 #         docker compose up -d --build server
 #
-# 预发/本地：使用内置 postgres + redis（profile=local），并让 .env.local 指向服务名
-#       (DATABASE_URL=postgresql://fullyu:fullyu@postgres:5432/fullyu, REDIS_HOST=redis)：
+# 预发/本地：使用内置 mysql + redis（profile=local），并让 .env.local 指向服务名
+#       (DATABASE_URL=mysql://fullyu:fullyu@mysql:3306/fullyu, REDIS_HOST=redis)：
 #         docker compose --profile local up -d --build
 #
 # 数据库迁移（生产使用 migrate deploy，绝不使用 dev migrate）：
@@ -43,21 +43,22 @@ services:
       - fullyu
 
   # ===== 以下仅用于预发/本地（profile=local），生产请连阿里云 RDS/Redis =====
-  postgres:
-    image: postgres:16-alpine
+  mysql:
+    image: mysql:8.0
     profiles: ["local"]
-    container_name: fullyu-postgres
+    container_name: fullyu-mysql
     restart: unless-stopped
     environment:
-      POSTGRES_DB: fullyu
-      POSTGRES_USER: fullyu
-      POSTGRES_PASSWORD: fullyu
+      MYSQL_DATABASE: fullyu
+      MYSQL_USER: fullyu
+      MYSQL_PASSWORD: fullyu
+      MYSQL_ROOT_PASSWORD: fullyu
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - mysqldata:/var/lib/mysql
     ports:
-      - "5432:5432"
+      - "3306:3306"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fullyu -d fullyu"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ufullyu", "-pfullyu"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -80,7 +81,7 @@ services:
       - fullyu
 
 volumes:
-  pgdata:
+  mysqldata:
 
 networks:
   fullyu:

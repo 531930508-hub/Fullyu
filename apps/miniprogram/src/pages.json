@@ -31,20 +31,49 @@
     {
       "path": "pages/trainer-workspace/index",
       "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/my-reviews/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/profile-edit/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/community-list/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/community-detail/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/community-mine/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/community-create/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/community-workspace/index",
+      "style": { "navigationStyle": "custom" }
     }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "Full愈",
-    "navigationBarBackgroundColor": "#F5E8D8",
-    "backgroundColor": "#F5E8D8",
-    "backgroundColorTop": "#F5E8D8",
-    "backgroundColorBottom": "#F5E8D8"
+    "navigationBarBackgroundColor": "#EAE0D7",
+    "backgroundColor": "#EAE0D7",
+    "backgroundColorTop": "#EAE0D7",
+    "backgroundColorBottom": "#EAE0D7"
   },
   "tabBar": {
-    "color": "#A08A72",
-    "selectedColor": "#6B463C",
-    "backgroundColor": "#FFFFFF",
+    "custom": true,
+    "color": "#A78E70",
+    "selectedColor": "#584219",
+    "backgroundColor": "#FBF8F3",
     "borderStyle": "white",
     "list": [
       {

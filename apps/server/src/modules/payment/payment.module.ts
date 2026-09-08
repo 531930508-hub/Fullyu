@@ -1,11 +1,13 @@
-import { Module } from '@nestjs/common'
+import { Module, forwardRef } from '@nestjs/common'
 import { PaymentService } from './payment.service'
 import { PaymentController } from './payment.controller'
-import { WechatPayService } from './wechat-pay.service'
+import { HuifuPayService } from './huifu-pay.service'
+import { WaitlistModule } from '../waitlist/waitlist.module'
 
 @Module({
+  imports: [forwardRef(() => WaitlistModule)],
   controllers: [PaymentController],
-  providers: [PaymentService, WechatPayService],
-  exports: [PaymentService, WechatPayService],
+  providers: [PaymentService, HuifuPayService],
+  exports: [PaymentService, HuifuPayService],
 })
 export class PaymentModule {}

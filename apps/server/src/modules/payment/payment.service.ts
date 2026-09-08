@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common'
 import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
-import { WechatPayService } from './wechat-pay.service'
+import { HuifuPayService } from './huifu-pay.service'
 import { NotificationService } from '../../common/notification/notification.service'
+import { WaitlistService } from '../waitlist/waitlist.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
 import { Prisma } from '@prisma/client'
 
@@ -20,12 +21,14 @@ export class PaymentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-    private readonly wechatPay: WechatPayService,
+    private readonly huifuPay: HuifuPayService,
     private readonly notification: NotificationService,
+    @Inject(forwardRef(() => WaitlistService))
+    private readonly waitlist: WaitlistService,
   ) {}
 
   /**
-   * 为待支付订单创建微信 JSAPI 支付，返回小程序调起参数
+   * 为待支付订单创建汇付聚合支付（微信小程序），返回小程序调起参数
    */
   async createPayment(orderId: string, userId: string) {
     const order = await this.prisma.order.findFirst({
@@ -42,7 +45,7 @@ export class PaymentService {
     const totalFen = Math.round(Number(order.actualPaid) * 100)
     const description = this.buildDescription(order)
 
-    return this.wechatPay.createJsapiOrder({
+    return this.huifuPay.createJsapiOrder({
       outTradeNo: order.id,
       description,
       totalFen: Math.max(1, totalFen),
@@ -51,12 +54,14 @@ export class PaymentService {
   }
 
   /**
-   * 处理支付成功回调：验签解密 → 幂等更新 → 触发履约
+   * 处理支付成功回调：验签解析 → 幂等更新 → 触发履约
+   * 返回汇付要求的文本回包 RECV_ORD_ID_ + 请求流水号
    */
-  async handleNotify(rawBody: string): Promise<{ code: string; message: string }> {
-    const result = this.wechatPay.decryptNotify(rawBody)
+  async handleNotify(rawBody: string): Promise<string> {
+    const result = this.huifuPay.decryptNotify(rawBody)
+    const ack = this.huifuPay.buildNotifyAck(result.req_seq_id)
     if (result.trade_state !== 'SUCCESS') {
-      return { code: 'SUCCESS', message: 'OK' }
+      return ack
     }
 
     const orderId = result.out_trade_no
@@ -68,15 +73,16 @@ export class PaymentService {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } })
     if (!order) {
       this.logger.warn(`回调订单不存在: ${orderId}`)
-      return { code: 'SUCCESS', message: 'OK' }
+      return ack
     }
     if (order.status === 'PAID' || order.status === 'COMPLETED') {
       // 已处理，幂等返回成功
-      return { code: 'SUCCESS', message: 'OK' }
+      return ack
     }
 
+    // transaction_id 为汇付复合定位键 req_date|hf_seq_id，退款时回用
     await this.fulfillPaidOrder(orderId, result.transaction_id)
-    return { code: 'SUCCESS', message: 'OK' }
+    return ack
   }
 
   /**
@@ -219,12 +225,13 @@ export class PaymentService {
       data: { status: 'REFUNDING', refundAmount, cancelReason: operatorReason },
     })
 
-    await this.wechatPay.refund({
+    await this.huifuPay.refund({
       outTradeNo: order.id,
       outRefundNo: `RF${order.id}`,
       totalFen: Math.max(1, totalFen),
       refundFen: Math.max(1, refundFen),
       reason: operatorReason,
+      paymentId: order.paymentId,
     })
 
     return { refundAmount }
@@ -245,12 +252,13 @@ export class PaymentService {
       data: { status: 'REFUNDING', refundAmount: order.actualPaid, cancelReason: reason },
     })
     if (totalFen > 0) {
-      await this.wechatPay.refund({
+      await this.huifuPay.refund({
         outTradeNo: order.id,
         outRefundNo: `RF${order.id}`,
         totalFen,
         refundFen: totalFen,
         reason,
+        paymentId: order.paymentId,
       })
     } else {
       await this.prisma.order.update({
@@ -262,12 +270,65 @@ export class PaymentService {
   }
 
   /**
+   * 强制退款（客诉特殊处理，经二次审批后执行）：按指定金额原路退回，
+   * 不受课程 refundRules 限制。refundAmount 单位为元，0 或不传则全额退。
+   */
+  async forceRefund(
+    orderId: string,
+    refundAmount?: number,
+    reason?: string,
+  ): Promise<{ refundAmount: number }> {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } })
+    if (!order) throw new BusinessException('订单不存在', 4004)
+    if (order.status !== 'PAID' && order.status !== 'COMPLETED') {
+      throw new BusinessException('订单状态不可退款', 4007)
+    }
+
+    const paidYuan = Number(order.actualPaid)
+    // 未指定或非法金额时全额退；不得超过实付
+    let amount = refundAmount && refundAmount > 0 ? refundAmount : paidYuan
+    amount = Math.min(amount, paidYuan)
+    const totalFen = Math.round(paidYuan * 100)
+    const refundFen = Math.round(amount * 100)
+
+    if (refundFen <= 0) {
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          status: 'REFUNDED',
+          refundAmount: 0,
+          refundTime: new Date(),
+          cancelReason: reason ?? '强制退款',
+        },
+      })
+      return { refundAmount: 0 }
+    }
+
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { status: 'REFUNDING', refundAmount: amount, cancelReason: reason ?? '强制退款' },
+    })
+
+    await this.huifuPay.refund({
+      outTradeNo: order.id,
+      outRefundNo: `RF${order.id}`,
+      totalFen: Math.max(1, totalFen),
+      refundFen: Math.max(1, refundFen),
+      reason: reason ?? '强制退款',
+      paymentId: order.paymentId,
+    })
+
+    return { refundAmount: amount }
+  }
+
+  /**
    * 退款回调处理：置 REFUNDED，释放席位
    */
-  async handleRefundNotify(rawBody: string): Promise<{ code: string; message: string }> {
-    const result = this.wechatPay.decryptNotify(rawBody)
+  async handleRefundNotify(rawBody: string): Promise<string> {
+    const result = this.huifuPay.decryptNotify(rawBody)
+    const ack = this.huifuPay.buildNotifyAck(result.req_seq_id)
     if (result.refund_status !== 'SUCCESS') {
-      return { code: 'SUCCESS', message: 'OK' }
+      return ack
     }
     const orderId = result.out_trade_no
     const order = await this.prisma.order.findUnique({
@@ -275,7 +336,7 @@ export class PaymentService {
       include: { course: true },
     })
     if (!order || order.status === 'REFUNDED') {
-      return { code: 'SUCCESS', message: 'OK' }
+      return ack
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -297,6 +358,11 @@ export class PaymentService {
       }
     })
 
+    // 课程订单退款释放名额后触发候补递补（会员席优先）
+    if (order.orderType === 'COURSE' && order.courseId) {
+      await this.waitlist.promote(order.courseId).catch(() => undefined)
+    }
+
     if (order.orderType === 'COURSE' && order.course) {
       await this.notification.refundSuccess(order.userId, {
         courseName: order.course.title,
@@ -304,7 +370,7 @@ export class PaymentService {
         orderId: order.id,
       })
     }
-    return { code: 'SUCCESS', message: 'OK' }
+    return ack
   }
 
   /**

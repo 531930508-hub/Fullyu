@@ -13,7 +13,7 @@ export class PaymentController {
   @Post('jsapi/:orderId')
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth()
-  @ApiOperation({ summary: '创建微信 JSAPI 支付（返回小程序调起参数）' })
+  @ApiOperation({ summary: '创建汇付聚合支付（返回小程序调起参数）' })
   async createPayment(@Req() req: any, @Param('orderId') orderId: string) {
     return this.paymentService.createPayment(orderId, req.user.userId)
   }
@@ -21,18 +21,22 @@ export class PaymentController {
   @Post('notify')
   @Public()
   @SkipTransform()
-  @ApiOperation({ summary: '微信支付结果回调' })
+  @ApiOperation({ summary: '汇付支付结果回调' })
   async notify(@Req() req: any) {
-    const rawBody = req.rawBody?.toString('utf8') ?? JSON.stringify(req.body)
-    return this.paymentService.handleNotify(rawBody)
+    return this.paymentService.handleNotify(this.rawForm(req))
   }
 
   @Post('refund-notify')
   @Public()
   @SkipTransform()
-  @ApiOperation({ summary: '微信退款结果回调' })
+  @ApiOperation({ summary: '汇付退款结果回调' })
   async refundNotify(@Req() req: any) {
-    const rawBody = req.rawBody?.toString('utf8') ?? JSON.stringify(req.body)
-    return this.paymentService.handleRefundNotify(rawBody)
+    return this.paymentService.handleRefundNotify(this.rawForm(req))
+  }
+
+  /** 汇付回调为 form 提交；优先取原始报文，降级时由已解析 body 重建 */
+  private rawForm(req: any): string {
+    if (req.rawBody) return req.rawBody.toString('utf8')
+    return new URLSearchParams(req.body ?? {}).toString()
   }
 }

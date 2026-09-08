@@ -1,13 +1,18 @@
 import { NestFactory } from '@nestjs/core'
 import { ValidationPipe } from '@nestjs/common'
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
+import { NestExpressApplication } from '@nestjs/platform-express'
 import { AppModule } from './app.module'
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true })
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true })
 
   // 全局前缀
   app.setGlobalPrefix('api/v1')
+
+  // 请求体大小上限：图片以 base64 dataURL 提交，需放宽默认 100kb 限制
+  app.useBodyParser('json', { limit: '15mb' })
+  app.useBodyParser('urlencoded', { extended: true, limit: '15mb' })
 
   // 全局验证管道
   app.useGlobalPipes(

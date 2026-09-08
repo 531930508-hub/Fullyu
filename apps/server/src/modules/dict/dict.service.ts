@@ -16,6 +16,7 @@ export class DictService {
 
   /** 按 code 获取启用中的选项（前端/小程序取值） */
   async getItems(code: string) {
+    if (!code) return []
     const set = await this.prisma.dictSet.findUnique({
       where: { code },
       include: { items: { where: { enabled: true }, orderBy: { sort: 'asc' } } },

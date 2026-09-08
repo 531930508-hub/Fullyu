@@ -21,6 +21,16 @@ export class RedisService {
     await this.redis.del(key)
   }
 
+  /** 原子自增 */
+  async incr(key: string): Promise<number> {
+    return this.redis.incr(key)
+  }
+
+  /** 设置过期时间 */
+  async expire(key: string, seconds: number): Promise<void> {
+    await this.redis.expire(key, seconds)
+  }
+
   /**
    * 席位锁定：使用 SETNX 实现分布式锁
    * @returns true 表示锁定成功

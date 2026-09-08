@@ -14,7 +14,7 @@
           <a-select-option value="COMPLETED">已完成</a-select-option>
           <a-select-option value="CANCELLED">已取消</a-select-option>
         </a-select>
-        <a-button type="primary" @click="openCreate">发布任务</a-button>
+        <a-button v-perm="'task:create'" type="primary" @click="openCreate">发布任务</a-button>
       </a-space>
     </div>
 
@@ -51,7 +51,7 @@
           </template>
           <template v-if="column.dataIndex === 'action'">
             <a-space>
-              <a-button type="link" size="small" @click="openEdit(record)">编辑</a-button>
+              <a-button v-perm="'task:update'" type="link" size="small" @click="openEdit(record)">编辑</a-button>
               <a-popconfirm v-if="record.status === 'PUBLISHED'" title="确定取消该任务？" @confirm="handleCancel(record)">
                 <a-button type="link" size="small" danger>取消</a-button>
               </a-popconfirm>

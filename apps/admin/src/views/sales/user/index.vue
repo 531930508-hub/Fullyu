@@ -40,7 +40,7 @@
           <template v-if="column.dataIndex === 'action'">
             <a-space>
               <a-button type="link" size="small" @click.stop="showUserDetail(record)">详情</a-button>
-              <a-button type="link" size="small" @click.stop="openSendVoucher(record)">发券</a-button>
+              <a-button v-perm="'voucher:create'" type="link" size="small" @click.stop="openSendVoucher(record)">发券</a-button>
             </a-space>
           </template>
         </template>
@@ -60,16 +60,43 @@
       </template>
     </a-drawer>
 
-    <!-- 发券弹窗 -->
-    <a-modal v-model:open="showVoucherModal" title="发放代金券" @ok="confirmVoucher" :confirm-loading="granting">
-      <a-form layout="vertical">
+    <!-- 发券弹窗（与代金券管理页逻辑一致） -->
+    <a-modal v-model:open="showVoucherModal" title="发放代金券" width="560px" @ok="confirmVoucher" :confirm-loading="granting">
+      <a-form layout="vertical" style="margin-top: 8px;">
         <a-form-item label="发放对象">{{ voucherTarget?.name }}（{{ voucherTarget?.phone }}）</a-form-item>
+        <a-form-item label="优惠方式" required>
+          <a-radio-group v-model:value="voucherForm.mode">
+            <a-radio value="REDUCE_BY">减额（减多少元）</a-radio>
+            <a-radio value="REDUCE_TO">减至（减到多少元）</a-radio>
+          </a-radio-group>
+        </a-form-item>
         <a-row :gutter="16">
-          <a-col :span="12"><a-form-item label="面额（元）"><a-input-number v-model:value="voucherForm.amount" :min="1" style="width: 100%" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="有效期至"><a-date-picker v-model:value="voucherForm.expiresAt" style="width: 100%" /></a-form-item></a-col>
+          <a-col :span="12">
+            <a-form-item v-if="voucherForm.mode === 'REDUCE_BY'" label="抵扣面额（元）" required>
+              <a-input-number v-model:value="voucherForm.amount" prefix="￥" style="width: 100%" :min="1" placeholder="如：50" />
+            </a-form-item>
+            <a-form-item v-else label="减至目标价（元）" required>
+              <a-input-number v-model:value="voucherForm.targetPrice" prefix="￥" style="width: 100%" :min="0" placeholder="如：9.9，将实付降至此价" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="有效期至" required>
+              <a-date-picker v-model:value="voucherForm.expiresAt" style="width: 100%" />
+            </a-form-item>
+          </a-col>
         </a-row>
-        <a-form-item label="发放说明"><a-input v-model:value="voucherForm.source" placeholder="如：新人体验券、活动补偿" /></a-form-item>
-        <a-form-item><a-checkbox v-model:checked="voucherForm.applicableAll">全场课程可用</a-checkbox></a-form-item>
+        <a-form-item label="来源说明">
+          <a-input v-model:value="voucherForm.source" placeholder="如：新人体验、活动补偿" />
+        </a-form-item>
+        <a-form-item label="适用范围">
+          <a-radio-group v-model:value="voucherForm.applicableAll">
+            <a-radio :value="true">全部课程</a-radio>
+            <a-radio :value="false">指定课程</a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item v-if="!voucherForm.applicableAll" label="适用课程">
+          <a-select v-model:value="voucherForm.applicableCourseIds" mode="multiple" placeholder="选择适用课程" :options="courseOptions" />
+        </a-form-item>
       </a-form>
     </a-modal>
   </div>
@@ -78,9 +105,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import dayjs from 'dayjs'
+import dayjs, { Dayjs } from 'dayjs'
 import { adminListUsers } from '@/api/user'
 import { grantVoucher } from '@/api/voucher'
+import { adminListCourses } from '@/api/course'
 
 const loading = ref(false)
 const searchText = ref('')
@@ -142,30 +170,67 @@ const detailVisible = ref(false)
 const currentUser = ref<any>(null)
 function showUserDetail(record: any) { currentUser.value = record; detailVisible.value = true }
 
-// ===== 发券 =====
+// ===== 发券（与代金券管理页逻辑一致） =====
 const showVoucherModal = ref(false)
 const granting = ref(false)
 const voucherTarget = ref<any>(null)
-const voucherForm = ref<any>({ amount: 50, expiresAt: null, source: '', applicableAll: true })
+const courseOptions = ref<{ label: string; value: string }[]>([])
+const voucherForm = ref({
+  mode: 'REDUCE_BY' as 'REDUCE_BY' | 'REDUCE_TO',
+  amount: null as number | null,
+  targetPrice: null as number | null,
+  expiresAt: null as Dayjs | null,
+  source: '',
+  applicableAll: true,
+  applicableCourseIds: [] as string[],
+})
 
 function openSendVoucher(record: any) {
   voucherTarget.value = record
-  voucherForm.value = { amount: 50, expiresAt: dayjs().add(30, 'day'), source: '', applicableAll: true }
+  voucherForm.value = { mode: 'REDUCE_BY', amount: 50, targetPrice: null, expiresAt: dayjs().add(30, 'day'), source: '', applicableAll: true, applicableCourseIds: [] }
   showVoucherModal.value = true
+  loadCourseOptions()
+}
+
+async function loadCourseOptions() {
+  if (courseOptions.value.length) return
+  try {
+    const res = await adminListCourses({ page: 1, pageSize: 200 })
+    const list = Array.isArray(res) ? res : (res?.items || res?.list || [])
+    courseOptions.value = list.map((c: any) => {
+        const dateStr = c.startDate ? new Date(c.startDate).toISOString().slice(0, 10).replace(/-/g, '') : ''
+        return { label: dateStr ? `${c.title}-${dateStr}` : c.title, value: c.id }
+      })
+  } catch (e) {}
 }
 
 async function confirmVoucher() {
-  if (!voucherForm.value.amount || !voucherForm.value.expiresAt) { message.warning('请填写面额与有效期'); return }
+  if (voucherForm.value.mode === 'REDUCE_BY' && !voucherForm.value.amount) {
+    message.warning('请填写抵扣面额'); return
+  }
+  if (voucherForm.value.mode === 'REDUCE_TO' && (voucherForm.value.targetPrice === null || voucherForm.value.targetPrice < 0)) {
+    message.warning('请填写减至目标价'); return
+  }
+  if (!voucherForm.value.expiresAt) {
+    message.warning('请选择有效期'); return
+  }
   granting.value = true
   try {
-    await grantVoucher({
+    const res = await grantVoucher({
       userIds: [voucherTarget.value.id],
-      amount: voucherForm.value.amount,
-      expiresAt: dayjs(voucherForm.value.expiresAt).toISOString(),
+      mode: voucherForm.value.mode,
+      amount: voucherForm.value.mode === 'REDUCE_BY' ? voucherForm.value.amount : undefined,
+      targetPrice: voucherForm.value.mode === 'REDUCE_TO' ? voucherForm.value.targetPrice : undefined,
+      expiresAt: voucherForm.value.expiresAt.toISOString(),
       source: voucherForm.value.source || '后台发放',
       applicableAll: voucherForm.value.applicableAll,
+      applicableCourseIds: voucherForm.value.applicableAll ? [] : voucherForm.value.applicableCourseIds,
     })
-    message.success(`代金券已发放给 ${voucherTarget.value?.name}`)
+    if (res?.pendingApproval) {
+      message.success('发放申请已提交，需审批通过后生效')
+    } else {
+      message.success(`代金券已发放给 ${voucherTarget.value?.name}`)
+    }
     showVoucherModal.value = false
   } catch (e: any) {
     message.error(e?.message || '发放失败')

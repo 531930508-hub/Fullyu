@@ -36,6 +36,15 @@
           <template v-else-if="column.dataIndex === 'type'">
             <a-tag :color="typeColors[record.type]">{{ typeLabels[record.type] }}</a-tag>
           </template>
+          <template v-else-if="column.dataIndex === 'photo'">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <a-image v-if="record.user?.photo" :src="record.user.photo" :width="40" :height="40" style="object-fit: cover; border-radius: 4px;" />
+              <a-tag v-else color="warning">缺照片</a-tag>
+              <a-upload :show-upload-list="false" accept="image/*" :before-upload="(file: any) => beforePhotoUpload(file, record)">
+                <a-button v-perm="'membercard:update'" type="link" size="small" :loading="uploadingId === record.id">{{ record.user?.photo ? '更换' : '上传' }}</a-button>
+              </a-upload>
+            </div>
+          </template>
           <template v-else-if="column.dataIndex === 'startDate'">
             {{ record.startDate ? dayjs(record.startDate).format('YYYY-MM-DD') : '-' }}
           </template>
@@ -47,10 +56,10 @@
           </template>
           <template v-else-if="column.dataIndex === 'action'">
             <a-space>
-              <a-popconfirm v-if="record.status === 'ACTIVE'" title="确定冻结该会员卡？" @confirm="handleFreeze(record)">
+              <a-popconfirm v-perm="'membercard:update'" v-if="record.status === 'ACTIVE'" title="确定冻结该会员卡？" @confirm="handleFreeze(record)">
                 <a style="color: #F39C12;">冻结</a>
               </a-popconfirm>
-              <a-popconfirm v-else-if="record.status === 'FROZEN'" title="确定解冻该会员卡？" @confirm="handleUnfreeze(record)">
+              <a-popconfirm v-perm="'membercard:update'" v-else-if="record.status === 'FROZEN'" title="确定解冻该会员卡？" @confirm="handleUnfreeze(record)">
                 <a style="color: #27AE60;">解冻</a>
               </a-popconfirm>
               <span v-else style="color: #ccc;">-</span>
@@ -67,9 +76,11 @@ import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import { adminListCards, freezeCard, unfreezeCard } from '@/api/member'
+import { updateUserPhoto } from '@/api/user'
 
 const loading = ref(false)
 const filterStatus = ref('')
+const uploadingId = ref('')
 
 const typeLabels: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
 const typeColors: Record<string, string> = { MONTHLY: 'blue', QUARTERLY: 'purple', YEARLY: 'gold' }
@@ -78,6 +89,7 @@ const statusColors: Record<string, string> = { ACTIVE: 'green', FROZEN: 'orange'
 
 const columns = [
   { title: '会员', dataIndex: 'user', width: 200 },
+  { title: '个人照片', dataIndex: 'photo', width: 130 },
   { title: '卡类型', dataIndex: 'type', width: 100 },
   { title: '开卡日期', dataIndex: 'startDate', width: 120 },
   { title: '到期日期', dataIndex: 'endDate', width: 120 },
@@ -121,4 +133,49 @@ async function handleUnfreeze(record: any) {
 }
 
 onMounted(() => loadCards())
+
+/** 上传/更换会员个人核验照片：本地压缩到 ≤640px 后以 base64 提交（后台可随时改） */
+function beforePhotoUpload(file: File, record: any) {
+  if (!record.user?.id) { message.error('该会员卡未关联用户'); return false }
+  if (!file.type.startsWith('image/')) { message.error('请上传图片文件'); return false }
+  if (file.size > 10 * 1024 * 1024) { message.error('图片过大，请选择 10MB 以内的图片'); return false }
+  const reader = new FileReader()
+  reader.onload = e => {
+    const src = e.target?.result as string
+    const img = new Image()
+    img.onload = () => {
+      const MAX = 640
+      let { width, height } = img
+      if (width > MAX || height > MAX) {
+        const ratio = Math.min(MAX / width, MAX / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      let out = src
+      if (ctx) { ctx.drawImage(img, 0, 0, width, height); out = canvas.toDataURL('image/jpeg', 0.85) }
+      doUploadPhoto(record, out)
+    }
+    img.onerror = () => { doUploadPhoto(record, src) }
+    img.src = src
+  }
+  reader.readAsDataURL(file)
+  return false
+}
+
+async function doUploadPhoto(record: any, dataUrl: string) {
+  uploadingId.value = record.id
+  try {
+    await updateUserPhoto(record.user.id, dataUrl)
+    message.success(`已更新 ${record.user?.nickname || '该会员'} 的个人照片`)
+    loadCards()
+  } catch (e: any) {
+    message.error(e?.message || '照片上传失败')
+  } finally {
+    uploadingId.value = ''
+  }
+}
 </script>

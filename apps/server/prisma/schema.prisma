@@ -1,12 +1,13 @@
 // Full愈 数据库 Schema
-// PostgreSQL + Prisma ORM
+// MySQL + Prisma ORM
+// 注意：原 PostgreSQL 数组字段（String[]/Int[]）在 MySQL 下统一改用 Json 存储
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -16,7 +17,8 @@ model User {
   id        String   @id @default(cuid())
   phone     String   @unique
   nickname  String
-  avatar    String?
+  avatar    String?  @db.LongText
+  photo     String?  @db.LongText // 个人核验照片（签到用，用户不可自助修改，仅后台/购卡时录入）
   openId    String?  @unique @map("open_id")
   unionId   String?  @map("union_id")
   language  String   @default("zh") // zh | en
@@ -25,39 +27,46 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  memberCards    MemberCard[]
-  orders         Order[]
-  pointsRecords  PointsRecord[]
-  vouchers       Voucher[]
-  reviews        Review[]
-  checkIns       CheckIn[]
-  trainerProfile TrainerProfile?
-  taskClaims     TaskClaim[]
+  memberCards     MemberCard[]
+  orders          Order[]
+  pointsRecords   PointsRecord[]
+  vouchers        Voucher[]
+  reviews         Review[]
+  checkIns        CheckIn[]
+  trainerProfile  TrainerProfile?
+  taskClaims      TaskClaim[]
   waitlistEntries WaitlistEntry[]
 
   @@map("users")
 }
 
 model TrainerProfile {
-  id            String   @id @default(cuid())
-  userId        String   @unique @map("user_id")
-  displayName   String   @map("display_name")
-  avatar        String?
-  level         Int      @default(1) // LV1 - LV5
-  certBadge     String?  @map("cert_badge") // 认证等级徽章
-  specialties   String[] // 擅长领域标签
-  bio           String?  // 个人简介
-  hourlyRate    Decimal  @default(0) @map("hourly_rate") // 小时单价
-  seedsBalance  Int      @default(0) @map("seeds_balance")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id           String        @id @default(cuid())
+  userId       String        @unique @map("user_id")
+  displayName  String        @unique @map("display_name") // 全局唯一
+  avatar       String?       @db.LongText
+  level        Int           @default(1) // LV1 - LV5
+  status       TrainerStatus @default(ACTIVE) // 在职状态
+  seedifyCert  Boolean       @default(false) @map("seedify_cert") // Seedify认证
+  certBadge    String?       @map("cert_badge") // 认证等级徽章
+  specialties  Json // 擅长课程标签（string[]），支持模糊搜索
+  bio          String?       @db.Text // 个人简介
+  hourlyRate   Decimal       @default(0) @map("hourly_rate") // 小时单价（只读，由等级配置决定）
+  seedsBalance Int           @default(0) @map("seeds_balance")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
 
   // Relations
-  user    User     @relation(fields: [userId], references: [id])
-  courses Course[]
+  user         User          @relation(fields: [userId], references: [id])
+  courses      Course[]
   seedsRecords SeedsRecord[]
 
   @@map("trainer_profiles")
+}
+
+enum TrainerStatus {
+  ACTIVE // 在职
+  RESIGNED // 离职
 }
 
 // ========== 会员卡 ==========
@@ -98,7 +107,7 @@ model MemberCardProduct {
   price        Decimal
   durationDays Int                     @map("duration_days")
   description  String?
-  benefits     String[]
+  benefits     Json // string[]
   status       MemberCardProductStatus @default(ON_SHELF)
   sort         Int                     @default(0)
   createdAt    DateTime                @default(now()) @map("created_at")
@@ -117,14 +126,14 @@ enum MemberCardProductStatus {
 // ========== 积分系统 ==========
 
 model PointsRecord {
-  id        String          @id @default(cuid())
-  userId    String          @map("user_id")
-  amount    Int             // 正数=增加，负数=减少
-  balance   Int             // 变动后余额
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  amount    Int // 正数=增加，负数=减少
+  balance   Int // 变动后余额
   type      PointsChangeType
-  reason    String          // 变动原因描述
-  relatedId String?         @map("related_id") // 关联的订单/课程ID
-  createdAt DateTime        @default(now()) @map("created_at")
+  reason    String // 变动原因描述
+  relatedId String?          @map("related_id") // 关联的订单/课程ID
+  createdAt DateTime         @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id])
 
@@ -143,14 +152,14 @@ enum PointsChangeType {
 // ========== Seeds系统（培训师积分） ==========
 
 model SeedsRecord {
-  id         String   @id @default(cuid())
-  trainerId  String   @map("trainer_id")
-  amount     Int      // 正数=增加，负数=减少
-  balance    Int      // 变动后余额
-  type       String   // COURSE_SETTLEMENT | TASK_REWARD | ADMIN_ADJUST
-  reason     String
-  relatedId  String?  @map("related_id")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id        String   @id @default(cuid())
+  trainerId String   @map("trainer_id")
+  amount    Int // 正数=增加，负数=减少
+  balance   Int // 变动后余额
+  type      String // COURSE_SETTLEMENT | TASK_REWARD | ADMIN_ADJUST
+  reason    String
+  relatedId String?  @map("related_id")
+  createdAt DateTime @default(now()) @map("created_at")
 
   trainer TrainerProfile @relation(fields: [trainerId], references: [id])
 
@@ -160,50 +169,66 @@ model SeedsRecord {
 // ========== 课程系统 ==========
 
 model Course {
-  id              String        @id @default(cuid())
-  title           String
-  coverImage      String        @map("cover_image")
-  type            CourseType
-  categories      String[]      // 课程分类标签
-  description     String        // 富文本
-  targetAudience  String[]      @map("target_audience")
-  learningGoals   String?       @map("learning_goals")
-  startDate       DateTime      @map("start_date")
-  endDate         DateTime      @map("end_date")
-  startTime       String        @map("start_time") // HH:mm
-  endTime         String        @map("end_time")   // HH:mm
-  trainerId       String        @map("trainer_id")
-  minCapacity     Int           @map("min_capacity")
-  maxCapacity     Int           @map("max_capacity")
-  currentEnrolled Int           @default(0) @map("current_enrolled")
-  originalPrice   Decimal       @map("original_price")
-  venueId         String        @map("venue_id")
-  status          CourseStatus  @default(DRAFT)
-  trainerSeeds    Int           @default(0) @map("trainer_seeds") // 导师可获积分
-  allowDeduction  Boolean       @default(true) @map("allow_deduction") // 是否支持积分抵扣
-  internalNote    String?       @map("internal_note") // 内部备注
-  enrollStartAt   DateTime?     @map("enroll_start_at")
-  enrollEndAt     DateTime?     @map("enroll_end_at")
-  memberEnrollStartAt DateTime? @map("member_enroll_start_at") // 会员提前报名时间
-  refundRules     Json?         @map("refund_rules") // 退款规则 [{hoursFrom,hoursTo,refundPercent}]
-  gallery         String[]      // 课程详情图集
-  scheduleType    ScheduleType  @default(ONE_TIME) @map("schedule_type")
-  weekdays        Int[]         // 周期性排课的星期 [1-7]
-  waitlistEnabled Boolean       @default(true) @map("waitlist_enabled")
-  waitlistDeadlineHours Decimal? @map("waitlist_deadline_hours") // 候补截止（开课前小时数）
-  memberWaitlistSeats   Int      @default(3) @map("member_waitlist_seats") // 会员候补席位数
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  id                    String       @id @default(cuid())
+  title                 String
+  coverImage            String       @map("cover_image") @db.LongText
+  type                  CourseType
+  categories            Json // 课程分类标签（string[]）
+  description           String       @db.Text // 富文本
+  targetAudience        Json         @map("target_audience") // string[]
+  learningGoals         String?      @map("learning_goals") @db.Text
+  startDate             DateTime     @map("start_date")
+  endDate               DateTime     @map("end_date")
+  startTime             String       @map("start_time") // HH:mm
+  endTime               String       @map("end_time") // HH:mm
+  trainerId             String       @map("trainer_id")
+  minCapacity           Int          @map("min_capacity")
+  maxCapacity           Int          @map("max_capacity")
+  currentEnrolled       Int          @default(0) @map("current_enrolled")
+  originalPrice         Decimal      @map("original_price")
+  venueId               String       @map("venue_id")
+  status                CourseStatus @default(DRAFT)
+  trainerSeeds          Int          @default(0) @map("trainer_seeds") // 导师可获积分
+  allowDeduction        Boolean      @default(true) @map("allow_deduction") // 是否支持积分抵扣
+  internalNote          String?      @map("internal_note") @db.Text // 内部备注
+  enrollStartAt         DateTime?    @map("enroll_start_at")
+  enrollEndAt           DateTime?    @map("enroll_end_at")
+  memberEnrollStartAt   DateTime?    @map("member_enroll_start_at") // 会员提前报名时间
+  refundRules           Json?        @map("refund_rules") // 退款规则 [{hoursFrom,hoursTo,refundPercent}]
+  gallery               Json // 课程详情图集（string[]）
+  scheduleType          ScheduleType @default(ONE_TIME) @map("schedule_type")
+  weekdays              Json // 周期性排课的星期 [1-7]（number[]）
+  waitlistEnabled       Boolean      @default(true) @map("waitlist_enabled")
+  waitlistDeadlineHours Decimal?     @map("waitlist_deadline_hours") // 候补截止（开课前小时数）
+  memberWaitlistSeats   Int          @default(3) @map("member_waitlist_seats") // 会员候补席位数
+  // 后台表单补充字段（草稿/发布均可持久化，多为可空）
+  detailDesc            String?      @map("detail_desc") @db.Text // 课程详细介绍
+  difficulty            String? // 难度：BEGINNER/INTERMEDIATE/ADVANCED
+  assistantId           String?      @map("assistant_id") // 助教
+  coverType             String?      @map("cover_type") // upload/gradient
+  coverColor            String?      @map("cover_color") // 渐变封面色值
+  duration              Int? // 单节时长（分钟）
+  totalSessions         Int?         @map("total_sessions") // 总节数
+  materials             Json? // 所需物料（string[]）
+  groupDeadline         DateTime?    @map("group_deadline") // 最晚成团时间
+  voucherPolicy         String?      @map("voucher_policy") // ALL/SOME/NONE
+  seedsReward           Int?         @map("seeds_reward") // 每节完课奖励
+  reviewSeeds           Int?         @map("review_seeds") // 提交评价奖励
+  syllabus              Json? // 课程大纲 [{title,content}]
+  notice                String?      @db.Text // 学员须知
+  createdAt             DateTime     @default(now()) @map("created_at")
+  updatedAt             DateTime     @updatedAt @map("updated_at")
 
   // Relations
-  trainer     TrainerProfile   @relation(fields: [trainerId], references: [id])
-  venue       Venue            @relation(fields: [venueId], references: [id])
-  orders      Order[]
-  checkIns    CheckIn[]
-  reviews     Review[]
-  priceTiers  CoursePriceTier[]
+  trainer         TrainerProfile         @relation(fields: [trainerId], references: [id])
+  venue           Venue                  @relation(fields: [venueId], references: [id])
+  orders          Order[]
+  checkIns        CheckIn[]
+  reviews         Review[]
+  priceTiers      CoursePriceTier[]
   waitlistEntries WaitlistEntry[]
   memberDiscounts CourseMemberDiscount[]
+  reservation     VenueReservation?
 
   @@map("courses")
 }
@@ -224,15 +249,16 @@ enum CourseStatus {
 enum ScheduleType {
   ONE_TIME
   WEEKLY
+  APPOINTMENT
 }
 
 // 课程阶梯价格（按报名顺序区间锁价）
 model CoursePriceTier {
-  id        String  @id @default(cuid())
-  courseId   String  @map("course_id")
-  seatFrom  Int     @map("seat_from") // 报名顺序区间起（含）
-  seatTo    Int     @map("seat_to")   // 报名顺序区间止（含）
-  price     Decimal // 该区间价格
+  id       String  @id @default(cuid())
+  courseId String  @map("course_id")
+  seatFrom Int     @map("seat_from") // 报名顺序区间起（含）
+  seatTo   Int     @map("seat_to") // 报名顺序区间止（含）
+  price    Decimal // 该区间价格
 
   course Course @relation(fields: [courseId], references: [id])
 
@@ -298,68 +324,144 @@ enum OrderType {
 // ========== 场地 ==========
 
 model Venue {
-  id            String   @id @default(cuid())
-  name          String
-  address       String
-  images        String[]
-  businessHours String   @map("business_hours") // JSON
+  id      String  @id @default(cuid())
+  name    String
+  address String
+  /// 归属门店/组织：本系统（小程序）订单的收入按 订单→课程→场馆→组织 归集到门店
+  orgId   String? @map("org_id")
+
+  capacity      Int      @default(0) // 场地容量（人）
+  description   String?  @db.Text // 场地描述/设备特点
+  images        Json // string[]
+  businessHours String   @map("business_hours") @db.Text // JSON
   isAvailable   Boolean  @default(true) @map("is_available")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   courses      Course[]
   reservations VenueReservation[]
+  org          Organization?      @relation(fields: [orgId], references: [id])
 
+  @@index([orgId])
   @@map("venues")
 }
 
 model VenueReservation {
-  id           String   @id @default(cuid())
-  venueId      String   @map("venue_id")
-  date         DateTime
-  startTime    String   @map("start_time")
-  endTime      String   @map("end_time")
-  eventName    String   @map("event_name")
-  contactName  String   @map("contact_name")
-  contactPhone String   @map("contact_phone")
-  internalContact String? @map("internal_contact")
-  note         String?
+  id              String   @id @default(cuid())
+  venueId         String   @map("venue_id")
+  courseId        String?  @unique @map("course_id") // 非空表示由课程发布自动登记的占用
+  date            DateTime
+  startTime       String   @map("start_time")
+  endTime         String   @map("end_time")
+  eventName       String   @map("event_name")
+  contactName     String   @map("contact_name")
+  contactPhone    String   @map("contact_phone")
+  internalContact String?  @map("internal_contact")
+  note            String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // 使用类型与合同字段（INTERNAL / RENTAL；课程占用不填写 useType，默认 RENTAL 也不影响课程旧数据）
+  useType        String    @default("RENTAL") @map("use_type") // INTERNAL / RENTAL
+  contractStatus String?   @map("contract_status") // INTENT / SIGNED；内部使用为 null
+  salesId        String?   @map("sales_id") // 我方销售 admin id
+  salesName      String?   @map("sales_name") // 我方销售名（冗余展示）
+  contractUrl    String?   @map("contract_url") @db.Text // 合同文件 URL（OSS）
+  contractName   String?   @map("contract_name") // 合同文件名
+  signedAt       DateTime? @map("signed_at") // 签约时间
+  totalAmount    Int?      @map("total_amount") // 应收总额（分）
+  paidAmount     Int       @default(0) @map("paid_amount") // 已收金额（分）
+
+  venue    Venue          @relation(fields: [venueId], references: [id])
+  course   Course?        @relation(fields: [courseId], references: [id])
+  payments VenuePayment[]
+
+  @@index([contractStatus])
+  @@index([useType])
+  @@map("venue_reservations")
+}
+
+// 场地预约收款流水（仅针对 useType=RENTAL；一个预约可多次收款）
+model VenuePayment {
+  id            String @id @default(cuid())
+  reservationId String @map("reservation_id")
+  amount        Int // 金额（分）
+  method        String // OFFLINE_TRANSFER / QR_CODE
+
+  // 线下转账专属
+  transferAt   DateTime? @map("transfer_at")
+  counterparty String?
+
+  // 二维码收款专属
+  qrChannel String?   @map("qr_channel") // ALIPAY / WECHAT
+  paidAt    DateTime? @map("paid_at")
+
+  status       String   @default("PENDING") // PENDING / CONFIRMED / CANCELLED
+  operatorId   String?  @map("operator_id")
+  operatorName String?  @map("operator_name")
+  remark       String?  @db.Text
   createdAt    DateTime @default(now()) @map("created_at")
 
-  venue Venue @relation(fields: [venueId], references: [id])
+  reservation VenueReservation @relation(fields: [reservationId], references: [id])
 
-  @@map("venue_reservations")
+  @@index([reservationId])
+  @@index([status])
+  @@map("venue_payments")
+}
+
+// 场地预约操作日志（占用/取消变动记录，便于争议追溯）
+model VenueReservationLog {
+  id            String    @id @default(cuid())
+  reservationId String?   @map("reservation_id") // 预约被删除后仍保留
+  venueId       String    @map("venue_id")
+  venueName     String?   @map("venue_name")
+  courseId      String?   @map("course_id") // 非空 = 课程联动
+  courseTitle   String?   @map("course_title")
+  action        String // CREATE / CANCEL_RENTAL / COURSE_RESERVE / COURSE_RELEASE / COURSE_EXPIRE_RELEASE
+  source        String    @default("ADMIN") // ADMIN / SYSTEM / COURSE_STATUS
+  operatorId    String?   @map("operator_id")
+  operatorName  String?   @map("operator_name")
+  eventName     String?   @map("event_name")
+  date          DateTime?
+  startTime     String?   @map("start_time")
+  endTime       String?   @map("end_time")
+  reason        String?   @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([venueId, createdAt])
+  @@index([courseId])
+  @@map("venue_reservation_logs")
 }
 
 // ========== 订单与支付 ==========
 
 model Order {
-  id              String      @id @default(cuid())
-  userId          String      @map("user_id")
-  courseId         String?     @map("course_id")
-  orderType       OrderType   @default(COURSE) @map("order_type")
-  memberCardProductId String?  @map("member_card_product_id")
-  memberCardId    String?     @map("member_card_id") // 支付成功后生成的会员卡ID
-  cardType        MemberCardType? @map("card_type")
-  originalPrice   Decimal     @map("original_price")
-  discountAmount  Decimal     @default(0) @map("discount_amount")
-  pointsDeduction Decimal     @default(0) @map("points_deduction")
-  voucherDeduction Decimal    @default(0) @map("voucher_deduction")
-  actualPaid      Decimal     @map("actual_paid")
-  status          OrderStatus @default(PENDING_PAYMENT)
-  paymentId       String?     @map("payment_id") // 微信支付单号
-  paymentTime     DateTime?   @map("payment_time")
-  cancelTime      DateTime?   @map("cancel_time")
-  cancelReason    String?     @map("cancel_reason")
-  refundAmount    Decimal?    @map("refund_amount")
-  refundTime      DateTime?   @map("refund_time")
-  voucherId       String?     @map("voucher_id")
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
+  id                  String          @id @default(cuid())
+  orderNo             String          @unique @default(cuid()) @map("order_no") // 自定义订单号 C/M/W+YYMMDD+5位流水（默认 cuid 兼容旧逻辑）
+  userId              String          @map("user_id")
+  courseId            String?         @map("course_id")
+  orderType           OrderType       @default(COURSE) @map("order_type")
+  memberCardProductId String?         @map("member_card_product_id")
+  memberCardId        String?         @map("member_card_id") // 支付成功后生成的会员卡ID
+  cardType            MemberCardType? @map("card_type")
+  originalPrice       Decimal         @map("original_price")
+  discountAmount      Decimal         @default(0) @map("discount_amount")
+  pointsDeduction     Decimal         @default(0) @map("points_deduction")
+  voucherDeduction    Decimal         @default(0) @map("voucher_deduction")
+  actualPaid          Decimal         @map("actual_paid")
+  status              OrderStatus     @default(PENDING_PAYMENT)
+  paymentId           String?         @map("payment_id") // 微信支付单号
+  paymentTime         DateTime?       @map("payment_time")
+  cancelTime          DateTime?       @map("cancel_time")
+  cancelReason        String?         @map("cancel_reason") @db.Text
+  refundAmount        Decimal?        @map("refund_amount")
+  refundTime          DateTime?       @map("refund_time")
+  voucherId           String?         @map("voucher_id")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
 
-  user              User    @relation(fields: [userId], references: [id])
-  course            Course?  @relation(fields: [courseId], references: [id])
-  voucher           Voucher? @relation(fields: [voucherId], references: [id])
+  user              User               @relation(fields: [userId], references: [id])
+  course            Course?            @relation(fields: [courseId], references: [id])
+  voucher           Voucher?           @relation(fields: [voucherId], references: [id])
   memberCardProduct MemberCardProduct? @relation(fields: [memberCardProductId], references: [id])
   waitlistEntry     WaitlistEntry?
 
@@ -378,11 +480,11 @@ enum OrderStatus {
 // ========== 签到 ==========
 
 model CheckIn {
-  id        String       @id @default(cuid())
-  userId    String       @map("user_id")
-  courseId   String       @map("course_id")
+  id        String        @id @default(cuid())
+  userId    String        @map("user_id")
+  courseId  String        @map("course_id")
   method    CheckInMethod
-  checkedAt DateTime     @default(now()) @map("checked_at")
+  checkedAt DateTime      @default(now()) @map("checked_at")
 
   user   User   @relation(fields: [userId], references: [id])
   course Course @relation(fields: [courseId], references: [id])
@@ -400,8 +502,8 @@ enum CheckInMethod {
 model Review {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
-  courseId   String   @map("course_id")
-  rating    Int      // 1-5
+  courseId  String   @map("course_id")
+  rating    Int // 1-5
   content   String?
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -415,16 +517,18 @@ model Review {
 // ========== 代金券 ==========
 
 model Voucher {
-  id               String        @id @default(cuid())
-  userId           String        @map("user_id")
-  amount           Decimal
-  applicableCourseIds String[]   @map("applicable_course_ids")
-  applicableAll    Boolean       @default(false) @map("applicable_all")
-  expiresAt        DateTime      @map("expires_at")
-  status           VoucherStatus @default(UNUSED)
-  source           String        // 来源描述
-  usedAt           DateTime?     @map("used_at")
-  createdAt        DateTime      @default(now()) @map("created_at")
+  id                  String        @id @default(cuid())
+  userId              String        @map("user_id")
+  mode                VoucherMode   @default(REDUCE_BY) // REDUCE_BY 减额 / REDUCE_TO 减至
+  amount              Decimal // 减额模式：抵扣面额；减至模式：忽略
+  targetPrice         Decimal?      @map("target_price") // 减至模式：将实付减至该价格
+  applicableCourseIds Json          @map("applicable_course_ids") // string[]
+  applicableAll       Boolean       @default(false) @map("applicable_all")
+  expiresAt           DateTime      @map("expires_at")
+  status              VoucherStatus @default(UNUSED)
+  source              String // 来源描述
+  usedAt              DateTime?     @map("used_at")
+  createdAt           DateTime      @default(now()) @map("created_at")
 
   user   User    @relation(fields: [userId], references: [id])
   orders Order[]
@@ -439,20 +543,25 @@ enum VoucherStatus {
   REVOKED
 }
 
+enum VoucherMode {
+  REDUCE_BY
+  REDUCE_TO
+}
+
 // ========== 任务系统 ==========
 
 model Task {
-  id                String     @id @default(cuid())
-  title             String
-  description       String
-  seedsReward       Int        @map("seeds_reward") // 每人可获得 seeds
-  publisherCost     Int        @default(0) @map("publisher_cost") // 发布方消耗
-  maxParticipants   Int        @map("max_participants")
-  scope             TaskScope  @default(ALL)
-  specificTrainerIds String[]  @map("specific_trainer_ids")
-  status            TaskStatus @default(PUBLISHED)
-  createdAt         DateTime   @default(now()) @map("created_at")
-  updatedAt         DateTime   @updatedAt @map("updated_at")
+  id                 String     @id @default(cuid())
+  title              String
+  description        String     @db.Text
+  seedsReward        Int        @map("seeds_reward") // 每人可获得 seeds
+  publisherCost      Int        @default(0) @map("publisher_cost") // 发布方消耗
+  maxParticipants    Int        @map("max_participants")
+  scope              TaskScope  @default(ALL)
+  specificTrainerIds Json       @map("specific_trainer_ids") // string[]
+  status             TaskStatus @default(PUBLISHED)
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
 
   claims TaskClaim[]
 
@@ -494,13 +603,15 @@ enum TaskClaimStatus {
 // ========== 物料管理 ==========
 
 model Material {
-  id         String   @id @default(cuid())
-  name       String
-  quantity   Int
-  unitPrice  Decimal  @map("unit_price")
-  seedsCost  Int      @map("seeds_cost") // 使用所需积分
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(cuid())
+  name      String
+  image     String?  @db.LongText // 物料图片
+  quantity  Int
+  usageType String   @default("CONSUMABLE") @map("usage_type") // CONSUMABLE=一次性消耗 | REUSABLE=循环使用
+  unitPrice Decimal  @map("unit_price")
+  seedsCost Int      @map("seeds_cost") // 使用所需积分
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("materials")
 }
@@ -508,7 +619,7 @@ model Material {
 // ========== 课程标签 ==========
 
 model CourseTag {
-  id    String @id @default(cuid())
+  id     String @id @default(cuid())
   nameZh String @map("name_zh")
   nameEn String @map("name_en")
   sort   Int    @default(0)
@@ -517,6 +628,19 @@ model CourseTag {
 }
 
 // ========== 值集字典（后台可维护） ==========
+
+// 导师等级配置（等级 -> 名称 -> 默认时薪）
+model TrainerLevel {
+  id         String   @id @default(cuid())
+  level      Int      @unique // 1-5
+  name       String // 等级名称，如 LV1 初级导师
+  hourlyRate Decimal  @default(0) @map("hourly_rate") // 该等级默认时薪
+  sort       Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("trainer_levels")
+}
 
 model DictSet {
   id        String   @id @default(cuid())
@@ -547,28 +671,97 @@ model DictItem {
   @@map("dict_items")
 }
 
+// ========== 组织架构（全系统主数据） ==========
+
+/// 组织节点：集团 / 总部部门 / 子公司 / 门店。
+/// 进销存的仓库主体、财务核算主体、审批人范围、后台数据行级权限均以此为唯一来源。
+model Organization {
+  id        String  @id // 可读主键，如 HQ / D-PUR / C001 / S001
+  name      String
+  shortName String  @map("short_name")
+  code      String  @unique
+  type      OrgType
+  parentId  String? @map("parent_id")
+  leader    String  @default("")
+  phone     String  @default("")
+
+  /// 独立财务核算主体：财务看板按此维度出利润
+  accounting   Boolean @default(false)
+  /// 有独立仓库：可作为进销存收货/库存主体
+  hasWarehouse Boolean @default(false) @map("has_warehouse")
+  /// 可作为采购方向上级或外部供应商下单
+  canPurchase  Boolean @default(false) @map("can_purchase")
+
+  /// 总部抽取的管理费比例（如 0.15），仅门店有意义
+  mgmtFeeRate  Decimal @default(0) @map("mgmt_fee_rate") @db.Decimal(6, 4)
+  /// 总部抽取的培训费比例（如 0.02）
+  trainFeeRate Decimal @default(0) @map("train_fee_rate") @db.Decimal(6, 4)
+
+  /// 月保底租金（元）：与提成租金取高后计入看板房租
+  baseRent    Decimal @default(0) @map("base_rent") @db.Decimal(12, 2)
+  /// 提成租金比例（如 0.06）：按当月收入流水总额计提
+  rentRate    Decimal @default(0) @map("rent_rate") @db.Decimal(6, 4)
+  /// 月物业费（元）：固定额，不随营收浮动
+  propertyFee Decimal @default(0) @map("property_fee") @db.Decimal(12, 2)
+
+  status    OrgStatus @default(ACTIVE)
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  parent   Organization?  @relation("OrgTree", fields: [parentId], references: [id])
+  children Organization[] @relation("OrgTree")
+  admins   AdminUser[]
+  venues   Venue[]
+
+  @@index([parentId])
+  @@index([type, status])
+  @@map("organizations")
+}
+
+enum OrgType {
+  GROUP // 集团总部
+  DEPT // 总部部门
+  SUBSIDIARY // 子公司
+  STORE // 门店
+}
+
+enum OrgStatus {
+  ACTIVE
+  DISABLED
+}
+
 // ========== 后台管理系统 ==========
 
 model AdminUser {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  password  String
-  name      String
-  phone     String?
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(cuid())
+  username           String   @unique
+  password           String
+  name               String
+  phone              String?
+  /// 归属组织：数据行级权限的判定基准（超管可为空表示不受限）
+  orgId              String?  @map("org_id")
+  isActive           Boolean  @default(true) @map("is_active")
+  mustChangePassword Boolean  @default(true) @map("must_change_password") // 首次登录强制改密
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   roles AdminUserRole[]
+  org   Organization?   @relation(fields: [orgId], references: [id])
 
+  @@index([orgId])
   @@map("admin_users")
 }
 
 model Role {
-  id          String   @id @default(cuid())
-  name        String   @unique
+  id          String    @id @default(cuid())
+  name        String    @unique
   description String?
-  createdAt   DateTime @default(now()) @map("created_at")
+  /// 数据行级范围：多角色取最宽松者。仅作用于按组织核算的模块（进销存/财务）
+  dataScope   DataScope @default(OWN) @map("data_scope")
+  /// 内置角色不允许删除
+  isBuiltin   Boolean   @default(false) @map("is_builtin")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   users       AdminUserRole[]
   permissions RolePermission[]
@@ -576,15 +769,36 @@ model Role {
   @@map("roles")
 }
 
+/// 数据行级可见范围，由宽到严
+enum DataScope {
+  ALL // 全部组织
+  OWN_AND_SUB // 本组织及其下级
+  OWN // 仅本组织
+  SELF // 仅本人创建的单据
+}
+
 model Permission {
-  id       String @id @default(cuid())
-  code     String @unique // e.g. "course:create", "user:view"
-  name     String
-  module   String // 所属模块：education, sales, system
+  id        String    @id @default(cuid())
+  code      String    @unique // e.g. "course:create", "finance:dashboard:profit"
+  name      String
+  module    String // 所属模块：education, sales, system, org, scm, finance, flow
+  /// 粒度：MENU 菜单/页面、TAB 页面内标签页、ACTION 按钮动作、FIELD 敏感数据块
+  level     PermLevel @default(ACTION)
+  /// 同模块内的展示分组名，用于权限树折叠，如「采购订单」
+  groupName String    @default("") @map("group_name")
+  sortOrder Int       @default(0) @map("sort_order")
 
   roles RolePermission[]
 
+  @@index([module, sortOrder])
   @@map("permissions")
+}
+
+enum PermLevel {
+  MENU
+  TAB
+  ACTION
+  FIELD
 }
 
 model AdminUserRole {
@@ -609,16 +823,694 @@ model RolePermission {
   @@map("role_permissions")
 }
 
+// ========== 系统配置 ==========
+
+/// 通用系统配置 KV
+model SystemConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_configs")
+}
+
 // ========== 结算 ==========
 
 model Settlement {
-  id        String   @id @default(cuid())
-  trainerId String   @map("trainer_id")
-  courseId   String   @map("course_id")
-  hours     Decimal  // 课程时长
-  rate      Decimal  // 小时单价
-  amount    Decimal  // 结算金额
-  settledAt DateTime @default(now()) @map("settled_at")
+  id             String           @id @default(cuid())
+  trainerId      String           @map("trainer_id")
+  trainerName    String           @map("trainer_name") // 冗余导师名
+  courseId       String           @map("course_id")
+  courseName     String           @map("course_name") // 冗余课程名
+  hours          Decimal // 课程时长
+  rate           Decimal // 小时单价
+  amount         Decimal // 结算金额
+  adjustedAmount Decimal?         @map("adjusted_amount") // 人工调整后金额
+  adjustNote     String?          @map("adjust_note") @db.Text // 调整说明
+  status         SettlementStatus @default(NORMAL)
+  settledAt      DateTime         @default(now()) @map("settled_at")
 
   @@map("settlements")
+}
+
+enum SettlementStatus {
+  NORMAL // 正常
+  ADJUSTED // 已调整
+}
+
+// ========== 运营位 ==========
+
+/// 首页运营 Banner（后台可配置轮播位）
+model Banner {
+  id        String   @id @default(cuid())
+  title     String
+  subtitle  String?  @db.Text // 副标题/描述
+  bg        String? // 背景渐变色，如 linear-gradient(135deg, #6B463C, #A07060)
+  imageUrl  String?  @map("image_url") @db.LongText // 背景图（存在时优先于渐变色）
+  linkType  String   @default("none") @map("link_type") // none | course
+  linkValue String?  @map("link_value") // 关联课程 id 等
+  sortOrder Int      @default(0) @map("sort_order") // 越小越靠前
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("banners")
+}
+
+// ========== 审批流引擎 ==========
+
+/// 可走审批的单据类型（全系统共用一套引擎）
+enum ApprovalBizType {
+  PURCHASE_ORDER // 采购订单
+  EXPENSE_ENTRY // 费用录入
+  STOCK_ADJUST // 库存调整
+  VOUCHER_GRANT // 代金券发放
+  ORDER_FORCE_REFUND // 订单强制退款
+}
+
+/// 流程适用的组织范围：同一单据类型下总部与门店可走不同节点
+enum ApprovalFlowScope {
+  ALL // 全部组织
+  HQ // 仅总部/部门
+  STORE // 仅子公司/门店
+}
+
+/// 节点内多审批人时的通过规则
+enum ApprovalNodeMode {
+  ALL // 会签：全部同意
+  ANY // 或签：一人同意即可
+}
+
+enum ApprovalInstanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApprovalNodeStatus {
+  WAITING // 未到达
+  PROCESSING // 审批中
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalDecisionAction {
+  APPROVE
+  REJECT
+}
+
+/// 审批流规则：按单据类型 + 组织范围 + 金额区间 命中
+model ApprovalFlowRule {
+  id        String            @id @default(cuid())
+  bizType   ApprovalBizType   @map("biz_type")
+  name      String
+  scope     ApprovalFlowScope @default(ALL)
+  /// 金额下限（含），null 为不限
+  minAmount Decimal?          @map("min_amount") @db.Decimal(12, 2)
+  /// 金额上限（不含），null 为不限
+  maxAmount Decimal?          @map("max_amount") @db.Decimal(12, 2)
+  enabled   Boolean           @default(true)
+  remark    String            @default("") @db.VarChar(500)
+  sortOrder Int               @default(0) @map("sort_order")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  nodes ApprovalFlowNode[]
+
+  @@index([bizType, enabled])
+  @@map("approval_flow_rules")
+}
+
+/// 流程节点模板
+model ApprovalFlowNode {
+  id        String           @id @default(cuid())
+  ruleId    String           @map("rule_id")
+  name      String
+  mode      ApprovalNodeMode @default(ANY)
+  /// 审批人登录名（手机号）数组：比 cuid 稳定，重新 seed 也不会把节点打成空
+  approvers Json
+  sortOrder Int              @default(0) @map("sort_order")
+
+  rule ApprovalFlowRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@map("approval_flow_nodes")
+}
+
+/// 审批实例：单据提交时根据命中的规则快照生成
+model ApprovalInstance {
+  id      String          @id // 可读单号 AP+日期+序号
+  bizType ApprovalBizType @map("biz_type")
+  /// 关联业务单据 id；代金券/退款类无实体单据时为空字符串
+  bizId   String          @default("") @map("biz_id")
+  summary String          @db.Text
+  amount  Decimal         @default(0) @db.Decimal(12, 2)
+  /// 发起方组织，用于命中流程的组织范围与数据权限过滤
+  orgId   String?         @map("org_id")
+
+  requester     String @default("") // 发起人登录名
+  requesterName String @default("") @map("requester_name")
+
+  flowId   String? @map("flow_id")
+  flowName String  @default("") @map("flow_name")
+
+  currentIndex Int                    @default(0) @map("current_index")
+  status       ApprovalInstanceStatus @default(PENDING)
+
+  /// 通过后执行副作用所需的参数快照（如发券行、退款金额）
+  payload    Json?
+  /// 执行结果或失败原因
+  resultNote String?   @map("result_note") @db.Text
+  finishedAt DateTime? @map("finished_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  nodes ApprovalInstanceNode[]
+
+  @@index([status, bizType])
+  @@index([bizType, bizId])
+  @@index([orgId])
+  @@map("approval_instances")
+}
+
+/// 实例节点：从模板拷贝，之后模板改动不影响已在跑的单
+model ApprovalInstanceNode {
+  id         String             @id @default(cuid())
+  instanceId String             @map("instance_id")
+  name       String
+  mode       ApprovalNodeMode
+  approvers  Json
+  status     ApprovalNodeStatus @default(WAITING)
+  sortOrder  Int                @default(0) @map("sort_order")
+
+  instance  ApprovalInstance   @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  decisions ApprovalDecision[]
+
+  @@index([instanceId])
+  @@map("approval_instance_nodes")
+}
+
+/// 单次审批意见
+model ApprovalDecision {
+  id           String                 @id @default(cuid())
+  nodeId       String                 @map("node_id")
+  approver     String // 审批人登录名
+  approverName String                 @default("") @map("approver_name")
+  action       ApprovalDecisionAction
+  comment      String                 @default("") @db.VarChar(500)
+  createdAt    DateTime               @default(now()) @map("created_at")
+
+  node ApprovalInstanceNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@map("approval_decisions")
+}
+
+// ========== 进销存 ==========
+
+/// 外部供应商（总部向其采购）
+model ScmSupplier {
+  id        String   @id @default(cuid())
+  name      String
+  contact   String   @default("")
+  phone     String   @default("")
+  enabled   Boolean  @default(true)
+  remark    String   @default("") @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  orders PurchaseOrder[]
+
+  @@map("scm_suppliers")
+}
+
+/// 进销存商品/耗材主数据（与小程序侧 Material 无关：后者是课程用料，带积分消耗）
+model ScmProduct {
+  id            String  @id @default(cuid())
+  /// 可读编码，如 P001
+  code          String  @unique
+  name          String
+  spec          String  @default("")
+  unit          String  @default("")
+  /// 总部向供应商的采购参考价
+  purchasePrice Decimal @default(0) @map("purchase_price") @db.Decimal(10, 2)
+  /// 总部供给门店的供货价
+  supplyPrice   Decimal @default(0) @map("supply_price") @db.Decimal(10, 2)
+  /// 低于此数在库存页告警
+  safetyStock   Int     @default(0) @map("safety_stock")
+  enabled       Boolean @default(true)
+  remark        String  @default("") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  balances StockBalance[]
+
+  @@map("scm_products")
+}
+
+/// 供货方类型
+enum PurchaseSupplierType {
+  EXTERNAL // 外部供应商
+  HQ // 总部（门店向总部订货）
+}
+
+enum PurchaseOrderStatus {
+  PENDING_APPROVAL // 审批中
+  REJECTED // 已驳回
+  APPROVED // 待收货
+  PARTIAL // 部分入库
+  COMPLETED // 已完成
+  CANCELLED // 已取消
+}
+
+/// 采购订单
+model PurchaseOrder {
+  id           String               @id // 可读单号 PO+日期+序号
+  /// 采购方组织（总部向外采购，或门店向总部订货）
+  buyerId      String               @map("buyer_id")
+  supplierType PurchaseSupplierType @map("supplier_type")
+  supplierId   String?              @map("supplier_id")
+  /// 下单时的供货方名称快照
+  supplierName String               @default("") @map("supplier_name")
+
+  totalAmount Decimal             @default(0) @map("total_amount") @db.Decimal(12, 2)
+  status      PurchaseOrderStatus @default(PENDING_APPROVAL)
+
+  createdBy     String @default("") @map("created_by") // 发起人登录名
+  createdByName String @default("") @map("created_by_name")
+  remark        String @default("") @db.VarChar(500)
+
+  /// 关联审批实例；为空表示未命中流程，免审直接生效
+  approvalId String? @map("approval_id")
+  flowName   String  @default("") @map("flow_name")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items    PurchaseOrderItem[]
+  receipts GoodsReceipt[]
+  supplier ScmSupplier?        @relation(fields: [supplierId], references: [id])
+
+  @@index([buyerId, status])
+  @@index([createdAt])
+  @@map("purchase_orders")
+}
+
+/// 采购明细（商品名/规格/单位下单时快照，主数据改名不影响历史单）
+model PurchaseOrderItem {
+  id          String  @id @default(cuid())
+  orderId     String  @map("order_id")
+  productId   String  @map("product_id")
+  name        String
+  spec        String  @default("")
+  unit        String  @default("")
+  price       Decimal @default(0) @db.Decimal(10, 2)
+  qty         Int     @default(0)
+  /// 已验收入库数量，支持分批入库累加
+  receivedQty Int     @default(0) @map("received_qty")
+
+  order PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("purchase_order_items")
+}
+
+/// 验收入库单
+model GoodsReceipt {
+  id          String  @id // 可读单号 GR+日期+序号
+  poId        String  @map("po_id")
+  /// 收货仓库（有独立仓库的组织）
+  warehouseId String  @map("warehouse_id")
+  /// 本次验收是否存在差异（少收/拒收）
+  hasDiff     Boolean @default(false) @map("has_diff")
+
+  operator     String   @default("") // 验收人登录名
+  operatorName String   @default("") @map("operator_name")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  items GoodsReceiptItem[]
+  order PurchaseOrder      @relation(fields: [poId], references: [id], onDelete: Cascade)
+
+  @@index([poId])
+  @@index([warehouseId])
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptItem {
+  id         String @id @default(cuid())
+  receiptId  String @map("receipt_id")
+  productId  String @map("product_id")
+  name       String
+  unit       String @default("")
+  orderedQty Int    @default(0) @map("ordered_qty")
+  /// 本次实收
+  acceptQty  Int    @default(0) @map("accept_qty")
+  /// 本次拒收/差异
+  rejectQty  Int    @default(0) @map("reject_qty")
+  reason     String @default("") @db.VarChar(500)
+
+  receipt GoodsReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+  @@map("goods_receipt_items")
+}
+
+/// 库存结存：仓库 × 商品 唯一
+model StockBalance {
+  id          String @id @default(cuid())
+  warehouseId String @map("warehouse_id")
+  productId   String @map("product_id")
+  qty         Int    @default(0)
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product ScmProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, productId])
+  @@index([productId])
+  @@map("stock_balances")
+}
+
+enum StockLedgerType {
+  IN
+  OUT
+  ADJUST
+}
+
+/// 库存变动流水（只进不改，与结存同事务写入）
+model StockLedger {
+  id          String          @id @default(cuid())
+  warehouseId String          @map("warehouse_id")
+  productId   String          @map("product_id")
+  type        StockLedgerType
+  /// 正数为增、负数为减
+  qty         Int
+  /// 来源单据号或说明
+  ref         String          @default("")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  @@index([warehouseId, productId])
+  @@index([createdAt])
+  @@map("stock_ledgers")
+}
+
+enum StockAdjustReason {
+  PROFIT // 盘盈
+  LOSS // 盘亏
+  DAMAGE // 报损
+  OTHER
+}
+
+enum StockAdjustStatus {
+  PENDING_APPROVAL
+  REJECTED
+  EFFECTIVE // 已生效（已写入库存）
+  CANCELLED
+}
+
+/// 库存调整单：盘盈盘亏/报损，走审批，通过后才写入库存
+model StockAdjust {
+  id          String            @id // 可读单号 SA+日期+序号
+  warehouseId String            @map("warehouse_id")
+  reason      StockAdjustReason @default(OTHER)
+  remark      String            @default("") @db.VarChar(500)
+  /// 影响金额（按供货价估算的绝对值），用于命中金额分级
+  totalAmount Decimal           @default(0) @map("total_amount") @db.Decimal(12, 2)
+  status      StockAdjustStatus @default(PENDING_APPROVAL)
+
+  createdBy     String @default("") @map("created_by")
+  createdByName String @default("") @map("created_by_name")
+
+  approvalId String? @map("approval_id")
+  flowName   String  @default("") @map("flow_name")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items StockAdjustItem[]
+
+  @@index([warehouseId, status])
+  @@map("stock_adjusts")
+}
+
+model StockAdjustItem {
+  id        String  @id @default(cuid())
+  adjustId  String  @map("adjust_id")
+  productId String  @map("product_id")
+  name      String
+  unit      String  @default("")
+  /// 调整前账面数（录入时快照）
+  beforeQty Int     @default(0) @map("before_qty")
+  /// 调整后实际数
+  afterQty  Int     @default(0) @map("after_qty")
+  /// 差额 = 后 - 前，正为盘盈
+  diffQty   Int     @default(0) @map("diff_qty")
+  price     Decimal @default(0) @db.Decimal(10, 2)
+
+  adjust StockAdjust @relation(fields: [adjustId], references: [id], onDelete: Cascade)
+
+  @@index([adjustId])
+  @@map("stock_adjust_items")
+}
+
+// ========== 财务 ==========
+
+/// 收入数据源：各业务系统的口径统一抽到本系统
+enum RevenueSourceKey {
+  SELF // 本系统（福愈小程序）
+  ONSITE // 在场系统（到店收银）
+  QINGLIAO // 轻疗系统
+  MANUAL // 手工补录
+}
+
+enum RevenueSourceStatus {
+  CONNECTED // 已打通
+  PENDING // 待打通
+  MANUAL // 人工兼容
+}
+
+/// 数据源接入状态配置（一源一行，供收入页展示与手动触发抽数）
+model RevenueSourceConfig {
+  key        RevenueSourceKey    @id
+  name       String
+  intro      String              @default("") @db.VarChar(500)
+  status     RevenueSourceStatus @default(PENDING)
+  /// 抽数方式说明
+  mode       String              @default("")
+  /// 同步频率说明
+  cron       String              @default("")
+  lastSyncAt DateTime?           @map("last_sync_at")
+  note       String              @default("") @db.VarChar(500)
+  sortOrder  Int                 @default(0) @map("sort_order")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+
+  @@map("revenue_source_configs")
+}
+
+enum RevenueWay {
+  AUTO // 接口自动
+  IMPORT // 手工导入
+  MANUAL // 手工录入
+}
+
+/// 收入流水：按 月份 × 核算组织 × 数据源 入账，看板实时聚合不存结果
+model RevenueRecord {
+  id         String           @id @default(cuid())
+  /// 核算月份 yyyy-MM
+  month      String
+  orgId      String           @map("org_id")
+  source     RevenueSourceKey
+  amount     Decimal          @default(0) @db.Decimal(12, 2)
+  /// 对应单量，仅供展示
+  orderCount Int              @default(0) @map("order_count")
+  way        RevenueWay       @default(MANUAL)
+  remark     String           @default("") @db.VarChar(500)
+  /// 自动抽数时的幂等键：同一源同一月同一组织只留一条自动汇总
+  syncKey    String?          @map("sync_key")
+
+  syncAt    DateTime @default(now()) @map("sync_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([syncKey])
+  @@index([month, orgId])
+  @@index([source, month])
+  @@map("revenue_records")
+}
+
+/// 人工录入类支出科目。房租与物业费不在此列，它们按门店租金参数现算。
+enum ExpenseCategory {
+  LABOR // 人力成本
+  MEITUAN // 美团推广费
+  OTHER // 其他支出
+}
+
+enum ExpenseSource {
+  MANUAL // 手工录入
+  IMPORT // 批量导入
+}
+
+enum ExpenseStatus {
+  PENDING_APPROVAL // 审批中（不计入看板）
+  EFFECTIVE // 已生效
+  REJECTED // 已驳回
+}
+
+/// 月度支出录入（房租/人力/美团推广费/其他）
+/// 管理费、培训费按组织比例由看板现算；耗材支出由采购单汇总，均不在此表
+model ExpenseEntry {
+  id       String          @id @default(cuid())
+  orgId    String          @map("org_id")
+  month    String
+  category ExpenseCategory
+  /// 自定义名称（OTHER 类使用）
+  name     String          @default("")
+  amount   Decimal         @default(0) @db.Decimal(12, 2)
+  source   ExpenseSource   @default(MANUAL)
+  remark   String          @default("") @db.VarChar(500)
+  status   ExpenseStatus   @default(EFFECTIVE)
+
+  approvalId String? @map("approval_id")
+  flowName   String  @default("") @map("flow_name")
+
+  createdBy     String @default("") @map("created_by")
+  createdByName String @default("") @map("created_by_name")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([month, orgId])
+  @@index([status])
+  @@map("expense_entries")
+}
+
+// ========== 社群（国内版 Skool） ==========
+
+/// 社群审核状态：创建/修改后需平台审核通过才上架广场
+enum CommunityStatus {
+  PENDING // 待审核
+  APPROVED // 已通过
+  REJECTED // 已驳回
+}
+
+/// 社群活动形式：线下课程 / 直播 / 线上（会议等）
+enum CommunityEventType {
+  OFFLINE // 线下课程/活动
+  LIVE // 直播
+  ONLINE // 线上
+}
+
+/// 社群动态审核状态（发帖先审后发）
+enum CommunityPostStatus {
+  PENDING // 待审核
+  APPROVED // 已发布
+  REJECTED // 已驳回
+}
+
+/// 社群（主理人可创建多个；入会主口径年费，单位：分）
+model Community {
+  id       String          @id @default(cuid())
+  name     String
+  slogan   String          @default("") @db.VarChar(200)
+  category String          @default("疗愈")
+  /// 16:9 封面（主理人上传，存 URL）
+  coverUrl      String? @map("cover_url") @db.LongText
+  coverFallback String? @default("linear-gradient(135deg, #6D5934 0%, #A78E70 100%)") @map("cover_fallback")
+  ownerName     String    @default("") @map("owner_name")
+  ownerTitle    String?   @map("owner_title")
+  ownerAvatar   String?   @map("owner_avatar") @db.LongText
+  /// 主理人小程序用户 id（可空：官方社群由平台直管）
+  ownerUserId String?  @map("owner_user_id")
+  memberCount Int      @default(0) @map("member_count")
+  /// 年费（分），0 = 免费
+  yearlyFee   Int      @default(0) @map("yearly_fee")
+  isOfficial  Boolean  @default(false) @map("is_official")
+  /// 内部运营字段：新社群排序加权用，不面向 C 端展示
+  isNew       Boolean  @default(false) @map("is_new")
+  /// 标签 JSON 数组，如 ["身心疗愈","正念"]（MySQL TEXT 列不能带默认值，服务端创建时默认写入 "[]"）
+  tags        String   @db.Text
+  description String?  @db.Text
+  status      CommunityStatus @default(PENDING)
+  isActive    Boolean  @default(true) @map("is_active")
+  /// 近 30 天新增成员（内部排序加权用）
+  growth30d   Int      @default(0) @map("growth_30d")
+  /// 今日活跃成员数（广场展示用）
+  activeToday Int      @default(0) @map("active_today")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  events CommunityEvent[]
+  posts  CommunityPost[]
+  joins  CommunityJoin[]
+
+  @@index([status, isActive])
+  @@map("communities")
+}
+
+/// 社群活动（活动日历数据源；官方课程活动可关联 Course 直接跳转报名）
+model CommunityEvent {
+  id          String             @id @default(cuid())
+  communityId String             @map("community_id")
+  eventDate   DateTime           @db.Date @map("event_date")
+  /// 开始时间，如 "20:00"
+  time        String             @default("")
+  title       String
+  type        CommunityEventType @default(OFFLINE)
+  venue       String? // 线下场地
+  capacity    Int                @default(0)
+  joined      Int                @default(0)
+  /// 关联官方课程 id（存在时 C 端点击跳转课程页报名）
+  courseId    String?            @map("course_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, eventDate])
+  @@map("community_events")
+}
+
+/// 社群动态（先审后发；作者信息为发布时快照）
+model CommunityPost {
+  id           String              @id @default(cuid())
+  communityId  String              @map("community_id")
+  authorId     String?             @map("author_id")
+  authorName   String              @default("") @map("author_name")
+  authorAvatar String?             @map("author_avatar") @db.LongText
+  /// 主理人 | 成员
+  authorRole   String              @default("成员") @map("author_role")
+  authorLevel  Int                 @default(1) @map("author_level")
+  content      String              @db.Text
+  /// 配图 JSON 数组
+  images       String?             @db.Text
+  likes        Int                 @default(0)
+  comments     Int                 @default(0)
+  status       CommunityPostStatus @default(PENDING)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, status])
+  @@map("community_posts")
+}
+
+/// 社群加入关系（我加入的/成员列表数据源）
+model CommunityJoin {
+  id          String   @id @default(cuid())
+  communityId String   @map("community_id")
+  userId      String   @map("user_id")
+  joinedAt    DateTime @default(now()) @map("joined_at")
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
+  @@index([userId])
+  @@map("community_joins")
 }

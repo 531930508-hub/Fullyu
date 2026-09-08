@@ -16,3 +16,8 @@ export interface LoginResult {
 export function wechatPhoneLogin(loginCode: string, phoneCode: string) {
   return post<LoginResult>('/auth/wechat/phone-login', { loginCode, phoneCode }, { auth: false })
 }
+
+/** 【仅本地开发】手机号快捷登录（后端 DEV_LOGIN_ENABLED 开启时可用） */
+export function devLogin(phone: string) {
+  return post<LoginResult>('/auth/dev/login', { phone }, { auth: false })
+}

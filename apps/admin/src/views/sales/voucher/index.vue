@@ -10,7 +10,7 @@
           <a-select-option value="EXPIRED">已过期</a-select-option>
           <a-select-option value="REVOKED">已作废</a-select-option>
         </a-select>
-        <a-button type="primary" @click="openGrant">发放代金券</a-button>
+        <a-button v-perm="'voucher:create'" type="primary" @click="openGrant">发放代金券</a-button>
       </a-space>
     </div>
 
@@ -31,7 +31,8 @@
             <div style="font-size: 12px; color: #999;">{{ record.user?.phone || '' }}</div>
           </template>
           <template v-else-if="column.dataIndex === 'amount'">
-            <span style="color: #6B463C; font-weight: 600;">¥{{ Number(record.amount || 0) }}</span>
+            <span v-if="record.mode === 'REDUCE_TO'" style="color: #6B463C; font-weight: 600;">减至 ¥{{ Number(record.targetPrice || 0) }}</span>
+            <span v-else style="color: #6B463C; font-weight: 600;">减 ¥{{ Number(record.amount || 0) }}</span>
           </template>
           <template v-else-if="column.dataIndex === 'scope'">
             <a-tag v-if="record.applicableAll" color="blue">全部课程</a-tag>
@@ -47,7 +48,7 @@
             {{ record.createdAt ? dayjs(record.createdAt).format('YYYY-MM-DD HH:mm') : '-' }}
           </template>
           <template v-else-if="column.dataIndex === 'action'">
-            <a-popconfirm v-if="record.status === 'UNUSED'" title="确定作废该代金券？" @confirm="handleRevoke(record)">
+            <a-popconfirm v-perm="'voucher:update'" v-if="record.status === 'UNUSED'" title="确定作废该代金券？" @confirm="handleRevoke(record)">
               <a-button size="small" danger>作废</a-button>
             </a-popconfirm>
             <span v-else style="color: #ccc;">-</span>
@@ -69,10 +70,19 @@
             show-search
           />
         </a-form-item>
+        <a-form-item label="优惠方式" required>
+          <a-radio-group v-model:value="grantForm.mode">
+            <a-radio value="REDUCE_BY">减额（减多少元）</a-radio>
+            <a-radio value="REDUCE_TO">减至（减到多少元）</a-radio>
+          </a-radio-group>
+        </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
-            <a-form-item label="面额（元）" required>
+            <a-form-item v-if="grantForm.mode === 'REDUCE_BY'" label="抵扣面额（元）" required>
               <a-input-number v-model:value="grantForm.amount" prefix="¥" style="width: 100%" :min="1" placeholder="如：50" />
+            </a-form-item>
+            <a-form-item v-else label="减至目标价（元）" required>
+              <a-input-number v-model:value="grantForm.targetPrice" prefix="¥" style="width: 100%" :min="0" placeholder="如：9.9，将实付降至此价" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -130,7 +140,9 @@ const columns = [
 
 const grantForm = ref({
   userIds: [] as string[],
+  mode: 'REDUCE_BY' as 'REDUCE_BY' | 'REDUCE_TO',
   amount: null as number | null,
+  targetPrice: null as number | null,
   expiresAt: null as Dayjs | null,
   source: '',
   applicableAll: true,
@@ -169,13 +181,16 @@ async function loadOptions() {
   } catch (e) {}
   try {
     const res = await adminListCourses({ page: 1, pageSize: 200 })
-    const list = Array.isArray(res) ? res : (res?.list || [])
-    courseOptions.value = list.map((c: any) => ({ label: c.title, value: c.id }))
+    const list = Array.isArray(res) ? res : (res?.items || res?.list || [])
+    courseOptions.value = list.map((c: any) => {
+      const dateStr = c.startDate ? new Date(c.startDate).toISOString().slice(0, 10).replace(/-/g, '') : ''
+      return { label: dateStr ? `${c.title}-${dateStr}` : c.title, value: c.id }
+    })
   } catch (e) {}
 }
 
 function openGrant() {
-  grantForm.value = { userIds: [], amount: null, expiresAt: null, source: '', applicableAll: true, applicableCourseIds: [] }
+  grantForm.value = { userIds: [], mode: 'REDUCE_BY', amount: null, targetPrice: null, expiresAt: null, source: '', applicableAll: true, applicableCourseIds: [] }
   showGrantModal.value = true
 }
 
@@ -184,8 +199,12 @@ async function confirmGrant() {
     message.warning('请选择发放用户')
     return
   }
-  if (!grantForm.value.amount) {
-    message.warning('请填写面额')
+  if (grantForm.value.mode === 'REDUCE_BY' && !grantForm.value.amount) {
+    message.warning('请填写抵扣面额')
+    return
+  }
+  if (grantForm.value.mode === 'REDUCE_TO' && (grantForm.value.targetPrice === null || grantForm.value.targetPrice < 0)) {
+    message.warning('请填写减至目标价')
     return
   }
   if (!grantForm.value.expiresAt) {
@@ -196,14 +215,20 @@ async function confirmGrant() {
   try {
     const res = await grantVoucher({
       userIds: grantForm.value.userIds,
-      amount: grantForm.value.amount,
+      mode: grantForm.value.mode,
+      amount: grantForm.value.mode === 'REDUCE_BY' ? grantForm.value.amount : undefined,
+      targetPrice: grantForm.value.mode === 'REDUCE_TO' ? grantForm.value.targetPrice : undefined,
       expiresAt: grantForm.value.expiresAt.toISOString(),
       source: grantForm.value.source || 'ADMIN_GRANT',
       applicableAll: grantForm.value.applicableAll,
       applicableCourseIds: grantForm.value.applicableAll ? [] : grantForm.value.applicableCourseIds,
     })
-    const count = res?.granted ?? grantForm.value.userIds.length
-    message.success(`已成功发放 ${count} 张代金券`)
+    if (res?.pendingApproval) {
+      message.success('发放申请已提交，需审批通过后生效')
+    } else {
+      const count = res?.granted ?? grantForm.value.userIds.length
+      message.success(`已成功发放 ${count} 张代金券`)
+    }
     showGrantModal.value = false
     loadVouchers()
   } catch (e) {

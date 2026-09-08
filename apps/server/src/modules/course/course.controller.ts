@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Query, Param } from '@nestjs/common'
+import { Controller, Get, Post, Put, Delete, Body, Query, Param, Request } from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import { CourseService } from './course.service'
 import { AdminAuth } from '../../common/decorators/admin-auth.decorator'
@@ -16,12 +16,16 @@ export class CourseController {
     @Query('pageSize') pageSize?: number,
     @Query('status') status?: string,
     @Query('keyword') keyword?: string,
+    @Query('startDateFrom') startDateFrom?: string,
+    @Query('startDateTo') startDateTo?: string,
   ) {
     return this.courseService.adminList({
       page: page ? Number(page) : 1,
       pageSize: pageSize ? Number(pageSize) : 10,
       status,
       keyword,
+      startDateFrom,
+      startDateTo,
     })
   }
 
@@ -68,8 +72,19 @@ export class CourseController {
   @Post(':id/status')
   @AdminAuth('course:update')
   @ApiOperation({ summary: '发布/下架/取消课程' })
-  async setStatus(@Param('id') id: string, @Body() body: { status: any }) {
-    return this.courseService.setStatus(id, body.status)
+  async setStatus(@Request() req: any, @Param('id') id: string, @Body() body: { status: any }) {
+    return this.courseService.setStatus(id, body.status, {
+      operatorId: req.user?.adminId,
+      operatorName: req.user?.username,
+      source: 'COURSE_PAGE',
+    })
+  }
+
+  @Delete(':id')
+  @AdminAuth('course:delete')
+  @ApiOperation({ summary: '删除课程（仅草稿且无报名/候补）' })
+  async remove(@Param('id') id: string) {
+    return this.courseService.remove(id)
   }
 
   @Put(':id/price-tiers')

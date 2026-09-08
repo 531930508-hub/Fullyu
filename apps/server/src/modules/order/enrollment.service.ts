@@ -4,6 +4,7 @@ import { RedisService } from '../../common/redis.service'
 import { PricingService } from '../pricing/pricing.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
 import { SEAT_LOCK_DURATION_MINUTES, POINTS_TO_YUAN_RATIO } from '@fullyu/shared'
+import { generateOrderNo } from '../../common/order-no.helper'
 
 export interface EnrollDto {
   usePoints?: number
@@ -75,10 +76,21 @@ export class EnrollmentService {
         if (!course) throw new BusinessException('课程不存在', 4004)
         if (course.status !== 'PUBLISHED') throw new BusinessException('课程未开放报名', 4008)
 
-        // 报名时间窗校验
+        // 报名二次校验：以事务内最新数据为准，兜底“报名页停留期间课程被改期/改场”的并发场景
         const now = new Date()
+        if (course.enrollStartAt && now < course.enrollStartAt) {
+          throw new BusinessException('报名尚未开始', 4018)
+        }
         if (course.enrollEndAt && now > course.enrollEndAt) {
           throw new BusinessException('报名已截止', 4009)
+        }
+        if (course.startDate && now >= course.startDate) {
+          throw new BusinessException('课程已开课，无法报名', 4019)
+        }
+        // 场地兜底：课程被改期/改场后场地被停用则拦截报名
+        const venue = await tx.venue.findUnique({ where: { id: course.venueId } })
+        if (!venue || !venue.isAvailable) {
+          throw new BusinessException('课程场地暂不可用，暂无法报名', 4025)
         }
 
         // 容量校验（含待支付占位）
@@ -110,11 +122,16 @@ export class EnrollmentService {
 
         // 校验积分抵扣
         let pointsDeduction = 0
-        if (dto.usePoints && dto.usePoints > 0) {
-          if (!course.allowDeduction) throw new BusinessException('该课程不支持积分抵扣', 4012)
-          const balance = await this.pricing.getPointsBalance(userId)
-          if (dto.usePoints > balance) throw new BusinessException('积分余额不足', 4013)
-          pointsDeduction = Math.min(dto.usePoints * POINTS_TO_YUAN_RATIO, priceAfterDiscount)
+        if (dto.usePoints !== undefined && dto.usePoints !== null && dto.usePoints !== 0) {
+          if (!Number.isInteger(dto.usePoints) || dto.usePoints < 0) {
+            throw new BusinessException('使用积分需为非负整数', 4011)
+          }
+          if (dto.usePoints > 0) {
+            if (!course.allowDeduction) throw new BusinessException('该课程不支持积分抵扣', 4012)
+            const balance = await this.pricing.getPointsBalance(userId)
+            if (dto.usePoints > balance) throw new BusinessException('积分余额不足', 4013)
+            pointsDeduction = Math.min(dto.usePoints * POINTS_TO_YUAN_RATIO, priceAfterDiscount)
+          }
         }
 
         // 校验代金券
@@ -123,15 +140,22 @@ export class EnrollmentService {
         if (dto.voucherId) {
           const voucher = await this.validateVoucher(tx, dto.voucherId, userId, courseId)
           voucherId = voucher.id
-          voucherDeduction = Math.min(Number(voucher.amount), priceAfterDiscount - pointsDeduction)
+          if (voucher.mode === 'REDUCE_TO') {
+            // 减至模式：将实付（扣积分后）降至目标价，差额即抵扣金额
+            voucherDeduction = priceAfterDiscount - pointsDeduction - Number(voucher.targetPrice)
+          } else {
+            voucherDeduction = Math.min(Number(voucher.amount), priceAfterDiscount - pointsDeduction)
+          }
           voucherDeduction = Math.max(0, voucherDeduction)
         }
 
         const actualPaid = Math.max(0, priceAfterDiscount - pointsDeduction - voucherDeduction)
 
         // 创建待支付订单
+        const orderNo = await generateOrderNo(this.redis, 'COURSE')
         const order = await tx.order.create({
           data: {
+            orderNo,
             userId,
             courseId,
             orderType: 'COURSE',
@@ -186,7 +210,7 @@ export class EnrollmentService {
       orderBy: { amount: 'desc' },
     })
     return vouchers.filter(
-      (v) => v.applicableAll || v.applicableCourseIds.includes(courseId),
+      (v) => v.applicableAll || (v.applicableCourseIds as string[]).includes(courseId),
     )
   }
 
@@ -195,7 +219,7 @@ export class EnrollmentService {
     if (!voucher) throw new BusinessException('代金券不存在', 4014)
     if (voucher.status !== 'UNUSED') throw new BusinessException('代金券不可用', 4015)
     if (voucher.expiresAt < new Date()) throw new BusinessException('代金券已过期', 4016)
-    const applicable = voucher.applicableAll || voucher.applicableCourseIds.includes(courseId)
+    const applicable = voucher.applicableAll || (voucher.applicableCourseIds as string[]).includes(courseId)
     if (!applicable) throw new BusinessException('代金券不适用于该课程', 4017)
     return voucher
   }
