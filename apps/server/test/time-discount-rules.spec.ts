@@ -68,7 +68,7 @@ describe('时段折扣规则命中', () => {
   it('weekdays/timeRanges 为空 = 不限星期/全天', () => {
     const rules = [rule({ discountPercent: 70 })]
     expect(pickTimeDiscountRule(rules, ctx({ appointmentStart: MON_1530 }))?.discountPercent).toBe(70)
-    expect(pickTimeDiscountRule(rules, ctx({ appointmentStart: new Date(2026, 8, 7, 10, 0) })))?.discountPercent
+    expect(pickTimeDiscountRule(rules, ctx({ appointmentStart: new Date(2026, 8, 7, 10, 0) }))?.discountPercent).toBe(70)
   })
 
   it('门店特异性：显式门店规则优先于全局规则，与 priority 无关', () => {
@@ -129,5 +129,19 @@ describe('时段折扣规则命中', () => {
   it('停用规则跳过；非法时间段(start>=end)不命中', () => {
     expect(pickTimeDiscountRule([rule({ enabled: false })], ctx())).toBeNull()
     expect(pickTimeDiscountRule([rule({ timeRanges: [{ start: '20:00', end: '10:00' }] })], ctx())).toBeNull()
+  })
+
+  it('多时间段任一命中；validFrom/validTo 为 Date 对象；PERCENT 缺 discountPercent 跳过', () => {
+    const multi = rule({ id: 'multi', timeRanges: [{ start: '10:00', end: '12:00' }, { start: '14:00', end: '18:00' }] })
+    expect(pickTimeDiscountRule([multi], ctx({ appointmentStart: new Date(2026, 8, 5, 11, 0) }))?.ruleId).toBe('multi')
+    expect(pickTimeDiscountRule([multi], ctx({ appointmentStart: new Date(2026, 8, 5, 13, 0) }))).toBeNull()
+
+    const dateWindow = rule({ id: 'dw', validFrom: new Date(2026, 9, 1), validTo: new Date(2026, 9, 7) })
+    expect(pickTimeDiscountRule([dateWindow], ctx({ appointmentStart: new Date(2026, 9, 3, 15, 0) }))?.ruleId).toBe('dw')
+    expect(pickTimeDiscountRule([dateWindow], ctx())).toBeNull() // 9 月 5 日不在 10 月窗口内
+
+    const broken = rule({ id: 'broken', actionType: 'PERCENT', discountPercent: null })
+    const next = rule({ id: 'next', priority: 2, discountPercent: 80 })
+    expect(pickTimeDiscountRule([broken, next], ctx())?.ruleId).toBe('next')
   })
 })
