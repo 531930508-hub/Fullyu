@@ -21,10 +21,11 @@ export interface PriceQuote {
 export interface MemberDiscountResult {
   cardType: MemberCardType | null
   discountPercent: number | null
+  /** 单位与入参 basePrice 一致（课程链路为「分」） */
   discountAmount: number
   /** 命中的时段折扣规则 id（未命中为 null） */
   hitTimeRuleId: string | null
-  /** 命中详情（前端展示"会员时段价"用；未命中为 null） */
+  /** 命中详情（前端展示"会员时段价"用；未命中为 null）。其中 fixedPrice 单位为「元」 */
   timeDiscount: TimeDiscountHit | null
 }
 
@@ -129,7 +130,8 @@ export class PricingService {
     if (hit) {
       if (hit.actionType === 'PERCENT') {
         // discountPercent=70 表示 7 折；>100 时 discountAmount 为负 = 峰时加价
-        const discountAmount = basePrice * (1 - (hit.discountPercent as number) / 100)
+        // 金额以「分」为单位取整，避免 0.15000000000000002 这类浮点毛刺落进订单
+        const discountAmount = Math.round(basePrice * (1 - (hit.discountPercent as number) / 100))
         return {
           cardType: card.type,
           discountPercent: hit.discountPercent,
@@ -139,11 +141,13 @@ export class PricingService {
         }
       }
       // FIXED_BY_DURATION：会员价 = 固定价，折扣额 = 原价与固定价之差（可为负）
-      const fixedPrice = hit.fixedPrice as number
+      // 单位换算点：basePrice 与订单各金额列在课程链路是「分」，而规则里配置的
+      // fixedPrices.price 是「元」（后台按元录入、预览按元展示），只在此处换算一次。
+      const fixedPriceFen = Math.round((hit.fixedPrice as number) * 100)
       return {
         cardType: card.type,
         discountPercent: null,
-        discountAmount: basePrice - fixedPrice,
+        discountAmount: basePrice - fixedPriceFen,
         hitTimeRuleId: hit.ruleId,
         timeDiscount: hit,
       }
@@ -156,7 +160,7 @@ export class PricingService {
     if (!discount) {
       return { cardType: card.type, discountPercent: null, discountAmount: 0, hitTimeRuleId: null, timeDiscount: null }
     }
-    const discountAmount = Math.max(0, basePrice * (1 - discount.discountPercent / 100))
+    const discountAmount = Math.max(0, Math.round(basePrice * (1 - discount.discountPercent / 100)))
     return {
       cardType: card.type,
       discountPercent: discount.discountPercent,
