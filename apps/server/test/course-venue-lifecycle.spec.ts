@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing'
 import { INestApplication } from '@nestjs/common'
 import { PrismaService } from '../src/common/prisma.service'
 import { CourseService } from '../src/modules/course/course.service'
+import { SettlementService } from '../src/modules/settlement/settlement.service'
 import { Seeder } from './helpers'
 
 /**
@@ -20,7 +21,7 @@ describe('课程生命周期与场地占用', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      providers: [PrismaService, CourseService],
+      providers: [PrismaService, CourseService, SettlementService],
     }).compile()
     app = moduleRef.createNestApplication()
     await app.init()

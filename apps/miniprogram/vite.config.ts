@@ -29,15 +29,23 @@ function fixFileProtocol() {
   }
 }
 
+// 小程序端以 library mode 打包，@vitejs/plugin-legacy 不支持该模式；
+// legacy 与 file:// 修复仅 H5 产物需要
+const isMpTarget = (process.env.UNI_PLATFORM || '').startsWith('mp-')
+
 export default defineConfig({
   base: './',
   plugins: [
     uni(),
-    legacy({
-      targets: ['defaults', 'not IE 11'],
-      renderLegacyChunks: true,
-    }),
-    fixFileProtocol(),
+    ...(isMpTarget
+      ? []
+      : [
+          legacy({
+            targets: ['defaults', 'not IE 11'],
+            renderLegacyChunks: true,
+          }),
+          fixFileProtocol(),
+        ]),
   ],
   resolve: {
     alias: {

@@ -31,6 +31,7 @@ export const PERMISSION_MODULES: { key: string; name: string }[] = [
   { key: 'scm', name: '进销存' },
   { key: 'finance', name: '财务' },
   { key: 'flow', name: '审批流' },
+  { key: 'community', name: '社群管理' },
   { key: 'system', name: '系统设置' },
 ]
 

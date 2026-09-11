@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule'
 import { PrismaService } from '../../common/prisma.service'
 import { PaymentService } from '../payment/payment.service'
 import { NotificationService } from '../../common/notification/notification.service'
+import { orderAmountToYuan } from '@fullyu/shared'
 
 /**
  * 课程定时任务：
@@ -102,7 +103,7 @@ export class CourseTasksService {
       const amount = paidOrders.find((o) => o.userId === userId)?.actualPaid
       await this.notification.refundSuccess(userId, {
         courseName: course.title,
-        amount: amount ? `¥${Number(amount).toFixed(2)}` : '全额退款',
+        amount: amount ? `¥${orderAmountToYuan('COURSE', Number(amount)).toFixed(2)}` : '全额退款',
         orderId: paidOrders.find((o) => o.userId === userId)?.id ?? '',
       }).catch(() => undefined)
     }

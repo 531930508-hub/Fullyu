@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma, RevenueSourceKey, RevenueWay } from '@prisma/client'
-import { isValidMonth, monthRange } from '@fullyu/shared'
+import { isValidMonth, monthRange, orderAmountToYuan } from '@fullyu/shared'
 import { PrismaService } from '../../common/prisma.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
 import { buildOrgScope } from '../../common/utils/data-scope.util'
@@ -85,6 +85,7 @@ export class RevenueService {
       },
       select: {
         actualPaid: true,
+        orderType: true,
         courseId: true,
         course: { select: { venue: { select: { orgId: true } } } },
       },
@@ -99,7 +100,7 @@ export class RevenueService {
         continue
       }
       const acc = grouped.get(orgId) ?? { amount: 0, orderCount: 0 }
-      acc.amount += Number(order.actualPaid)
+      acc.amount += orderAmountToYuan(order.orderType, Number(order.actualPaid))
       acc.orderCount += 1
       grouped.set(orgId, acc)
     }

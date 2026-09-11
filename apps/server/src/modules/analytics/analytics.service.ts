@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { currentMonth, isBelowSafety, resolveWorkbenchBlocks } from '@fullyu/shared'
+import { currentMonth, isBelowSafety, orderAmountToFen, resolveWorkbenchBlocks } from '@fullyu/shared'
 import { PrismaService } from '../../common/prisma.service'
 import { buildOrgScope } from '../../common/utils/data-scope.util'
 import type { AdminContext } from '../auth/admin-jwt.strategy'
@@ -31,19 +31,19 @@ export class AnalyticsService {
       }),
       this.prisma.order.findMany({
         where: { status: { in: ['PAID', 'COMPLETED'] } },
-        select: { actualPaid: true },
+        select: { actualPaid: true, orderType: true },
       }),
       this.prisma.order.findMany({
         where: {
           status: { in: ['PAID', 'COMPLETED'] },
           paymentTime: { gte: monthStart },
         },
-        select: { actualPaid: true },
+        select: { actualPaid: true, orderType: true },
       }),
     ])
 
-    const totalRevenue = paidOrders.reduce((s, o) => s + Number(o.actualPaid), 0)
-    const monthRevenue = monthPaidOrders.reduce((s, o) => s + Number(o.actualPaid), 0)
+    const totalRevenue = paidOrders.reduce((s, o) => s + orderAmountToFen(o.orderType, Number(o.actualPaid)), 0)
+    const monthRevenue = monthPaidOrders.reduce((s, o) => s + orderAmountToFen(o.orderType, Number(o.actualPaid)), 0)
 
     return {
       userCount,
@@ -251,7 +251,7 @@ export class AnalyticsService {
       id: o.id,
       user: o.user?.nickname || '匿名',
       course: o.course?.title || o.memberCardProduct?.name || '会员卡',
-      amount: Number(o.actualPaid),
+      amount: orderAmountToFen(o.orderType, Number(o.actualPaid)),
     }))
 
     // 库存预警：按商品各自维护的安全库存判定，阈值不再写死
@@ -322,13 +322,13 @@ export class AnalyticsService {
         status: { in: ['PAID', 'COMPLETED'] },
         paymentTime: { gte: since },
       },
-      select: { actualPaid: true, paymentTime: true },
+      select: { actualPaid: true, paymentTime: true, orderType: true },
     })
     const map = new Map<string, number>()
     for (const o of orders) {
       if (!o.paymentTime) continue
       const key = o.paymentTime.toISOString().slice(0, 10)
-      map.set(key, (map.get(key) ?? 0) + Number(o.actualPaid))
+      map.set(key, (map.get(key) ?? 0) + orderAmountToFen(o.orderType, Number(o.actualPaid)))
     }
     return Array.from(map.entries())
       .map(([date, amount]) => ({ date, amount }))

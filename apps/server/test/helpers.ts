@@ -4,7 +4,7 @@ import { AuthGuard } from '@nestjs/passport'
 import { PrismaService } from '../src/common/prisma.service'
 import { RedisService } from '../src/common/redis.service'
 import { NotificationService } from '../src/common/notification/notification.service'
-import { WechatPayService } from '../src/modules/payment/wechat-pay.service'
+import { HuifuPayService } from '../src/modules/payment/huifu-pay.service'
 import { PricingService } from '../src/modules/pricing/pricing.service'
 import { EnrollmentService } from '../src/modules/order/enrollment.service'
 import { OrderService } from '../src/modules/order/order.service'
@@ -19,6 +19,11 @@ import { WaitlistService } from '../src/modules/waitlist/waitlist.service'
  */
 export function createRedisMock() {
   const store = new Map<string, string>()
+  const counters = new Map<string, number>()
+  // 并行 suite 共用测试库，但各自 new 一个 mock；若计数器都从 1 起，
+  // 生成的订单号（前缀+日期+5 位流水）会撞 orders_order_no_key 唯一约束。
+  // 生产用真实共享 Redis INCR 不受影响，这里给每个实例一个随机基址隔离即可。
+  const base = Math.floor(Math.random() * 90000) + 1
   return {
     get: async (k: string) => store.get(k) ?? null,
     set: async (k: string, v: string) => {
@@ -27,6 +32,12 @@ export function createRedisMock() {
     del: async (k: string) => {
       store.delete(k)
     },
+    incr: async (k: string) => {
+      const next = (counters.get(k) ?? 0) + 1
+      counters.set(k, next)
+      return base + next
+    },
+    expire: async () => undefined,
     lockSeat: async () => true,
     unlockSeat: async () => undefined,
     getSeatLockTTL: async () => -1,
@@ -37,11 +48,11 @@ export function createRedisMock() {
 }
 
 /**
- * 微信支付 mock：
+ * 汇付支付 mock：
  * - refund 不发起真实网络请求
  * - decryptNotify 直接 JSON.parse，便于用例构造支付/退款回调报文
  */
-export function createWechatPayMock() {
+export function createHuifuPayMock() {
   return {
     createJsapiOrder: async () => ({
       appId: 'wx_test',
@@ -53,6 +64,7 @@ export function createWechatPayMock() {
     }),
     refund: async () => ({ refund_id: 'RF_TEST', status: 'PROCESSING' }),
     decryptNotify: (raw: string) => JSON.parse(raw),
+    buildNotifyAck: (reqSeqId: string) => `RECV_ORD_ID_${reqSeqId}`,
   }
 }
 
@@ -96,7 +108,7 @@ export async function buildTestContext(): Promise<TestContext> {
       PaymentService,
       WaitlistService,
       { provide: RedisService, useValue: createRedisMock() },
-      { provide: WechatPayService, useValue: createWechatPayMock() },
+      { provide: HuifuPayService, useValue: createHuifuPayMock() },
       { provide: NotificationService, useValue: createNotificationMock() },
     ],
   })
@@ -127,7 +139,7 @@ export async function buildTestContext(): Promise<TestContext> {
 
 /**
  * 测试数据播种器：按外键顺序创建实体并记录 id，afterAll 反向清理。
- * 所有金额单位为「元」。
+ * 课程链金额（originalPrice / tiers）单位为「分」；积分单位为「个」。
  */
 export class Seeder {
   private venueIds: string[] = []
@@ -157,7 +169,7 @@ export class Seeder {
   async trainer() {
     const user = await this.user()
     const tp = await this.prisma.trainerProfile.create({
-      data: { userId: user.id, displayName: '测试导师', specialties: ['yoga'] },
+      data: { userId: user.id, displayName: `测试导师${this.uniq().slice(-5)}`, specialties: ['yoga'] },
     })
     this.trainerIds.push(tp.id)
     return tp

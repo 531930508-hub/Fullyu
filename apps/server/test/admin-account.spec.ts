@@ -11,6 +11,7 @@
  */
 import { UnauthorizedException } from '@nestjs/common'
 import { RbacService } from '../src/modules/rbac/rbac.service'
+import { PasswordPolicyService } from '../src/common/password-policy.service'
 import { AdminJwtStrategy, type AdminJwtPayload } from '../src/modules/auth/admin-jwt.strategy'
 
 /** 超管上下文：不受行级范围限制 */
@@ -38,7 +39,8 @@ describe('手机号即登录账号', () => {
       },
       role: { findMany: jest.fn().mockResolvedValue(opts.role ?? []) },
     }
-    return { service: new RbacService(prisma), prisma, created }
+    const config: any = { get: () => undefined }
+    return { service: new RbacService(prisma, new PasswordPolicyService(config)), prisma, created }
   }
 
   const normalize = (service: RbacService, phone?: string) =>

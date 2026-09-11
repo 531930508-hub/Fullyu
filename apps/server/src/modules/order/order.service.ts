@@ -3,7 +3,7 @@ import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
 import { PaymentService } from '../payment/payment.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
-import { SEAT_LOCK_DURATION_MINUTES, POINTS_TO_YUAN_RATIO } from '@fullyu/shared'
+import { SEAT_LOCK_DURATION_MINUTES, POINTS_TO_FEN_RATIO } from '@fullyu/shared'
 import { generateOrderNo } from '../../common/order-no.helper'
 
 @Injectable()
@@ -158,7 +158,7 @@ export class OrderService {
             orderBy: { createdAt: 'desc' },
           })
           const balance = last?.balance ?? 0
-          const refundPoints = Math.round(Number(order.pointsDeduction) / POINTS_TO_YUAN_RATIO)
+          const refundPoints = Math.round(Number(order.pointsDeduction) / POINTS_TO_FEN_RATIO)
           await tx.pointsRecord.create({
             data: {
               userId: order.userId,

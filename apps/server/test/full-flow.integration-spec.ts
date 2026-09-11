@@ -141,15 +141,15 @@ describe('报名/候补/退款 全链路集成', () => {
   })
 
   it('D. 待支付订单取消：回补积分流水 + 券置 UNUSED + 不减名额', async () => {
-    const course = await seeder.course({ maxCapacity: 5, originalPrice: 100, allowDeduction: true })
+    const course = await seeder.course({ maxCapacity: 5, originalPrice: 10000, allowDeduction: true })
     const user = await seeder.user()
-    await seeder.addPoints(user.id, 50) // POINTS_TO_YUAN_RATIO=1 → 50 元
+    await seeder.addPoints(user.id, 50) // 1 积分 = 1 元 = 100 分
 
     const voucher = await ctx.prisma.voucher.create({
       data: {
         userId: user.id,
         mode: 'REDUCE_BY',
-        amount: 10,
+        amount: 10, // 代金券面额后台按元录入
         applicableAll: true,
         applicableCourseIds: [],
         expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000),
@@ -163,9 +163,9 @@ describe('报名/候补/退款 全链路集成', () => {
       voucherId: voucher.id,
     })
     const order = await ctx.prisma.order.findUnique({ where: { id: enrolled.orderId } })
-    expect(Number(order!.pointsDeduction)).toBe(50)
-    expect(Number(order!.voucherDeduction)).toBe(10)
-    expect(enrolled.actualPaid).toBe(40) // 100 - 50 - 10
+    expect(Number(order!.pointsDeduction)).toBe(5000)
+    expect(Number(order!.voucherDeduction)).toBe(1000)
+    expect(enrolled.actualPaid).toBe(4000) // 10000 - 5000 - 1000（分）
 
     // 券已预占
     let v = await ctx.prisma.voucher.findUnique({ where: { id: voucher.id } })

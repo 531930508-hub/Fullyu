@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
-import { SEAT_LOCK_DURATION_MINUTES, POINTS_TO_YUAN_RATIO } from '@fullyu/shared'
+import { SEAT_LOCK_DURATION_MINUTES, POINTS_TO_FEN_RATIO } from '@fullyu/shared'
 
 /**
  * 订单定时任务：待支付超时自动取消并释放占位、回补积分/代金券。
@@ -53,7 +53,7 @@ export class OrderTasksService {
               orderBy: { createdAt: 'desc' },
             })
             const balance = last?.balance ?? 0
-            const refundPoints = Math.round(Number(fresh.pointsDeduction) / POINTS_TO_YUAN_RATIO)
+            const refundPoints = Math.round(Number(fresh.pointsDeduction) / POINTS_TO_FEN_RATIO)
             await tx.pointsRecord.create({
               data: {
                 userId: fresh.userId,

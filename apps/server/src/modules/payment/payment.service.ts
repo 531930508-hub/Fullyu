@@ -5,6 +5,7 @@ import { HuifuPayService } from './huifu-pay.service'
 import { NotificationService } from '../../common/notification/notification.service'
 import { WaitlistService } from '../waitlist/waitlist.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
+import { orderAmountToFen, orderAmountToYuan } from '@fullyu/shared'
 import { Prisma } from '@prisma/client'
 
 /** 退款规则条目 */
@@ -42,7 +43,7 @@ export class PaymentService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } })
     if (!user?.openId) throw new BusinessException('用户未绑定微信', 4006)
 
-    const totalFen = Math.round(Number(order.actualPaid) * 100)
+    const totalFen = orderAmountToFen(order.orderType, Number(order.actualPaid))
     const description = this.buildDescription(order)
 
     return this.huifuPay.createJsapiOrder({
@@ -136,7 +137,7 @@ export class PaymentService {
     if (order && order.orderType === 'COURSE' && order.course) {
       await this.notification.paymentSuccess(order.userId, {
         courseName: order.course.title,
-        amount: `¥${Number(order.actualPaid).toFixed(2)}`,
+        amount: `¥${orderAmountToYuan(order.orderType, Number(order.actualPaid)).toFixed(2)}`,
         orderNo: order.id,
         orderId: order.id,
       })
@@ -203,8 +204,8 @@ export class PaymentService {
     }
 
     const refundAmount = this.calculateRefund(order)
-    const totalFen = Math.round(Number(order.actualPaid) * 100)
-    const refundFen = Math.round(refundAmount * 100)
+    const totalFen = orderAmountToFen(order.orderType, Number(order.actualPaid))
+    const refundFen = orderAmountToFen(order.orderType, refundAmount)
 
     if (refundFen <= 0) {
       // 无可退金额，仅置状态
@@ -246,7 +247,7 @@ export class PaymentService {
     if (order.status !== 'PAID' && order.status !== 'COMPLETED') {
       return { refundAmount: 0 }
     }
-    const totalFen = Math.round(Number(order.actualPaid) * 100)
+    const totalFen = orderAmountToFen(order.orderType, Number(order.actualPaid))
     await this.prisma.order.update({
       where: { id: orderId },
       data: { status: 'REFUNDING', refundAmount: order.actualPaid, cancelReason: reason },
@@ -284,11 +285,11 @@ export class PaymentService {
       throw new BusinessException('订单状态不可退款', 4007)
     }
 
-    const paidYuan = Number(order.actualPaid)
+    const paidYuan = orderAmountToYuan(order.orderType, Number(order.actualPaid))
     // 未指定或非法金额时全额退；不得超过实付
     let amount = refundAmount && refundAmount > 0 ? refundAmount : paidYuan
     amount = Math.min(amount, paidYuan)
-    const totalFen = Math.round(paidYuan * 100)
+    const totalFen = orderAmountToFen(order.orderType, Number(order.actualPaid))
     const refundFen = Math.round(amount * 100)
 
     if (refundFen <= 0) {
@@ -366,7 +367,7 @@ export class PaymentService {
     if (order.orderType === 'COURSE' && order.course) {
       await this.notification.refundSuccess(order.userId, {
         courseName: order.course.title,
-        amount: `¥${Number(order.refundAmount ?? order.actualPaid).toFixed(2)}`,
+        amount: `¥${orderAmountToYuan(order.orderType, Number(order.refundAmount ?? order.actualPaid)).toFixed(2)}`,
         orderId: order.id,
       })
     }

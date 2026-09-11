@@ -3,7 +3,7 @@ import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
 import { PricingService } from '../pricing/pricing.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
-import { SEAT_LOCK_DURATION_MINUTES, POINTS_TO_YUAN_RATIO } from '@fullyu/shared'
+import { SEAT_LOCK_DURATION_MINUTES, POINTS_TO_FEN_RATIO, voucherYuanToFen } from '@fullyu/shared'
 import { generateOrderNo } from '../../common/order-no.helper'
 
 export interface EnrollDto {
@@ -61,7 +61,7 @@ export class EnrollmentService {
       allowDeduction: course.allowDeduction,
       pointsBalance: course.allowDeduction ? pointsBalance : 0,
       maxPointsDeduction: course.allowDeduction
-        ? Math.min(pointsBalance * POINTS_TO_YUAN_RATIO, priceAfterDiscount)
+        ? Math.min(pointsBalance * POINTS_TO_FEN_RATIO, priceAfterDiscount)
         : 0,
       vouchers,
       remaining,
@@ -141,7 +141,7 @@ export class EnrollmentService {
             if (!course.allowDeduction) throw new BusinessException('该课程不支持积分抵扣', 4012)
             const balance = await this.pricing.getPointsBalance(userId)
             if (dto.usePoints > balance) throw new BusinessException('积分余额不足', 4013)
-            pointsDeduction = Math.min(dto.usePoints * POINTS_TO_YUAN_RATIO, priceAfterDiscount)
+            pointsDeduction = Math.min(dto.usePoints * POINTS_TO_FEN_RATIO, priceAfterDiscount)
           }
         }
 
@@ -153,9 +153,9 @@ export class EnrollmentService {
           voucherId = voucher.id
           if (voucher.mode === 'REDUCE_TO') {
             // 减至模式：将实付（扣积分后）降至目标价，差额即抵扣金额
-            voucherDeduction = priceAfterDiscount - pointsDeduction - Number(voucher.targetPrice)
+            voucherDeduction = priceAfterDiscount - pointsDeduction - voucherYuanToFen(Number(voucher.targetPrice))
           } else {
-            voucherDeduction = Math.min(Number(voucher.amount), priceAfterDiscount - pointsDeduction)
+            voucherDeduction = Math.min(voucherYuanToFen(Number(voucher.amount)), priceAfterDiscount - pointsDeduction)
           }
           voucherDeduction = Math.max(0, voucherDeduction)
         }
@@ -185,7 +185,7 @@ export class EnrollmentService {
         // 预扣积分（负向流水），取消/超时时回补
         if (pointsDeduction > 0) {
           const balance = await this.pricing.getPointsBalance(userId)
-          const usedPoints = Math.round(pointsDeduction / POINTS_TO_YUAN_RATIO)
+          const usedPoints = Math.round(pointsDeduction / POINTS_TO_FEN_RATIO)
           await tx.pointsRecord.create({
             data: {
               userId,
