@@ -417,9 +417,19 @@ async function handleBook() {
   if (course.value.currentEnrolled >= course.value.maxCapacity) return
   try {
     const quote = await quoteEnroll(course.value.id)
+    // timeDiscount.fixedPrice 后端按「元」返回（quote 其余金额是「分」，需 toYuan）
+    const td = (quote as any).timeDiscount as
+      | { ruleName: string; actionType: string; discountPercent: number | null; fixedPrice: number | null }
+      | null
+      | undefined
+    const tdLine = td
+      ? td.actionType === 'FIXED_BY_DURATION'
+        ? `\n会员时段价 ¥${td.fixedPrice}（${td.ruleName}）`
+        : `\n时段折扣 ${td.discountPercent}%（${td.ruleName}）`
+      : ''
     uni.showModal({
       title: '确认报名',
-      content: `${course.value.title}\n${formatDate(course.value.startDate)} ${course.value.startTime}\n应付 ¥${toYuan(quote.priceAfterDiscount)}`,
+      content: `${course.value.title}\n${formatDate(course.value.startDate)} ${course.value.startTime}\n应付 ¥${toYuan(quote.priceAfterDiscount)}${tdLine}`,
       confirmText: '确认支付',
       confirmColor: '#584219',
       success: async (res) => {
