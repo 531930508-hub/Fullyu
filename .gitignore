@@ -14,6 +14,14 @@ build/
 !.env.example
 *.local
 
+# 部署辅助脚本与凭据（含明文密码，严禁入库）
+.scp_helper.exp
+*.exp
+deploy-secrets.*
+*.pem
+*.key
+id_rsa*
+
 # 系统 / 编辑器
 .DS_Store
 *.log
