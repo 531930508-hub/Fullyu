@@ -25,6 +25,45 @@
       message="匹配顺序：显式门店规则（按优先级）→ 全局规则（门店不选=全部，新店自动生效）→ 课程固定折扣 → 原价。折扣率 100% = 原价，>100% = 峰时加价；判定口径为本单预约开始时间。"
     />
 
+    <a-card style="margin-bottom: 16px" title="一周总览预览">
+      <template #extra>
+        <a-space>
+          <a-select v-model:value="pvOrg" style="width: 150px" placeholder="选择门店">
+            <a-select-option v-for="s in stores" :key="s.id" :value="s.id">{{ s.name }}</a-select-option>
+          </a-select>
+          <a-select v-model:value="pvCard" style="width: 110px">
+            <a-select-option v-for="(label, t) in typeLabels" :key="t" :value="t">{{ label }}</a-select-option>
+          </a-select>
+          <a-select v-model:value="pvDuration" style="width: 110px">
+            <a-select-option v-for="d in [30, 45, 60, 90]" :key="d" :value="d">{{ d }} 分钟项目</a-select-option>
+          </a-select>
+        </a-space>
+      </template>
+      <div style="overflow-x: auto">
+        <table style="border-collapse: collapse; width: 100%; font-size: 12px; text-align: center">
+          <thead>
+            <tr>
+              <th style="padding: 4px 8px; color: #A08A72; text-align: left">日期</th>
+              <th v-for="h in previewHours" :key="h" style="padding: 4px; color: #A08A72">{{ h }}:00</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="day in previewDays" :key="day.key">
+              <td style="padding: 4px 8px; text-align: left; color: #4B3621; white-space: nowrap">{{ day.label }}</td>
+              <td v-for="h in previewHours" :key="h" style="padding: 2px">
+                <a-tooltip :title="cellOf(day.date, h).tip">
+                  <div :style="cellStyle(cellOf(day.date, h))">{{ cellOf(day.date, h).text }}</div>
+                </a-tooltip>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top: 8px; font-size: 12px; color: #A08A72">
+        绿 = 折扣 · 红 = 峰时加价 · 蓝 = 时长固定价 · 黄 = 原价 · 灰「—」= 未命中时段规则（回退课程固定折扣/原价）。hover 查看命中规则。预览基于当前已保存的启用规则，按未来 7 天演算（日期范围规则自然纳入）。
+      </div>
+    </a-card>
+
     <a-card>
       <a-table :columns="columns" :data-source="filteredRules" :loading="loading" size="small" row-key="id">
         <template #bodyCell="{ column, record, index }">
@@ -170,6 +209,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { listOrgs } from '@/api/org'
+import { pickTimeDiscountRule, type TimeDiscountRuleLike } from '@fullyu/shared'
 import {
   listTimeDiscountRules,
   createTimeDiscountRule,
@@ -366,8 +406,82 @@ async function removeRule(record: any) {
   loadRules()
 }
 
-onMounted(() => {
-  loadStores()
+// ===== 一周总览预览 =====
+const pvOrg = ref<string>('')
+const pvCard = ref<string>('YEARLY')
+const pvDuration = ref<number>(60)
+const previewHours = Array.from({ length: 13 }, (_, i) => 10 + i) // 10:00–22:00
+
+const previewDays = computed(() => {
+  const out: { key: string; label: string; date: Date }[] = []
+  for (let i = 0; i < 7; i++) {
+    const d = new Date()
+    d.setDate(d.getDate() + i)
+    d.setHours(0, 0, 0, 0)
+    out.push({
+      key: d.toISOString().slice(0, 10),
+      label: `${weekdayLabels[((d.getDay() + 6) % 7)]} ${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+      date: d,
+    })
+  }
+  return out
+})
+
+function toRuleLikes(rows: any[]): TimeDiscountRuleLike[] {
+  return rows
+    .filter((r) => r.status === 'ENABLED')
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      orgIds: r.orgIds ?? [],
+      cardTypes: r.cardTypes ?? [],
+      priority: r.priority,
+      weekdays: r.weekdays ?? [],
+      timeRanges: r.timeRanges ?? [],
+      validFrom: r.validFrom,
+      validTo: r.validTo,
+      actionType: r.actionType,
+      discountPercent: r.discountPercent,
+      fixedPrices: r.fixedPrices,
+      enabled: true,
+    }))
+}
+
+function cellOf(day: Date, hour: number) {
+  const start = new Date(day)
+  start.setHours(hour, 0, 0, 0)
+  const hit = pickTimeDiscountRule(toRuleLikes(rules.value), {
+    orgId: pvOrg.value || null,
+    cardType: pvCard.value,
+    appointmentStart: start,
+    durationMinutes: pvDuration.value,
+  })
+  if (!hit) return { text: '—', tip: '未命中时段规则：回退课程固定折扣/原价', kind: 'none' }
+  if (hit.actionType === 'FIXED_BY_DURATION') {
+    return { text: `¥${hit.fixedPrice}`, tip: `命中「${hit.ruleName}」：${pvDuration.value}分钟固定价`, kind: 'fixed' }
+  }
+  const p = hit.discountPercent as number
+  if (p > 100) return { text: `${p}%`, tip: `命中「${hit.ruleName}」：峰时加价 ${p - 100}%`, kind: 'up' }
+  if (p < 100) return { text: `${p}%`, tip: `命中「${hit.ruleName}」：${(p / 10).toFixed(1)} 折`, kind: 'down' }
+  return { text: '100%', tip: `命中「${hit.ruleName}」：原价（取消折扣）`, kind: 'flat' }
+}
+
+const CELL_COLORS: Record<string, { bg: string; color: string }> = {
+  none: { bg: '#f5f5f5', color: '#bbb' },
+  fixed: { bg: '#E3F2FD', color: '#1565C0' },
+  up: { bg: '#FFEBEE', color: '#C62828' },
+  down: { bg: '#E8F5E9', color: '#2E7D32' },
+  flat: { bg: '#FFFDE7', color: '#8D6E63' },
+}
+
+function cellStyle(cell: { kind: string }) {
+  const c = CELL_COLORS[cell.kind] ?? CELL_COLORS.none
+  return { background: c.bg, color: c.color, borderRadius: '4px', padding: '4px 0', fontWeight: 600 }
+}
+
+onMounted(async () => {
+  await loadStores()
+  pvOrg.value = stores.value[0]?.id ?? ''
   loadRules()
 })
 </script>
