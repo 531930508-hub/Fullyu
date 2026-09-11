@@ -91,6 +91,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '会员卡商品', icon: 'CreditCardOutlined', module: 'sales', perm: ['membercard:view'] },
       },
       {
+        path: 'sales/time-discounts',
+        name: 'MemberTimeDiscounts',
+        component: () => import('@/views/sales/time-discount/index.vue'),
+        meta: { title: '时段折扣', icon: 'FieldTimeOutlined', module: 'sales', perm: ['membercard:view'] },
+      },
+      {
         path: 'sales/vouchers',
         name: 'Vouchers',
         component: () => import('@/views/sales/voucher/index.vue'),
