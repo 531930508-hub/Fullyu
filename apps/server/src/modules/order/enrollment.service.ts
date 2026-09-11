@@ -35,7 +35,12 @@ export class EnrollmentService {
 
     const position = await this.pricing.getNextPosition(this.prisma, courseId, course.currentEnrolled)
     const basePrice = this.pricing.getTierPrice(course.priceTiers, position, course.originalPrice)
-    const member = await this.pricing.getMemberDiscount(userId, courseId, basePrice)
+    const member = await this.pricing.getMemberDiscount(
+      userId,
+      courseId,
+      basePrice,
+      this.pricing.courseStartAt(course),
+    )
     const priceAfterDiscount = Math.max(0, basePrice - member.discountAmount)
 
     const pointsBalance = await this.pricing.getPointsBalance(userId)
@@ -50,6 +55,7 @@ export class EnrollmentService {
       basePrice,
       memberCardType: member.cardType,
       discountPercent: member.discountPercent,
+      timeDiscount: member.timeDiscount,
       discountAmount: member.discountAmount,
       priceAfterDiscount,
       allowDeduction: course.allowDeduction,
@@ -117,7 +123,12 @@ export class EnrollmentService {
         // 锁价
         const position = occupied + 1
         const basePrice = this.pricing.getTierPrice(course.priceTiers, position, course.originalPrice)
-        const member = await this.pricing.getMemberDiscount(userId, courseId, basePrice)
+        const member = await this.pricing.getMemberDiscount(
+          userId,
+          courseId,
+          basePrice,
+          this.pricing.courseStartAt(course),
+        )
         const priceAfterDiscount = Math.max(0, basePrice - member.discountAmount)
 
         // 校验积分抵扣
@@ -167,6 +178,7 @@ export class EnrollmentService {
             status: 'PENDING_PAYMENT',
             voucherId: voucherId,
             cardType: member.cardType ?? undefined,
+            hitTimeRuleId: member.hitTimeRuleId ?? undefined,
           },
         })
 

@@ -420,7 +420,12 @@ export class WaitlistService {
       course.maxCapacity + 1,
       course.originalPrice,
     )
-    const member = await this.pricing.getMemberDiscount(userId, course.id, basePrice)
+    const member = await this.pricing.getMemberDiscount(
+      userId,
+      course.id,
+      basePrice,
+      this.pricing.courseStartAt(course),
+    )
     const priceAfterDiscount = Math.max(0, basePrice - member.discountAmount)
     return {
       basePrice,
