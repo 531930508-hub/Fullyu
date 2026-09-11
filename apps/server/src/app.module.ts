@@ -27,6 +27,7 @@ import { ApprovalModule } from './modules/approval/approval.module'
 import { ScmModule } from './modules/scm/scm.module'
 import { FinanceModule } from './modules/finance/finance.module'
 import { BannerModule } from './modules/banner/banner.module'
+import { TimeDiscountModule } from './modules/time-discount/time-discount.module'
 import { CommunityModule } from './modules/community/community.module'
 import { PrismaModule } from './common/prisma.module'
 import { RedisModule } from './common/redis.module'
@@ -97,6 +98,7 @@ if (SCHEDULER_DISABLED) {
     ScmModule,
     FinanceModule,
     BannerModule,
+    TimeDiscountModule,
     CommunityModule,
   ],
   providers: [
