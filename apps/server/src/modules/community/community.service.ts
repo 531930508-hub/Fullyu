@@ -815,21 +815,25 @@ export class CommunityService {
     if (!['HIDE', 'RESTORE', 'DELETE'].includes(input.action)) throw new BusinessException('不支持的处理动作', 4000)
     if (actor.type === 'HOST') await this.assertHost(communityId, actor.id)
 
-    const data =
+    const base =
       input.action === 'RESTORE'
-        ? { isHidden: false, isDeleted: false, hiddenReason: null, moderatedAt: new Date(), moderatedBy: actor.id }
+        ? { isHidden: false, isDeleted: false, hiddenReason: null }
         : input.action === 'HIDE'
-          ? { isHidden: true, hiddenReason: reason, moderatedAt: new Date(), moderatedBy: actor.id }
-          : { isDeleted: true, isHidden: true, hiddenReason: reason, moderatedAt: new Date(), moderatedBy: actor.id }
+          ? { isHidden: true, hiddenReason: reason }
+          : { isDeleted: true, isHidden: true, hiddenReason: reason }
 
     if (input.targetType === 'POST') {
       const post = await this.prisma.communityPost.findUnique({ where: { id: input.targetId } })
       if (!post || post.communityId !== communityId) throw new BusinessException('动态不存在', 4043)
-      await this.prisma.communityPost.update({ where: { id: post.id }, data })
+      await this.prisma.communityPost.update({
+        where: { id: post.id },
+        data: { ...base, moderatedAt: new Date(), moderatedBy: actor.id },
+      })
     } else {
       const comment = await this.prisma.communityComment.findUnique({ where: { id: input.targetId } })
       if (!comment || comment.communityId !== communityId) throw new BusinessException('评论不存在', 4044)
-      await this.prisma.communityComment.update({ where: { id: comment.id }, data })
+      // 评论表仅保留隐藏/删除标记，治理时间与操作人统一记录在治理日志中
+      await this.prisma.communityComment.update({ where: { id: comment.id }, data: base })
     }
 
     await this.prisma.communityModerationLog.create({

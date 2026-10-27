@@ -211,6 +211,20 @@ export class ApprovalService {
     action: ApprovalDecisionAction,
     comment?: string,
   ) {
+    // 同一审批单串行处理：避免双击/多人同时审批产生重复表决、节点停住或副作用重复执行
+    return this.redis.withLock(
+      `approval:decide:${id}`,
+      () => this.decideLocked(admin, id, action, comment),
+      { ttlSeconds: 15 },
+    )
+  }
+
+  private async decideLocked(
+    admin: AdminContext,
+    id: string,
+    action: ApprovalDecisionAction,
+    comment?: string,
+  ) {
     const instance = await this.prisma.approvalInstance.findUnique({
       where: { id },
       include: instanceInclude,
