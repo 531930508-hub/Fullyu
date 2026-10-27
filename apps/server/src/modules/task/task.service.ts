@@ -79,7 +79,7 @@ export class TaskService {
     })
   }
 
-  /** 审核完成任务 → 发放导师 Seeds */
+  /** 审核完成任务 → 发放导师积分 */
   async complete(claimId: string) {
     return this.prisma.$transaction(async (tx) => {
       const claim = await tx.taskClaim.findUnique({

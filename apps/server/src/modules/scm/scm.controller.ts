@@ -5,6 +5,7 @@ import { ScmBasicService } from './scm-basic.service'
 import { PurchaseService, type CreatePurchaseOrderInput, type CreateReceiptInput } from './purchase.service'
 import { StockQueryService, type CreateAdjustInput } from './stock-query.service'
 import { AdminAuth } from '../../common/decorators/admin-auth.decorator'
+import { hasPermission } from '@fullyu/shared'
 
 @ApiTags('进销存')
 @Controller('scm')
@@ -20,32 +21,54 @@ export class ScmController {
   @Get('products')
   @AdminAuth('scm:po:view')
   @ApiOperation({ summary: '商品列表' })
-  async products(@Query('keyword') keyword?: string, @Query('enabled') enabled?: string) {
-    return this.basicService.listProducts({
-      keyword,
-      enabled: enabled === undefined ? undefined : enabled === 'true',
-    })
+  async products(
+    @Request() req: any,
+    @Query('keyword') keyword?: string,
+    @Query('enabled') enabled?: string,
+  ) {
+    return this.basicService.listProducts(
+      {
+        keyword,
+        enabled: enabled === undefined ? undefined : enabled === 'true',
+      },
+      hasPermission(req.user?.permissions, 'scm:po:price'),
+    )
   }
 
   @Post('products')
   @AdminAuth('scm:po:update')
   @ApiOperation({ summary: '新建商品' })
-  async createProduct(@Body() body: any) {
-    return this.basicService.createProduct(body)
+  async createProduct(@Request() req: any, @Body() body: any) {
+    return this.basicService.createProduct(
+      body,
+      hasPermission(req.user?.permissions, 'scm:po:price'),
+    )
   }
 
   @Put('products/:id')
   @AdminAuth('scm:po:update')
   @ApiOperation({ summary: '编辑商品' })
-  async updateProduct(@Param('id') id: string, @Body() body: any) {
-    return this.basicService.updateProduct(id, body)
+  async updateProduct(@Request() req: any, @Param('id') id: string, @Body() body: any) {
+    return this.basicService.updateProduct(
+      id,
+      body,
+      hasPermission(req.user?.permissions, 'scm:po:price'),
+    )
   }
 
   @Put('products/:id/toggle')
   @AdminAuth('scm:po:update')
   @ApiOperation({ summary: '启用/停用商品' })
-  async toggleProduct(@Param('id') id: string, @Body() body: { enabled: boolean }) {
-    return this.basicService.toggleProduct(id, !!body?.enabled)
+  async toggleProduct(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: { enabled: boolean },
+  ) {
+    return this.basicService.toggleProduct(
+      id,
+      !!body?.enabled,
+      hasPermission(req.user?.permissions, 'scm:po:price'),
+    )
   }
 
   @Get('suppliers')

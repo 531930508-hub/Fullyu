@@ -1,7 +1,7 @@
 <template>
   <div class="page-container">
     <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px">
-      <h2 class="page-title">财务看板</h2>
+      <h2 class="page-title">全业务财务看板</h2>
       <a-space wrap>
         <a-select v-model:value="month" style="width: 130px" @change="load">
           <a-select-option v-for="m in monthOptions" :key="m" :value="m">{{ m }}</a-select-option>

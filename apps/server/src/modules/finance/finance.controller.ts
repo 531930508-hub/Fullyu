@@ -5,6 +5,8 @@ import { recentMonths } from '@fullyu/shared'
 import { RevenueService, type RevenueRecordInput } from './revenue.service'
 import { ExpenseService, type ExpenseInput } from './expense.service'
 import { DashboardService } from './dashboard.service'
+import { PresenceLedgerService } from './presence-ledger.service'
+import { PresenceReportService } from './presence-report.service'
 import { AdminAuth } from '../../common/decorators/admin-auth.decorator'
 
 @ApiTags('财务')
@@ -14,6 +16,8 @@ export class FinanceController {
     private readonly revenueService: RevenueService,
     private readonly expenseService: ExpenseService,
     private readonly dashboardService: DashboardService,
+    private readonly presenceLedger: PresenceLedgerService,
+    private readonly presenceReport: PresenceReportService,
   ) {}
 
   // ===== 收入 =====
@@ -122,5 +126,90 @@ export class FinanceController {
   ) {
     const months = recentMonths(Math.min(Number(count) || 6, 24)).reverse()
     return this.dashboardService.trend(req.user, months, orgId)
+  }
+
+  // ===== 在场业务（独立财务台账，与全业务看板互不影响） =====
+
+  @Get('presence/dashboard')
+  @AdminAuth('finance:presence:view')
+  @ApiOperation({ summary: '在场业务月度总览（只读财务台账）' })
+  async presenceDashboard(
+    @Request() req: any,
+    @Query('month') month?: string,
+    @Query('orgId') orgId?: string,
+  ) {
+    return this.presenceReport.dashboard(req.user, month, orgId)
+  }
+
+  @Get('presence/courses')
+  @AdminAuth('finance:presence:view')
+  @ApiOperation({ summary: '报课与会员卡确认收入明细' })
+  async presenceCourses(
+    @Request() req: any,
+    @Query('month') month?: string,
+    @Query('orgId') orgId?: string,
+    @Query('keyword') keyword?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.presenceReport.courseRevenue(req.user, {
+      month,
+      orgId,
+      keyword,
+      page: Number(page) || 1,
+      pageSize: Number(pageSize) || 20,
+    })
+  }
+
+  @Get('presence/community')
+  @AdminAuth('finance:presence:view')
+  @ApiOperation({ summary: '社群代收与手续费明细' })
+  async presenceCommunity(
+    @Request() req: any,
+    @Query('month') month?: string,
+    @Query('keyword') keyword?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.presenceReport.communityRevenue(req.user, {
+      month,
+      keyword,
+      page: Number(page) || 1,
+      pageSize: Number(pageSize) || 20,
+    })
+  }
+
+  @Get('presence/trainers')
+  @AdminAuth('finance:presence:view')
+  @ApiOperation({ summary: '导师结算明细' })
+  async presenceTrainers(
+    @Request() req: any,
+    @Query('month') month?: string,
+    @Query('orgId') orgId?: string,
+    @Query('keyword') keyword?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.presenceReport.trainerSettlements(req.user, {
+      month,
+      orgId,
+      keyword,
+      page: Number(page) || 1,
+      pageSize: Number(pageSize) || 20,
+    })
+  }
+
+  @Get('presence/periods')
+  @AdminAuth('finance:presence:view')
+  @ApiOperation({ summary: '在场财务关账期间' })
+  async presencePeriods() {
+    return this.presenceReport.periods()
+  }
+
+  @Post('presence/periods/:month/close')
+  @AdminAuth('finance:presence:close')
+  @ApiOperation({ summary: '手工关账（当前月可提前锁定）' })
+  async closePresencePeriod(@Request() req: any, @Param('month') month: string) {
+    return this.presenceLedger.closeMonth(month, `MANUAL:${req.user?.username ?? 'admin'}`)
   }
 }

@@ -117,10 +117,22 @@ const routes: RouteRecordRaw[] = [
       },
       // 社群模块（国内版 Skool）
       {
+        path: 'community/workspace',
+        name: 'CommunityWorkspace',
+        component: () => import('@/views/community/workspace/index.vue'),
+        meta: { title: '社群工作台', icon: 'DashboardOutlined', module: 'community', perm: ['community:view'] },
+      },
+      {
         path: 'community/list',
         name: 'CommunityList',
         component: () => import('@/views/community/list/index.vue'),
         meta: { title: '社群管理', icon: 'TeamOutlined', module: 'community', perm: ['community:view'] },
+      },
+      {
+        path: 'community/hosts',
+        name: 'CommunityHosts',
+        component: () => import('@/views/community/hosts/index.vue'),
+        meta: { title: '主理人角色', icon: 'CrownOutlined', module: 'community', perm: ['community:view'] },
       },
       {
         path: 'community/events',
@@ -132,7 +144,7 @@ const routes: RouteRecordRaw[] = [
         path: 'community/posts',
         name: 'CommunityPosts',
         component: () => import('@/views/community/posts/index.vue'),
-        meta: { title: '动态审核', icon: 'AuditOutlined', module: 'community', perm: ['community:view'] },
+        meta: { title: '内容治理', icon: 'AuditOutlined', module: 'community', perm: ['community:view'] },
       },
       // 进销存模块
       {
@@ -170,7 +182,13 @@ const routes: RouteRecordRaw[] = [
         path: 'finance/dashboard',
         name: 'FinanceDashboard',
         component: () => import('@/views/finance/dashboard/index.vue'),
-        meta: { title: '财务看板', icon: 'FundOutlined', module: 'finance', perm: ['finance:dashboard:view'] },
+        meta: { title: '全业务财务看板', icon: 'FundOutlined', module: 'finance', perm: ['finance:dashboard:view'] },
+      },
+      {
+        path: 'finance/presence',
+        name: 'FinancePresence',
+        component: () => import('@/views/finance/presence/index.vue'),
+        meta: { title: '在场业务看板', icon: 'LineChartOutlined', module: 'finance', perm: ['finance:presence:view'] },
       },
       {
         path: 'finance/revenue',

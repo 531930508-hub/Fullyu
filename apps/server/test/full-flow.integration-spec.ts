@@ -101,7 +101,8 @@ describe('报名/候补/退款 全链路集成', () => {
     entry = await ctx.prisma.waitlistEntry.findFirst({ where: { orderId: cJoin.orderId } })
     expect(entry!.status).toBe('CONVERTED')
     const cOrder = await ctx.prisma.order.findUnique({ where: { id: cJoin.orderId } })
-    expect(cOrder!.status).toBe('COMPLETED')
+    expect(cOrder!.status).toBe('PAID')
+    expect(cOrder!.orderType).toBe('COURSE')
 
     c = await ctx.prisma.course.findUnique({ where: { id: course!.id } })
     expect(c!.currentEnrolled).toBe(2) // A 释放 -1，C 递补 +1

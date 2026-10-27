@@ -13,11 +13,22 @@
             <a-radio-button value="week">本周</a-radio-button>
             <a-radio-button value="all">全部</a-radio-button>
           </a-radio-group>
-          <a-select v-model:value="filterStatus" style="width: 120px" placeholder="状态" @change="loadCourses">
-            <a-select-option value="">全部状态</a-select-option>
+          <a-select v-model:value="filterStatus" style="width: 130px" placeholder="数据状态" @change="loadCourses">
+            <a-select-option value="">全部数据状态</a-select-option>
             <a-select-option value="PUBLISHED">已发布</a-select-option>
             <a-select-option value="DRAFT">草稿</a-select-option>
+            <a-select-option value="COMPLETED">已完成</a-select-option>
+            <a-select-option value="EXPIRED">已过期</a-select-option>
             <a-select-option value="CANCELLED">已下架</a-select-option>
+          </a-select>
+          <a-select v-model:value="filterPhase" style="width: 150px" placeholder="展示状态" @change="loadCourses">
+            <a-select-option value="">全部展示状态</a-select-option>
+            <a-select-option value="ENROLL_UPCOMING">报名未开始</a-select-option>
+            <a-select-option value="ENROLLING">报名中</a-select-option>
+            <a-select-option value="ENROLL_CLOSED">报名截止</a-select-option>
+            <a-select-option value="LATE_ENROLLING">补报名中</a-select-option>
+            <a-select-option value="ONGOING">进行中</a-select-option>
+            <a-select-option value="ENDED">已结束</a-select-option>
           </a-select>
           <a-button v-perm="'course:create'" type="primary" @click="openCreate">+ 创建课程</a-button>
         </a-space>
@@ -26,7 +37,7 @@
       <!-- 课程统计 -->
       <a-row :gutter="24" style="margin-bottom: 24px">
         <a-col :span="6"><a-card><a-statistic title="课程总数" :value="filteredCourses.length" /></a-card></a-col>
-        <a-col :span="6"><a-card><a-statistic title="进行中" :value="filteredCourses.filter(c => c.status === 'PUBLISHED').length" :value-style="{ color: '#27AE60' }" /></a-card></a-col>
+        <a-col :span="6"><a-card><a-statistic title="报名中" :value="filteredCourses.filter(c => c.bookable).length" :value-style="{ color: '#27AE60' }" /></a-card></a-col>
         <a-col :span="6"><a-card><a-statistic title="本周开课" :value="weekCourseCount" suffix="节" /></a-card></a-col>
         <a-col :span="6"><a-card><a-statistic title="平均满员率" :value="avgFillRate" suffix="%" :value-style="{ color: '#6B463C' }" /></a-card></a-col>
       </a-row>
@@ -43,8 +54,8 @@
             <div class="course-meta">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <span style="font-weight: 600; color: #4B3621;">{{ course.trainer }}</span>
-                <a-tag :color="course.status === 'PUBLISHED' ? 'green' : course.status === 'DRAFT' ? 'default' : 'red'">
-                  {{ course.statusLabel }}
+                <a-tag :color="phaseColor(course)">
+                  {{ course.phaseLabel || course.statusLabel }}
                 </a-tag>
               </div>
               <div style="color: #7D665C; font-size: 13px; margin-bottom: 8px;">
@@ -59,8 +70,18 @@
             <template #actions>
               <a-button type="link" size="small" @click.stop="viewCourseDetail(course)">详情</a-button>
               <a-button v-perm="'course:create'" type="link" size="small" @click.stop="handleCopy(course)">复制</a-button>
-              <a-button v-perm="'course:delete'" v-if="course.status === 'DRAFT'" type="link" size="small" danger @click.stop="handleDelete(course)">删除</a-button>
-              <a-button v-perm="'course:update'" v-else type="link" size="small" danger @click.stop="handleUnpublish(course)">下架</a-button>
+              <a-dropdown trigger="click">
+                <a-button type="link" size="small" @click.stop>管理</a-button>
+                <template #overlay>
+                  <a-menu @click="handleCourseMenuClick($event, course)">
+                    <a-menu-item v-if="course.status === 'PUBLISHED' && canAdjustEnrollment(course)" key="adjust">调整报名截止</a-menu-item>
+                    <a-menu-item v-if="course.status === 'PUBLISHED'" key="complete">标记为已结束</a-menu-item>
+                    <a-menu-item v-if="course.status === 'PUBLISHED'" key="unpublish" danger>下架课程</a-menu-item>
+                    <a-menu-item v-if="course.status === 'DRAFT'" key="delete" danger>删除草稿</a-menu-item>
+                    <a-menu-item v-if="!['PUBLISHED', 'DRAFT'].includes(course.status)" key="view">查看历史</a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
             </template>
           </a-card>
         </a-col>
@@ -371,16 +392,16 @@
             </a-radio-group>
           </a-form-item>
 
-          <a-divider>Seeds 积分奖励</a-divider>
+          <a-divider>积分奖励</a-divider>
           <a-row :gutter="24">
             <a-col :span="12">
               <a-form-item label="每节完课奖励">
-                <a-input-number v-model:value="form.seedsReward" :min="0" style="width: 100%" suffix="Seeds/人/节" />
+                <a-input-number v-model:value="form.seedsReward" :min="0" style="width: 100%" suffix="积分/人/节" />
               </a-form-item>
             </a-col>
             <a-col :span="12">
               <a-form-item label="提交评价奖励（每人一次）">
-                <a-input-number v-model:value="form.reviewSeeds" :min="0" style="width: 100%" suffix="Seeds/人" />
+                <a-input-number v-model:value="form.reviewSeeds" :min="0" style="width: 100%" suffix="积分/人" />
               </a-form-item>
             </a-col>
           </a-row>
@@ -447,7 +468,7 @@
           </a-descriptions-item>
           <a-descriptions-item label="会员折扣" :span="2">年卡 {{ form.yearlyDiscount }}% / 季卡 {{ form.quarterlyDiscount }}% / 月卡 {{ form.monthlyDiscount }}%（百分比收费）</a-descriptions-item>
           <a-descriptions-item label="候补排队" :span="2">{{ form.waitlistEnabled ? `已开启（预付候补），会员候补席位 ${form.memberWaitlistSeats} 个 + 普通候补不限量，可候补至开课前 ${form.waitlistDeadlineHours} 小时` : '未开启' }}</a-descriptions-item>
-          <a-descriptions-item label="Seeds奖励">完课 {{ form.seedsReward || 0 }} Seeds/人/节 · 评价 {{ form.reviewSeeds || 0 }} Seeds/人</a-descriptions-item>
+          <a-descriptions-item label="积分奖励">完课 {{ form.seedsReward || 0 }} 积分/人/节 · 评价 {{ form.reviewSeeds || 0 }} 积分/人</a-descriptions-item>
           <a-descriptions-item label="退款政策">
             <span v-for="(rule, i) in form.refundRules" :key="i" style="display: block; font-size: 12px;">{{ rule.hoursFrom }}~{{ rule.hoursTo }}h前 → 退{{ rule.refundPercent }}%</span>
           </a-descriptions-item>
@@ -469,13 +490,19 @@
         <a-space>
           <a-button @click="currentView = 'list'">← 返回列表</a-button>
           <h2 class="page-title" style="margin: 0;">{{ currentCourse.name }}</h2>
-          <a-tag :color="currentCourse.status === 'PUBLISHED' ? 'green' : 'default'">{{ currentCourse.statusLabel }}</a-tag>
+          <a-tag :color="phaseColor(currentCourse)">{{ currentCourse.phaseLabel || currentCourse.statusLabel }}</a-tag>
+          <a-tag v-if="currentCourse.status !== 'PUBLISHED'" color="default">数据状态：{{ currentCourse.statusLabel }}</a-tag>
         </a-space>
         <a-space>
-          <a-button v-perm="'course:update'" @click="handleEditCourse">编辑课程</a-button>
-          <a-button v-perm="'course:update'" type="primary" danger ghost @click="handleUnpublishCurrent">下架</a-button>
+          <a-button v-perm="'course:update'" v-if="['PUBLISHED','DRAFT'].includes(currentCourse.status)" @click="handleEditCourse">编辑课程</a-button>
+          <a-button v-perm="'course:update'" v-if="currentCourse.status === 'PUBLISHED' && canAdjustEnrollment(currentCourse)" @click="openEnrollWindow(currentCourse)">调整报名截止</a-button>
+          <a-button v-perm="'course:update'" v-if="currentCourse.status === 'PUBLISHED'" @click="handleComplete(currentCourse)">标记为已结束</a-button>
+          <a-button v-perm="'course:update'" v-if="currentCourse.status === 'PUBLISHED'" type="primary" danger ghost @click="handleUnpublishCurrent">下架</a-button>
         </a-space>
       </div>
+
+      <a-alert v-if="currentCourse.status === 'PUBLISHED'" type="info" show-icon style="margin-bottom: 16px"
+        message="展示状态按当前时间自动推导，无需手工切换：报名未开始 / 报名中 / 报名截止 / 进行中 / 已结束。已结束课程不再进入小程序发现列表，但历史预约仍可查看。课程开始后把报名截止改到未来，即展示为「补报名中」。" />
 
       <a-tabs v-model:activeKey="detailTab">
         <a-tab-pane key="info" tab="基本信息">
@@ -489,6 +516,10 @@
                   <a-descriptions-item label="上课场地">{{ currentCourse.venue }}</a-descriptions-item>
                   <a-descriptions-item label="排课时间">{{ currentCourse.schedule }}</a-descriptions-item>
                   <a-descriptions-item label="课程时长">{{ currentCourse.durationLabel || '90分钟' }}</a-descriptions-item>
+                  <a-descriptions-item label="展示状态">{{ currentCourse.phaseLabel || '-' }}</a-descriptions-item>
+                  <a-descriptions-item label="数据状态">{{ currentCourse.statusLabel }}</a-descriptions-item>
+                  <a-descriptions-item label="报名截止">{{ formatLifecycleTime(currentCourse.enrollDeadline) }}</a-descriptions-item>
+                  <a-descriptions-item label="课程结束">{{ formatLifecycleTime(currentCourse.endAt) }}</a-descriptions-item>
                   <a-descriptions-item label="课程价格">¥{{ currentCourse.price }}</a-descriptions-item>
                   <a-descriptions-item label="容量">{{ currentCourse.capacity }}人</a-descriptions-item>
                   <a-descriptions-item label="难度" :span="2">{{ currentCourse.difficultyLabel || '入门' }}</a-descriptions-item>
@@ -572,6 +603,37 @@
       </a-tabs>
     </template>
 
+    <!-- 调整报名截止 / 开放补报名 -->
+    <a-modal
+      v-model:open="enrollModalVisible"
+      title="调整报名截止"
+      :confirm-loading="enrollSubmitting"
+      ok-text="保存"
+      cancel-text="取消"
+      @ok="submitEnrollWindow"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="截止方式">
+          <a-radio-group v-model:value="enrollMode">
+            <a-radio value="default">恢复默认：开课时刻截止</a-radio>
+            <a-radio value="custom">指定未来截止时间（可开放补报名）</a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item v-if="enrollMode === 'custom'" label="报名截止时间">
+          <a-date-picker
+            v-model:value="enrollEndAt"
+            show-time
+            format="YYYY-MM-DD HH:mm"
+            style="width: 100%"
+            placeholder="须晚于当前且不晚于课程结束时间"
+          />
+        </a-form-item>
+      </a-form>
+      <a-alert type="info" show-icon
+        message="课程开始后仍开放报名，即视为「补报名中」，小程序会明确提示；截止后恢复为报名截止/进行中。" />
+      <p style="margin: 12px 0 0; color: #999;">当前课程结束时间：{{ formatLifecycleTime(currentCourse?.endAt) }}</p>
+    </a-modal>
+
     <!-- 封面裁剪弹窗 -->
     <ImageCropper v-model:open="cropperVisible" @cropped="onCoverCropped" />
   </div>
@@ -582,7 +644,7 @@ import { ref, computed, onMounted } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import ImageCropper from '@/components/ImageCropper.vue'
-import { adminListCourses, getCourse, createCourse, updateCourse, setCourseStatus, deleteCourse, savePriceTiers, saveMemberDiscounts } from '@/api/course'
+import { adminListCourses, getCourse, createCourse, updateCourse, setCourseStatus, deleteCourse, savePriceTiers, saveMemberDiscounts, setEnrollmentWindow } from '@/api/course'
 import { listCourseWaitlist, promoteWaitlistEntry, cancelWaitlistEntry } from '@/api/waitlist'
 import { listTrainers } from '@/api/trainer'
 import { listVenues } from '@/api/venue'
@@ -600,6 +662,13 @@ const detailTab = ref('info')
 const searchText = ref('')
 const filterType = ref('')
 const filterStatus = ref('')
+const filterPhase = ref('')
+/** 报名截止调整弹窗 */
+const enrollModalVisible = ref(false)
+const enrollSubmitting = ref(false)
+const enrollMode = ref<'default' | 'custom'>('custom')
+const enrollEndAt = ref<any>(null)
+const enrollTargetId = ref('')
 /** 日期快捷预设：today|near(前一天~后三天)|week|all，默认 near */
 const datePreset = ref<'today' | 'near' | 'week' | 'all' | ''>('near')
 /** 开课日期范围 [起, 止]（dayjs），默认前一天到后三天 */
@@ -660,7 +729,43 @@ const form = ref(createDefaultForm())
 
 const courses = ref<any[]>([])
 
-const statusLabelMap: Record<string, string> = { PUBLISHED: '已发布', DRAFT: '草稿', CANCELLED: '已下架', COMPLETED: '已结束', EXPIRED: '已过期', ENDED: '已下架', ON_SHELF: '已上架', OFF_SHELF: '已下架' }
+const statusLabelMap: Record<string, string> = { PUBLISHED: '已发布', DRAFT: '草稿', CANCELLED: '已下架', COMPLETED: '已完成', EXPIRED: '已过期', ENDED: '已下架', ON_SHELF: '已上架', OFF_SHELF: '已下架' }
+const phaseLabelMap: Record<string, string> = {
+  DRAFT: '草稿',
+  CANCELLED: '已下架',
+  COMPLETED: '已结束',
+  EXPIRED: '已过期',
+  ENROLL_UPCOMING: '报名未开始',
+  ENROLLING: '报名中',
+  ENROLL_CLOSED: '报名截止',
+  LATE_ENROLLING: '补报名中',
+  ONGOING: '进行中',
+  ENDED: '已结束',
+}
+
+/** 展示状态颜色：可报名绿色、补报名金色、进行中蓝色、终态灰色 */
+function phaseColor(course: any) {
+  const phase = String(course?.phase || '').toUpperCase()
+  if (phase === 'ENROLLING') return 'green'
+  if (phase === 'LATE_ENROLLING') return 'gold'
+  if (phase === 'ENROLL_UPCOMING') return 'blue'
+  if (phase === 'ONGOING') return 'cyan'
+  if (phase === 'ENROLL_CLOSED') return 'orange'
+  if (phase === 'ENDED' || phase === 'COMPLETED' || phase === 'EXPIRED' || phase === 'CANCELLED') return 'default'
+  return course?.status === 'PUBLISHED' ? 'green' : course?.status === 'DRAFT' ? 'default' : 'red'
+}
+
+/** 已结束课程不能再改报名窗口，只能复制新排期 */
+function canAdjustEnrollment(course: any) {
+  if (!course || course.status !== 'PUBLISHED') return false
+  return !['ENDED', 'COMPLETED', 'EXPIRED'].includes(String(course.phase || '').toUpperCase())
+}
+
+function formatLifecycleTime(value: any) {
+  if (!value) return '—'
+  const d = dayjs(value)
+  return d.isValid() ? d.format('YYYY-MM-DD HH:mm') : '—'
+}
 
 function trainerName(id: string) {
   return trainerOptions.value.find(t => t.id === id)?.displayName || ''
@@ -669,10 +774,11 @@ function trainerName(id: string) {
 /** 后端课程字段 → 页面展示字段映射 */
 function mapCourse(c: any) {
   const dateStr = c.startDate ? String(c.startDate).slice(0, 10) : ''
+  const phase = String(c.phase || '').toUpperCase()
   return {
     id: c.id,
     name: c.title,
-    type: '',
+    type: c.type || '',
     typeLabel: (c.categories && c.categories[0]?.name) || '课程',
     trainer: c.trainer?.displayName || '—',
     trainerId: c.trainerId,
@@ -683,6 +789,12 @@ function mapCourse(c: any) {
     enrolled: c.currentEnrolled ?? 0,
     status: c.status,
     statusLabel: statusLabelMap[c.status] || c.status,
+    phase,
+    phaseLabel: phaseLabelMap[phase] || statusLabelMap[c.status] || c.status,
+    bookable: c.bookable === true,
+    enrollDeadline: c.enrollDeadline || c.enrollEndAt || c.startAt || null,
+    startAt: c.startAt || null,
+    endAt: c.endAt || null,
     coverImage: c.coverImage || '',
     gallery: Array.isArray(c.gallery) ? c.gallery : [],
     coverColor: coverColors[0],
@@ -702,6 +814,7 @@ async function loadCourses() {
       pageSize: 100,
       keyword: searchText.value || undefined,
       status: filterStatus.value || undefined,
+      phase: filterPhase.value || undefined,
       startDateFrom,
       startDateTo,
     })
@@ -752,6 +865,7 @@ const filteredCourses = computed(() => {
     if (searchText.value && !c.name.includes(searchText.value)) return false
     if (filterType.value && c.type !== filterType.value) return false
     if (filterStatus.value && c.status !== filterStatus.value) return false
+    if (filterPhase.value && c.phase !== filterPhase.value) return false
     return true
   })
 })
@@ -800,6 +914,93 @@ function viewCourseDetail(course: any) {
   loadCourseReviews(course.id)
   loadWaitlist(course.id)
   loadStudents(course.id)
+}
+
+/** 卡片「管理」菜单：统一收口课程生命周期操作 */
+function handleCourseMenuClick(info: any, course: any) {
+  handleCourseAction(String(info?.key || ''), course)
+}
+
+function handleCourseAction(key: string, course: any) {
+  if (key === 'adjust') return openEnrollWindow(course)
+  if (key === 'complete') return handleComplete(course)
+  if (key === 'unpublish') return handleUnpublish(course)
+  if (key === 'delete') return handleDelete(course)
+  if (key === 'view') return viewCourseDetail(course)
+}
+
+/** 打开报名截止调整：默认填入现有截止或课程结束时刻 */
+function openEnrollWindow(course: any) {
+  if (!course?.id) return
+  enrollTargetId.value = course.id
+  enrollMode.value = 'custom'
+  const raw = course.raw || {}
+  const suggested = course.enrollDeadline ? dayjs(course.enrollDeadline) : dayjs(course.endAt || raw.endAt || raw.startAt || raw.startDate)
+  const fallback = dayjs().add(1, 'hour')
+  enrollEndAt.value = suggested.isValid() && suggested.isAfter(dayjs()) ? suggested : fallback
+  enrollModalVisible.value = true
+}
+
+async function submitEnrollWindow() {
+  if (!enrollTargetId.value) return
+  let iso: string | null = null
+  if (enrollMode.value === 'custom') {
+    if (!enrollEndAt.value || !dayjs(enrollEndAt.value).isValid()) {
+      message.warning('请选择报名截止时间')
+      return
+    }
+    if (!dayjs(enrollEndAt.value).isAfter(dayjs())) {
+      message.warning('报名截止时间须晚于当前时间')
+      return
+    }
+    iso = dayjs(enrollEndAt.value).toISOString()
+  }
+  enrollSubmitting.value = true
+  try {
+    await setEnrollmentWindow(enrollTargetId.value, iso)
+    message.success(iso ? '报名截止已更新，展示状态会按时间自动切换' : '已恢复默认截止（开课时刻）')
+    enrollModalVisible.value = false
+    const id = enrollTargetId.value
+    await loadCourses()
+    await refreshCurrentCourse(id)
+  } catch (e: any) {
+    message.error(e?.message || '调整报名截止失败')
+  } finally {
+    enrollSubmitting.value = false
+  }
+}
+
+/** 手动归档历史课程：停止报名并退出小程序发现列表，保留订单与退款历史 */
+function handleComplete(course: any) {
+  if (!course || course.status !== 'PUBLISHED') return
+  Modal.confirm({
+    title: '确认将该课程标记为已结束？',
+    content: `「${course.name}」将立即停止报名并从小程序发现列表移除，订单、签到与退款历史仍保留。该操作不可撤销。`,
+    okText: '确认结束',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await setCourseStatus(course.id, 'COMPLETED')
+        message.success('课程已结束归档')
+        await loadCourses()
+        await refreshCurrentCourse(course.id)
+      } catch (e: any) {
+        message.error(e?.message || '结束课程失败')
+      }
+    },
+  })
+}
+
+/** 操作后同步详情页展示数据 */
+async function refreshCurrentCourse(id: string) {
+  if (currentCourse.value?.id !== id) return
+  try {
+    const data: any = await getCourse(id)
+    if (data?.id) currentCourse.value = mapCourse(data)
+  } catch {
+    // 详情刷新失败不覆盖已有页面，列表已刷新。
+  }
 }
 
 /** 本周开课数（基于当前筛选结果，startDate 落在本周一~周日的课程数） */

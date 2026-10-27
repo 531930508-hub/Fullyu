@@ -13,8 +13,11 @@ export interface ScmProduct {
   name: string
   spec: string
   unit: string
-  purchasePrice: number
+  /** 无 scm:po:price 权限时为 null，门店只看得到总部供货价 */
+  purchasePrice: number | null
   supplyPrice: number
+  /** 是否可见总部对外采购价 */
+  priceVisible: boolean
   safetyStock: number
   enabled: boolean
   remark: string
@@ -45,6 +48,7 @@ export interface PurchaseOrder {
   id: string
   buyerId: string
   buyerName: string
+  buyerType: 'GROUP' | 'DEPT' | 'SUBSIDIARY' | 'STORE' | null
   supplierType: PurchaseSupplierType
   supplierId: string | null
   supplierName: string

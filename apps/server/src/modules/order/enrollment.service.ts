@@ -3,7 +3,12 @@ import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
 import { PricingService } from '../pricing/pricing.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
-import { SEAT_LOCK_DURATION_MINUTES, POINTS_TO_FEN_RATIO, voucherYuanToFen } from '@fullyu/shared'
+import {
+  SEAT_LOCK_DURATION_MINUTES,
+  POINTS_TO_FEN_RATIO,
+  voucherYuanToFen,
+  resolveCourseLifecycle,
+} from '@fullyu/shared'
 import { generateOrderNo } from '../../common/order-no.helper'
 
 export interface EnrollDto {
@@ -48,9 +53,13 @@ export class EnrollmentService {
 
     const isFull = course.currentEnrolled + (position - course.currentEnrolled - 1) >= course.maxCapacity
     const remaining = Math.max(0, course.maxCapacity - (position - 1))
+    const lifecycle = resolveCourseLifecycle(course)
 
     return {
       courseId,
+      phase: lifecycle.phase,
+      bookable: lifecycle.bookable,
+      enrollDeadline: lifecycle.enrollDeadline,
       position,
       basePrice,
       memberCardType: member.cardType,
@@ -82,16 +91,21 @@ export class EnrollmentService {
         if (!course) throw new BusinessException('课程不存在', 4004)
         if (course.status !== 'PUBLISHED') throw new BusinessException('课程未开放报名', 4008)
 
-        // 报名二次校验：以事务内最新数据为准，兜底“报名页停留期间课程被改期/改场”的并发场景
+        // 报名二次校验：以事务内最新数据为准，兜底“报名页停留期间课程被改期/改场”的并发场景。
+        // 截止时刻按 startDate + startTime 推导，支持后台通过 enrollEndAt 开放补报名。
         const now = new Date()
-        if (course.enrollStartAt && now < course.enrollStartAt) {
+        const lifecycle = resolveCourseLifecycle(course, now)
+        if (lifecycle.phase === 'ENROLL_UPCOMING') {
           throw new BusinessException('报名尚未开始', 4018)
         }
-        if (course.enrollEndAt && now > course.enrollEndAt) {
-          throw new BusinessException('报名已截止', 4009)
+        if (lifecycle.phase === 'ENDED') {
+          throw new BusinessException('课程已结束，无法报名', 4019)
         }
-        if (course.startDate && now >= course.startDate) {
-          throw new BusinessException('课程已开课，无法报名', 4019)
+        if (!lifecycle.bookable) {
+          throw new BusinessException(
+            lifecycle.phase === 'ONGOING' ? '课程已开课，无法报名' : '报名已截止',
+            4009,
+          )
         }
         // 场地兜底：课程被改期/改场后场地被停用则拦截报名
         const venue = await tx.venue.findUnique({ where: { id: course.venueId } })
@@ -163,7 +177,7 @@ export class EnrollmentService {
         const actualPaid = Math.max(0, priceAfterDiscount - pointsDeduction - voucherDeduction)
 
         // 创建待支付订单
-        const orderNo = await generateOrderNo(this.redis, 'COURSE')
+        const orderNo = await generateOrderNo(this.redis, 'COURSE', this.prisma)
         const order = await tx.order.create({
           data: {
             orderNo,

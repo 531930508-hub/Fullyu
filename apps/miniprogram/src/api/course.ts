@@ -28,8 +28,14 @@ export interface CourseListResult {
 export interface CourseDetail extends CourseListItem {
   gallery?: string[]
   description?: string
+  detailDesc?: string
   targetAudience?: string[]
   learningGoals?: string
+  materials?: string[]
+  notice?: string
+  tags?: string[]
+  difficulty?: string
+  duration?: number
   endDate?: string
   minCapacity?: number
   waitlistEnabled?: boolean
@@ -38,6 +44,18 @@ export interface CourseDetail extends CourseListItem {
   allowDeduction?: boolean
   priceTiers?: { seatFrom: number; seatTo: number; price: number }[]
   refundRules?: { hoursFrom: number; hoursTo: number | null; refundPercent: number }[]
+  seedsReward?: number
+  reviewSeeds?: number
+  /** 生命周期展示字段（后端按日期推导） */
+  phase?: string
+  phaseLabel?: string
+  bookable?: boolean
+  discoverable?: boolean
+  startAt?: string
+  endAt?: string
+  enrollDeadline?: string | null
+  enrollStartAt?: string | null
+  enrollEndAt?: string | null
   trainer?: any
   venue?: any
 }

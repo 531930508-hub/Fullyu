@@ -35,6 +35,7 @@ export class VenueService {
     return this.prisma.venue.create({
       data: {
         name: data.name,
+        city: String(data.city ?? '').trim() || '上海',
         address: data.address ?? '',
         capacity: Number(data.capacity) || 0,
         description: data.description ?? null,
@@ -50,6 +51,7 @@ export class VenueService {
   async update(id: string, data: any) {
     const patch: any = {}
     if (data.name !== undefined) patch.name = data.name
+    if (data.city !== undefined) patch.city = String(data.city ?? '').trim() || '上海'
     if (data.address !== undefined) patch.address = data.address ?? ''
     if (data.capacity !== undefined) patch.capacity = Number(data.capacity) || 0
     if (data.description !== undefined) patch.description = data.description ?? null

@@ -128,7 +128,9 @@ jobs:
             done
             rm -f /tmp/fullyu-ci/admin-dist.tar.gz /tmp/fullyu-ci/h5-dist.tar.gz
 
-      # 后端：git pull 源码 → 构建 shared → tsc 编译 → prisma db push → 重启 PM2
+      # 后端：git pull 源码 → 构建 shared → tsc 编译 → 重启 PM2
+      # 生产库包含会员系统等人工维护的表，prisma db push 会生成 DROP 语句，禁止在 CI 里执行。
+      # 表结构变更一律走 prisma/*.sql 增量脚本人工/手动执行。
       - name: Deploy server over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -141,10 +143,8 @@ jobs:
             cd "$SERVER_PATH"
             git pull --ff-only
             export PATH="/root/.local/node/bin:$PATH"
-            # 生产用 db push（仓库无 migrations 目录），绝不使用 migrate dev / reset
             pnpm --filter @fullyu/shared build
             pnpm --filter @fullyu/server db:generate
-            pnpm --filter @fullyu/server exec prisma db push --schema=prisma/schema.prisma
             cd apps/server
             npx tsc --project tsconfig.json
             pm2 restart "$PM2_APP" --update-env

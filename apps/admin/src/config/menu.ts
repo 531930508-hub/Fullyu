@@ -77,7 +77,8 @@ export const MENU_CONFIG: MenuItem[] = [
     title: '财务管理',
     icon: 'FundOutlined',
     children: [
-      { key: 'finance-dashboard', title: '财务看板', path: '/finance/dashboard', perm: ['finance:dashboard:view'] },
+      { key: 'finance-dashboard', title: '全业务财务看板', path: '/finance/dashboard', perm: ['finance:dashboard:view'] },
+      { key: 'finance-presence', title: '在场业务看板', path: '/finance/presence', perm: ['finance:presence:view'] },
       { key: 'finance-revenue', title: '收入数据源', path: '/finance/revenue', perm: ['finance:revenue:view'] },
       { key: 'finance-expenses', title: '月度支出录入', path: '/finance/expenses', perm: ['finance:expense:view'] },
     ],
@@ -96,9 +97,11 @@ export const MENU_CONFIG: MenuItem[] = [
     icon: 'TeamOutlined',
     perm: ['community:view'],
     children: [
+      { key: 'community-workspace', title: '社群工作台', path: '/community/workspace', perm: ['community:view'] },
       { key: 'community-list', title: '社群管理', path: '/community/list', perm: ['community:view'] },
+      { key: 'community-hosts', title: '主理人角色', path: '/community/hosts', perm: ['community:view'] },
       { key: 'community-events', title: '活动管理', path: '/community/events', perm: ['community:view'] },
-      { key: 'community-posts', title: '动态审核', path: '/community/posts', perm: ['community:view'] },
+      { key: 'community-posts', title: '内容治理', path: '/community/posts', perm: ['community:view'] },
     ],
   },
   {

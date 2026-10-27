@@ -29,7 +29,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <div>
                     <span style="font-size: 16px; font-weight: 600; color: #4B3621;">{{ trainer.displayName }}</span>
-                    <a-tag v-if="trainer.seedifyCert" color="green" style="margin-left: 8px;">Seedify认证</a-tag>
+                    <a-tag v-if="trainer.seedifyCert" color="green" style="margin-left: 8px;">Full愈认证</a-tag>
                     <a-tag :color="levelColors[trainer.level]" style="margin-left: 4px;">LV{{ trainer.level }}</a-tag>
                   </div>
                   <a-tag :color="trainer.status === 'ACTIVE' ? 'green' : 'red'">{{ trainer.status === 'ACTIVE' ? '在职' : '离职' }}</a-tag>
@@ -40,7 +40,7 @@
                   <span v-if="(trainer.specialties || []).length > 3" style="font-size: 12px; color: #999;">+{{ trainer.specialties.length - 3 }}</span>
                 </div>
                 <div style="display: flex; gap: 24px; margin-top: 8px; color: #999; font-size: 12px;">
-                  <span>Seeds {{ trainer.seedsBalance }}</span>
+                  <span>积分 {{ trainer.seedsBalance }}</span>
                   <span>时薪 ¥{{ trainer.hourlyRate }}</span>
                 </div>
               </div>
@@ -84,7 +84,7 @@
                   </a-form-item>
                 </a-col>
                 <a-col :span="12">
-                  <a-form-item label="Seedify认证">
+                  <a-form-item label="Full愈认证">
                     <a-switch v-model:checked="editForm.seedifyCert" checked-children="已认证" un-checked-children="未认证" />
                   </a-form-item>
                 </a-col>
@@ -107,9 +107,9 @@
               <a-button type="primary" :loading="saving" @click="saveTrainerEdit">保存修改</a-button>
             </a-form>
           </a-tab-pane>
-          <a-tab-pane key="seeds" tab="Seeds 记录">
+          <a-tab-pane key="seeds" tab="积分记录">
             <a-row :gutter="16" style="margin-bottom: 16px;">
-              <a-col :span="12"><a-card size="small"><a-statistic title="当前 Seeds 余额" :value="currentTrainer.seedsBalance" suffix="粒" /></a-card></a-col>
+              <a-col :span="12"><a-card size="small"><a-statistic title="当前积分余额" :value="currentTrainer.seedsBalance" suffix="分" /></a-card></a-col>
             </a-row>
             <a-form layout="inline" style="margin-bottom: 16px;">
               <a-form-item label="调整数量">
@@ -154,7 +154,7 @@
         </a-row>
         <a-row :gutter="16">
           <a-col :span="12">
-            <a-form-item label="Seedify认证">
+            <a-form-item label="Full愈认证">
               <a-switch v-model:checked="addForm.seedifyCert" checked-children="已认证" un-checked-children="未认证" />
             </a-form-item>
           </a-col>
@@ -361,7 +361,7 @@ async function submitSeeds() {
   seedsSaving.value = true
   try {
     await adjustTrainerSeeds(currentTrainer.value.id, seedsForm.value.amount, seedsForm.value.reason)
-    message.success('Seeds 已调整')
+    message.success('积分已调整')
     const detail: any = await getTrainer(currentTrainer.value.id)
     currentTrainer.value = detail
     seedsForm.value = { amount: null, reason: '' }

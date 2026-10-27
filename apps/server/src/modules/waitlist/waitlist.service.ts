@@ -5,7 +5,7 @@ import { PricingService } from '../pricing/pricing.service'
 import { NotificationService } from '../../common/notification/notification.service'
 import { PaymentService } from '../payment/payment.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
-import { SEAT_LOCK_DURATION_MINUTES } from '@fullyu/shared'
+import { SEAT_LOCK_DURATION_MINUTES, resolveCourseLifecycle } from '@fullyu/shared'
 import { WaitlistSeatType } from '@prisma/client'
 import { generateOrderNo } from '../../common/order-no.helper'
 
@@ -38,6 +38,13 @@ export class WaitlistService {
     })
     if (!course) throw new BusinessException('课程不存在', 4004)
     if (!course.waitlistEnabled) throw new BusinessException('该课程未开启候补', 4020)
+    const lifecycle = resolveCourseLifecycle(course)
+    if (!lifecycle.bookable) {
+      throw new BusinessException(
+        lifecycle.phase === 'ENROLL_CLOSED' ? '报名已截止，候补同步关闭' : '当前不在可候补时间范围内',
+        4026,
+      )
+    }
 
     const seatType = await this.decideSeatType(courseId, userId, course.memberWaitlistSeats)
     const position = await this.nextPosition(this.prisma, courseId, seatType)
@@ -73,11 +80,17 @@ export class WaitlistService {
 
         // 二次校验：以事务内最新数据为准，兜底课程被改期/改场后仍可候补的并发场景
         const now = new Date()
-        if (course.enrollEndAt && now > course.enrollEndAt) {
-          throw new BusinessException('报名已截止', 4009)
+        const lifecycle = resolveCourseLifecycle(course, now)
+        if (lifecycle.phase === 'ENDED') {
+          throw new BusinessException('课程已结束，无法候补', 4019)
         }
-        if (course.startDate && now >= course.startDate) {
-          throw new BusinessException('课程已开课，无法候补', 4019)
+        if (!lifecycle.bookable) {
+          throw new BusinessException(
+            lifecycle.phase === 'ENROLL_CLOSED'
+              ? '报名已截止，候补同步关闭'
+              : '当前不在可候补时间范围内',
+            4009,
+          )
         }
         const venue = await tx.venue.findUnique({ where: { id: course.venueId } })
         if (!venue || !venue.isAvailable) {
@@ -105,7 +118,7 @@ export class WaitlistService {
           await this.computeLockedPrice(course, userId)
 
         // 预付订单
-        const orderNo = await generateOrderNo(this.redis, 'WAITLIST')
+        const orderNo = await generateOrderNo(this.redis, 'WAITLIST', this.prisma)
         const order = await tx.order.create({
           data: {
             orderNo,
@@ -154,6 +167,9 @@ export class WaitlistService {
       return this.prisma.$transaction(async (tx) => {
         const course = await tx.course.findUnique({ where: { id: courseId } })
         if (!course) return 0
+        // 已取消/下架/已开课的课程不得再递补：退款回调可能晚于课程取消任务到达，
+        // 否则会把候补用户转正到一场不存在的课程上。
+        if (course.status !== 'PUBLISHED' || !resolveCourseLifecycle(course).bookable) return 0
 
         let free = course.maxCapacity - course.currentEnrolled
         if (free <= 0) return 0
@@ -176,11 +192,13 @@ export class WaitlistService {
             where: { id: entry.id },
             data: { status: 'CONVERTED', convertedAt: new Date() },
           })
-          // 预付订单已支付，转正即视为正式报名
+          // 预付订单已支付，转正即转为正式课程报名：
+          // 类型切到 COURSE、状态置为 PAID（待上课），后续签到、评价、退款、
+          // 名额释放、统计均按正式报名识别，且仍留在「待上课」而非「已完成」。
           if (entry.orderId) {
             await tx.order.update({
               where: { id: entry.orderId },
-              data: { status: 'COMPLETED' },
+              data: { status: 'PAID', orderType: 'COURSE' },
             })
           }
           promotedUsers.push({ userId: entry.userId, orderId: entry.orderId })
@@ -283,11 +301,11 @@ export class WaitlistService {
           where: { id: entryId },
           data: { status: 'CONVERTED', convertedAt: new Date() },
         })
-        // 预付订单已支付，转正即视为正式报名（不受最大人数限制，可超额）
+        // 预付订单已支付，转正即转为正式课程报名（不受最大人数限制，可超额）
         if (entry.orderId) {
           await tx.order.update({
             where: { id: entry.orderId },
-            data: { status: 'COMPLETED' },
+            data: { status: 'PAID', orderType: 'COURSE' },
           })
         }
         await tx.course.update({

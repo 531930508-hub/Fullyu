@@ -43,7 +43,10 @@
             :pagination="{ pageSize: 10, showTotal: (t: number) => `共 ${t} 个商品` }"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'purchasePrice'">¥{{ money(record.purchasePrice) }}</template>
+              <template v-if="column.key === 'purchasePrice'">
+                <template v-if="priceVisible">¥{{ money(record.purchasePrice) }}</template>
+                <span v-else class="sub-text">—</span>
+              </template>
               <template v-else-if="column.key === 'supplyPrice'">¥{{ money(record.supplyPrice) }}</template>
               <template v-else-if="column.key === 'enabled'">
                 <a-tag :color="record.enabled ? 'green' : 'default'">{{ record.enabled ? '启用中' : '已停用' }}</a-tag>
@@ -146,7 +149,7 @@
           </a-col>
         </a-row>
         <a-row :gutter="16">
-          <a-col :span="8">
+          <a-col v-if="priceVisible" :span="8">
             <a-form-item label="采购价（元）">
               <a-input-number v-model:value="productForm.purchasePrice" :min="0" :precision="2" style="width: 100%" />
             </a-form-item>
@@ -201,7 +204,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import {
@@ -215,6 +218,11 @@ import {
 } from '@/api/scm'
 import type { ScmProduct, ScmSupplier } from '@/api/scm'
 import { money } from '@/utils/format'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
+/** 采购价属于总部对外采购口径，无权限时列与输入框都不渲染 */
+const priceVisible = computed(() => auth.hasPerm('scm:po:price'))
 
 const tab = ref('product')
 
@@ -224,18 +232,20 @@ const productLoading = ref(false)
 const productKeyword = ref('')
 const productEnabled = ref<boolean | undefined>(undefined)
 
-const productColumns = [
-  { title: '编码', dataIndex: 'code', width: 120 },
-  { title: '名称', dataIndex: 'name', width: 180 },
-  { title: '规格', dataIndex: 'spec', width: 150 },
-  { title: '单位', dataIndex: 'unit', width: 70 },
-  { title: '采购价', key: 'purchasePrice', width: 100 },
-  { title: '供货价', key: 'supplyPrice', width: 100 },
-  { title: '安全库存', dataIndex: 'safetyStock', width: 90 },
-  { title: '状态', key: 'enabled', width: 90 },
-  { title: '备注', dataIndex: 'remark', ellipsis: true },
-  { title: '操作', key: 'action', width: 120, fixed: 'right' },
-]
+const productColumns = computed(() =>
+  [
+    { title: '编码', dataIndex: 'code', width: 120 },
+    { title: '名称', dataIndex: 'name', width: 180 },
+    { title: '规格', dataIndex: 'spec', width: 150 },
+    { title: '单位', dataIndex: 'unit', width: 70 },
+    ...(priceVisible.value ? [{ title: '采购价', key: 'purchasePrice', width: 100 }] : []),
+    { title: '供货价', key: 'supplyPrice', width: 100 },
+    { title: '安全库存', dataIndex: 'safetyStock', width: 90 },
+    { title: '状态', key: 'enabled', width: 90 },
+    { title: '备注', dataIndex: 'remark', ellipsis: true },
+    { title: '操作', key: 'action', width: 120, fixed: 'right' as const },
+  ],
+)
 
 async function loadProducts() {
   productLoading.value = true
@@ -290,7 +300,7 @@ async function submitProduct() {
     name: productForm.name.trim(),
     spec: productForm.spec.trim(),
     unit: productForm.unit.trim(),
-    purchasePrice: productForm.purchasePrice ?? 0,
+    ...(priceVisible.value ? { purchasePrice: productForm.purchasePrice ?? 0 } : {}),
     supplyPrice: productForm.supplyPrice ?? 0,
     safetyStock: productForm.safetyStock ?? 0,
     remark: productForm.remark,

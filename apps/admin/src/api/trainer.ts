@@ -20,7 +20,7 @@ export function updateTrainer(id: string, body: any) {
   return put(`/trainers/${id}`, body)
 }
 
-/** 调整导师 Seeds */
+/** 调整导师积分 */
 export function adjustTrainerSeeds(id: string, amount: number, reason: string) {
   return post(`/trainers/${id}/seeds`, { amount, reason })
 }

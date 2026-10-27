@@ -20,6 +20,7 @@
       <a-tab-pane key="ALL" tab="全部订单" />
       <a-tab-pane key="COURSE" tab="课程订单" />
       <a-tab-pane key="MEMBER_CARD" tab="会员卡订单" />
+      <a-tab-pane key="COMMUNITY" tab="社群订单" />
     </a-tabs>
 
     <!-- 订单统计 -->
@@ -84,6 +85,7 @@
           <a-descriptions-item label="原价">¥{{ currentOrder.originalPrice.toFixed(2) }}</a-descriptions-item>
           <a-descriptions-item label="优惠">{{ currentOrder.discount > 0 ? `-¥${currentOrder.discount.toFixed(2)}` : '无' }}</a-descriptions-item>
           <a-descriptions-item label="实付">¥{{ currentOrder.actualPaid.toFixed(2) }}</a-descriptions-item>
+          <a-descriptions-item v-if="currentOrder.refundAmount != null" label="退款金额">¥{{ currentOrder.refundAmount.toFixed(2) }}</a-descriptions-item>
           <a-descriptions-item label="下单时间">{{ currentOrder.createTime }}</a-descriptions-item>
           <a-descriptions-item label="支付时间">{{ currentOrder.payTime || '-' }}</a-descriptions-item>
           <a-descriptions-item v-if="currentOrder.refundTime" label="退款时间">{{ currentOrder.refundTime }}</a-descriptions-item>
@@ -137,7 +139,7 @@ const orders = ref<any[]>([])
 
 const statusColorMap: Record<string, string> = { PAID: 'green', COMPLETED: 'cyan', PENDING_PAYMENT: 'orange', REFUNDING: 'orange', REFUNDED: 'red', CANCELLED: 'default' }
 const statusLabelMap: Record<string, string> = { PAID: '已支付', COMPLETED: '已完成', PENDING_PAYMENT: '待支付', REFUNDING: '退款中', REFUNDED: '已退款', CANCELLED: '已取消' }
-const typeLabelMap: Record<string, string> = { COURSE: '课程', WAITLIST: '候补', MEMBER_CARD: '会员卡' }
+const typeLabelMap: Record<string, string> = { COURSE: '课程', WAITLIST: '候补', MEMBER_CARD: '会员卡', COMMUNITY: '社群' }
 const cardTypeLabelMap: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
 
 const columns = [
@@ -151,7 +153,7 @@ const columns = [
   { title: '操作', dataIndex: 'action', width: 80 },
 ]
 
-/** 课程/候补订单金额单位为分，会员卡订单单位为元 */
+/** 课程/候补/社群订单金额单位为分，会员卡订单单位为元 */
 function toYuan(o: any, val: any) {
   const n = Number(val || 0)
   return o.orderType === 'MEMBER_CARD' ? n : n / 100
@@ -166,7 +168,11 @@ function mapOrder(o: any) {
     orderType: o.orderType,
     typeLabel: typeLabelMap[o.orderType] || o.orderType,
     userName: o.user?.nickname || o.user?.phone || '用户',
-    itemName: o.orderType === 'MEMBER_CARD' ? (cardTypeLabelMap[o.cardType] || '会员卡') : (o.course?.title || '—'),
+    itemName: o.orderType === 'MEMBER_CARD'
+      ? (cardTypeLabelMap[o.cardType] || '会员卡')
+      : o.orderType === 'COMMUNITY'
+        ? (o.community?.name || '社群年费')
+        : (o.course?.title || '—'),
     originalPrice,
     actualPaid,
     discount: Math.max(0, originalPrice - actualPaid),
@@ -174,6 +180,7 @@ function mapOrder(o: any) {
     statusLabel: statusLabelMap[o.status] || o.status,
     createTime: o.createdAt ? String(o.createdAt).replace('T', ' ').slice(0, 16) : '',
     payTime: o.paymentTime ? String(o.paymentTime).replace('T', ' ').slice(0, 16) : '',
+    refundAmount: o.refundAmount == null ? null : toYuan(o, o.refundAmount),
     refundTime: o.refundTime ? String(o.refundTime).replace('T', ' ').slice(0, 16) : '',
   }
 }

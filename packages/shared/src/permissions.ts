@@ -132,6 +132,8 @@ export const PERMISSIONS: PermissionDef[] = [
   { code: 'finance:expense:update', name: '编辑支出', module: 'finance', level: 'ACTION', group: '支出' },
   { code: 'finance:expense:delete', name: '删除支出', module: 'finance', level: 'ACTION', group: '支出' },
   { code: 'finance:expense:import', name: '批量导入支出', module: 'finance', level: 'ACTION', group: '支出' },
+  { code: 'finance:presence:view', name: '在场业务看板访问', module: 'finance', level: 'MENU', group: '在场业务' },
+  { code: 'finance:presence:close', name: '在场台账手工关账', module: 'finance', level: 'ACTION', group: '在场业务' },
 
   // ===== 审批流 =====
   { code: 'flow:config:view', name: '流程配置（标签页）', module: 'flow', level: 'TAB', group: '流程配置' },

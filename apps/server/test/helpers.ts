@@ -169,7 +169,7 @@ export class Seeder {
   async trainer() {
     const user = await this.user()
     const tp = await this.prisma.trainerProfile.create({
-      data: { userId: user.id, displayName: `测试导师${this.uniq().slice(-5)}`, specialties: ['yoga'] },
+      data: { userId: user.id, displayName: `测试导师${this.uniq()}`, specialties: ['yoga'] },
     })
     this.trainerIds.push(tp.id)
     return tp
@@ -206,6 +206,11 @@ export class Seeder {
     memberWaitlistSeats?: number
     allowDeduction?: boolean
     startInHours?: number
+    minCapacity?: number
+    groupDeadline?: Date | null
+    waitlistDeadlineHours?: number
+    startDate?: Date
+    endDate?: Date
     enrollStartAt?: Date
     enrollEndAt?: Date
     venueId?: string
@@ -217,8 +222,8 @@ export class Seeder {
   } = {}) {
     const trainer = await this.trainer()
     const venueId = opts.venueId ?? (await this.venue()).id
-    const startDate = new Date(Date.now() + (opts.startInHours ?? 240) * 3600 * 1000)
-    const endDate = new Date(startDate.getTime() + 3600 * 1000)
+    const startDate = opts.startDate ?? new Date(Date.now() + (opts.startInHours ?? 240) * 3600 * 1000)
+    const endDate = opts.endDate ?? new Date(startDate.getTime() + 3600 * 1000)
     const course = await this.prisma.course.create({
       data: {
         title: `测试课程${this.uniq().slice(-5)}`,
@@ -232,12 +237,14 @@ export class Seeder {
         startTime: opts.startTime ?? '10:00',
         endTime: opts.endTime ?? '11:00',
         trainerId: trainer.id,
-        minCapacity: 1,
+        minCapacity: opts.minCapacity ?? 1,
         maxCapacity: opts.maxCapacity ?? 5,
         currentEnrolled: opts.currentEnrolled ?? 0,
         originalPrice: opts.originalPrice ?? 100,
         venueId,
         status: opts.status ?? 'PUBLISHED',
+        groupDeadline: opts.groupDeadline ?? undefined,
+        waitlistDeadlineHours: opts.waitlistDeadlineHours ?? undefined,
         enrollStartAt: opts.enrollStartAt ?? undefined,
         enrollEndAt: opts.enrollEndAt ?? undefined,
         allowDeduction: opts.allowDeduction ?? true,

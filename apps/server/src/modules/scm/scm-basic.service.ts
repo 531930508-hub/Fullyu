@@ -35,7 +35,10 @@ export class ScmBasicService {
 
   // ===== 商品 =====
 
-  async listProducts(query: { keyword?: string; enabled?: boolean } = {}) {
+  async listProducts(
+    query: { keyword?: string; enabled?: boolean } = {},
+    canSeePurchasePrice = false,
+  ) {
     const where: Prisma.ScmProductWhereInput = {}
     if (query.enabled !== undefined) where.enabled = query.enabled
     if (query.keyword) {
@@ -45,22 +48,30 @@ export class ScmBasicService {
       where,
       orderBy: [{ code: 'asc' }],
     })
-    return rows.map((row) => this.toProductDto(row))
+    return rows.map((row) => this.toProductDto(row, canSeePurchasePrice))
   }
 
-  async createProduct(input: UpsertProductInput) {
+  async createProduct(input: UpsertProductInput, canSeePurchasePrice = true) {
     const code = input.code?.trim().toUpperCase()
     if (!code) throw new BusinessException('商品编码不能为空', 4220)
     if (!input.name?.trim()) throw new BusinessException('商品名称不能为空', 4225)
     const taken = await this.prisma.scmProduct.findUnique({ where: { code } })
     if (taken) throw new BusinessException('商品编码已存在', 4221)
     const row = await this.prisma.scmProduct.create({
-      data: { ...this.productData(input), code, name: input.name.trim() },
+      data: {
+        ...this.productData(input, canSeePurchasePrice),
+        code,
+        name: input.name.trim(),
+      },
     })
-    return this.toProductDto(row)
+    return this.toProductDto(row, canSeePurchasePrice)
   }
 
-  async updateProduct(id: string, input: Partial<UpsertProductInput>) {
+  async updateProduct(
+    id: string,
+    input: Partial<UpsertProductInput>,
+    canSeePurchasePrice = true,
+  ) {
     const current = await this.prisma.scmProduct.findUnique({ where: { id } })
     if (!current) throw new BusinessException('商品不存在', 4222)
     if (input.code && input.code.trim().toUpperCase() !== current.code) {
@@ -72,23 +83,23 @@ export class ScmBasicService {
     const row = await this.prisma.scmProduct.update({
       where: { id },
       data: {
-        ...this.productData(input),
+        ...this.productData(input, canSeePurchasePrice),
         code: input.code ? input.code.trim().toUpperCase() : undefined,
       },
     })
-    return this.toProductDto(row)
+    return this.toProductDto(row, canSeePurchasePrice)
   }
 
   /**
    * 停用而非删除：已开出的采购单与库存流水都引用商品，
    * 删掉会让历史单据显示不出名字。
    */
-  async toggleProduct(id: string, enabled: boolean) {
+  async toggleProduct(id: string, enabled: boolean, canSeePurchasePrice = true) {
     await this.prisma.scmProduct.findUniqueOrThrow({ where: { id } }).catch(() => {
       throw new BusinessException('商品不存在', 4222)
     })
     const row = await this.prisma.scmProduct.update({ where: { id }, data: { enabled } })
-    return this.toProductDto(row)
+    return this.toProductDto(row, canSeePurchasePrice)
   }
 
   // ===== 供应商 =====
@@ -130,12 +141,13 @@ export class ScmBasicService {
 
   // ===== 内部工具 =====
 
-  private productData(input: Partial<UpsertProductInput>) {
+  /** 无价格权限时忽略前端传的采购价，避免把总部维护的价格覆盖成 0 */
+  private productData(input: Partial<UpsertProductInput>, canSeePurchasePrice = true) {
     return {
       name: input.name,
       spec: input.spec,
       unit: input.unit,
-      purchasePrice: input.purchasePrice,
+      purchasePrice: canSeePurchasePrice ? input.purchasePrice : undefined,
       supplyPrice: input.supplyPrice,
       safetyStock: input.safetyStock,
       enabled: input.enabled,
@@ -143,16 +155,20 @@ export class ScmBasicService {
     }
   }
 
-  /** Decimal 出参统一转 number，前端不必再处理字符串金额 */
-  private toProductDto(row: Prisma.ScmProductGetPayload<object>) {
+  /**
+   * Decimal 出参统一转 number。
+   * 无 scm:po:price 时隐藏总部对外采购价，只保留门店要付的供货价。
+   */
+  private toProductDto(row: Prisma.ScmProductGetPayload<object>, canSeePurchasePrice = true) {
     return {
       id: row.id,
       code: row.code,
       name: row.name,
       spec: row.spec,
       unit: row.unit,
-      purchasePrice: Number(row.purchasePrice),
+      purchasePrice: canSeePurchasePrice ? Number(row.purchasePrice) : null,
       supplyPrice: Number(row.supplyPrice),
+      priceVisible: canSeePurchasePrice,
       safetyStock: row.safetyStock,
       enabled: row.enabled,
       remark: row.remark,

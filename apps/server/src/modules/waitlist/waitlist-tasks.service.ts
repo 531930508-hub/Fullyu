@@ -19,12 +19,13 @@ export class WaitlistTasksService {
 
   /**
    * 每 5 分钟扫描：候补截止仍未轮上的 WAITING 条目 → 全额退款
+   * @param courseId 仅处理指定课程（测试/人工单课补偿用；定时任务不传）
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
-  async refundExpiredWaitlist() {
+  async refundExpiredWaitlist(courseId?: string) {
     const now = new Date()
     const entries = await this.prisma.waitlistEntry.findMany({
-      where: { status: 'WAITING' },
+      where: { status: 'WAITING', ...(courseId ? { courseId } : {}) },
       include: { course: true },
     })
 

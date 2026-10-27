@@ -40,7 +40,7 @@
             <a-tag :color="record.scope === 'ALL' ? 'blue' : 'orange'">{{ record.scopeLabel }}</a-tag>
           </template>
           <template v-if="column.dataIndex === 'reward'">
-            <span style="color: #F39C12; font-weight: 500;">{{ record.seedsReward }} Seeds</span>
+            <span style="color: #F39C12; font-weight: 500;">{{ record.seedsReward }} 积分</span>
           </template>
           <template v-if="column.dataIndex === 'progress'">
             <a-progress :percent="record.progress" size="small" :stroke-color="'#6B463C'" />
@@ -76,7 +76,7 @@
             </a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="奖励 Seeds"><a-input-number v-model:value="form.seedsReward" :min="0" style="width: 100%" /></a-form-item>
+            <a-form-item label="奖励积分"><a-input-number v-model:value="form.seedsReward" :min="0" style="width: 100%" /></a-form-item>
           </a-col>
           <a-col :span="8">
             <a-form-item label="参与名额"><a-input-number v-model:value="form.maxParticipants" :min="1" style="width: 100%" /></a-form-item>

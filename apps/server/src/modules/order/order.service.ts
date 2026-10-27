@@ -19,7 +19,7 @@ export class OrderService {
    * C=课程 M=会员卡 W=候补
    */
   async generateOrderNo(type: 'COURSE' | 'MEMBER_CARD' | 'WAITLIST'): Promise<string> {
-    return generateOrderNo(this.redis, type)
+    return generateOrderNo(this.redis, type, this.prisma)
   }
 
   /**
@@ -82,15 +82,34 @@ export class OrderService {
     const where: any = { userId }
     if (status) where.status = status
 
-    return this.prisma.order.findMany({
+    const orders = await this.prisma.order.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       include: {
         course: {
-          select: { title: true, coverImage: true, startDate: true, startTime: true, endTime: true },
+          select: {
+            title: true,
+            coverImage: true,
+            startDate: true,
+            startTime: true,
+            endTime: true,
+            venue: { select: { name: true } },
+            trainer: { select: { displayName: true } },
+          },
         },
+        community: { select: { id: true, name: true, yearlyFee: true } },
       },
     })
+
+    // 待支付订单返回支付截止时间，前端据此倒计时；超时后由定时任务取消
+    const lockMs = SEAT_LOCK_DURATION_MINUTES * 60 * 1000
+    return orders.map((order) => ({
+      ...order,
+      expireAt:
+        order.status === 'PENDING_PAYMENT'
+          ? new Date(order.createdAt.getTime() + lockMs)
+          : null,
+    }))
   }
 
   /**
@@ -113,6 +132,7 @@ export class OrderService {
       include: {
         user: { select: { phone: true, nickname: true } },
         course: { select: { title: true, startDate: true } },
+        community: { select: { name: true, yearlyFee: true } },
       },
     })
   }
@@ -121,9 +141,10 @@ export class OrderService {
    * 取消订单 / 用户主动退款
    * - 待支付（PENDING_PAYMENT）：取消占位，回补预扣积分与预占代金券；不涉及退款，也不减名额
    *   （未支付订单从未占用 currentEnrolled，占位仅体现在待支付计数中）
-   * - 已支付（PAID/COMPLETED）：走标准退款链路，名额释放与候补递补由退款成功回调统一处理
+   * - 已支付且课程未开始（PAID）：走标准退款链路，名额释放与候补递补由退款成功回调统一处理
    *   · 课程订单：按课程 refundRules 阶梯计算退款并原路退回微信
    *   · 候补订单：全额退回微信
+   * - 已完成（COMPLETED）：课程已结束，关闭用户自助退款；客诉退款由后台强制退款处理
    */
   async cancelOrder(orderId: string, userId: string, reason: string) {
     const order = await this.prisma.order.findFirst({
@@ -132,17 +153,32 @@ export class OrderService {
     })
     if (!order) throw new BusinessException('订单不存在', 4004)
 
-    if (order.status === 'PAID' || order.status === 'COMPLETED') {
+    if (order.status === 'COMPLETED') {
+      throw new BusinessException(
+        '课程已完成，不支持自助退款；如有问题请联系客服或线下工作人员',
+        4007,
+      )
+    }
+
+    if (order.status === 'PAID') {
       if (order.orderType === 'WAITLIST') {
-        return this.payment.refundFull(orderId, reason || '用户取消候补')
+        const result = await this.payment.refundFull(orderId, reason || '用户取消候补')
+        // 立即置为已退款：退款回调到达前若有人退出释放名额，
+        // 递补只能处理 WAITING 条目，不能把正在退款的候补转正占座。
+        await this.prisma.waitlistEntry.updateMany({
+          where: { orderId, status: { in: ['WAITING', 'PENDING_PAYMENT'] } },
+          data: { status: 'REFUNDED', refundedAt: new Date() },
+        })
+        return result
       }
       return this.payment.refundOrder(orderId, reason)
     }
 
     if (order.status === 'PENDING_PAYMENT') {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.order.update({
-          where: { id: orderId },
+      const cancelled = await this.prisma.$transaction(async (tx) => {
+        // 条件更新：若支付回调已抢先置为 PAID，则不再取消、不重复回补积分与券
+        const res = await tx.order.updateMany({
+          where: { id: orderId, status: 'PENDING_PAYMENT' },
           data: {
             status: 'CANCELLED',
             cancelTime: new Date(),
@@ -150,6 +186,15 @@ export class OrderService {
             refundAmount: 0,
           },
         })
+        if (!res.count) return false
+
+        // 候补待支付订单：同步释放候补条目
+        if (order.orderType === 'WAITLIST') {
+          await tx.waitlistEntry.updateMany({
+            where: { orderId, status: 'PENDING_PAYMENT' },
+            data: { status: 'CANCELLED' },
+          })
+        }
 
         // 回补预扣积分（enroll 下单时以负向流水预扣）
         if (Number(order.pointsDeduction) > 0) {
@@ -178,7 +223,13 @@ export class OrderService {
             data: { status: 'UNUSED', usedAt: null },
           })
         }
+
+        return true
       })
+
+      if (!cancelled) {
+        throw new BusinessException('订单状态已变化，请刷新后重试', 4007)
+      }
 
       if (order.courseId) {
         await this.redis.unlockSeat(order.courseId, userId).catch(() => undefined)

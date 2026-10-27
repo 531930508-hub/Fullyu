@@ -26,9 +26,9 @@
       <a-col :xs="12" :md="6">
         <a-card>
           <a-statistic
-            v-if="priceVisible"
+            v-if="hasAnyPrice"
             title="采购总额"
-            :value="totalAmount"
+            :value="visibleAmount"
             :precision="2"
             prefix="¥"
           />
@@ -43,7 +43,7 @@
           <a-select-option v-for="(v, k) in PO_STATUS_META" :key="k" :value="k">{{ v.text }}</a-select-option>
         </a-select>
         <a-select v-model:value="query.buyerId" style="width: 180px" placeholder="全部采购方" allow-clear @change="load">
-          <a-select-option v-for="o in buyerOrgs" :key="o.id" :value="o.id">{{ o.shortName }}</a-select-option>
+          <a-select-option v-for="o in allOrgs" :key="o.id" :value="o.id">{{ o.shortName }}</a-select-option>
         </a-select>
         <a-input-search
           v-model:value="query.keyword"
@@ -73,7 +73,10 @@
             {{ record.supplierName }}
           </template>
           <template v-else-if="column.key === 'items'">{{ record.items.length }} 项</template>
-          <template v-else-if="column.key === 'amount'">¥{{ money(record.totalAmount) }}</template>
+          <template v-else-if="column.key === 'amount'">
+            <template v-if="record.priceVisible">¥{{ money(record.totalAmount) }}</template>
+            <span v-else class="sub-text">—</span>
+          </template>
           <template v-else-if="column.key === 'status'">
             <a-tag :color="PO_STATUS_META[record.status as PurchaseOrderStatus].color">
               {{ PO_STATUS_META[record.status as PurchaseOrderStatus].text }}
@@ -117,15 +120,15 @@
         <a-row :gutter="16">
           <a-col :span="8">
             <a-form-item label="采购方" required>
-              <a-select v-model:value="form.buyerId">
-                <a-select-option v-for="o in buyerOrgs" :key="o.id" :value="o.id">{{ o.shortName }}</a-select-option>
+              <a-select v-model:value="form.buyerId" @change="onBuyerChange">
+                <a-select-option v-for="o in creatableOrgs" :key="o.id" :value="o.id">{{ o.shortName }}</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
           <a-col :span="8">
             <a-form-item label="供货方" required>
-              <a-select v-model:value="form.supplierType" @change="form.supplierId = undefined">
-                <a-select-option v-for="(t, k) in SUPPLIER_TYPE_NAMES" :key="k" :value="k">{{ t }}</a-select-option>
+              <a-select v-model:value="form.supplierType" @change="onSupplierChange">
+                <a-select-option v-for="(t, k) in allowedSupplierTypes" :key="k" :value="k">{{ t }}</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
@@ -138,6 +141,15 @@
             </a-form-item>
           </a-col>
         </a-row>
+
+        <a-alert
+          v-if="!isHqBuyer"
+          type="info"
+          show-icon
+          style="margin-bottom: 16px"
+          message="门店/分公司只能向总部统一采购"
+          description="供货价与单价由总部统一维护，这里只需填写采购数量。"
+        />
 
         <a-form-item label="采购明细">
           <div v-for="(line, i) in form.items" :key="i" class="po-line">
@@ -152,14 +164,15 @@
             />
             <a-input-number v-model:value="line.qty" :min="1" :precision="0" placeholder="数量" style="width: 100px" />
             <a-input-number
-              v-if="priceVisible"
+              v-if="showFormPrice"
               v-model:value="line.price"
               :min="0"
               :precision="2"
               placeholder="单价"
               style="width: 120px"
+              :disabled="!canEditFormPrice"
             />
-            <span v-if="priceVisible" class="po-cell">小计 ¥{{ money((line.qty || 0) * (line.price || 0)) }}</span>
+            <span v-if="showFormPrice" class="po-cell">小计 ¥{{ money((line.qty || 0) * (line.price || 0)) }}</span>
             <a class="danger" @click="form.items.splice(i, 1)">移除</a>
           </div>
           <a-button block type="dashed" @click="addLine">+ 添加商品</a-button>
@@ -172,13 +185,13 @@
             </a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item v-if="priceVisible" label="合计金额">
+            <a-form-item v-if="showFormPrice" label="合计金额">
               <a-input :value="`¥${money(formAmount)}`" disabled />
             </a-form-item>
           </a-col>
         </a-row>
 
-        <a-alert v-if="priceVisible" type="info" show-icon :message="flowHint" />
+        <a-alert v-if="showFormPrice" type="info" show-icon :message="flowHint" />
       </a-form>
     </a-modal>
 
@@ -207,8 +220,14 @@
           :pagination="false"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'price'">¥{{ money(record.price) }}</template>
-            <template v-else-if="column.key === 'amount'">¥{{ money(record.amount) }}</template>
+            <template v-if="column.key === 'price'">
+              <template v-if="current?.priceVisible">¥{{ money(record.price) }}</template>
+              <span v-else class="sub-text">—</span>
+            </template>
+            <template v-else-if="column.key === 'amount'">
+              <template v-if="current?.priceVisible">¥{{ money(record.amount) }}</template>
+              <span v-else class="sub-text">—</span>
+            </template>
             <template v-else-if="column.key === 'received'">
               <span :class="{ done: record.receivedQty >= record.qty }">{{ record.receivedQty }}/{{ record.qty }}</span>
             </template>
@@ -240,8 +259,8 @@ import {
   updatePurchaseOrder,
 } from '@/api/scm'
 import type { PurchaseOrder, ScmProduct } from '@/api/scm'
-import { listOrgOptions } from '@/api/org'
-import type { OrgOption } from '@/api/org'
+import { listOrgs } from '@/api/org'
+import type { OrgNode } from '@/api/org'
 import { getInstance, previewFlowRule } from '@/api/approval'
 import type { ApprovalInstance } from '@/api/approval'
 import ApprovalTimeline from '@/components/ApprovalTimeline.vue'
@@ -251,15 +270,19 @@ import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
 const priceVisible = computed(() => auth.hasPerm('scm:po:price'))
 
-const buyerOrgs = ref<OrgOption[]>([])
-const orgName = (id: string) => buyerOrgs.value.find((o) => o.id === id)?.shortName ?? id
+const allOrgs = ref<OrgNode[]>([])
+const orgName = (id: string) => allOrgs.value.find((o) => o.id === id)?.shortName ?? id
 
 const list = ref<PurchaseOrder[]>([])
 const loading = ref(false)
 const query = reactive<{ status?: PurchaseOrderStatus; buyerId?: string; keyword?: string }>({})
 
 const countOf = (status: PurchaseOrderStatus) => list.value.filter((o) => o.status === status).length
-const totalAmount = computed(() => list.value.reduce((s, o) => s + o.totalAmount, 0))
+/** 汇总只看得到金额的单据，对外采购单在无权限时不计入 */
+const hasAnyPrice = computed(() => list.value.some((o) => o.priceVisible))
+const visibleAmount = computed(() =>
+  list.value.filter((o) => o.priceVisible).reduce((s, o) => s + o.totalAmount, 0),
+)
 
 const columns = computed(() =>
   [
@@ -267,8 +290,8 @@ const columns = computed(() =>
     { title: '采购方', key: 'buyer', width: 120 },
     { title: '供货方', key: 'supplier', width: 220 },
     { title: '明细', key: 'items', width: 70 },
-    // 金额属敏感字段，无 scm:po:price 时整列不渲染
-    ...(priceVisible.value ? [{ title: '金额', key: 'amount', width: 110 }] : []),
+    // 向总部采购的单据金额对采购方可见，对外采购仍按权限裁剪
+    { title: '金额', key: 'amount', width: 110 },
     { title: '申请人', dataIndex: 'createdByName', width: 100 },
     { title: '状态', key: 'status', width: 180 },
     { title: '提交时间', key: 'createdAt', width: 140 },
@@ -276,20 +299,14 @@ const columns = computed(() =>
   ],
 )
 
-const itemColumns = computed(() =>
-  [
-    { title: '商品', dataIndex: 'name' },
-    { title: '规格', dataIndex: 'spec', width: 130 },
-    { title: '数量', dataIndex: 'qty', width: 70 },
-    ...(priceVisible.value
-      ? [
-          { title: '单价', key: 'price', width: 90 },
-          { title: '小计', key: 'amount', width: 100 },
-        ]
-      : []),
-    { title: '已收', key: 'received', width: 80 },
-  ],
-)
+const itemColumns = [
+  { title: '商品', dataIndex: 'name' },
+  { title: '规格', dataIndex: 'spec', width: 130 },
+  { title: '数量', dataIndex: 'qty', width: 70 },
+  { title: '单价', key: 'price', width: 90 },
+  { title: '小计', key: 'amount', width: 100 },
+  { title: '已收', key: 'received', width: 80 },
+]
 
 async function load() {
   loading.value = true
@@ -335,18 +352,87 @@ const form = reactive({
 
 const formAmount = computed(() => sumPurchaseAmount(form.items))
 
+/** 总部节点可对外采购；门店与分公司只能向总部订货 */
+function isHqOrg(org?: OrgNode | null) {
+  return org?.type === 'GROUP' || org?.type === 'DEPT'
+}
+
+const selectedBuyer = computed(() => allOrgs.value.find((o) => o.id === form.buyerId))
+const isHqBuyer = computed(() => isHqOrg(selectedBuyer.value))
+
+/** 可发起采购的组织；重新提交时把原采购方补进来，避免单子被数据范围收窄后选不到 */
+const creatableOrgs = computed(() => {
+  const rows = allOrgs.value.filter((o) => o.canPurchase)
+  const original = editing.value
+    ? allOrgs.value.find((o) => o.id === editing.value!.buyerId)
+    : null
+  if (original && !rows.some((o) => o.id === original.id)) rows.unshift(original)
+  return rows
+})
+
+/** 只有总部对外采购时才能改实价，其余单价一律用档案价锁定 */
+const canEditFormPrice = computed(
+  () => priceVisible.value && isHqBuyer.value && form.supplierType === 'EXTERNAL',
+)
+
+/** 向总部采购时展示锁定后的供货价，方便申请人核对金额 */
+const showFormPrice = computed(() => form.supplierType === 'HQ' || canEditFormPrice.value)
+
+const allowedSupplierTypes = computed<Partial<Record<PurchaseSupplierType, string>>>(() =>
+  isHqBuyer.value ? SUPPLIER_TYPE_NAMES : { HQ: SUPPLIER_TYPE_NAMES.HQ },
+)
+
+function basePriceOf(product: ScmProduct) {
+  if (form.supplierType === 'HQ') return product.supplyPrice
+  return canEditFormPrice.value ? (product.purchasePrice ?? 0) : 0
+}
+
+/** 切换采购方/供货方后，把明细价格重算成当前口径 */
+function recalcLinePrices() {
+  for (const line of form.items) {
+    const hit = products.value.find((p) => p.id === line.productId)
+    if (hit) line.price = basePriceOf(hit)
+  }
+}
+
+function onBuyerChange() {
+  if (!isHqBuyer.value && form.supplierType !== 'HQ') {
+    form.supplierType = 'HQ'
+    form.supplierId = undefined
+  }
+  recalcLinePrices()
+  previewFlow()
+}
+
+function onSupplierChange() {
+  form.supplierId = undefined
+  recalcLinePrices()
+  previewFlow()
+}
+
 function openCreate(row?: PurchaseOrder) {
   editing.value = row ?? null
+  const defaultBuyer =
+    creatableOrgs.value.find((o) => o.id === auth.org?.id) ?? creatableOrgs.value[0]
+  const buyerId = row?.buyerId ?? defaultBuyer?.id ?? ''
+  const buyer = allOrgs.value.find((o) => o.id === buyerId)
+  const hqNode = isHqOrg(buyer)
+  // 门店/分公司重新提交历史外部采购单时，只能改成向总部采购
+  const supplierType: PurchaseSupplierType = hqNode
+    ? (row?.supplierType ?? 'EXTERNAL')
+    : 'HQ'
   Object.assign(form, {
-    buyerId: row?.buyerId ?? auth.org?.id ?? buyerOrgs.value[0]?.id ?? '',
-    supplierType: row?.supplierType ?? 'EXTERNAL',
-    supplierId: row?.supplierId ?? undefined,
+    buyerId,
+    supplierType,
+    supplierId: supplierType === 'EXTERNAL' ? (row?.supplierId ?? undefined) : undefined,
     remark: row?.remark ?? '',
     items: row
       ? row.items.map((it) => ({ productId: it.productId, qty: it.qty, price: it.price }))
       : [],
   })
   if (!form.items.length) addLine()
+  // 重新提交的历史单据可能带旧价，按当前口径覆盖一次
+  if (!canEditFormPrice.value) recalcLinePrices()
   createOpen.value = true
   previewFlow()
 }
@@ -355,10 +441,10 @@ function addLine() {
   form.items.push({ productId: '', qty: 1, price: 0 })
 }
 
-/** 选中商品后带出档案里的采购价，避免每次手填 */
+/** 选中商品后带出正确口径的价格：总部供货价固定，对外采购价需权限才可改 */
 function onProductChange(line: PoLine) {
   const hit = products.value.find((p) => p.id === line.productId)
-  if (hit && !line.price) line.price = hit.purchasePrice
+  if (hit) line.price = basePriceOf(hit)
   previewFlow()
 }
 
@@ -373,7 +459,7 @@ function previewFlow() {
       flowHint.value = '填写明细后可预览命中的审批流程'
       return
     }
-    const org = buyerOrgs.value.find((o) => o.id === form.buyerId)
+    const org = allOrgs.value.find((o) => o.id === form.buyerId)
     try {
       const rule = await previewFlowRule({
         bizType: 'PURCHASE_ORDER',
@@ -391,6 +477,8 @@ function previewFlow() {
 
 async function submit() {
   if (!form.buyerId) return message.warning('请选择采购方')
+  if (!isHqBuyer.value && form.supplierType !== 'HQ')
+    return message.warning('门店/分公司只能向总部统一采购')
   if (form.supplierType === 'EXTERNAL' && !form.supplierId) return message.warning('请选择供应商')
   const lines = form.items.filter((it) => it.productId && it.qty > 0)
   if (!lines.length) return message.warning('请至少添加一行采购明细')
@@ -402,11 +490,11 @@ async function submit() {
     supplierType: form.supplierType,
     supplierId: form.supplierType === 'EXTERNAL' ? form.supplierId : undefined,
     remark: form.remark,
-    // 无价格权限时不报单价，由后端按商品档案的采购价兜底
+    // 门店向总部采购的单价由总部锁定，只有总部对外采购才上报实价
     items: lines.map((it) => ({
       productId: it.productId,
       qty: it.qty,
-      price: priceVisible.value ? it.price : undefined,
+      price: canEditFormPrice.value ? it.price : undefined,
     })),
   }
 
@@ -470,11 +558,11 @@ async function openDetail(row: PurchaseOrder) {
 
 onMounted(async () => {
   const [orgs, prods, sups] = await Promise.allSettled([
-    listOrgOptions({ purchase: 1 }),
+    listOrgs(),
     listProducts({ enabled: true }),
     listSuppliers(),
   ])
-  if (orgs.status === 'fulfilled') buyerOrgs.value = orgs.value
+  if (orgs.status === 'fulfilled') allOrgs.value = orgs.value
   if (prods.status === 'fulfilled') products.value = prods.value
   if (sups.status === 'fulfilled') {
     supplierOptions.value = sups.value

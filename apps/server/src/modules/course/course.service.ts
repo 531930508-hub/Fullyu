@@ -1,6 +1,13 @@
 import { Injectable, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../common/prisma.service'
 import { CourseStatus, CourseType, ScheduleType } from '@prisma/client'
+import {
+  courseEndAt,
+  courseStartAt,
+  decorateCourseLifecycle,
+  isCourseDiscoverable,
+  resolveCourseLifecycle,
+} from '@fullyu/shared'
 import { SettlementService } from '../settlement/settlement.service'
 
 @Injectable()
@@ -51,28 +58,31 @@ export class CourseService {
 
     const orderBy: any = sortPrice ? { originalPrice: sortPrice } : { startDate: 'asc' }
 
-    const [items, total] = await Promise.all([
-      this.prisma.course.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: {
-          trainer: { select: { displayName: true, avatar: true, level: true } },
-          venue: { select: { name: true, address: true } },
-        },
-      }),
-      this.prisma.course.count({ where }),
-    ])
+    // 已结束课程不进入发现流（列表页、首页）。
+    // 结束时刻由 startDate/endDate + startTime/endTime 推导，无法在数据库层精确比较，
+    // 因此在服务端过滤后再分页，保证 totalPages 与用户实际看到的一致。
+    const rows = await this.prisma.course.findMany({
+      where,
+      orderBy,
+      include: {
+        trainer: { select: { displayName: true, avatar: true, level: true } },
+        venue: { select: { name: true, address: true } },
+      },
+    })
+    const visible = rows.filter((course) => isCourseDiscoverable(course, now))
+    const total = visible.length
+    const items = visible
+      .slice((page - 1) * pageSize, page * pageSize)
+      .map((course) => decorateCourseLifecycle(course, now))
 
     return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) }
   }
 
   /**
-   * 获取课程详情
+   * 获取课程详情：已结束课程仍可打开（只读），但状态与报名入口由 phase 决定
    */
   async findById(id: string) {
-    return this.prisma.course.findUnique({
+    const course = await this.prisma.course.findUnique({
       where: { id },
       include: {
         trainer: true,
@@ -81,6 +91,7 @@ export class CourseService {
         memberDiscounts: true,
       },
     })
+    return course ? decorateCourseLifecycle(course) : null
   }
 
   /** 排期方式：前端值 → 数据库枚举（缺省兜底，非法值报错） */
@@ -245,8 +256,16 @@ export class CourseService {
   /**
    * 后台课程列表（全部状态，可分页/过滤）
    */
-  async adminList(query: { page?: number; pageSize?: number; status?: string; keyword?: string; startDateFrom?: string; startDateTo?: string }) {
-    const { page = 1, pageSize = 10, status, keyword, startDateFrom, startDateTo } = query
+  async adminList(query: {
+    page?: number
+    pageSize?: number
+    status?: string
+    phase?: string
+    keyword?: string
+    startDateFrom?: string
+    startDateTo?: string
+  }) {
+    const { page = 1, pageSize = 10, status, phase, keyword, startDateFrom, startDateTo } = query
     const where: any = {}
     if (status) where.status = status
     if (keyword) where.title = { contains: keyword }
@@ -255,19 +274,18 @@ export class CourseService {
       if (startDateFrom) where.startDate.gte = new Date(startDateFrom)
       if (startDateTo) where.startDate.lte = new Date(startDateTo)
     }
-    const [items, total] = await Promise.all([
-      this.prisma.course.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: {
-          trainer: { select: { displayName: true } },
-          venue: { select: { name: true } },
-        },
-      }),
-      this.prisma.course.count({ where }),
-    ])
+    const rows = await this.prisma.course.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        trainer: { select: { displayName: true } },
+        venue: { select: { name: true } },
+      },
+    })
+    const decorated = rows.map((course) => decorateCourseLifecycle(course))
+    const filtered = phase ? decorated.filter((course) => course.phase === phase) : decorated
+    const total = filtered.length
+    const items = filtered.slice((page - 1) * pageSize, page * pageSize)
     return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) }
   }
 
@@ -334,16 +352,10 @@ export class CourseService {
       await this.assertVenueAvailable(id, course)
     }
 
-    // 取消：课程开始日时已过拒绝（防止已完课课程被误取消；导致的退款/客诉风险很高）
+    // 取消：课程开始时刻已过拒绝（防止已完课课程被误取消；导致的退款/客诉风险很高）
     if (next === CourseStatus.CANCELLED) {
       const now = new Date()
-      const courseStart = new Date(course.startDate)
-      // 拼接开始时间，判断具体时刻是否已过
-      if (course.startTime) {
-        const [sh, sm] = String(course.startTime).split(':').map((v) => Number(v) || 0)
-        courseStart.setHours(sh, sm, 0, 0)
-      }
-      if (courseStart.getTime() <= now.getTime()) {
+      if (courseStartAt(course).getTime() <= now.getTime()) {
         throw new BadRequestException(
           '课程开始时间已过，不允许取消；如实际未成行请标为已结束或已过期',
         )
@@ -403,6 +415,59 @@ export class CourseService {
       }
       return updated
     })
+  }
+
+  /**
+   * 调整报名窗口（后台特殊处理）：
+   * - 传未来的 enrollEndAt：重新开放报名；若课程已开始，则自动成为「补报名」
+   * - 传 null：恢复默认截止（课程开始时刻）
+   * - 不能晚于课程结束时刻，已结束课程不允许再开放
+   */
+  async setEnrollmentWindow(
+    id: string,
+    enrollEndAt: string | null,
+    operator?: { operatorId?: string; operatorName?: string },
+  ) {
+    const course = await this.prisma.course.findUnique({ where: { id } })
+    if (!course) throw new BadRequestException('课程不存在')
+    if (course.status !== CourseStatus.PUBLISHED) {
+      throw new BadRequestException('仅已发布课程可调整报名窗口')
+    }
+    const now = new Date()
+    const endAt = courseEndAt(course)
+    if (now.getTime() >= endAt.getTime()) {
+      throw new BadRequestException('课程已结束，不能再开放报名；如需继续招生请复制课程重新排期')
+    }
+
+    let nextDeadline: Date | null = null
+    if (enrollEndAt) {
+      nextDeadline = new Date(enrollEndAt)
+      if (!Number.isFinite(nextDeadline.getTime())) {
+        throw new BadRequestException('报名截止时间格式不正确')
+      }
+      if (nextDeadline.getTime() <= now.getTime()) {
+        throw new BadRequestException('报名截止时间须晚于当前时间')
+      }
+      if (nextDeadline.getTime() > endAt.getTime()) {
+        throw new BadRequestException('报名截止时间不能晚于课程结束时间')
+      }
+    }
+
+    const updated = await this.prisma.course.update({
+      where: { id },
+      data: { enrollEndAt: nextDeadline },
+    })
+    const lifecycle = resolveCourseLifecycle(updated, now)
+    return {
+      ...updated,
+      phase: lifecycle.phase,
+      phaseLabel: lifecycle.phase === 'LATE_ENROLLING' ? '补报名中' : '报名中',
+      bookable: lifecycle.bookable,
+      startAt: lifecycle.startAt,
+      endAt: lifecycle.endAt,
+      enrollDeadline: lifecycle.enrollDeadline,
+      operator: operator?.operatorName ?? null,
+    }
   }
 
   /** 校验状态流转是否合法，非法则给出可读提示 */

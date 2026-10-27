@@ -21,9 +21,10 @@ export class CourseTasksService {
 
   /**
    * 每 5 分钟扫描：已发布且成团截止已过、报名人数不足的课程 → 自动取消
+   * @param courseId 仅处理指定课程（测试/人工单课补偿用；定时任务不传）
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
-  async cancelUnformedCourses() {
+  async cancelUnformedCourses(courseId?: string) {
     const now = new Date()
 
     // 查找已过成团截止且人数不足的已发布课程
@@ -31,6 +32,7 @@ export class CourseTasksService {
       where: {
         status: 'PUBLISHED',
         groupDeadline: { not: null, lt: now },
+        ...(courseId ? { id: courseId } : {}),
       },
     })
 

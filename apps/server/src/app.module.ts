@@ -29,6 +29,7 @@ import { FinanceModule } from './modules/finance/finance.module'
 import { BannerModule } from './modules/banner/banner.module'
 import { TimeDiscountModule } from './modules/time-discount/time-discount.module'
 import { CommunityModule } from './modules/community/community.module'
+import { ShareModule } from './modules/share/share.module'
 import { PrismaModule } from './common/prisma.module'
 import { RedisModule } from './common/redis.module'
 import { PasswordPolicyModule } from './common/password-policy.service'
@@ -100,6 +101,7 @@ if (SCHEDULER_DISABLED) {
     BannerModule,
     TimeDiscountModule,
     CommunityModule,
+    ShareModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

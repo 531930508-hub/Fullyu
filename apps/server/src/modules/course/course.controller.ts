@@ -15,6 +15,7 @@ export class CourseController {
     @Query('page') page?: number,
     @Query('pageSize') pageSize?: number,
     @Query('status') status?: string,
+    @Query('phase') phase?: string,
     @Query('keyword') keyword?: string,
     @Query('startDateFrom') startDateFrom?: string,
     @Query('startDateTo') startDateTo?: string,
@@ -23,6 +24,7 @@ export class CourseController {
       page: page ? Number(page) : 1,
       pageSize: pageSize ? Number(pageSize) : 10,
       status,
+      phase,
       keyword,
       startDateFrom,
       startDateTo,
@@ -77,6 +79,20 @@ export class CourseController {
       operatorId: req.user?.adminId,
       operatorName: req.user?.username,
       source: 'COURSE_PAGE',
+    })
+  }
+
+  @Put(':id/enrollment-window')
+  @AdminAuth('course:update')
+  @ApiOperation({ summary: '调整报名窗口（开放补报名 / 恢复默认截止）' })
+  async setEnrollmentWindow(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: { enrollEndAt?: string | null },
+  ) {
+    return this.courseService.setEnrollmentWindow(id, body?.enrollEndAt ?? null, {
+      operatorId: req.user?.adminId,
+      operatorName: req.user?.username,
     })
   }
 

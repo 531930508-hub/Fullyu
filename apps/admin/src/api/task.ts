@@ -20,7 +20,7 @@ export function cancelTask(id: string) {
   return post(`/tasks/${id}/cancel`)
 }
 
-/** 审核完成任务（发放 Seeds） */
+/** 审核完成任务（发放积分） */
 export function completeTaskClaim(claimId: string) {
   return post(`/tasks/claims/${claimId}/complete`)
 }

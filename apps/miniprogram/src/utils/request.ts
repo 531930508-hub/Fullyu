@@ -7,12 +7,17 @@
  */
 
 // 后端基础地址：mp-weixin 需完整域名并在小程序后台配置合法域名；H5 可走相对路径
-// 测试阶段指向测试服务器（http 仅限开发者工具勾选「不校验合法域名」）；正式发布需替换为 https 备案域名
-let baseUrl = 'http://120.55.36.3/api/v1'
+// 小程序真机/体验版只允许 HTTPS 合法域名，统一走测试服务器域名
+let baseUrl = 'https://test-zaichang.fullyu.cn/api/v1'
 // #ifdef H5
 baseUrl = '/api/v1'
 // #endif
 export const BASE_URL = baseUrl
+
+/** 请求层通用提示：直接读本地语言，避免与 store / locale 形成循环依赖 */
+function uiText(zh: string, en: string): string {
+  return uni.getStorageSync('language') === 'en' ? en : zh
+}
 
 /** 后端统一响应结构 */
 export interface ApiEnvelope<T = any> {
@@ -39,7 +44,7 @@ function goLogin() {
   uni.removeStorageSync('userInfo')
   if (redirecting) return
   redirecting = true
-  uni.showToast({ title: '登录已过期，请重新登录', icon: 'none' })
+  uni.showToast({ title: uiText('登录已过期，请重新登录', 'Session expired. Please log in again.'), icon: 'none' })
   setTimeout(() => {
     redirecting = false
   }, 1500)
@@ -77,12 +82,12 @@ export function request<T = any>(options: RequestOptions): Promise<T> {
           return
         }
         if (status === 403) {
-          if (!silent) uni.showToast({ title: '没有权限执行该操作', icon: 'none' })
-          reject(new Error('无权限'))
+          if (!silent) uni.showToast({ title: uiText('没有权限执行该操作', 'You do not have permission to do that.'), icon: 'none' })
+          reject(new Error(uiText('无权限', 'No permission')))
           return
         }
         if (status < 200 || status >= 300) {
-          const msg = (body && body.message) || `请求失败(${status})`
+          const msg = (body && body.message) || uiText(`请求失败(${status})`, `Request failed (${status})`)
           if (!silent) uni.showToast({ title: msg, icon: 'none' })
           reject(new Error(msg))
           return
@@ -101,12 +106,12 @@ export function request<T = any>(options: RequestOptions): Promise<T> {
         }
 
         // 业务错误
-        const msg = body.message || '请求失败'
+        const msg = body.message || uiText('请求失败', 'Request failed')
         if (!silent) uni.showToast({ title: msg, icon: 'none' })
         reject(new Error(msg))
       },
       fail: (err) => {
-        if (!silent) uni.showToast({ title: '网络异常，请稍后重试', icon: 'none' })
+        if (!silent) uni.showToast({ title: uiText('网络异常，请稍后重试', 'Network error. Please try again.'), icon: 'none' })
         reject(err)
       },
     })
@@ -145,15 +150,15 @@ export function uploadFile<T = any>(url: string, filePath: string, name = 'file'
           if (body.code === 0) {
             resolve(body.data)
           } else {
-            uni.showToast({ title: body.message || '上传失败', icon: 'none' })
-            reject(new Error(body.message || '上传失败'))
+            uni.showToast({ title: body.message || uiText('上传失败', 'Upload failed'), icon: 'none' })
+            reject(new Error(body.message || uiText('上传失败', 'Upload failed')))
           }
         } catch (e) {
           reject(e)
         }
       },
       fail: (err) => {
-        uni.showToast({ title: '上传失败', icon: 'none' })
+        uni.showToast({ title: uiText('上传失败', 'Upload failed'), icon: 'none' })
         reject(err)
       },
     })

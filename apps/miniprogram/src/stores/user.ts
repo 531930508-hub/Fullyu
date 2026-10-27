@@ -12,7 +12,9 @@ export const useUserStore = defineStore('user', () => {
     avatar?: string
     isTrainer: boolean
   } | null>(null)
-  const language = ref<'zh' | 'en'>('zh')
+  // 语言在 store 创建时即从本地恢复，避免首屏 setup 早于 App.onLaunch 时读到默认中文。
+  const storedLanguage = uni.getStorageSync('language')
+  const language = ref<'zh' | 'en'>(storedLanguage === 'en' ? 'en' : 'zh')
   /**
    * 端内视角（Skool 式双视角）：
    * student = 课程视角（我想上什么课），trainer = 导师视角（经营我的社群）。
