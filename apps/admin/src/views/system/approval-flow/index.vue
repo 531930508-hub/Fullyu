@@ -97,7 +97,8 @@
               </template>
               <template v-else-if="column.key === 'createdAt'">{{ dt(record.createdAt) }}</template>
               <template v-else-if="column.key === 'action'">
-                <a @click="openDetail(record.id)">去审批</a>
+                <!-- 审批动作统一在待办中心完成：审批人可能没有审批记录权限，直接开详情会 403 -->
+                <a @click="goTodo(record.id)">去审批</a>
               </template>
             </template>
           </a-table>
@@ -305,6 +306,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import {
@@ -341,6 +343,12 @@ import { dt, money } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+const router = useRouter()
+
+/** 跳待办中心并直接打开对应审批详情（审批人不需要 flow:instance:view） */
+function goTodo(instanceId: string) {
+  router.push({ path: '/todos', query: { focus: `approval-${instanceId}` } })
+}
 const { approverOptions, load: loadApprovers, approverLabel, approverLabels } = useApprovers()
 
 /** 节点里存的审批人就是登录名（手机号），与当前登录人同一套标识 */

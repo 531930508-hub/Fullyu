@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common'
 import { AnalyticsService } from './analytics.service'
 import { AnalyticsController } from './analytics.controller'
-import { ApprovalModule } from '../approval/approval.module'
+import { TodoModule } from '../todo/todo.module'
 
-/** 首页工作台的「待我审批」直接复用审批引擎的待办判定，避开再写一份又走差 */
+/** 首页工作台的待办直接复用待办中心的聚合与权限裁剪，避免再写一份又走差 */
 @Module({
-  imports: [ApprovalModule],
+  imports: [TodoModule],
   controllers: [AnalyticsController],
   providers: [AnalyticsService],
 })

@@ -28,6 +28,17 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/dashboard/index.vue'),
         meta: { title: '工作台', icon: 'DashboardOutlined' },
       },
+      // 待办中心（审批 / 退款跟进 / 入群审核 / 库存预警）
+      {
+        path: 'todos',
+        name: 'TodoCenter',
+        component: () => import('@/views/todo/index.vue'),
+        meta: {
+          title: '待办中心',
+          icon: 'CheckSquareOutlined',
+          perm: ['flow:todo:view', 'order:view', 'community:view', 'scm:stock:view'],
+        },
+      },
       // 教务模块
       {
         path: 'education/trainers',

@@ -27,7 +27,11 @@
     <!-- 统计卡：只放「当下要不要动手」的数，存量指标不占首页 -->
     <a-row :gutter="24" style="margin-bottom: 24px">
       <a-col v-for="card in statCards" :key="card.key" :span="24 / statCards.length">
-        <a-card :loading="loading">
+        <a-card
+          :loading="loading"
+          :class="{ 'wb-stat-clickable': card.key === 'todo' && canOpenTodo }"
+          @click="card.key === 'todo' && canOpenTodo && router.push('/todos')"
+        >
           <a-statistic
             :title="card.title"
             :value="card.value"
@@ -115,16 +119,35 @@
 
       <!-- 待处理事项：所有人可见，条目本身按权限派生 -->
       <a-col :span="todoSpan">
-        <a-card title="待处理事项" :loading="loading">
+        <a-card :loading="loading">
+          <template #title>
+            <span>待处理事项</span>
+            <a
+              v-if="stats.todoCount && canOpenTodo"
+              class="wb-card-extra wb-card-link"
+              @click="router.push('/todos')"
+            >
+              去待办中心 →
+            </a>
+          </template>
           <a-empty v-if="!todoItems.length" description="暂无待处理事项" />
           <div v-for="item in todoItems" :key="item.id" class="wb-todo-row">
-            <div style="display: flex; align-items: center; gap: 8px">
+            <div style="display: flex; align-items: center; gap: 8px; min-width: 0">
               <a-badge :status="item.urgent ? 'error' : 'processing'" />
-              <span style="color: #4b3621">{{ item.text }}</span>
+              <a-tag
+                v-if="item.source !== 'SUMMARY'"
+                :color="sourceMeta(item.source).color"
+                style="margin-inline-end: 0"
+              >
+                {{ sourceMeta(item.source).text }}
+              </a-tag>
+              <span class="wb-todo-text" style="color: #4b3621">{{ item.text }}</span>
             </div>
             <a-space>
               <a-tag v-if="item.urgent" color="red">紧急</a-tag>
-              <a-button type="link" size="small" @click="handleTodo(item)">处理</a-button>
+              <a-button type="link" size="small" @click="handleTodo(item)">
+                {{ item.source === 'SUMMARY' ? '查看' : '处理' }}
+              </a-button>
             </a-space>
           </div>
         </a-card>
@@ -191,6 +214,7 @@ import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { workbench } from '@/api/analytics'
 import { useAuthStore } from '@/stores/auth'
+import { TODO_SOURCE_META, type TodoSource } from '@fullyu/shared'
 import dayjs, { type Dayjs } from 'dayjs'
 
 /**
@@ -203,6 +227,11 @@ import dayjs, { type Dayjs } from 'dayjs'
 const router = useRouter()
 const auth = useAuthStore()
 
+/** 没有任何一类待办权限时，统计卡不做成可点击，避免点进 403 */
+const canOpenTodo = computed(() =>
+  auth.hasAny(['flow:todo:view', 'order:view', 'community:view', 'scm:stock:view']),
+)
+
 const loading = ref(false)
 
 /** 后端声明的可渲染块，请求失败时全部关掉，页面退化成只剩统计卡骨架 */
@@ -211,6 +240,7 @@ const stats = ref({
   todayCourseCount: 0,
   todayCheckinCount: 0,
   myTodoCount: 0,
+  todoCount: 0,
   monthRevenue: null as number | null,
 })
 
@@ -261,11 +291,16 @@ const statCards = computed<StatCard[]>(() => {
     },
     {
       key: 'todo',
-      title: '待我审批',
-      value: stats.value.myTodoCount,
+      title: '待办事项',
+      value: stats.value.todoCount,
       suffix: '项',
-      color: stats.value.myTodoCount > 0 ? '#E74C3C' : '#8B7355',
-      sub: '当前节点指派到我名下的单据',
+      color: stats.value.todoCount > 0 ? '#E74C3C' : '#8B7355',
+      sub:
+        stats.value.myTodoCount > 0
+          ? `其中待我审批 ${stats.value.myTodoCount} 项，点击进入待办中心`
+          : canOpenTodo.value
+            ? '审批、退款、社群、库存统一处理'
+            : '当前账号没有待办处理权限',
     },
   ]
   if (blocks.value.revenue) {
@@ -291,7 +326,7 @@ const SLOT_PER_VENUE = 28
 const SLOT_BASE_MIN = 8 * 60 // 08:00
 
 const venueQuickView = ref<any[]>([])
-const todoItems = ref<{ id: string; text: string; urgent: boolean; link: string }[]>([])
+const todoItems = ref<{ id: string; source: string; text: string; urgent: boolean; link: string }[]>([])
 const todayCourses = ref<any[]>([])
 const recentOrders = ref<{ id: string; user: string; course: string; amount: number }[]>([])
 const stockAlerts = ref<any[]>([])
@@ -369,6 +404,7 @@ async function loadWorkbench() {
       todayCourseCount: data.stats?.todayCourseCount ?? 0,
       todayCheckinCount: data.stats?.todayCheckinCount ?? 0,
       myTodoCount: data.stats?.myTodoCount ?? 0,
+      todoCount: data.stats?.todoCount ?? 0,
       monthRevenue: data.stats?.monthRevenue ?? null,
     }
     venueQuickView.value = (data.venues || []).map((v: any) => ({
@@ -410,20 +446,18 @@ function waitedText(createdAt: string | null | undefined): string {
   return `${d}天${rh}小时`
 }
 
-/** 待办跳转目标页所需权限，避免点进去撞 403 */
-const TODO_PERM: Record<string, string> = {
-  approval: 'flow:todo:view',
-  refund: 'order:view',
-  stock: 'scm:stock:view',
+/** 待办来源标签：后端已按权限裁剪，前端只负责展示来源 */
+function sourceMeta(source: string) {
+  if (source === 'SUMMARY') return { text: '汇总', color: 'default' }
+  return TODO_SOURCE_META[source as TodoSource] ?? { text: source, color: 'default' }
 }
 
-function handleTodo(item: { id: string; link: string }) {
-  const perm = TODO_PERM[item.id]
-  if (perm && !auth.hasPerm(perm)) {
-    message.warning('你没有该单据的处理权限，请联系管理员')
-    return
-  }
-  router.push(item.link)
+/**
+ * 待办只跳待办中心：审批/入群在中心里直接处理，
+ * 退款跟进、库存补货再从详情跳到对应业务页。
+ */
+function handleTodo(item: { link: string }) {
+  router.push(item.link || '/todos')
 }
 </script>
 
@@ -431,8 +465,13 @@ function handleTodo(item: { id: string; link: string }) {
 .wb-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
 .wb-sub { font-size: 13px; color: #7D665C; }
 .wb-stat-sub { margin-top: 4px; font-size: 12px; color: #999; }
+.wb-stat-clickable { cursor: pointer; transition: box-shadow 0.2s; }
+.wb-stat-clickable:hover { box-shadow: 0 4px 12px rgba(107, 70, 60, 0.16); }
 .wb-card-extra { margin-left: 8px; font-size: 12px; font-weight: normal; color: #999; }
-.wb-todo-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f5f0eb; }
+.wb-card-link { color: #6B463C; cursor: pointer; }
+.wb-card-link:hover { color: #8B5A3C; }
+.wb-todo-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f5f0eb; }
+.wb-todo-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wb-order-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f5f0eb; }
 .venue-overview { display: flex; flex-direction: column; gap: 8px; }
 .venue-row { display: flex; align-items: center; gap: 12px; }

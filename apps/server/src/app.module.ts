@@ -24,6 +24,7 @@ import { RbacModule } from './modules/rbac/rbac.module'
 import { OrgModule } from './modules/org/org.module'
 import { DictModule } from './modules/dict/dict.module'
 import { ApprovalModule } from './modules/approval/approval.module'
+import { TodoModule } from './modules/todo/todo.module'
 import { ScmModule } from './modules/scm/scm.module'
 import { FinanceModule } from './modules/finance/finance.module'
 import { BannerModule } from './modules/banner/banner.module'
@@ -96,6 +97,7 @@ if (SCHEDULER_DISABLED) {
     OrgModule,
     DictModule,
     ApprovalModule,
+    TodoModule,
     ScmModule,
     FinanceModule,
     BannerModule,

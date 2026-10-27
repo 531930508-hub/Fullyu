@@ -8,12 +8,14 @@ export interface MenuLeaf {
   key: string
   title: string
   path: string
+  /** 图标名，对应 MainLayout 的 iconMap；不写用默认图标 */
+  icon?: string
   /** 任一命中即可见 */
   perm?: string[]
   /** 是否 Demo（mock 数据）阶段 */
   demo?: boolean
   /** 徽标类型，目前仅审批待办用 */
-  badge?: 'approvalPending'
+  badge?: 'approvalPending' | 'todoPending'
 }
 
 export interface MenuGroup {
@@ -32,7 +34,15 @@ export function isGroup(item: MenuItem): item is MenuGroup {
 }
 
 export const MENU_CONFIG: MenuItem[] = [
-  { key: 'dashboard', title: '工作台', path: '/dashboard' } as MenuLeaf & { icon?: string },
+  { key: 'dashboard', title: '工作台', path: '/dashboard', icon: 'DashboardOutlined' },
+  {
+    key: 'todos',
+    title: '待办中心',
+    path: '/todos',
+    icon: 'CheckSquareOutlined',
+    perm: ['flow:todo:view', 'order:view', 'community:view', 'scm:stock:view'],
+    badge: 'todoPending',
+  },
   {
     key: 'education',
     title: '教务管理',

@@ -258,9 +258,14 @@ export const BUILTIN_ROLES: BuiltinRoleDef[] = [
   {
     name: 'HQ_OPERATION',
     label: '总部运营',
-    description: '教务与运营销售全部权限，不涉及财务与进销存',
+    description: '教务与运营销售全部权限，不涉及财务与进销存；可处理指派给自己的审批待办',
     dataScope: 'ALL',
-    permissions: [...moduleAll('education', 'sales')],
+    permissions: [
+      ...moduleAll('education', 'sales'),
+      // 退款等流程会把「客服主管」节点指派给总部运营，没有待办权限就点不开、也表不了态
+      'flow:todo:view',
+      'flow:todo:approve',
+    ],
   },
   {
     name: 'BRANCH_MANAGER',

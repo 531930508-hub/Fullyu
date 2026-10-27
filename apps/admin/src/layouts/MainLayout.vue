@@ -30,8 +30,13 @@
             </a-menu-item>
           </a-sub-menu>
           <a-menu-item v-else :key="item.key" @click="go(item.path)">
-            <template #icon><DashboardOutlined /></template>
+            <template #icon><component :is="iconOf(item.icon)" /></template>
             <span>{{ item.title }}</span>
+            <a-badge
+              v-if="item.badge === 'todoPending' && todoPendingCount"
+              :count="todoPendingCount"
+              :offset="[6, -2]"
+            />
           </a-menu-item>
         </template>
       </a-menu>
@@ -67,8 +72,13 @@
             </a-menu-item>
           </a-sub-menu>
           <a-menu-item v-else :key="item.key" @click="goMobile(item.path)">
-            <template #icon><DashboardOutlined /></template>
+            <template #icon><component :is="iconOf(item.icon)" /></template>
             <span>{{ item.title }}</span>
+            <a-badge
+              v-if="item.badge === 'todoPending' && todoPendingCount"
+              :count="todoPendingCount"
+              :offset="[6, -2]"
+            />
           </a-menu-item>
         </template>
       </a-menu>
@@ -149,6 +159,7 @@ import {
   ShoppingCartOutlined,
   FundOutlined,
   ApartmentOutlined,
+  CheckSquareOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from '@ant-design/icons-vue'
@@ -156,7 +167,7 @@ import { DATA_SCOPES } from '@fullyu/shared'
 import { adminChangePassword } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { MENU_CONFIG, filterMenu, isGroup, type MenuItem } from '@/config/menu'
-import { getTodoCount } from '@/api/approval'
+import { getTodoCounts } from '@/api/todo'
 
 const router = useRouter()
 const currentRoute = useRoute()
@@ -176,24 +187,41 @@ const scopeLabel = computed(
 )
 
 /**
- * 审批待办红点。
+ * 待办红点。
  * 权限画像是首屏之后才到的，所以监听权限而不是只在 onMounted 拉一次；
  * 拉取失败静默处理，红点不重要，不能因为它挡住整个布局。
+ *
+ * pendingCount：审批中心「待我审批」数
+ * todoPendingCount：待办中心全部待办数（审批 + 退款跟进 + 入群审核 + 库存预警）
  */
 const pendingCount = ref(0)
+const todoPendingCount = ref(0)
+const hasTodoAccess = computed(() =>
+  auth.hasAny(['flow:todo:view', 'order:view', 'community:view', 'scm:stock:view']),
+)
 async function loadPendingCount() {
-  if (!auth.hasPerm('flow:todo:view')) {
+  if (!hasTodoAccess.value) {
     pendingCount.value = 0
+    todoPendingCount.value = 0
     return
   }
   try {
-    const res = await getTodoCount()
-    pendingCount.value = res.count
+    const res = await getTodoCounts()
+    pendingCount.value = res.approval
+    todoPendingCount.value = res.all
   } catch {
     pendingCount.value = 0
+    todoPendingCount.value = 0
   }
 }
-watch(() => auth.hasPerm('flow:todo:view'), loadPendingCount, { immediate: true })
+watch(hasTodoAccess, loadPendingCount, { immediate: true })
+
+/** 待办中心内处理完单据会派发事件，侧边栏立即扣数 */
+function onTodoUpdated() {
+  loadPendingCount()
+}
+onMounted(() => window.addEventListener('todo-updated', onTodoUpdated))
+onBeforeUnmount(() => window.removeEventListener('todo-updated', onTodoUpdated))
 
 const iconMap: Record<string, any> = {
   DashboardOutlined,
@@ -203,6 +231,7 @@ const iconMap: Record<string, any> = {
   ShoppingCartOutlined,
   FundOutlined,
   ApartmentOutlined,
+  CheckSquareOutlined,
 }
 function iconOf(name?: string) {
   return name ? iconMap[name] ?? SettingOutlined : SettingOutlined
@@ -228,8 +257,8 @@ watch(
   () => currentRoute.path,
   (path, from) => {
     syncMenuState(path)
-    // 从审批中心离开时刷一次，刚批完的单要立刻从红点里扣掉
-    if (from === '/system/approval-flow') loadPendingCount()
+    // 离开待办/审批页时刷一次，刚批完的单要立刻从红点里扣掉
+    if (from === '/todos' || from === '/system/approval-flow') loadPendingCount()
   },
   { immediate: true },
 )

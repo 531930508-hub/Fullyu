@@ -9,6 +9,7 @@
           <a-select-option value="PAID">已支付</a-select-option>
           <a-select-option value="PENDING_PAYMENT">待支付</a-select-option>
           <a-select-option value="COMPLETED">已完成</a-select-option>
+          <a-select-option value="REFUNDING">退款中</a-select-option>
           <a-select-option value="REFUNDED">已退款</a-select-option>
           <a-select-option value="CANCELLED">已取消</a-select-option>
         </a-select>
@@ -128,8 +129,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { adminListOrders, forceRefundOrder } from '@/api/order'
+
+const route = useRoute()
 
 const loading = ref(false)
 const searchText = ref('')
@@ -194,11 +198,24 @@ async function loadOrders() {
       keyword: searchText.value || undefined,
     })
     orders.value = (Array.isArray(data) ? data : []).map(mapOrder)
+    openFocusedOrder()
   } catch (e: any) {
     message.error(e?.message || '加载订单失败')
   } finally {
     loading.value = false
   }
+}
+
+/** 从待办中心「退款跟进」跳进来时，自动打开对应订单详情 */
+let focusHandled = false
+function openFocusedOrder() {
+  if (focusHandled) return
+  const focus = String(route.query.focus || '')
+  if (!focus) return
+  const hit = orders.value.find((o) => o.id === focus || o.orderNo === focus)
+  if (!hit) return
+  focusHandled = true
+  showOrderDetail(hit)
 }
 
 onMounted(loadOrders)
