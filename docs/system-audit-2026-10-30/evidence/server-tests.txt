@@ -1,0 +1,24 @@
+
+> @teahour/server@1.0.0 test /Users/th/Desktop/Full愈-时叙/apps/server
+> jest
+
+ts-jest[config] (WARN) 
+    The "ts-jest" config option "isolatedModules" is deprecated and will be removed in v30.0.0. Please use "isolatedModules: true" in /Users/th/Desktop/Full愈-时叙/apps/server/tsconfig.json instead, see https://www.typescriptlang.org/tsconfig/#isolatedModules
+  
+PASS src/admin/admin.spec.ts
+PASS src/orders/fulfillment.spec.ts
+PASS src/catalog/catalog.spec.ts
+PASS src/finance/finance.spec.ts
+PASS src/orders/orders.spec.ts
+PASS src/auth/auth.spec.ts
+PASS src/approvals/approvals.spec.ts
+PASS src/auth/wechat.spec.ts
+PASS src/api/hooks.spec.ts
+PASS src/auth/profile.spec.ts
+PASS src/hardware/integrations.spec.ts
+
+Test Suites: 11 passed, 11 total
+Tests:       102 passed, 102 total
+Snapshots:   0 total
+Time:        5.641 s, estimated 6 s
+Ran all test suites.

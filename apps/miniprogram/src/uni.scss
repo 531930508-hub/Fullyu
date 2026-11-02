@@ -1,0 +1,30 @@
+/* Full愈·时叙 顾客端设计变量。
+   与 teahour-app/web 的 styles.css / v7.css 保持一致；
+   页面样式统一在 styles/teahour.source.css 维护。 */
+$paper: #f6f4ef;
+$canvas: #eeece6;
+$card: #fffefa;
+$ink: #352f2b;
+$muted: #68625b;
+$line: #dedbd3;
+$line-soft: #e9e5dd;
+$wood: #694b3d;
+$accent: #a26843;
+$apricot: #f1deca;
+$sage: #dde5d9;
+$rose: #edd9cf;
+$lilac: #e5e0ee;
+$blue: #e0e9ed;
+$success: #46684f;
+$danger: #a34338;
+$warning: #86571d;
+
+/* 字体与 CSS 变量保持一致：界面无衬线、标题衬线、编码等宽。 */
+$font-ui: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+$font-display: Georgia, 'Times New Roman', 'Songti SC', 'STSong', 'Noto Serif SC', 'Source Han Serif SC', serif;
+$font-code: ui-monospace, Menlo, 'SF Mono', monospace;
+$font: $font-ui;
+$serif: $font-display;
+$mono: $font-code;
+$art-ink: #68370f;
+$art-cream: #f5f6ee;

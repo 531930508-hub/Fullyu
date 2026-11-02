@@ -1,0 +1,70 @@
+{
+  "name": "山野风物笺",
+  "trim_mm": [
+    65,
+    125
+  ],
+  "bleed_mm": 3,
+  "sides": 1,
+  "safe_margin_mm": 5,
+  "column_mm": [
+    7,
+    58
+  ],
+  "title_pt": 28,
+  "poem_pt": 8.6,
+  "body_pt": 8.4,
+  "body_leading_mm": 4.55,
+  "body_baseline_mm": 72.3,
+  "footer_rule_mm": 109.5,
+  "art_max_box_mm": [
+    18,
+    19
+  ],
+  "fonts": {
+    "hand": "LongCang-Regular",
+    "name": "STSongti-SC-Regular",
+    "sans": "PingFangSC-Regular"
+  },
+  "colors_cmyk": {
+    "paper": [
+      0,
+      0.008,
+      0.027,
+      0.016
+    ],
+    "ink": [
+      0,
+      0,
+      0,
+      0.9
+    ],
+    "body": [
+      0,
+      0,
+      0,
+      0.82
+    ],
+    "secondary": [
+      0,
+      0,
+      0,
+      0.67
+    ],
+    "accent": [
+      0,
+      0.42,
+      0.55,
+      0.37
+    ],
+    "rule": [
+      0,
+      0,
+      0,
+      0.25
+    ]
+  },
+  "copy_policy": "Preserve supplied copy. The Liuzhan ~12% value was confirmed by the user. Six-selection descriptions refer to the first six classic tea cocktails, excluding the two after-tea drinks.",
+  "art_policy": "AI-generated nature imagery illustrates poetic tasting associations, not an ingredient list.",
+  "status": "PASS: eight cards, final overview, layout guide and bleed sample rendered and reviewed; content, geometry, colors, page order and 300 dpi assets checked. Physical proof remains with printer."
+}

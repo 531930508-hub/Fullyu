@@ -1,0 +1,479 @@
+[
+  {
+    "text": "MONTEVEIL",
+    "font": "PingFangSC-Regular",
+    "size_pt": 5.8,
+    "x_mm": 10.0,
+    "baseline_mm": 10.0,
+    "width_mm": 17.358,
+    "role": "sans"
+  },
+  {
+    "text": "TEA / SPIRITS",
+    "font": "PingFangSC-Regular",
+    "size_pt": 5.4,
+    "x_mm": 77.477,
+    "baseline_mm": 10.0,
+    "width_mm": 17.523,
+    "role": "sans"
+  },
+  {
+    "text": "山的微醺",
+    "font": "LongCang-Regular",
+    "size_pt": 34,
+    "x_mm": 9.5,
+    "baseline_mm": 28.6,
+    "width_mm": 51.153,
+    "role": "hand"
+  },
+  {
+    "text": "茶",
+    "font": "PingFangSC-Regular",
+    "size_pt": 6.7,
+    "x_mm": 91.718,
+    "baseline_mm": 20.3,
+    "width_mm": 2.364,
+    "role": "sans"
+  },
+  {
+    "text": "与",
+    "font": "PingFangSC-Regular",
+    "size_pt": 6.7,
+    "x_mm": 91.718,
+    "baseline_mm": 24.0,
+    "width_mm": 2.364,
+    "role": "sans"
+  },
+  {
+    "text": "酒",
+    "font": "PingFangSC-Regular",
+    "size_pt": 6.7,
+    "x_mm": 91.718,
+    "baseline_mm": 27.7,
+    "width_mm": 2.364,
+    "role": "sans"
+  },
+  {
+    "text": "一片叶子的两种泡法，一杯茶，一杯酒。",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.5,
+    "x_mm": 10.5,
+    "baseline_mm": 37.4,
+    "width_mm": 49.544,
+    "role": "sans"
+  },
+  {
+    "text": "清",
+    "font": "LongCang-Regular",
+    "size_pt": 19.5,
+    "x_mm": 10.0,
+    "baseline_mm": 52.0,
+    "width_mm": 6.879,
+    "role": "hand"
+  },
+  {
+    "text": "壹",
+    "font": "PingFangSC-Regular",
+    "size_pt": 4.8,
+    "x_mm": 12.353,
+    "baseline_mm": 45.9,
+    "width_mm": 1.693,
+    "role": "sans"
+  },
+  {
+    "text": "气泡",
+    "font": "PingFangSC-Regular",
+    "size_pt": 6.5,
+    "x_mm": 10.783,
+    "baseline_mm": 58.0,
+    "width_mm": 4.833,
+    "role": "sans"
+  },
+  {
+    "text": "长饮",
+    "font": "PingFangSC-Regular",
+    "size_pt": 6.5,
+    "x_mm": 10.783,
+    "baseline_mm": 61.5,
+    "width_mm": 4.833,
+    "role": "sans"
+  },
+  {
+    "text": "敛馀红 × 微澜",
+    "font": "STSongti-SC-Regular",
+    "size_pt": 11,
+    "x_mm": 25.0,
+    "baseline_mm": 51,
+    "width_mm": 25.717,
+    "role": "name"
+  },
+  {
+    "text": "98",
+    "font": "Baskerville",
+    "size_pt": 10.5,
+    "x_mm": 91.225,
+    "baseline_mm": 50.9,
+    "width_mm": 3.775,
+    "role": "latin"
+  },
+  {
+    "text": "古树滇红 · 白酒苏打 · 约 7%",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.0,
+    "x_mm": 25.0,
+    "baseline_mm": 55.4,
+    "width_mm": 32.552,
+    "role": "sans"
+  },
+  {
+    "text": "浅金透粉。酸很轻，薯香与蜜甜跟在后面，不抢。",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.4,
+    "x_mm": 25.0,
+    "baseline_mm": 59.8,
+    "width_mm": 57.432,
+    "role": "sans"
+  },
+  {
+    "text": "鸡嘴白 × 雪落",
+    "font": "STSongti-SC-Regular",
+    "size_pt": 11,
+    "x_mm": 25.0,
+    "baseline_mm": 68,
+    "width_mm": 25.717,
+    "role": "name"
+  },
+  {
+    "text": "98",
+    "font": "Baskerville",
+    "size_pt": 10.5,
+    "x_mm": 91.225,
+    "baseline_mm": 67.9,
+    "width_mm": 3.775,
+    "role": "latin"
+  },
+  {
+    "text": "古树白茶 · 金汤力 · 约 8%",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.0,
+    "x_mm": 25.0,
+    "baseline_mm": 72.4,
+    "width_mm": 30.214,
+    "role": "sans"
+  },
+  {
+    "text": "凉的。奶香先到，气泡散开，收在一点清苦里。",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.4,
+    "x_mm": 25.0,
+    "baseline_mm": 76.8,
+    "width_mm": 54.822,
+    "role": "sans"
+  },
+  {
+    "text": "春风渡 × 流水",
+    "font": "STSongti-SC-Regular",
+    "size_pt": 11,
+    "x_mm": 25.0,
+    "baseline_mm": 85,
+    "width_mm": 25.717,
+    "role": "name"
+  },
+  {
+    "text": "98",
+    "font": "Baskerville",
+    "size_pt": 10.5,
+    "x_mm": 91.225,
+    "baseline_mm": 84.9,
+    "width_mm": 3.775,
+    "role": "latin"
+  },
+  {
+    "text": "普洱生茶 · 斯普利兹 · 约 8%",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.0,
+    "x_mm": 25.0,
+    "baseline_mm": 89.4,
+    "width_mm": 32.683,
+    "role": "sans"
+  },
+  {
+    "text": "青草的绿、一点石头的凉，花香在中段扬起来。",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.4,
+    "x_mm": 25.0,
+    "baseline_mm": 93.8,
+    "width_mm": 54.822,
+    "role": "sans"
+  },
+  {
+    "text": "落花游 × 酒肆",
+    "font": "STSongti-SC-Regular",
+    "size_pt": 11,
+    "x_mm": 25.0,
+    "baseline_mm": 102,
+    "width_mm": 25.717,
+    "role": "name"
+  },
+  {
+    "text": "98",
+    "font": "Baskerville",
+    "size_pt": 10.5,
+    "x_mm": 91.225,
+    "baseline_mm": 101.9,
+    "width_mm": 3.775,
+    "role": "latin"
+  },
+  {
+    "text": "普洱晒红 · 嗨棒 · 约 8%",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.0,
+    "x_mm": 25.0,
+    "baseline_mm": 106.4,
+    "width_mm": 27.744,
+    "role": "sans"
+  },
+  {
+    "text": "麦芽的暖，熟果的甜被气泡冲开，畅快两个字。",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.4,
+    "x_mm": 25.0,
+    "baseline_mm": 110.8,
+    "width_mm": 54.822,
+    "role": "sans"
+  },
+  {
+    "text": "浓",
+    "font": "LongCang-Regular",
+    "size_pt": 19.5,
+    "x_mm": 10.0,
+    "baseline_mm": 125.0,
+    "width_mm": 6.879,
+    "role": "hand"
+  },
+  {
+    "text": "贰",
+    "font": "PingFangSC-Regular",
+    "size_pt": 4.8,
+    "x_mm": 12.353,
+    "baseline_mm": 118.9,
+    "width_mm": 1.693,
+    "role": "sans"
+  },
+  {
+    "text": "慢酌",
+    "font": "PingFangSC-Regular",
+    "size_pt": 6.5,
+    "x_mm": 10.783,
+    "baseline_mm": 131.0,
+    "width_mm": 4.833,
+    "role": "sans"
+  },
+  {
+    "text": "短饮",
+    "font": "PingFangSC-Regular",
+    "size_pt": 6.5,
+    "x_mm": 10.783,
+    "baseline_mm": 134.5,
+    "width_mm": 4.833,
+    "role": "sans"
+  },
+  {
+    "text": "红泥醅 × 围炉",
+    "font": "STSongti-SC-Regular",
+    "size_pt": 11,
+    "x_mm": 25.0,
+    "baseline_mm": 124,
+    "width_mm": 25.717,
+    "role": "name"
+  },
+  {
+    "text": "98",
+    "font": "Baskerville",
+    "size_pt": 10.5,
+    "x_mm": 91.225,
+    "baseline_mm": 123.9,
+    "width_mm": 3.775,
+    "role": "latin"
+  },
+  {
+    "text": "古树熟茶 · 古典 · 约 25%",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.0,
+    "x_mm": 25.0,
+    "baseline_mm": 128.4,
+    "width_mm": 29.226,
+    "role": "sans"
+  },
+  {
+    "text": "入口绵。糖的暖推到舌根，咽下后茶慢慢收口。",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.4,
+    "x_mm": 25.0,
+    "baseline_mm": 132.8,
+    "width_mm": 54.822,
+    "role": "sans"
+  },
+  {
+    "text": "鸡嘴白 × 晚来",
+    "font": "STSongti-SC-Regular",
+    "size_pt": 11,
+    "x_mm": 25.0,
+    "baseline_mm": 141,
+    "width_mm": 25.717,
+    "role": "name"
+  },
+  {
+    "text": "98",
+    "font": "Baskerville",
+    "size_pt": 10.5,
+    "x_mm": 91.225,
+    "baseline_mm": 140.9,
+    "width_mm": 3.775,
+    "role": "latin"
+  },
+  {
+    "text": "古树白茶 · 尼格罗尼 · 约 25%",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.0,
+    "x_mm": 25.0,
+    "baseline_mm": 145.4,
+    "width_mm": 34.165,
+    "role": "sans"
+  },
+  {
+    "text": "先苦，后甘。与旁边那杯热茶交替着喝。",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.4,
+    "x_mm": 25.0,
+    "baseline_mm": 149.8,
+    "width_mm": 46.99,
+    "role": "sans"
+  },
+  {
+    "text": "夜",
+    "font": "LongCang-Regular",
+    "size_pt": 19.5,
+    "x_mm": 10.0,
+    "baseline_mm": 165.0,
+    "width_mm": 6.879,
+    "role": "hand"
+  },
+  {
+    "text": "叁",
+    "font": "PingFangSC-Regular",
+    "size_pt": 4.8,
+    "x_mm": 12.353,
+    "baseline_mm": 158.9,
+    "width_mm": 1.693,
+    "role": "sans"
+  },
+  {
+    "text": "茶席",
+    "font": "PingFangSC-Regular",
+    "size_pt": 6.5,
+    "x_mm": 10.783,
+    "baseline_mm": 171.0,
+    "width_mm": 4.833,
+    "role": "sans"
+  },
+  {
+    "text": "之后",
+    "font": "PingFangSC-Regular",
+    "size_pt": 6.5,
+    "x_mm": 10.783,
+    "baseline_mm": 174.5,
+    "width_mm": 4.833,
+    "role": "sans"
+  },
+  {
+    "text": "红泥醅 × 留盏",
+    "font": "STSongti-SC-Regular",
+    "size_pt": 11,
+    "x_mm": 25.0,
+    "baseline_mm": 164,
+    "width_mm": 25.717,
+    "role": "name"
+  },
+  {
+    "text": "68",
+    "font": "Baskerville",
+    "size_pt": 10.5,
+    "x_mm": 91.225,
+    "baseline_mm": 163.9,
+    "width_mm": 3.775,
+    "role": "latin"
+  },
+  {
+    "text": "古树熟茶 · 梅子酒底 · 约 12%",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.0,
+    "x_mm": 25.0,
+    "baseline_mm": 168.4,
+    "width_mm": 33.673,
+    "role": "sans"
+  },
+  {
+    "text": "先是梅子的酸甜，往后是陈香与木感。让人想多坐一会儿。",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.4,
+    "x_mm": 25.0,
+    "baseline_mm": 172.8,
+    "width_mm": 67.874,
+    "role": "sans"
+  },
+  {
+    "text": "带露",
+    "font": "STSongti-SC-Regular",
+    "size_pt": 11,
+    "x_mm": 25.0,
+    "baseline_mm": 181,
+    "width_mm": 7.832,
+    "role": "name"
+  },
+  {
+    "text": "58",
+    "font": "Baskerville",
+    "size_pt": 10.5,
+    "x_mm": 91.225,
+    "baseline_mm": 180.9,
+    "width_mm": 3.775,
+    "role": "latin"
+  },
+  {
+    "text": "玫瑰酿 · 小甜酒 · 3–5%",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.0,
+    "x_mm": 25.0,
+    "baseline_mm": 185.4,
+    "width_mm": 27.969,
+    "role": "sans"
+  },
+  {
+    "text": "香很浓，酒很轻。酸酸甜甜，收口干净。",
+    "font": "PingFangSC-Regular",
+    "size_pt": 7.4,
+    "x_mm": 25.0,
+    "baseline_mm": 189.8,
+    "width_mm": 46.99,
+    "role": "sans"
+  },
+  {
+    "text": "茶  与  酒",
+    "font": "PingFangSC-Regular",
+    "size_pt": 6.7,
+    "x_mm": 83.914,
+    "baseline_mm": 200.6,
+    "width_mm": 11.086,
+    "role": "sans"
+  },
+  {
+    "text": "MONTEVEIL",
+    "font": "PingFangSC-Regular",
+    "size_pt": 5.0,
+    "x_mm": 80.951,
+    "baseline_mm": 204.5,
+    "width_mm": 14.049,
+    "role": "sans"
+  }
+]

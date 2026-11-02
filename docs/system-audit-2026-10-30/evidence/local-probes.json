@@ -1,0 +1,91 @@
+{
+  "checkedAt": "2026-10-30T10:08:31.373Z",
+  "method": "local HTTP + isolated SQLite + current built modules; external providers mock; no production access",
+  "results": [
+    {
+      "id": "SEC-01",
+      "scenario": "会员码不构成登录凭证，持码会话是独立新顾客且改不到原顾客",
+      "sessionStatus": 201,
+      "distinctCustomer": true,
+      "writeStatus": 200,
+      "ownerNameUnchanged": true
+    },
+    {
+      "id": "SEC-02",
+      "scenario": "未登录顾客目录不含成本与投料字段",
+      "httpStatus": 200,
+      "productCostField": false,
+      "retailCostField": false,
+      "productDoseField": false,
+      "retailDoseField": false
+    },
+    {
+      "id": "SEC-03",
+      "scenario": "管理员重置密码后旧令牌与旧密码立即失效",
+      "layer": "HTTP",
+      "resetStatus": 200,
+      "oldTokenMeStatus": 401,
+      "oldPasswordLoginStatus": 401
+    },
+    {
+      "id": "OPS-01",
+      "scenario": "生产环境缺JWT配置时启动拒绝",
+      "jwtSecretThrows": true
+    },
+    {
+      "id": "OPS-02",
+      "scenario": "NODE_ENV=production且未指定渠道模式",
+      "actualMode": "disabled"
+    },
+    {
+      "id": "TX-13",
+      "scenario": "同一茶饮热饮和冰饮保留两行",
+      "layer": "service+database",
+      "submittedLineCount": 2,
+      "storedLineCount": 2,
+      "storedTotalQty": 2,
+      "retainedDistinctOptions": 2
+    },
+    {
+      "id": "TX-06",
+      "scenario": "重复支付成功处理不重复记销售台账",
+      "layer": "service+database",
+      "jobsBefore": 1,
+      "jobsAfter": 1,
+      "saleEntries": 1
+    },
+    {
+      "id": "TX-03",
+      "scenario": "失败释放库存后迟到成功恢复订单但未重新扣库",
+      "layer": "service sequence+database",
+      "stockReturned": true,
+      "afterLateStockStillRestored": true,
+      "orderStatus": "cancelled",
+      "paymentStatus": "failed"
+    },
+    {
+      "id": "TX-05",
+      "scenario": "部分退款后剩余杯数可正常出餐且退款杯不可再扫",
+      "layer": "service+database",
+      "paidRemainingQty": 1,
+      "refundedCupScanRejected": true,
+      "scannedUnitsAfter": 1
+    },
+    {
+      "id": "SEC-04",
+      "scenario": "门店授权清空后员工读不到门店订单",
+      "layer": "HTTP+database",
+      "httpStatus": 200,
+      "authorizedStoreCount": 0,
+      "leakedOrderCount": 0
+    },
+    {
+      "id": "BASELINE",
+      "scenario": "临时库由正式迁移创建并用关闭交易的种子初始化",
+      "migrationDeploySucceeded": true,
+      "baseRestrictedToLoopback": true,
+      "testDataOnly": true
+    }
+  ],
+  "cleanedUp": true
+}

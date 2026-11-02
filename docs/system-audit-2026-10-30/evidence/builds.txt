@@ -1,0 +1,12 @@
+
+> @teahour/shared@1.0.0 build /Users/th/Desktop/Full愈-时叙/packages/shared
+> tsc -p tsconfig.build.json
+
+
+> @teahour/integrations@1.0.0 build /Users/th/Desktop/Full愈-时叙/packages/integrations
+> tsc -p tsconfig.build.json
+
+
+> @teahour/server@1.0.0 build /Users/th/Desktop/Full愈-时叙/apps/server
+> tsc -p tsconfig.build.json
+

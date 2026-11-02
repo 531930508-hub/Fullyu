@@ -1,0 +1,44 @@
+{
+  "checkedAt": "2026-10-30T08:04:52.406295+00:00",
+  "documentFiles": 7,
+  "localLinksAndLineAnchorsChecked": 123,
+  "referencedSourceFilesFingerprinted": 57,
+  "brokenLinksOrInvalidLineAnchors": 0,
+  "issueCount": 36,
+  "priorityCounts": {
+    "P0": 11,
+    "P1": 23,
+    "P2": 2
+  },
+  "allIssuesRemainUnfixed": true,
+  "dynamicEvidenceIDs": [
+    "OPS-01",
+    "OPS-02",
+    "SEC-01",
+    "SEC-02",
+    "SEC-03",
+    "SEC-04",
+    "TX-03",
+    "TX-05",
+    "TX-06",
+    "TX-13"
+  ],
+  "probeTemporaryDataCleanedUp": true,
+  "backendTests": {
+    "suitesPassed": 11,
+    "testsPassed": 102
+  },
+  "builds": [
+    "shared",
+    "integrations",
+    "server"
+  ],
+  "notRun": [
+    "frontend browser QA in this audit",
+    "WeChat real device",
+    "live providers",
+    "target deployment concurrency and recovery",
+    "Presence build/tests"
+  ],
+  "validationLimits": "Link existence and line-range checks are not automatic semantic verification. Critical source findings were manually inspected; static concurrency items remain unexecuted."
+}

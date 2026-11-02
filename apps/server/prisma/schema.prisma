@@ -1,0 +1,516 @@
+// Full愈·时叙 数据库 Schema
+// 开发用 SQLite；上线切 MySQL：provider 改 "mysql" 并将 Json 字段保持 Json（MySQL 原生支持）。
+// 注意：时间一律 DateTime（SQLite 内为毫秒整数）；金额为整数分 Int。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ========== 基础 ==========
+
+model Counter {
+  name  String @id
+  value Int    @default(0)
+
+  @@map("counters")
+}
+
+model Setting {
+  key       String   @id
+  valueJson String   @map("value_json")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+model Store {
+  id            String   @id
+  city          String
+  cityEn        String   @map("city_en")
+  name          String
+  nameEn        String   @map("name_en")
+  short         String
+  address       String
+  addressEn     String   @map("address_en")
+  lat           Float
+  lng           Float
+  open          Boolean  @default(true)
+  retailPickup  Boolean  @default(true) @map("retail_pickup")
+  hours         String
+  printerStatus String   @default("online") @map("printer_status")
+  channelsJson  String   @map("channels_json")
+  positionsJson String   @map("positions_json")
+  waitMinutes   Int      @default(8) @map("wait_minutes")
+
+  stock           Stock[]
+  losses          Loss[]
+  userStores      UserStore[]
+
+  @@map("stores")
+}
+
+model Category {
+  id     String @id
+  name   String
+  nameEn String @map("name_en")
+  kind   String
+
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id              String   @id
+  name            String
+  nameEn          String   @map("name_en")
+  categoryId      String   @map("category_id")
+  series          String
+  kind            String // tea | retail | bottle
+  priceCents      Int      @map("price_cents")
+  costCents       Int      @map("cost_cents")
+  doseG           Float    @map("dose_g")
+  status          String // draft | published | archived
+  tempsJson       String   @map("temps_json")
+  ice             Boolean  @default(true)
+  memberEligible  Boolean  @default(true) @map("member_eligible")
+  descZh          String   @default("") @map("desc_zh")
+  descEn          String   @default("") @map("desc_en")
+  specZh          String   @default("") @map("spec_zh")
+  specEn          String   @default("") @map("spec_en")
+  tagZh           String   @default("") @map("tag_zh")
+  tagEn           String   @default("") @map("tag_en")
+  unitZh          String   @default("") @map("unit_zh")
+  unitEn          String   @default("") @map("unit_en")
+  // 后台上传的商品图（相对 uploads 的 key）；为空时小程序回退到内置系列插画。
+  imageUrl        String   @default("") @map("image_url")
+  // 总部默认排序：同系列同分类内生效，门店可用 Stock.sortOrder 覆盖。
+  sortOrder       Int      @default(0) @map("sort_order")
+  updatedAt       DateTime @map("updated_at")
+
+  category   Category     @relation(fields: [categoryId], references: [id])
+  stock      Stock[]
+  orderItems OrderItem[]
+  losses     Loss[]
+  mappings   Mapping[]
+
+  @@map("products")
+}
+
+model Stock {
+  storeId   String  @map("store_id")
+  productId String  @map("product_id")
+  grams     Float   @default(0)
+  soldOut   Boolean @default(false) @map("sold_out")
+  // 门店自定义排序；null 表示跟随总部 Product.sortOrder。
+  sortOrder Int?    @map("sort_order")
+
+  store   Store   @relation(fields: [storeId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@id([storeId, productId])
+  @@map("stock")
+}
+
+model Mapping {
+  id         String   @id
+  externalId String   @unique @map("external_id")
+  productId  String   @map("product_id")
+  unit       String   @default("袋")
+  factor     Float    @default(1)
+  updatedAt  DateTime @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("mappings")
+}
+
+// ========== 账号与权限 ==========
+
+model Role {
+  id          String  @id
+  name        String
+  description String
+  scope       String // ALL | STORES
+  builtin     Boolean @default(false)
+  permsJson   String  @map("perms_json")
+
+  userRoles UserRole[]
+
+  @@map("roles")
+}
+
+model User {
+  id           String   @id
+  name         String
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  allStores    Boolean  @default(false) @map("all_stores")
+  active       Boolean  @default(true)
+  // 会话版本：改密 / 主动撤销时 +1，旧令牌立即失效（JWT 携带签发时的版本）。
+  tokenVersion Int      @default(1) @map("token_version")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  roles      UserRole[]
+  userStores UserStore[]
+
+  @@map("users")
+}
+
+model UserRole {
+  userId String @map("user_id")
+  roleId String @map("role_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model UserStore {
+  userId  String @map("user_id")
+  storeId String @map("store_id")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, storeId])
+  @@map("user_stores")
+}
+
+model Customer {
+  id         String   @id
+  memberCode String   @unique @map("member_code")
+  name       String   @default("茶客")
+  // 手机号是顾客唯一身份：微信手机号授权后写入，同一号码永远对应同一顾客。
+  phone      String?  @unique
+  // 积分余额（全平台共享，不分门店）；入账规则待运营确认前保持只读展示。
+  points     Int      @default(0)
+  // 头像存储 key（由 AvatarStorageProvider 下发），对外序列化为可访问 URL。
+  avatarKey  String?  @map("avatar_key")
+  // 与在场一致：1=男 2=女 null=未填写
+  gender     Int?
+  birthday   DateTime?
+  // 微信身份：由小程序 wx.login → code2session 写入；H5 环境下为空。
+  openId     String?  @unique @map("open_id")
+  unionId    String?  @map("union_id")
+  // 顾客会话版本：安全整改时整体 +1，旧的会员码会话令牌一次性作废。
+  sessionVersion Int      @default(1) @map("session_version")
+  // 会员身份为权威数据：standard | annual；memberUntil 为空表示长期有效。
+  memberTier     String   @default("standard") @map("member_tier")
+  memberUntil    DateTime? @map("member_until")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  orders  Order[]
+  coupons CustomerCoupon[]
+
+  @@map("customers")
+}
+
+// ========== 优惠券 ==========
+
+/// 券模板：由总部创建，可通用或限定品类，带面额、门槛与有效期。
+model Coupon {
+  id            String   @id
+  title         String
+  // all=全场通用；category=仅限指定商品品类
+  scope         String   @default("all")
+  categoryId    String?  @map("category_id")
+  amountCents   Int      @map("amount_cents")
+  minSpendCents Int      @default(0) @map("min_spend_cents")
+  validFrom     DateTime @map("valid_from")
+  validTo       DateTime @map("valid_to")
+  active        Boolean  @default(true)
+  note          String   @default("")
+  createdBy     String?  @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  issued CustomerCoupon[]
+
+  @@map("coupons")
+}
+
+/// 顾客持券实例：available 可用 / reserved 已锁单待支付 / used 已使用。
+model CustomerCoupon {
+  id         String    @id
+  couponId   String    @map("coupon_id")
+  customerId String    @map("customer_id")
+  status     String    @default("available")
+  issuedAt   DateTime  @default(now()) @map("issued_at")
+  usedAt     DateTime? @map("used_at")
+  orderId    String?   @map("order_id")
+
+  coupon   Coupon   @relation(fields: [couponId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, status])
+  @@index([couponId, customerId])
+  @@map("customer_coupons")
+}
+
+// ========== 订单 ==========
+
+model Order {
+  id            String    @id
+  number        String    @unique
+  business      String // fresh | retail
+  storeId       String    @map("store_id")
+  channel       String // mini | assisted | meituan | taobao
+  type          String // dine | takeaway | delivery | retail
+  seat          String?
+  status        String // unpaid | pending | ready | delivered | refunded | cancelled
+  paymentStatus String    @default("unpaid") @map("payment_status")
+  totalCents    Int       @map("total_cents")
+  refundedCents Int       @default(0) @map("refunded_cents")
+  // 优惠券抵扣：下单时由服务端核验并计算，券实例随之锁定，支付成功后标记已用。
+  couponId            String? @map("coupon_id")
+  couponTitle         String? @map("coupon_title")
+  couponDiscountCents Int     @default(0) @map("coupon_discount_cents")
+  pickupCode    String?   @map("pickup_code")
+  pickupStoreId String?   @map("pickup_store_id")
+  printStatus   String    @default("pending") @map("print_status")
+  parentOrderId String?   @map("parent_order_id")
+  note          String    @default("")
+  customerId    String?   @map("customer_id")
+  ownerKind     String    @default("customer") @map("owner_kind")
+  createdBy     String?   @map("created_by")
+  paymentRef    String?   @map("payment_ref")
+  paymentMethod String?   @map("payment_method")
+  preparedAt    DateTime? @map("prepared_at")
+  createdAt     DateTime  @map("created_at")
+  paidAt        DateTime? @map("paid_at")
+  deliveredAt   DateTime? @map("delivered_at")
+  refundPending Boolean   @default(false) @map("refund_pending")
+
+  // storeId 允许为 'brand'（品牌零售 / 总部），因此不设外键，仅保留字符串标识。
+  customer Customer?   @relation(fields: [customerId], references: [id])
+  items    OrderItem[]
+  units    OrderUnit[]
+  finance  FinanceEntry[]
+  printJobs PrintJob[]
+
+  @@index([storeId, status, createdAt])
+  @@index([customerId, createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id             String  @id
+  orderId        String  @map("order_id")
+  productId      String  @map("product_id")
+  name           String
+  nameEn         String  @map("name_en")
+  kind           String
+  series         String
+  qty            Int
+  sortOrder      Int     @default(0) @map("sort_order")
+  refundedQty    Int     @default(0) @map("refunded_qty")
+  // 已被退款意图原子占用的数量：外部退款调用前先占用，成功转 refundedQty，失败释放。
+  pendingRefundQty Int   @default(0) @map("pending_refund_qty")
+  unitPriceCents Int     @map("unit_price_cents")
+  totalCents     Int     @map("total_cents")
+  costCents      Int     @map("cost_cents")
+  temp           String?
+  ice            String?
+
+  order  Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product    @relation(fields: [productId], references: [id])
+  units   OrderUnit[]
+
+  @@map("order_items")
+}
+
+model OrderUnit {
+  id        String    @id
+  orderId   String    @map("order_id")
+  itemId    String    @map("item_id")
+  label     String    @unique
+  status    String    @default("pending") // pending | scanned | ready | refunded
+  scannedAt DateTime? @map("scanned_at")
+
+  order Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item  OrderItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("order_units")
+}
+
+// ========== 财务 ==========
+
+model FinanceEntry {
+  id          String   @id
+  orderId     String?  @map("order_id")
+  storeId     String   @map("store_id")
+  type        String // SALE | REFUND
+  amountCents Int      @map("amount_cents")
+  method      String
+  settlement  String
+  memo        String   @default("")
+  costCents   Int      @default(0) @map("cost_cents")
+  dedupeKey   String   @unique @map("dedupe_key")
+  at          DateTime
+
+  order Order? @relation(fields: [orderId], references: [id])
+
+  @@index([storeId, at])
+  @@map("finance_entries")
+}
+
+model Expense {
+  id          String    @id
+  storeId     String    @map("store_id") // brand = 品牌零售/总部
+  category    String
+  amountCents Int       @map("amount_cents")
+  at          String // YYYY-MM-DD 发生日期
+  memo        String    @default("")
+  source      String // manual | import | seed
+  batchId     String?   @map("batch_id")
+  // 源行唯一键（导入批次+行号+内容指纹）：数据库层防重复导入；手工录入为空。
+  sourceKey   String?   @unique @map("source_key")
+  createdBy   String?   @map("created_by")
+  createdAt   DateTime  @map("created_at")
+  voidedAt    DateTime? @map("voided_at")
+  voidedBy    String?   @map("voided_by")
+
+  @@index([storeId, at])
+  @@map("expenses")
+}
+
+model Loss {
+  id           String    @id
+  storeId      String    @map("store_id")
+  productId    String    @map("product_id")
+  name         String
+  kind         String
+  qty          Float
+  unit         String
+  amountCents  Int       @map("amount_cents")
+  reason       String
+  note         String    @default("")
+  status       String // pending | approved | rejected
+  reportedBy   String?   @map("reported_by")
+  decidedBy    String?   @map("decided_by")
+  decidedAt    DateTime? @map("decided_at")
+  decisionNote String    @default("") @map("decision_note")
+  approvalId   String?   @map("approval_id")
+  at           DateTime
+
+  store   Store   @relation(fields: [storeId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([storeId, at])
+  @@map("losses")
+}
+
+model Approval {
+  id          String    @id
+  kind        String // refund | loss | remake
+  status      String // pending | approved | rejected（决策状态）
+  // 执行状态：批准 ≠ 已退钱；退款执行单独跟踪，失败可重试且不重复审批。
+  executionStatus String @default("") @map("execution_status") // '' | pending | succeeded | failed | unknown
+  refundIntentId  String? @map("refund_intent_id")
+  amountCents Int       @map("amount_cents")
+  storeId     String?   @map("store_id")
+  orderId     String?   @map("order_id")
+  summary     String
+  payloadJson String    @map("payload_json")
+  requestedBy String?   @map("requested_by")
+  decidedBy   String?   @map("decided_by")
+  comment     String    @default("")
+  resultNote  String    @default("") @map("result_note")
+  createdAt   DateTime  @map("created_at")
+  decidedAt   DateTime? @map("decided_at")
+
+  @@index([status, createdAt])
+  @@map("approvals")
+}
+
+model Log {
+  id        String   @id
+  actorId   String?  @map("actor_id")
+  actorName String?  @map("actor_name")
+  action    String
+  detail    String   @default("")
+  type      String   @default("")
+  storeId   String?  @map("store_id")
+  orderId   String?  @map("order_id")
+  at        DateTime
+
+  @@index([at])
+  @@map("logs")
+}
+
+model PrintJob {
+  id          String   @id
+  orderId     String   @map("order_id")
+  kind        String
+  // 稳定业务键：同一订单的自动出票任务只允许存在一条，重复回调不会重复入队。
+  businessKey String   @unique @map("business_key")
+  payloadJson String   @map("payload_json")
+  status      String // queued | processing | printed | failed
+  // 处理租约：领取时写入，超时未回写可安全恢复。
+  claimedAt   DateTime? @map("claimed_at")
+  attempts    Int      @default(0)
+  lastError   String?  @map("last_error")
+  createdAt   DateTime @map("created_at")
+  updatedAt   DateTime @map("updated_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("print_jobs")
+}
+
+// 支付意图：下单/收款贯穿重试的幂等锚点。同键同内容重试返回同一单；网关未知结果可查询收敛。
+model PaymentIntent {
+  id           String   @id
+  key          String   @unique // 客户端幂等键（或服务端生成的首次请求键）
+  fingerprint  String // 请求内容指纹；同键异内容视为冲突
+  status       String // processing | succeeded | failed | unknown
+  orderId      String?  @map("order_id")
+  storeId      String   @map("store_id")
+  amountCents  Int      @map("amount_cents")
+  method       String?
+  providerRef  String?  @map("provider_ref")
+  failReason   String?  @map("fail_reason")
+  responseJson String?  @map("response_json") // 终态响应快照，用于幂等重放
+  createdAt    DateTime @map("created_at")
+  updatedAt    DateTime @map("updated_at")
+
+  @@index([orderId])
+  @@index([status])
+  @@map("payment_intents")
+}
+
+// 退款意图：先持久化并原子占用可退数量，再调外部网关；稳定退款单号支撑渠道幂等与对账。
+model RefundIntent {
+  id          String   @id // 稳定退款单号（RF-…），重试复用同一号
+  orderId     String   @map("order_id")
+  status      String // occupied | processing | succeeded | failed | released | unknown
+  amountCents Int      @map("amount_cents")
+  linesJson   String   @map("lines_json") // 占用的行明细 [{itemId, qty, amountCents, costCents}]
+  approvalId  String?  @map("approval_id")
+  requestedBy String?  @map("requested_by")
+  decidedBy   String?  @map("decided_by")
+  reason      String   @default("")
+  providerRef String?  @map("provider_ref")
+  failReason  String?  @map("fail_reason")
+  createdAt   DateTime @map("created_at")
+  updatedAt   DateTime @map("updated_at")
+
+  @@index([orderId])
+  @@map("refund_intents")
+}
+
+model IdempotencyKey {
+  key         String   @id
+  responseJson String  @map("response_json")
+  createdAt   DateTime @map("created_at")
+
+  @@map("idempotency_keys")
+}

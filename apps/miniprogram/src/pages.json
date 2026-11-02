@@ -1,0 +1,24 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "时叙"
+      }
+    },
+    {
+      "path": "pages/legal/index",
+      "style": {
+        "navigationBarTitleText": "用户协议与隐私政策"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "Full愈·时叙",
+    "navigationBarBackgroundColor": "#f6f4ef",
+    "backgroundColor": "#f6f4ef",
+    "backgroundTextStyle": "dark"
+  }
+}
