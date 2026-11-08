@@ -2,7 +2,7 @@
   "pages": [
     {
       "path": "pages/index/index",
-      "style": { "navigationStyle": "custom" }
+      "style": { "navigationStyle": "custom", "enablePullDownRefresh": true, "backgroundTextStyle": "dark" }
     },
     {
       "path": "pages/course-detail/index",
@@ -15,6 +15,18 @@
     {
       "path": "pages/member/index",
       "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/brand-member/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/brand-member/compare",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/brand-member/game",
+      "style": { "navigationBarTitleText": "愈行之旅" }
     },
     {
       "path": "pages/assets/index",
@@ -66,6 +78,10 @@
     },
     {
       "path": "pages/community-workspace/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/legal/index",
       "style": { "navigationStyle": "custom" }
     }
   ],
