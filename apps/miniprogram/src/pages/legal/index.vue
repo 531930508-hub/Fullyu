@@ -17,11 +17,19 @@
       >
         {{ tt('隐私政策', 'Privacy Policy') }}
       </button>
+      <button
+        hover-class="none"
+        class="legal-tab"
+        :class="{ active: tab === 'member' }"
+        @click="switchTab('member')"
+      >
+        {{ tt('会员规则', 'Member Rules') }}
+      </button>
       <button hover-class="none" class="legal-lang" @click="toggleLocale">{{ locale === 'en' ? '中文' : 'EN' }}</button>
     </view>
 
     <view class="legal-doc">
-      <text class="legal-updated">{{ tt('更新日期：2026年11月1日', 'Last updated: 1 November 2026') }}</text>
+      <text class="legal-updated">{{ tt('更新日期：2026年11月8日', 'Last updated: 8 November 2026') }}</text>
       <text class="legal-lead">{{ doc.lead }}</text>
       <view v-for="(section, index) in doc.sections" :key="index" class="legal-section">
         <text class="legal-h">{{ section.h }}</text>
@@ -208,7 +216,8 @@ const DOCS = {
         {
           h: '四、共享与委托处理',
           p: [
-            '我们不会出售你的个人信息。仅在实现以下功能所必需的范围内共享：微信（登录、手机号授权与支付）、支付服务商（汇付天下，用于收付款与退款）、云服务商（服务器与数据存储）。我们会要求合作方按约定保护你的信息。'
+            '我们不会出售你的个人信息。仅在实现以下功能所必需的范围内共享：微信（登录、手机号授权与支付）、支付服务商（汇付天下，用于收付款与退款）、云服务商（服务器与数据存储）。我们会要求合作方按约定保护你的信息。',
+            '为提供 Full愈年卡在时叙、在场、轻疗三店通用的会员权益，你的手机号、会员编号、卡期与积分会在 Full愈品牌会员体系内共享，仅用于跨店识别会员身份、核销权益与内部结算，不用于与会员服务无关的用途。'
           ]
         },
         {
@@ -274,7 +283,8 @@ const DOCS = {
         {
           h: '4. Sharing and processors',
           p: [
-            'We do not sell your personal information. We share only what is necessary with WeChat (sign-in, phone authorisation and payment), our payment provider (Huifu, for payments and refunds) and our cloud provider (servers and data storage). Partners are required to protect your information under our agreements.'
+            'We do not sell your personal information. We share only what is necessary with WeChat (sign-in, phone authorisation and payment), our payment provider (Huifu, for payments and refunds) and our cloud provider (servers and data storage). Partners are required to protect your information under our agreements.',
+            'To provide Full Yu annual card benefits across Teahour, Presence and Retreat, your phone number, member number, card term and points are shared within the Full Yu membership programme. This is used only to recognise your membership across stores, redeem benefits and settle internally, not for unrelated purposes.'
           ]
         },
         {
@@ -310,6 +320,144 @@ const DOCS = {
       ],
       foot: 'This policy describes privacy practices in the mini program. The operating entity is shown at each store.'
     }
+  },
+  member: {
+    zh: {
+      title: '会员规则',
+      lead: '本规则适用于 Full愈年卡与月卡。开通前请确认卡种、价格、有效期与适用门店；开通即表示你已阅读并同意本规则。',
+      sections: [
+        {
+          h: '一、卡的性质',
+          p: [
+            'Full愈年卡（¥299 / 365 天）与月卡（¥45 / 30 天）是在有效期内享受时叙、在场、轻疗会员权益的服务权益卡，不是储值卡。卡内不含可消费本金，不产生余额，不可提现、转账、代付或找零。'
+          ]
+        },
+        {
+          h: '二、有效期与续费',
+          p: [
+            '有效期自支付成功之日起算，以页面展示的到期日与剩余天数为准。',
+            '续费不覆盖当前有效期，从当前有效期结束次日起接续；待生效的续费卡期可在生效前申请全额退款。',
+            '有效期届满后权益自动停止；未使用的权益不折现、不结转。到期前 30 天页面会提示续费。'
+          ]
+        },
+        {
+          h: '三、权益范围',
+          p: [
+            '权益按业务配置：时叙、在场、轻疗分别提供页面展示的会员价或优惠。具体适用门店、商品、课程或项目与折扣，以开卡时锁定的配置、门店公示和结算页为准。',
+            '会员价不与优惠券、积分抵扣、活动价叠加，同一笔消费按对你最有利的一种结算。'
+          ]
+        },
+        {
+          h: '四、积分',
+          p: [
+            '积分由 Full愈品牌会员中心统一记录，时叙、在场、轻疗共用一个积分账户。',
+            '积分通过消费、活动与「愈行之旅」获得，不可购买、不可提现、不可转让，不构成预付款。',
+            '积分按批次计算有效期，到期未使用自动失效；页面展示最近到期时间。',
+            '轻疗结算时 1 积分可抵 ¥1，单笔可抵扣金额与可用范围以结算页为准；时叙、在场本期仅展示积分，暂不参与抵扣。'
+          ]
+        },
+        {
+          h: '五、退款',
+          p: [
+            '开通后 7 日内，且三店均未使用任何会员权益的，可申请全额退款。',
+            '超过 7 日或已使用权益的，按实付金额扣除已享优惠后计算，最低为 0；已享优惠包括会员价差额、积分抵扣、赠品与活动优惠。',
+            '退款原路退回，到账时间以支付渠道为准；已开具发票的，需按税务规定办理发票退回或红冲。'
+          ]
+        },
+        {
+          h: '六、收款、发票与经营主体',
+          p: [
+            '会员卡由开通页面注明的业务主体销售并收款，发票由实际收款方开具。',
+            '三店权益由各业务主体分别提供；会员身份、卡期与积分由 Full愈品牌会员中心统一记录，用于跨店识别与结算。',
+            '门店调整、装修、暂停营业或迁址时，未使用权益按门店公示与本规则处理。'
+          ]
+        },
+        {
+          h: '七、个人信息',
+          p: [
+            '为提供三店通用权益，你的手机号、会员编号、卡期与积分会在 Full愈品牌会员体系内（时叙、在场、轻疗）共享；我们不会出售你的个人信息。',
+            '详细处理规则见《隐私政策》。你可以在「我的」查看、更正资料，或联系我们注销账号。'
+          ]
+        },
+        {
+          h: '八、其他',
+          p: [
+            '本规则是《用户协议》的组成部分；与《用户协议》不一致时，会员权益部分以本规则为准。',
+            '已购卡期按开卡时锁定的权益与规则执行；规则更新会在小程序内公布，重大变更显著提示。',
+            '如对权益、退款或积分有疑问，请通过「我的 - 联系与帮助」或门店伙伴联系我们。'
+          ]
+        }
+      ],
+      foot: '本规则为小程序内的会员说明；正式经营主体信息以门店公示为准。'
+    },
+    en: {
+      title: 'Member Rules',
+      lead: 'These rules apply to the Full Yu annual and monthly card. Please confirm the plan, price, term and participating stores before joining. Joining means you have read and accepted these rules.',
+      sections: [
+        {
+          h: '1. What the card is',
+          p: [
+            'The Full Yu annual card (¥299 / 365 days) and monthly card (¥45 / 30 days) are service-benefit cards for member pricing at Teahour, Presence and Retreat during the term. They are not stored-value cards: there is no spendable principal or balance, and no cash withdrawal, transfer, payment on behalf of others or change.'
+          ]
+        },
+        {
+          h: '2. Term and renewal',
+          p: [
+            'The term starts when payment succeeds; the expiry date and remaining days shown in the app apply.',
+            'Renewal does not overwrite the current term. It starts the day after the current term ends. A paid renewal that has not started can be fully refunded before it begins.',
+            'When the term ends, benefits stop. Unused benefits are not converted to cash or carried forward. The app reminds you 30 days before expiry.'
+          ]
+        },
+        {
+          h: '3. Benefit scope',
+          p: [
+            'Benefits follow each business configuration. Teahour, Presence and Retreat each provide the member price or discount shown in the app. The participating stores, products, classes or services and discounts follow the configuration locked at purchase, in-store notices and the checkout page.',
+            'Member prices do not stack with coupons, points or promotions; the single most favourable option applies to each purchase.'
+          ]
+        },
+        {
+          h: '4. Points',
+          p: [
+            'Points are recorded in one ledger by the Full Yu membership centre and shared by Teahour, Presence and Retreat.',
+            'Points are earned through spending, activities and the Journey game. They cannot be purchased, withdrawn or transferred, and are not prepayments.',
+            'Points are held in batches with expiry dates. Unused points expire automatically; the app shows the nearest expiry date.',
+            'At Retreat checkout, 1 point offsets ¥1. The amount and scope that can be offset follow the checkout page. Teahour and Presence display points only for now and do not accept point offsets.'
+          ]
+        },
+        {
+          h: '5. Refunds',
+          p: [
+            'Within 7 days of joining, if no member benefit has been used at any of the three stores, you may request a full refund.',
+            'After 7 days or once a benefit has been used, the refund is the amount paid less benefits already enjoyed, with a minimum of 0. Benefits already enjoyed include member-price savings, point offsets, gifts and promotional discounts.',
+            'Refunds are returned to the original payment method; timing depends on the payment channel. If an invoice has been issued, it must be returned or reversed under tax rules.'
+          ]
+        },
+        {
+          h: '6. Seller, invoices and operators',
+          p: [
+            'The card is sold and collected by the business named on the join page, and the invoice is issued by that payee.',
+            'Benefits at the three stores are provided by each business. Member identity, card terms and points are recorded centrally by the Full Yu membership centre for cross-store recognition and settlement.',
+            'If a store is adjusted, renovated, suspended or relocated, unused benefits follow the in-store notice and these rules.'
+          ]
+        },
+        {
+          h: '7. Personal information',
+          p: [
+            'To provide cross-store benefits, your phone number, member number, card term and points are shared within the Full Yu membership programme (Teahour, Presence and Retreat). We do not sell your personal information.',
+            'See the Privacy Policy for details. You can view and correct your profile under Me, or contact us to close your account.'
+          ]
+        },
+        {
+          h: '8. Other',
+          p: [
+            'These rules form part of the Terms of Service. If they conflict on member benefits, these rules apply.',
+            'Purchased terms follow the benefits and rules locked at purchase. Updates are published in the app and material changes are highlighted.',
+            'For questions about benefits, refunds or points, contact us via Me - Help & contact or a store partner.'
+          ]
+        }
+      ],
+      foot: 'These rules describe membership in the app. The official operating entity is shown at each store.'
+    }
   }
 };
 
@@ -320,7 +468,8 @@ export default {
     const locale = ref(stored === 'en' ? 'en' : 'zh');
 
     onLoad((query) => {
-      tab.value = query && query.tab === 'terms' ? 'terms' : 'privacy';
+      const next = query && query.tab;
+      tab.value = next === 'terms' || next === 'member' ? next : 'privacy';
       applyTitle();
     });
 

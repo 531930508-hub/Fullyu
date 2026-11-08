@@ -12,6 +12,19 @@
       "style": {
         "navigationBarTitleText": "用户协议与隐私政策"
       }
+    },
+    {
+      "path": "pages/brand-member/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "Full愈年卡"
+      }
+    },
+    {
+      "path": "pages/brand-member/game",
+      "style": {
+        "navigationBarTitleText": "愈行之旅"
+      }
     }
   ],
   "globalStyle": {
