@@ -1,0 +1,154 @@
+{
+	"pages": [
+		{
+			"path": "pages/splash/splash",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/index/index",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/login/login",
+			"style": {
+				"navigationBarTitleText": "登录"
+			}
+		},
+		{
+			"path": "pages/user/user",
+			"style": {
+				"navigationStyle": "custom",
+				"backgroundColor": "#F6F6F6"
+			}
+		},
+		{
+			"path": "pages/user/about",
+			"style":
+			{
+				"navigationBarTitleText" : "关于"
+			}
+		},
+		{
+			"path": "pages/user/terms-policy",
+			"style":
+			{
+				"navigationBarTitleText" : ""
+			}
+		},
+		{
+			"path": "pages/user/lottery",
+			"style":
+			{
+				"navigationBarTitleText": "抽积分",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/user/treatment-record",
+			"style" :
+			{
+				"navigationBarTitleText" : "服务记录",
+				"enablePullDownRefresh": false,
+				"onReachBottomDistance": 20
+			}
+		},
+		{
+			"path": "pages/user/favorite-therapist",
+			"style":{
+				"navigationBarTitleText" : "收藏的疗愈师",
+				"enablePullDownRefresh": false,
+				"onReachBottomDistance": 20
+			}
+		},
+		{
+			"path" : "pages/mall/mall",
+			"style": {
+				"navigationBarTitleText" : "Full愈商城",
+				"enablePullDownRefresh": false,
+				"onReachBottomDistance": 20
+			}
+		},
+		{
+			"path": "pages/user/treatment-detail",
+			"style": {
+				"navigationBarTitleText": "疗愈详情"
+			}
+		},
+		{
+			"path": "pages/index/booking",
+			"style": {
+				"navigationBarTitleText": "智能预约",
+				"navigationBarBackgroundColor": "#FFFFFF",
+				"navigationBarTextStyle": "black"
+			}
+		},
+		{
+			"path":"pages/mall/sendGift",
+			"style": {
+				"navigationBarTitleText": "赠送礼物"
+			}
+		},
+		{
+			"path":"pages/mall/gift",
+			"style": {
+				"navigationBarTitleText": "礼物接收"
+			}
+		},
+		{
+			"path": "pages/index/banner-detail",
+			"style": {
+				"navigationBarTitleText": "Full愈"
+			}
+		},
+		{
+			"path": "pages/user/invitation-reward",
+			"style": {
+				"navigationBarTitleText": "推荐有礼",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path" : "pages/user/redeem-coupons",
+			"style" :
+			{
+				"navigationBarTitleText" : "礼品卡兑换"
+				// "navigationStyle": "custom"
+			}
+		}
+	],
+	"tabBar": {
+		"custom": true,
+		"color": "#584219",
+		"selectedColor": "#584219",
+		"borderStyle": "black",
+		"backgroundColor": "#FFFFFF",
+		"list": [
+			{
+				"pagePath": "pages/index/index",
+				"text": "首页",
+				"iconPath": "static/icons/home.png",
+				"selectedIconPath": "static/icons/homeHL.png"
+			},
+
+			{
+				"pagePath": "pages/user/user",
+				"text": "我的",
+				"iconPath": "static/icons/user.png",
+				"selectedIconPath": "static/icons/userHL.png"
+			}
+		]
+	},
+	"globalStyle": {
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "Full愈",
+		"navigationBarBackgroundColor": "#FFFFFF",
+		"backgroundColor": "#F6F6F6"
+
+	}
+}

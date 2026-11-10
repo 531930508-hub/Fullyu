@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F5E8D8">
+<title>愈行之旅 · Full愈会员漫游</title>
+<style>
+/* Brand source: Full愈/packages/design-tokens/src/colors.ts. */
+:root{--wood-900:#4B3621;--wood-700:#6B463C;--wood-hover:#5A3A32;--sand:#F5E8D8;--peach:#FFF3E0;--paper:#FFFFFF;--taupe:#A08A72;--muted:#7D665C;--line:#D8CBBB;--line-soft:#E8DED2;--serif:"Songti SC","STSong","Noto Serif CJK SC",serif;--sans:"PingFang SC","Microsoft YaHei",sans-serif;--shadow:0 16px 48px #4b36211a}
+*{box-sizing:border-box}body{margin:0;background:var(--sand);font-family:var(--sans);color:var(--wood-900);font-size:14px}button{font:inherit;color:inherit;cursor:pointer;border:0}button:disabled{cursor:default;opacity:.55}button:focus-visible,a:focus-visible{outline:3px solid var(--wood-700);outline-offset:4px}button{touch-action:manipulation}button svg{pointer-events:none}svg.ui-icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}[hidden]{display:none!important}h1,h2,h3,p{margin:0}.eyebrow{font-size:10px;font-weight:500;letter-spacing:2.2px;color:var(--wood-700)}.muted{color:var(--muted)}.serif{font-family:var(--serif)}.text-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 12px;background:none;font-size:12px}.outline-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--paper);border-radius:12px;min-height:44px;padding:9px 14px;font-size:12px}.primary{display:flex;align-items:center;justify-content:center;gap:9px;min-height:50px;background:var(--wood-700);color:var(--paper);padding:12px 20px;border-radius:14px;font-weight:500}.primary:hover{background:var(--wood-hover)}.full{width:100%}.art{display:block;object-fit:contain;width:72px;height:72px;filter:drop-shadow(0 4px 3px #4b362112)}
+.app{width:min(1240px,calc(100% - 48px));height:calc(100vh - 48px);height:calc(100dvh - 48px);margin:24px auto;display:flex;flex-direction:column;position:relative;isolation:isolate;background:var(--peach);border:1px solid var(--line);border-radius:24px;overflow:hidden;box-shadow:var(--shadow)}
+.header{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:18px 26px;background:var(--peach);border-bottom:1px solid var(--line-soft);gap:10px}.brand-lockup{display:flex;align-items:center;gap:18px}.brand-word{font-family:var(--serif);font-size:24px;letter-spacing:-1px;padding-right:18px;border-right:1px solid var(--line)}.title-lockup h1{font:600 22px var(--serif);letter-spacing:3px}.title-lockup .eyebrow{font-size:8px;margin-top:5px;letter-spacing:2.4px}.header-actions{display:flex;align-items:center;gap:8px}.member-tag{font-size:11px;border:1px solid var(--line);padding:6px 10px;border-radius:20px;white-space:nowrap}
+.workspace{display:grid;grid-template-columns:minmax(0,1fr) 314px;min-height:0;flex:1}.map-shell{display:flex;flex-direction:column;min-height:0;min-width:0;position:relative}.map-toolbar{padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line-soft);background:var(--peach);z-index:2}.region-title{font:600 18px var(--serif);letter-spacing:2px}.region-title small{font:11px var(--sans);letter-spacing:0;margin-left:8px}.map-tools{display:flex;gap:2px}.map-tools .text-btn{padding:0 8px}.region-nav{display:flex;flex-shrink:0;padding:8px 16px;gap:5px;background:var(--peach);border-bottom:1px solid var(--line);z-index:4}.region-nav button{flex:1;padding:8px 0;min-height:38px;background:var(--peach);border:1px solid var(--line);border-radius:20px;font-size:11px}.region-nav button.active{background:var(--wood-700);color:var(--paper);border-color:var(--wood-700)}
+.map-viewport{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;position:relative;scroll-behavior:smooth;overscroll-behavior:contain;scrollbar-color:var(--taupe) transparent;scrollbar-width:thin;background:var(--sand)}.map-world{position:relative;height:2070px;width:100%;background-image:url('assets/journey-atlas.jpg');background-size:cover;background-position:center;background-repeat:no-repeat}.map-world:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 8%,#fff3e02e 35%,#fff3e035 65%,transparent 92%);pointer-events:none}.trail{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.trail-base{fill:none;stroke:var(--wood-900);stroke-opacity:.22;stroke-width:25;stroke-linecap:round;stroke-linejoin:round}.trail-paper{fill:none;stroke:var(--peach);stroke-width:20;stroke-linecap:round;stroke-linejoin:round}.trail-dots{fill:none;stroke:var(--taupe);stroke-width:1.4;stroke-dasharray:2 7;stroke-linecap:round}.return-trail{fill:none;stroke:var(--wood-700);stroke-opacity:.35;stroke-width:1;stroke-dasharray:2 8}.zone-label{position:absolute;left:18px;padding:7px 11px;border-left:2px solid var(--wood-700);background:var(--peach);pointer-events:none}.zone-label b{display:block;font:600 17px var(--serif);letter-spacing:2px}.zone-label span{font-size:9px;letter-spacing:1.3px;color:var(--wood-700)}.map-caption{position:absolute;bottom:15px;left:50%;transform:translateX(-50%);padding:7px 12px;border:1px solid var(--line);border-radius:8px;background:var(--peach);white-space:nowrap;text-align:center;font:11px var(--serif);letter-spacing:2px;color:var(--wood-700)}
+.tile{position:absolute;width:104px;min-height:93px;transform:translate(-50%,-50%);background:none;padding:0 2px;display:flex;flex-direction:column;align-items:center;z-index:2}.tile .art{width:70px;height:64px;transition:transform .25s}.tile[data-kind="points"] .art{width:44px;height:41px;margin:13px 0 10px}.tile:hover .art{transform:translateY(-5px) rotate(-3deg)}.tile-label{background:var(--peach);color:var(--wood-900);padding:4px 8px 5px;border:1px solid var(--line);border-radius:8px;box-shadow:0 3px 8px #4b362114;min-width:64px;max-width:104px;text-align:center}.tile-label strong{display:block;font-size:12px;line-height:1.45;font-weight:600;white-space:nowrap}.tile-label small{display:block;color:var(--wood-700);font-size:10px;line-height:1.5;white-space:nowrap}.tile.current .tile-label{background:var(--wood-700);color:var(--paper);border-color:var(--wood-700)}.tile.current .tile-label small{color:var(--peach)}.tile.current:before{content:"";position:absolute;top:15px;width:70px;height:40px;border:1px solid var(--wood-700);border-radius:50%;transform:rotate(-10deg);box-shadow:0 0 0 6px #f5e8d884;z-index:-1}.tile.rare .art{width:80px;height:75px}.rare-flag{position:absolute;top:-7px;right:0;background:var(--wood-700);color:var(--paper);padding:3px 5px;font-size:9px;border-radius:4px;transform:rotate(5deg)}.tile-number{position:absolute;left:18px;top:7px;background:var(--peach);border:1px solid var(--line);font-size:9px;min-width:18px;height:18px;line-height:16px;border-radius:6px;color:var(--wood-700)}.traveler{position:absolute;width:30px;height:44px;z-index:5;pointer-events:none;transform:translate(-50%,-50%)}.traveler-tag{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);white-space:nowrap;background:var(--wood-700);color:var(--paper);border:2px solid var(--peach);padding:4px 8px;border-radius:20px;font-size:10px;box-shadow:0 3px 8px #4b362126}.traveler.walking .traveler-tag{opacity:0}.walker-figure{position:absolute;width:30px;height:44px;transform-origin:50% 100%;filter:drop-shadow(0 1px 1px #4b36213d)}.walker-figure i{display:block;position:absolute}.walker-head{width:13px;height:13px;top:4px;left:9px;border-radius:50%;background:linear-gradient(100deg,#ecd4b5,#c6a17c);border:1px solid #aa8260}.walker-hat{width:22px;height:5px;left:4px;top:6px;border-radius:50%;background:#99744f;box-shadow:0 1px 1px #4b362133}.walker-hat:before{content:"";position:absolute;width:13px;height:7px;left:5px;top:-5px;border-radius:6px 6px 1px 1px;background:linear-gradient(90deg,#c2a27b,#99744f)}.walker-coat{left:5px;top:16px;width:21px;height:22px;border-radius:8px 8px 5px 5px;background:linear-gradient(95deg,#d8bc97,#f5e8d8 42%,#c5a47e);border:1px solid #ab8964;transform:rotate(-3deg)}.walker-pack{left:4px;top:19px;width:11px;height:14px;border:1px solid #79543d;border-radius:4px;background:linear-gradient(100deg,#967454,#6b463c);box-shadow:inset 0 -3px 0 #4b362122}.walker-leg{width:7px;height:14px;top:30px;border-radius:2px 2px 4px 4px;background:linear-gradient(90deg,#6b463c,#99785b);transform-origin:50% 15%;border-bottom:3px solid var(--wood-900)}.left-leg{left:8px}.right-leg{left:18px}.walker-shadow{position:absolute;width:29px;height:9px;left:1px;bottom:-3px;border-radius:50%;background:#4b362147;filter:blur(2px)}.footprints{position:absolute;inset:0;pointer-events:none;z-index:1}.footstep{position:absolute;width:5px;height:10px;border-radius:55% 55% 40% 40%;background:var(--wood-700);opacity:.35;animation:footprint-fade 1.8s ease-out forwards}.footstep:after{content:"";position:absolute;bottom:-4px;left:1px;width:3px;height:3px;border-radius:50%;background:inherit}@keyframes footprint-fade{0%,25%{opacity:.35}100%{opacity:0}}.map-nudge{position:absolute;left:50%;bottom:190px;transform:translateX(-50%);background:var(--peach);border:1px solid var(--line);border-radius:20px;padding:7px 14px;font-size:10px;white-space:nowrap;box-shadow:0 4px 14px #4b362118;pointer-events:none;z-index:6;transition:opacity .3s}.map-nudge.quiet{opacity:0}
+.control-dock{flex-shrink:0;padding:12px 20px 15px;background:var(--peach);border-top:1px solid var(--line);position:relative;z-index:7}.journey-status{display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:10px;gap:8px}.journey-status b{font-weight:500;color:var(--wood-700)}.journey-status span:last-child{color:var(--wood-700);font-size:10px}.dock-row{display:flex;gap:10px;align-items:stretch}.roll-btn{flex:1;display:flex;justify-content:center;align-items:center;gap:12px;min-height:58px;border-radius:14px;background:var(--wood-700);color:var(--paper);box-shadow:0 4px 10px #6b463c20}.roll-btn:hover{background:var(--wood-hover)}.roll-copy{display:flex;flex-direction:column;gap:3px;text-align:left}.roll-copy b{font-size:15px;font-weight:500;letter-spacing:1px}.roll-copy small{font-size:10px;color:var(--peach)}.mini-die{width:31px;height:31px;border-radius:8px;background:var(--peach);color:var(--wood-700);display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:6px;gap:3px;transform:rotate(-9deg);box-shadow:2px 3px 0 #4b362140}.pip{display:block;width:100%;height:100%;border-radius:50%;background:currentColor}.bag-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:68px;border:1px solid var(--line);background:var(--paper);border-radius:14px;font-size:11px;position:relative}.badge{position:absolute;top:-5px;right:0;border-radius:10px;min-width:18px;height:18px;line-height:18px;background:var(--wood-700);color:var(--paper);font-size:10px}.badge:empty{display:none}.dock-meta{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:7px;font-size:10px;color:var(--wood-700)}.dock-meta button{font-size:10px;min-height:30px;background:none;padding:0}.demo-label{font-size:9px;color:var(--wood-700)}
+.sidebar{overflow-y:auto;padding:24px 23px 20px;border-left:1px solid var(--line);background:var(--peach);scrollbar-width:thin}.sidebar-intro h2{font:600 24px var(--serif);line-height:1.6;margin:10px 0 7px;letter-spacing:1px}.sidebar-intro p{font-size:12px;line-height:1.9;color:var(--wood-700)}.wallet{display:flex;margin:24px 0 20px;padding:15px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.wallet div{flex:1;text-align:center;border-right:1px solid var(--line)}.wallet div:last-child{border:0}.wallet small{display:block;font-size:10px;color:var(--wood-700)}.wallet strong{display:block;font:500 26px var(--serif);margin-top:5px}.feature-card{padding:16px 16px 14px;border:1px solid var(--line);border-radius:16px;background:var(--paper)}.feature-head{display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--wood-700)}.feature-art{height:105px;display:flex;justify-content:center;align-items:center;background:radial-gradient(ellipse,var(--peach),transparent 72%);margin:8px 0}.feature-art .art{width:102px;height:102px}.feature-card h3{font:600 19px var(--serif);text-align:center}.feature-card p{font-size:11px;line-height:1.8;text-align:center;color:var(--wood-700);margin:7px 0 12px}.feature-card .outline-btn{width:100%;font-size:11px}.section-title{display:flex;align-items:center;justify-content:space-between;font-size:12px;margin:22px 0 12px}.section-title small{font-size:10px;color:var(--wood-700)}.energy-grid{display:flex;gap:6px}.energy-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;font-size:10px}.energy-seal{width:36px;height:39px;border:1px solid var(--line);border-radius:16px 16px 7px 7px;background:var(--paper);display:grid;place-items:center;color:var(--wood-700);font-family:var(--serif);font-size:15px}.energy-item.lit .energy-seal{background:var(--wood-700);color:var(--peach)}.energy-item small{font-size:9px;color:var(--wood-700)}.side-note{font-size:10px;line-height:1.9;margin:16px 0;color:var(--wood-700)}.side-footer{font-family:var(--serif);font-size:11px;letter-spacing:3px;text-align:center;border-top:1px solid var(--line);padding-top:20px;margin-top:22px}
+/* Native dialog provides modal focus trapping, Escape, and background inertness. */
+dialog{padding:0;border:1px solid var(--line);border-radius:24px;width:min(410px,calc(100vw - 28px));max-height:calc(100vh - 36px);max-height:calc(100dvh - 36px);background:var(--peach);color:var(--wood-900);box-shadow:0 24px 90px #4b36214d;overflow:auto}dialog::backdrop{background:#4b36217a;backdrop-filter:blur(7px)}.dialog-head{display:flex;align-items:center;justify-content:space-between;padding:15px 18px 0}.dialog-head .eyebrow{font-size:9px}.close-btn{width:40px;height:40px;display:grid;place-items:center;background:none;border-radius:50%}.close-btn:hover{background:var(--sand)}.dialog-body{padding:0 25px 25px}.dialog-art{height:130px;display:flex;justify-content:center;align-items:center;background:radial-gradient(ellipse,var(--sand),transparent 70%);margin:0 0 8px}.dialog-art .art{width:126px;height:126px}.dialog-title{font:600 26px var(--serif);line-height:1.4;text-align:center;margin:0 0 10px}.dialog-desc{text-align:center;font-size:12px;line-height:1.8;color:var(--wood-700);margin-bottom:17px}.detail-rows{margin:16px 0 20px;border-block:1px solid var(--line);padding:4px 0}.detail-row{display:grid;grid-template-columns:66px 1fr;gap:8px;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:12px;line-height:1.75}.detail-row:last-child{border:0}.detail-row dt{color:var(--wood-700)}.detail-row dd{margin:0}.micro-note{font-size:10px;line-height:1.8;color:var(--wood-700);text-align:center;margin:12px 0 0}.reward-kicker{text-align:center;letter-spacing:3px;font-size:11px;margin-bottom:12px;color:var(--wood-700)}.reward-stamp{width:72px;height:72px;border:1px solid var(--wood-700);border-radius:50%;margin:18px auto;display:grid;place-items:center;position:relative;animation:stamp-in .5s cubic-bezier(.2,1.8,.5,1)}.reward-stamp:after{content:"";position:absolute;inset:5px;border:1px solid var(--line);border-radius:50%}.reward-stamp svg{width:33px;height:33px;stroke-dasharray:60;stroke-dashoffset:60;animation:draw-check .5s .2s forwards}.step-list{padding:0;margin:20px 0;list-style:none;counter-reset:steps}.step-list li{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);font-size:12px;line-height:1.9}.step-list li:before{counter-increment:steps;content:"0" counter(steps);font:22px var(--serif);color:var(--wood-700)}.step-list b{display:block;font-weight:600}.bag-list{display:flex;flex-direction:column;gap:10px;margin-top:20px}.prize-card{border:1px solid var(--line);border-radius:15px;background:var(--paper);padding:13px;display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:center}.prize-card .art{width:52px;height:60px}.prize-card h3{font-size:13px;font-weight:500;line-height:1.6}.prize-card small{display:block;color:var(--wood-700);font-size:10px;margin:5px 0 10px}.prize-card button{font-size:11px;padding:8px 12px;border-radius:9px;min-height:40px}.empty{padding:24px 0;text-align:center}.empty .art{width:100px;height:100px;margin:auto auto 18px}.empty p{font-size:12px;line-height:1.8;color:var(--wood-700)}.overview-list{display:flex;flex-direction:column;gap:9px;margin:18px 0}.overview-row{display:flex;align-items:center;gap:12px;text-align:left;padding:11px;background:var(--paper);border:1px solid var(--line);border-radius:13px;min-height:65px}.overview-row .art{width:43px;height:43px}.overview-row b{display:block;font:600 16px var(--serif)}.overview-row small{display:block;font-size:10px;color:var(--wood-700);margin-top:5px}.overview-row span{flex:1}.overview-row em{font-size:10px;font-style:normal;color:var(--wood-700)}.overview-map{position:relative;width:100%;height:180px;background:url('assets/journey-atlas.jpg') center 54%/cover;border-radius:14px;border:1px solid var(--line);overflow:hidden}.overview-map:after{content:"五片秘境 · 29 站旅程";position:absolute;left:12px;bottom:12px;padding:6px 10px;border-radius:6px;background:var(--peach);font-size:11px;color:var(--wood-900)}.overview-map svg{width:100%;height:100%;opacity:.9}.choice-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.choice-row button{min-height:65px}.receipt-ticket{text-align:center;border-block:1px solid var(--line);padding:14px 8px;margin:16px 0;background:#ffffff55}.receipt-ticket span{display:block;font-size:13px}.receipt-ticket small{display:block;font-size:11px;color:var(--wood-700);margin-top:8px}.receipt-instruction,.receipt-record{font-size:11px;line-height:1.9;text-align:center;color:var(--wood-700);margin:18px 0}.receipt-actions{margin-top:22px}.receipt-actions button{font-size:12px;padding:12px 10px}.gift-keepsake{position:relative;width:220px;height:215px;margin:4px auto 20px}.keepsake-handle{position:absolute;left:65px;top:30px;width:90px;height:85px;border:3px solid var(--taupe);border-bottom:0;border-radius:45px 45px 0 0;opacity:.6}.keepsake-gift{position:absolute;left:42px;top:0;width:136px;height:136px;animation:gift-tuck 1.35s cubic-bezier(.25,.6,.25,1) both}.keepsake-gift .art{width:136px;height:136px}.keepsake-pocket{position:absolute;left:34px;bottom:8px;width:152px;height:105px;border:1px solid #c9b297;border-radius:3px 3px 13px 13px;background:linear-gradient(100deg,#ead4b7,var(--sand) 40%,#e6cfb0);box-shadow:0 9px 14px #4b362114;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;animation:pocket-settle 1.35s ease-out both}.keepsake-pocket:before{content:"";position:absolute;inset:5px 7px;border:1px solid #c9b29766;border-top:0;border-radius:0 0 8px 8px}.keepsake-pocket span{font:23px var(--serif);letter-spacing:1px}.keepsake-pocket small{font-size:9px;letter-spacing:2px;color:var(--wood-700)}.receipt-stamp{position:absolute;right:11px;bottom:0;width:66px;height:66px;border:1px solid var(--wood-700);border-radius:50%;background:var(--peach);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--wood-700);box-shadow:inset 0 0 0 4px var(--peach),inset 0 0 0 5px var(--line);font-size:10px;transform:rotate(-9deg);animation:receipt-seal .4s 1s cubic-bezier(.2,.7,.25,1) both}.receipt-stamp svg{width:23px;height:23px}@keyframes gift-tuck{0%{transform:translateY(-12px) rotate(-5deg)}45%{transform:translateY(-18px) rotate(-2deg)}100%{transform:translateY(24px) rotate(0)}}@keyframes pocket-settle{0%,45%{transform:translateY(0)}72%{transform:translateY(3px)}100%{transform:translateY(0)}}@keyframes receipt-seal{from{opacity:0;transform:translateY(-6px) scale(1.12) rotate(-14deg)}to{opacity:1;transform:translateY(0) scale(1) rotate(-9deg)}}.buttons-row{display:flex;gap:9px}.buttons-row button{flex:1}
+/* Ceramic 3D dice: all six real faces remain part of the rotating cube. */
+.dice-overlay{position:absolute;inset:0;z-index:100;background:#fff3e0c9;backdrop-filter:blur(7px);display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;pointer-events:all}.dice-stage{width:250px;height:230px;position:relative;perspective:850px;display:grid;place-items:center}.dice-surface{position:absolute;left:4px;right:4px;height:115px;bottom:0;border-radius:50%;border:1px solid #cdbca459;background:radial-gradient(ellipse,#eadac3aa,#f5e8d844 68%,transparent 72%);box-shadow:inset 0 0 15px #fff3e0}.dice-toss{width:84px;height:84px;position:relative;transform-style:preserve-3d;z-index:2}.dice-cube{position:relative;width:84px;height:84px;transform-style:preserve-3d;transform:rotateX(-24deg) rotateY(32deg)}.dice-face{position:absolute;inset:0;background:linear-gradient(145deg,var(--paper),var(--peach) 70%,var(--sand));border:1px solid var(--line);border-radius:4px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:17px;gap:8px;color:var(--wood-700);backface-visibility:hidden;box-shadow:inset 0 0 0 3px #fff3e060,inset -3px -3px 8px #4b36211a}.dice-face .pip{box-shadow:inset 1px 2px 2px #4b362144}.dice-face[data-value="1"]{transform:translateZ(42px)}.dice-face[data-value="6"]{transform:rotateY(180deg) translateZ(42px)}.dice-face[data-value="3"]{transform:rotateY(90deg) translateZ(42px)}.dice-face[data-value="4"]{transform:rotateY(-90deg) translateZ(42px)}.dice-face[data-value="2"]{transform:rotateX(90deg) translateZ(42px)}.dice-face[data-value="5"]{transform:rotateX(-90deg) translateZ(42px)}.dice-shadow{position:absolute;bottom:36px;left:82px;width:86px;height:18px;background:var(--wood-900);opacity:.24;border-radius:50%;filter:blur(4px)}.dice-ring{position:absolute;width:100px;height:42px;border:1px solid var(--wood-700);border-radius:50%;bottom:39px;opacity:0}.dice-ring.land{animation:landing .7s ease-out}.dice-overlay .eyebrow{font-size:10px}.dice-message{font:600 28px var(--serif);letter-spacing:3px;margin:12px 0}.dice-sub{font-size:12px;line-height:1.8;color:var(--wood-700)}.confetti-wrap{position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden}.confetti{position:absolute;top:20%;width:6px;height:12px;background:var(--wood-700);animation:confetti 1.8s ease-out forwards}.toast{position:absolute;left:50%;bottom:190px;transform:translateX(-50%);background:var(--wood-700);color:var(--paper);padding:10px 16px;border-radius:12px;z-index:200;font-size:12px;white-space:nowrap}.live-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+@keyframes landing{from{transform:scale(.7);opacity:.65}to{transform:scale(2.5);opacity:0}}@keyframes stamp-in{from{transform:scale(1.7) rotate(-18deg);opacity:0}to{transform:scale(1) rotate(-8deg);opacity:1}}@keyframes draw-check{to{stroke-dashoffset:0}}@keyframes scan{0%,100%{top:16px}50%{top:156px}}@keyframes confetti{0%{transform:translate(0,-20px) rotate(0);opacity:0}10%{opacity:1}100%{transform:translate(var(--dx),65vh) rotate(560deg);opacity:0}}
+@media(min-width:1200px){.workspace{grid-template-columns:minmax(0,1fr) 338px}.map-viewport .map-world{background-size:cover;background-position:center}.tile .art{width:82px;height:75px}.tile[data-kind="points"] .art{width:48px;height:45px}.tile.rare .art{width:88px;height:84px}.tile-label strong{font-size:13px}.tile{width:114px}.tile-label{max-width:114px}.region-nav{left:28px;right:28px}.region-nav button{font-size:12px}}
+@media(max-width:899px){.app{max-width:540px;width:calc(100% - 28px);margin:14px auto;height:calc(100vh - 28px);height:calc(100dvh - 28px);border-radius:22px}.workspace{display:flex;flex-direction:column}.map-shell{flex:1}.sidebar{display:none}.header{padding:14px 18px}.brand-word{font-size:21px;padding-right:12px}.brand-lockup{gap:12px}.title-lockup h1{font-size:21px}.member-tag{display:none}.map-toolbar{padding:5px 16px}.region-nav{top:65px}.control-dock{padding:10px 16px 10px}.map-nudge{bottom:177px}.header-actions{gap:0}.header-actions .text-btn{padding:0 5px}.header-actions .text-btn svg{width:17px}.region-title{font-size:16px}}
+@media(max-width:540px){.app{width:100%;height:100vh;height:100dvh;margin:0;border:0;border-radius:0}.header{padding:12px 16px 10px;padding-top:max(12px,env(safe-area-inset-top))}.brand-word{display:none}.title-lockup h1{font-size:23px}.control-dock{padding-bottom:max(10px,env(safe-area-inset-bottom))}.map-tools .text-btn{font-size:11px;padding:0 6px}.region-nav{left:11px;right:11px;gap:4px}.region-nav button{font-size:10px}.map-toolbar{padding-left:16px}.region-title small{font-size:10px;margin-left:6px}.tile{width:100px}.tile-label{max-width:100px;padding:4px 6px}.tile-label strong{font-size:12px}.map-world{height:2070px}.header-actions .text-btn{font-size:11px}.dialog-body{padding:0 20px 22px}}
+@media(max-height:650px){.header{padding-top:8px;padding-bottom:8px}.title-lockup .eyebrow{display:none}.control-dock{padding-top:8px;padding-bottom:6px}.dock-meta{margin-top:3px}.journey-status{margin-bottom:6px}.roll-btn{min-height:50px}.map-toolbar{padding-top:0;padding-bottom:0}.region-nav{top:56px}.region-nav button{min-height:32px;padding:7px 0}.map-nudge{display:none}.dialog-art{height:95px}.dialog-art .art{width:95px;height:95px}.dialog-title{font-size:23px}.detail-row{padding:7px 0}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}.confetti-wrap{display:none}}
+</style>
+</head>
+<body>
+<main class="app" id="app">
+  <header class="header">
+    <div class="brand-lockup"><div class="brand-word">Full愈</div><div class="title-lockup"><h1>愈行之旅</h1><div class="eyebrow">A LITTLE JOURNEY, A LITTLE JOY</div></div></div>
+    <div class="header-actions"><span class="member-tag">365 年度会员专属</span><button class="text-btn" onclick="showRules()" aria-label="查看游戏玩法"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4m0 3v.1"/></svg>玩法</button><button class="text-btn" onclick="showEnergy()" aria-label="查看五感能量站"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 20V11M12 14C4 14 4 7 4 7s8-1 8 7ZM12 11c0-8 8-8 8-8s1 8-8 8Z"/></svg>能量站</button></div>
+  </header>
+  <div class="workspace">
+    <section class="map-shell" aria-label="探索地图">
+      <div class="map-toolbar"><div class="region-title" id="regionTitle">茶园<small>时叙 · 从一杯茶出发</small></div><div class="map-tools"><button class="text-btn" id="overviewBtn" onclick="showOverview()"><svg class="ui-icon" viewBox="0 0 24 24"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2Zm6-2v16m6-14v16"/></svg>全图</button><button class="text-btn" onclick="returnToPlayer()" aria-label="返回当前位置"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>定位</button></div></div>
+      <nav class="region-nav" id="regionNav" aria-label="五区快速跳转"></nav>
+      <div class="map-viewport" id="mapViewport" tabindex="0" aria-label="可上下滚动的地图，点击任一驿站查看奖品">
+        <div class="map-world" id="world"><svg class="trail" id="trail" viewBox="0 0 420 2070" preserveAspectRatio="none" aria-hidden="true"></svg><div id="nodes"></div><div class="footprints" id="footprints" aria-hidden="true"></div><div class="traveler" id="traveler" aria-hidden="true"><div class="traveler-tag">我在这里</div><div class="walker-shadow"></div><div class="walker-figure" id="walkerFigure"><i class="walker-leg left-leg"></i><i class="walker-leg right-leg"></i><i class="walker-coat"></i><i class="walker-pack"></i><i class="walker-head"></i><i class="walker-hat"></i></div></div></div>
+      </div>
+      <div class="map-nudge" id="mapNudge">向上探索 · 点击驿站，看看有什么</div>
+      <footer class="control-dock">
+        <div class="journey-status"><b id="positionLabel">起点 · 准备出发</b><span>第 <span id="lapCount">0</span> 圈 · 积分 <span id="pointsCount">0</span></span></div>
+        <div class="dock-row"><button class="roll-btn" id="rollBtn" onclick="roll()"><span class="mini-die" id="miniDie" aria-hidden="true"></span><span class="roll-copy"><b id="rollLabel">掷骰子，去遇见</b><small>剩余 <span id="diceCount">12</span> 颗 · 每次消耗 1 颗</small></span></button><button class="bag-btn" onclick="showBag()" aria-label="我的奖品"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 8h16v13H4Zm-1 0V5h18v3M12 5v16M12 5C4 5 5-2 9 1c2 1 3 4 3 4Zm0 0c8 0 7-7 3-4-2 1-3 4-3 4Z" transform="translate(0 1) scale(1 .92)"/></svg><span>我的奖品</span><span class="badge" id="bagBadge"></span></button></div>
+        <div class="dock-meta"><button onclick="showDiceSources()">如何获得骰子 <span aria-hidden="true">↗</span></button><span class="demo-label">交互演示 · 奖励规则待确认</span></div>
+      </footer>
+    </section>
+    <aside class="sidebar">
+      <div class="sidebar-intro"><div class="eyebrow">FULL YU · MEMBER JOURNEY</div><h2>把日常的放松，<br>走成一路的惊喜。</h2><p>掷出一颗骰子，穿过五片秘境。<br>停在哪一站，就收下那一份小礼物。</p></div>
+      <div class="wallet"><div><small>剩余骰子</small><strong id="sideDice">12</strong></div><div><small>我的积分</small><strong id="sidePoints">0</strong></div><div><small>完成圈数</small><strong id="sideLaps">0</strong></div></div>
+      <section class="feature-card" id="featureCard"></section>
+      <div class="section-title"><span>点亮五感能量站</span><small id="energyCount">0 / 5</small></div><div class="energy-grid" id="energyGrid"></div>
+      <p class="side-note">同一区域停留 3 次，点亮一站。<br>集齐五站，解锁年度大奖抽奖资格。</p>
+      <div class="side-footer">放松有道　自在生活</div>
+    </aside>
+  </div>
+  <div class="dice-overlay" id="diceOverlay" hidden aria-live="polite"><div class="eyebrow">ONE ROLL, A LITTLE FURTHER</div><div class="dice-stage"><div class="dice-surface"></div><div class="dice-shadow" id="diceShadow"></div><div class="dice-toss" id="diceToss"><div class="dice-cube" id="diceCube"></div></div></div><div class="dice-message" id="diceMessage">掷出一颗小期待</div><p class="dice-sub" id="diceSub">等它慢慢停稳</p></div>
+  <div class="toast" id="toast" hidden role="status"></div><div class="live-status" id="liveStatus" role="status" aria-live="polite"></div>
+</main>
+<dialog id="sheet" aria-labelledby="dialogTitle"><div class="dialog-head"><span class="eyebrow" id="dialogEyebrow">FULL YU JOURNEY</span><button class="close-btn" id="closeDialogBtn" onclick="closeSheet()" aria-label="关闭弹窗"><svg class="ui-icon" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div><div class="dialog-body" id="dialogBody"></div></dialog>
+<div class="confetti-wrap" id="confettiWrap" aria-hidden="true"></div>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const reducedMotion=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const ESCAPES={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+const escapeHtml=value=>String(value).replace(/[&<>"']/g,c=>ESCAPES[c]);
+const art=(name,cls='')=>`<img class="art ${cls}" src="assets/${name}.webp" alt="" draggable="false">`;
+const positions=[[100,1880],[229,1843],[336,1750],[226,1690],[88,1655],[82,1540],[207,1504],[337,1450],[326,1335],[196,1295],[76,1244],[96,1126],[230,1100],[339,997],[231,937],[96,915],[74,798],[199,743],[329,732],[338,620],[204,577],[81,535],[115,416],[241,401],[337,302],[235,250],[91,226],[126,113],[270,100]];
+const ZONES=[
+ {name:'茶园',brand:'时叙',en:'TEA GARDEN',message:'从一杯茶出发',first:0,last:5,labelY:1960,center:1770,art:'tea'},
+ {name:'花径',brand:'轻疗',en:'FLOWER PATH',message:'给身体一个暂停',first:6,last:11,labelY:1560,center:1370,art:'spa'},
+ {name:'静湖',brand:'在场',en:'STILL LAKE',message:'把注意力交还自己',first:12,last:16,labelY:1160,center:970,art:'bowl'},
+ {name:'杉谷',brand:'深疗',en:'CEDAR VALLEY',message:'在自然里深呼吸',first:17,last:22,labelY:834,center:590,art:'spa'},
+ {name:'Sense Guide',brand:'零售',en:'SENSE GUIDE',message:'把放松带回家',first:23,last:28,labelY:325,center:160,art:'candle'}
+];
+const tile=(kind,title,sub,artName,zone,more={})=>({kind,title,sub,art:artName,zone,...more});
+const points=(amount,zone)=>tile('points',`+${amount} 积分`,'停留即得','coins',zone,{amount,description:'积分直接记入账户，可用于后续兑换权益。',usage:'自动到账，无需到店领取。',expiry:'演示积分不设有效期'});
+const event=zone=>tile('event','五感惊喜卡','积分 / 额外骰子','cards',zone,{description:'翻开一张五感卡，遇见一份额外惊喜。',usage:'随机获得 15、20、30 积分，或 2 颗骰子。',expiry:'奖励即时到账'});
+const TILES=[
+ tile('start','旅途起点','每圈 +50 积分','cabin',0,{description:'每完成一圈，获得 50 积分和 1 颗骰子。',usage:'经过或停在起点均可获得，每圈只发一次。',expiry:'初次出发不重复发圈奖'}),
+ points(10,0),
+ tile('prize','免费茶饮','时叙 · 一杯','tea',0,{description:'一杯时叙精选茶饮，把旅途的第一份惊喜握在手心。',usage:'到店出示奖品页，由店员确认，兑换一杯活动指定茶饮。',expiry:'获得后 30 天内使用',days:30}),
+ points(8,0),event(0),points(15,0),points(10,1),points(20,1),
+ tile('prize','睡眠喷雾','价值 ¥198 · 到店领','spray',1,{rare:true,physical:true,days:14,description:'一瓶精油睡眠喷雾，把放松带回日常。',usage:'获得后进入「我的奖品」，到店出示奖品页，由店员确认领取一瓶。',expiry:'获得后 14 天内领取'}),
+ tile('prize','轻疗 8 折券','30 分钟体验','spa',1,{days:30,description:'给自己留出 30 分钟，体验全感舒筋。',usage:'用于活动指定的 30 分钟轻疗项目，按原价享 8 折；非免费体验。',expiry:'获得后 30 天内使用；需提前预约'}),
+ points(12,1),event(1),points(15,2),points(10,2),
+ tile('wish','许愿小站','积分 / 骰子二选一','wish',2,{description:'这一次，把选择权留给自己。',usage:'停留后可选择 20 积分或 1 颗骰子，仅可选一份。',expiry:'本次停留内选择'}),
+ tile('prize','在场体验课','免费上一节课','bowl',2,{days:30,description:'一节具身体验课程，感受身心在场。',usage:'预约活动指定体验课，到店出示奖品页，由店员确认；每券限一人一节。',expiry:'获得后 30 天内使用；需提前预约'}),
+ points(20,2),points(8,3),event(3),points(18,3),
+ tile('prize','深疗抵扣券','项目减 ¥50','spa',3,{days:30,description:'为下一次深度放松，留下一份小小心意。',usage:'预约活动指定深疗项目，到店核销抵扣 50 元；非现金。',expiry:'获得后 30 天内使用；需提前预约'}),
+ tile('prize','全感舒筋','免费体验 60 分钟','spa',3,{rare:true,days:30,description:'完整的 60 分钟，交给一次全感舒筋体验。',usage:'提前预约，到店出示奖品页，由店员确认，免费体验一次指定服务。',expiry:'获得后 30 天内使用；需提前预约'}),
+ points(25,3),points(10,4),event(4),points(15,4),
+ tile('prize','香氛蜡烛小样','Sense Guide · 到店领','candle',4,{physical:true,days:14,description:'让一缕植物香气，陪你回到自己的节奏。',usage:'到店出示奖品页，由店员确认，领取活动指定蜡烛小样一份。',expiry:'获得后 14 天内领取'}),
+ points(20,4),points(30,4)
+];
+TILES.forEach((t,i)=>{t.id=i;t.position=positions[i]});
+const S={pos:0,dice:12,pts:0,laps:0,prizes:[],visits:[0,0,0,0,0],rolling:false,selected:2,pendingWish:false,fullEnergyAwarded:false};
+let dialogMode='',redeemSession=null,toastTimer=null,lapBonus=0;
+/* 正式会员会话：票据换短期 token 后，棋盘、掷骰与礼物以 CRM 为准。 */
+const LIVE={active:false,token:'',points:0};
+const LIVE_TILES=[0,2,4,8,10,11,13,14,17,20,23,26];
+const liveTileOf=station=>LIVE_TILES[Number(station)]??0;
+const liveStationOf=tile=>LIVE_TILES.indexOf(tile);
+const liveHeaders=()=>({Accept:'application/json','Content-Type':'application/json',Authorization:`Bearer ${LIVE.token}`});
+const liveApi=(path,options={})=>fetch(path,{method:options.method||'GET',headers:liveHeaders(),body:options.body,credentials:'same-origin'}).then(async response=>{const body=await response.json().catch(()=>null);if(!response.ok)throw new Error((body&&(body.message||body.error))||'服务暂时不可用');return body});
+/* 本圈每站奖励由 CRM 生成：积分格逐圈递增，礼物站可能是免费体验券。 */
+const liveYuan=cents=>{const v=Number(cents||0)/100;return Number.isInteger(v)?String(v):v.toFixed(2)};
+const liveTileName=tile=>{const station=liveStationOf(tile);if(station<0)return '沿途风景';const name=String((LIVE.stations&&LIVE.stations[station]&&LIVE.stations[station].name)||'');return station===0?`${name||'起点'} · 准备出发`:name||`第 ${String(station).padStart(2,'0')} 站`};
+const liveCellOf=station=>(LIVE.cells||[]).find(cell=>Number(cell.station)===Number(station))||null;
+const liveCellTitle=cell=>!cell?'本圈奖励生成中':cell.kind==='voucher'?String(cell.name||'免费体验券'):`+${Number(cell.points)||0} 积分`;
+const liveCellNote=cell=>!cell?'本圈奖励以会员中心生成为准。':cell.kind==='voucher'?`礼物站 · 停留可得「${escapeHtml(cell.name||'免费体验券')}」免费体验券`:`停留可得 ${Number(cell.points)||0} 积分，自动到账`;
+function paintLiveTiles(){
+ document.querySelectorAll('#nodes .tile').forEach(el=>{
+  const id=Number(el.dataset.id),station=liveStationOf(id),label=el.querySelector('.tile-label'),flag=el.querySelector('.rare-flag');
+  if(flag)flag.remove();
+  if(!label)return;
+  if(station<0){el.classList.add('scenery');label.innerHTML='<strong>沿途风景</strong><small>路过即景</small>';el.setAttribute('aria-label','沿途风景，不对应会员站点');return}
+  const cell=liveCellOf(station),name=String((LIVE.stations[station]&&LIVE.stations[station].name)||'').split(' · ').pop();
+  el.classList.remove('scenery');el.classList.toggle('live-voucher',!!cell&&cell.kind==='voucher');
+  label.innerHTML=`<strong>${escapeHtml(liveCellTitle(cell))}</strong><small>${escapeHtml(name)}${cell&&cell.kind==='voucher'?' · 体验券':''}</small>`;
+  el.setAttribute('aria-label',`第${station}站${name}，${liveCellTitle(cell)}，查看详情`);
+ });
+}
+function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{$('toast').hidden=true},3200)}
+function applyLiveSession(session,points){
+ LIVE.active=true;LIVE.points=Number(points)||0;LIVE.rule=session.rule||{};
+ LIVE.stations=(session.board&&session.board.stations||[]).map((name,index)=>({index,name}));
+ LIVE.chests=(session.board&&session.board.chestStations||[]).slice();
+ LIVE.cells=(session.board&&Array.isArray(session.board.cells))?session.board.cells:[];LIVE.progress=session.progress||null;
+ S.dice=session.dice.balance;S.pos=liveTileOf(session.dice.station);S.laps=session.dice.lap;S.pts=LIVE.points;
+ S.prizes=session.prizes.filter(p=>p.status!=='EXPIRED').map(p=>({id:p.id,name:p.name,used:p.status==='COLLECTED',live:true,expiresAt:new Date(p.expiresAt).getTime(),station:p.station}));
+ document.body.classList.add('live-mode');
+ const title=document.querySelector('.sidebar .section-title');if(title)title.setAttribute('hidden','');
+ const note=document.querySelector('.side-note');if(note)note.setAttribute('hidden','');
+ const label=document.querySelector('.demo-label');if(label)label.textContent='会员身份已连接';
+ const sources=document.querySelector('.dock-meta button');if(sources)sources.textContent='骰子与规则';
+ paintLiveTiles();updateStats();updatePlayer();updateFeature();returnToPlayer(false);
+}
+async function bootLive(){
+ let ticket='';try{ticket=new URLSearchParams(location.search).get('ticket')||''}catch(error){}
+ if(!ticket)return;
+ try{
+  const response=await fetch('/api/v1/brand-member/game/exchange',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({ticket}),credentials:'same-origin'});
+  const body=await response.json().catch(()=>null);
+  if(!response.ok)throw new Error((body&&(body.message||body.error))||'票据已失效，请回到会员页重新进入');
+  LIVE.token=body.token;
+  applyLiveSession(body.session,body.points&&body.points.balance);
+ }catch(error){
+  const label=document.querySelector('.demo-label');if(label)label.textContent='未连接会员账户 · 演示模式';
+  toast(error&&error.message?error.message:'票据已失效，请回到会员页重新进入');
+ }
+}
+function pipMarkup(value){const layouts={1:[5],2:[1,9],3:[1,5,9],4:[1,3,7,9],5:[1,3,5,7,9],6:[1,3,4,6,7,9]};return layouts[value].map(p=>`<i class="pip" style="grid-area:${Math.ceil(p/3)}/${(p-1)%3+1}"></i>`).join('')}
+function buildMap(){
+ const pointsText=positions.map(([x,y])=>`${x},${y}`);
+ const walkPaths=[];
+ let d=`M ${pointsText[0]}`;
+ for(let i=1;i<positions.length;i++){
+   const [x0,y0]=positions[i-1],[x1,y1]=positions[i];
+   const [xp,yp]=positions[Math.max(0,i-2)],[xn,yn]=positions[Math.min(positions.length-1,i+1)];
+   const curve=` C ${x0+(x1-xp)*.17} ${y0+(y1-yp)*.17},${x1-(xn-x0)*.17} ${y1-(yn-y0)*.17},${x1} ${y1}`;
+   d+=curve;walkPaths.push(`<path data-walk-to="${i}" d="M${x0} ${y0}${curve}"/>`);
+ }
+ const returnPath='M270 100 C410 0 403 220 403 370 L403 1910 Q390 2020 230 1990 Q100 1980 100 1880';
+ walkPaths.push(`<path data-walk-to="0" d="${returnPath}"/>`);
+ $('trail').innerHTML=`<path class="return-trail" d="${returnPath}"/><path class="trail-base" d="${d}"/><path class="trail-paper" d="${d}"/><path class="trail-dots" d="${d}"/><g fill="none" stroke="none">${walkPaths.join('')}</g>`;
+ $('nodes').innerHTML=TILES.map(t=>`<button class="tile ${t.rare?'rare':''}" data-id="${t.id}" data-kind="${t.kind}" style="left:${t.position[0]/420*100}%;top:${t.position[1]}px" aria-label="第${t.id}站，${t.title}，${t.sub}，查看用途" onclick="showTile(${t.id})">${t.rare?'<span class="rare-flag">宝藏大奖</span>':''}<span class="tile-number">${String(t.id).padStart(2,'0')}</span>${art(t.art)}<span class="tile-label"><strong>${t.title}</strong><small>${t.sub}</small></span></button>`).join('');
+ $('regionNav').innerHTML=ZONES.map((z,i)=>`<button onclick="goZone(${i})" data-zone="${i}" aria-label="跳转${z.name}，${z.brand}">${z.name} · ${z.brand}</button>`).join('');
+ $('diceCube').innerHTML=[1,2,3,4,5,6].map(n=>`<div class="dice-face" data-value="${n}" aria-hidden="true">${pipMarkup(n)}</div>`).join('');
+ $('miniDie').innerHTML=pipMarkup(5);
+ updateStats();updatePlayer();updateFeature();
+ returnToPlayer(false);
+}
+function updateStats(){ 
+ for(const [id,value] of Object.entries({diceCount:S.dice,pointsCount:S.pts,lapCount:S.laps,sideDice:S.dice,sidePoints:S.pts,sideLaps:S.laps}))$(id).textContent=value;
+ $('bagBadge').textContent=S.prizes.filter(p=>!p.used&&p.expiresAt>Date.now()).length||'';
+ $('rollBtn').disabled=S.rolling||S.dice<=0||S.pendingWish;
+ $('rollLabel').textContent=S.rolling?'正在旅途中…':S.dice<=0?'骰子用完啦':'掷骰子，去遇见';
+ const t=TILES[S.pos];$('positionLabel').textContent=LIVE.active?liveTileName(S.pos):S.pos===0?'起点 · 准备出发':`第 ${String(S.pos).padStart(2,'0')} 站 · ${t.title}`;
+ const lit=S.visits.filter(v=>v>=3).length;$('energyCount').textContent=`${lit} / 5`;
+ $('energyGrid').innerHTML=ZONES.map((z,i)=>`<div class="energy-item ${S.visits[i]>=3?'lit':''}"><span class="energy-seal">${z.name[0]}</span><span>${z.name}</span><small>${Math.min(3,S.visits[i])} / 3</small></div>`).join('');
+}
+function updatePlayer(){
+ document.querySelectorAll('.tile').forEach((el,i)=>{el.classList.toggle('current',i===S.pos);if(i===S.pos)el.setAttribute('aria-current','step');else el.removeAttribute('aria-current')});
+ const [x,y]=positions[S.pos];$('traveler').style.left=x/420*100+'%';$('traveler').style.top=y-18+'px';
+}
+function setVisibleZone(index){
+ const z=ZONES[index];$('regionTitle').innerHTML=`${z.name}<small>${z.brand} · ${z.message}</small>`;
+ document.querySelectorAll('[data-zone]').forEach((b,i)=>{b.classList.toggle('active',i===index);b.setAttribute('aria-pressed',String(i===index))});
+}
+function returnToPlayer(smooth=true){
+ if(S.rolling&&smooth)return;
+ const vp=$('mapViewport'),y=positions[S.pos][1];
+ vp.scrollTo({top:Math.max(0,y-vp.clientHeight*.55),behavior:smooth&&!reducedMotion()?'smooth':'instant'});setVisibleZone(TILES[S.pos].zone);
+}
+function goZone(index){if(S.rolling)return;closeSheet();const vp=$('mapViewport');vp.scrollTo({top:Math.max(0,ZONES[index].center-vp.clientHeight*.52),behavior:reducedMotion()?'instant':'smooth'});setVisibleZone(index);$('mapNudge').classList.add('quiet')}
+function updateFeature(){const t=TILES[S.selected];if(LIVE.active){const station=LIVE.stations[liveStationOf(t.id)];const chest=station&&LIVE.chests.includes(station.index);$('featureCard').innerHTML=`<div class="feature-head"><span>这一站，有什么？</span><span>${station?`第 ${String(station.index).padStart(2,'0')} 站`:'风景'}</span></div><div class="feature-art">${art(t.art)}</div><h3>${station?escapeHtml(station.name.split(' · ').pop()):t.title}</h3><p>${station?liveCellNote(liveCellOf(station.index)):'沿途风景，不对应会员站点。'}<br>骰子、积分与体验券以会员中心结算为准。</p><button class="outline-btn" onclick="showTile(${t.id})">查看这一站 <span aria-hidden="true">↗</span></button>`;return}$('featureCard').innerHTML=`<div class="feature-head"><span>这一站，有什么？</span><span>第 ${String(t.id).padStart(2,'0')} 站</span></div><div class="feature-art">${art(t.art)}</div><h3>${t.title}</h3><p>${t.sub}<br>${t.kind==='points'?'停留后自动到账，无需领取':'停留可得 · 点击查看怎么使用'}</p><button class="outline-btn" onclick="showTile(${t.id})">看看奖品和使用条件 <span aria-hidden="true">↗</span></button>`}
+function openSheet(mode,eyebrow,html){
+ if(S.rolling)return;
+ if(!['redeem','confirm'].includes(mode))redeemSession=null;
+ dialogMode=mode;$('dialogEyebrow').textContent=eyebrow;$('dialogBody').innerHTML=html;
+ $('closeDialogBtn').hidden=mode==='wish';
+ if(!$('sheet').open)$('sheet').showModal();
+ $('sheet').scrollTop=0;
+}
+function closeSheet(){if(S.pendingWish&&dialogMode==='wish')return;$('sheet').close();cleanupDialog()}
+function cleanupDialog(){if($('sheet').open)return;redeemSession=null;dialogMode=''}
+$('sheet').addEventListener('close',cleanupDialog);
+$('sheet').addEventListener('cancel',e=>{if(S.pendingWish&&dialogMode==='wish')e.preventDefault()});
+function detailRows(t){return `<dl class="detail-rows"><div class="detail-row"><dt>怎样获得</dt><dd>${t.kind==='start'?'完成一圈经过起点':t.kind==='event'?'掷骰后停在此格，随机翻开一张卡':t.kind==='wish'?'掷骰后停在此格，自选一份奖励':'掷骰后停在此格即可获得；路过不发放'}</dd></div><div class="detail-row"><dt>可以做什么</dt><dd>${t.usage}</dd></div><div class="detail-row"><dt>使用期限</dt><dd>${t.expiry}</dd></div></dl>`}
+function showTile(index){if(S.rolling)return;const t=TILES[index];S.selected=index;updateFeature();if(LIVE.active){const station=LIVE.stations[liveStationOf(index)];const chest=station&&LIVE.chests.includes(station.index);openSheet('detail',station?`第 ${String(station.index).padStart(2,'0')} 站 / 会员旅程`:'旅途风景',`<div class="dialog-art">${art(t.art)}</div><h2 id="dialogTitle" class="dialog-title">${station?escapeHtml(station.name.split(' · ').pop()):t.title}</h2><p class="dialog-desc">${station?liveCellNote(liveCellOf(station.index))+'。':'这一格是地图装饰，不对应会员中心的站点。'}</p><div class="detail-rows"><div class="detail-row"><dt>怎样获得</dt><dd>掷骰停在本站即得，路过不发放；每圈奖励重新生成，圈数越多积分越高。</dd></div><div class="detail-row"><dt>可以做什么</dt><dd>积分自动记入 Full愈 会员账户；体验券到店由店员在会员后台确认核销，不需要扫码。</dd></div><div class="detail-row"><dt>使用期限</dt><dd>积分按批次有效期；体验券以「我的奖品」显示的到期日为准。</dd></div></div><button class="primary full" onclick="closeSheet()">知道了，继续探索</button><p class="micro-note">正式会员会话 · 棋盘按 12 站旅程映射展示。</p>`);return}openSheet('detail',`第 ${String(index).padStart(2,'0')} 站 / ${ZONES[t.zone].brand} · ${ZONES[t.zone].name}`,`<div class="dialog-art">${art(t.art)}</div><h2 id="dialogTitle" class="dialog-title">${t.title}</h2><p class="dialog-desc">${t.description}</p>${detailRows(t)}<button class="primary full" onclick="closeSheet()">知道了，继续探索</button><p class="micro-note">这是奖品预览，不会移动棋子或领取奖励。<br>奖品及条件均为本次原型的演示配置。</p>`)}
+function showRules(){if(LIVE.active)return openSheet('rules','HOW TO PLAY',`<h2 id="dialogTitle" class="dialog-title">一颗骰子，一段小旅程</h2><ol class="step-list"><li><div><b>消费积攒骰子</b>有效 Full愈卡会员在轻疗、在场、时叙的实付金额累计，每满 ¥${liveYuan((LIVE.rule||{}).centsPerDie)} 得 1 颗，零头累计到下一颗。</div></li><li><div><b>掷一下，走 1—6 步</b>骰子与落点由会员中心结算，棋子只负责把旅程走出来。</div></li><li><div><b>每一站都有礼</b>停下即得积分，圈数越多积分越高；礼物站可能是免费体验券，到店由店员确认核销。</div></li><li><div><b>退款会扣回</b>退款按每颗 ¥${liveYuan((LIVE.rule||{}).centsPerDie)} 扣回，可扣成负数；之后获得的骰子先补欠账。</div></li></ol><button class="primary full" onclick="closeSheet()">继续旅程</button><p class="micro-note">当前为正式会员会话，奖励与余额以会员中心为准。</p>`);openSheet('rules','HOW TO PLAY',`<h2 id="dialogTitle" class="dialog-title">一颗骰子，一段小旅程</h2><ol class="step-list"><li><div><b>消费积攒骰子</b>365 元年卡会员，在时叙消费、轻疗消费与评价、在场完课后获得骰子。</div></li><li><div><b>掷一下，走 1—6 步</b>骰子停下后，棋子沿小路前进。格子上直接标注奖励；点击可提前看用途。</div></li><li><div><b>停在哪，收下哪份礼</b>积分自动到账；茶饮、体验券、实物进入「我的奖品」，到店出示奖品页，由店员确认领取。</div></li><li><div><b>多走走，点亮五片秘境</b>同一区域停留 3 次点亮能量站；每走完一圈，再得 50 积分和 1 颗骰子。</div></li></ol><button class="primary full" onclick="closeSheet()">出发，遇见一点惊喜</button><p class="micro-note">本原型使用 12 颗演示骰子，不连接会员账户。<br>概率、预算、库存与正式兑换条件尚未配置。</p>`)}
+function showDiceSources(){if(LIVE.active){const rule=LIVE.rule||{};return openSheet('sources','COLLECT YOUR DICE',`<div class="dialog-art">${art('coins')}</div><h2 id="dialogTitle" class="dialog-title">骰子，来自日常的放松</h2><dl class="detail-rows"><div class="detail-row"><dt>三店消费</dt><dd>轻疗、在场、时叙实付累计，每满 ¥${liveYuan(rule.centsPerDie)} 得 1 颗，零头累计到下一颗，不设单笔或每月上限。</dd></div>${LIVE.progress&&LIVE.progress.headline?`<div class="detail-row"><dt>当前进度</dt><dd>${escapeHtml(LIVE.progress.headline)}</dd></div>`:''}${rule.checkinDaily>0?`<div class="detail-row"><dt>每日签到</dt><dd>每天可得 ${rule.checkinDaily} 颗。</dd></div>`:''}<div class="detail-row"><dt>退款</dt><dd>退款按每颗 ¥${liveYuan(rule.centsPerDie)} 扣回，可能扣成负数；后续所得先补欠账。</dd></div></dl><button class="primary full" onclick="closeSheet()">知道了</button><p class="micro-note">具体发放以会员中心规则版本为准。</p>`)}openSheet('sources','COLLECT YOUR DICE',`<div class="dialog-art">${art('coins')}</div><h2 id="dialogTitle" class="dialog-title">骰子，来自日常的放松</h2><dl class="detail-rows"><div class="detail-row"><dt>时叙茶饮</dt><dd>每笔消费获得 1 颗，不设百元门槛。</dd></div><div class="detail-row"><dt>轻疗消费</dt><dd>按实付金额阶梯发放；初版每满 100 元得 1 颗，额外档位待核定。</dd></div><div class="detail-row"><dt>轻疗评价</dt><dd>服务后评价再得 1 颗，替代原有大转盘；每笔订单限一次。</dd></div><div class="detail-row"><dt>在场课程</dt><dd>每次完课获得 2 颗。</dd></div></dl><button class="primary full" onclick="closeSheet()">知道了</button><p class="micro-note">发放标准为初版提案；本地演示不发生消费或发放。</p>`)}
+function showEnergy(){openSheet('energy','FIVE PLACES, ONE JOURNEY',`<h2 id="dialogTitle" class="dialog-title">点亮你的五感地图</h2><p class="dialog-desc">在同一区域停留 3 次，就点亮一座能量站。<br>集齐五站，解锁年度大奖抽奖资格。</p><div class="overview-list">${ZONES.map((z,i)=>`<div class="overview-row">${art(z.art)}<span><b>${z.name} · ${z.brand}</b><small>${S.visits[i]>=3?'已点亮':`还需停留 ${3-S.visits[i]} 次`}</small></span><em>${Math.min(3,S.visits[i])} / 3</em></div>`).join('')}</div><button class="primary full" onclick="closeSheet()">继续我的旅途</button><p class="micro-note">年度大奖内容和正式发放规则待确认；不是保底实物大奖。</p>`)}
+function showOverview(){openSheet('overview','YOUR JOURNEY AT A GLANCE',`<h2 id="dialogTitle" class="dialog-title">五片秘境，一路惊喜</h2><p class="dialog-desc">共 29 站 · 点击区域即可抵达查看<br>浏览地图不会移动棋子</p><div class="overview-map" aria-hidden="true"><svg viewBox="0 0 420 2070" preserveAspectRatio="none">${$('trail').innerHTML}</svg></div><div class="overview-list">${ZONES.map((z,i)=>`<button class="overview-row" onclick="goZone(${i})">${art(z.art)}<span><b>${z.name} · ${z.brand}</b><small>${['免费茶饮 / 积分 / 惊喜卡','睡眠喷雾 / 轻疗 8 折券','在场体验课 / 许愿小站','免费全感舒筋 / 深疗抵扣券','香氛蜡烛小样 / 积分'][i]}</small></span><em>${z.first}–${z.last} 站 ↗</em></button>`).join('')}</div><button class="outline-btn full" onclick="closeSheet();returnToPlayer()">返回我的位置</button>`)}
+function setDicePose(rx,ry,rz,x,height){
+ const toss=$('diceToss'),cube=$('diceCube'),shadow=$('diceShadow');
+ toss.style.transform=`translate3d(${x}px,${-height}px,0) rotateX(-56deg) rotateY(24deg)`;
+ cube.style.transform=`rotateX(${rx+90}deg) rotateY(${ry}deg) rotateZ(${rz}deg)`;
+ shadow.style.transform=`translateX(${x}px) scale(${1+height/210})`;
+ shadow.style.opacity=String(.24/(1+height/36));shadow.style.filter=`blur(${4+height/15}px)`;
+ // One light source; different face shading makes a solid die rather than floating paper faces.
+ const camera=new DOMMatrix(getComputedStyle(toss).transform),m=camera.multiply(new DOMMatrix(getComputedStyle(cube).transform));
+ const restingSupport=42*(Math.abs(camera.m12)+Math.abs(camera.m22)+Math.abs(camera.m32));
+ const currentSupport=42*(Math.abs(m.m12)+Math.abs(m.m22)+Math.abs(m.m32));
+ toss.style.transform=`translate3d(${x}px,${restingSupport-currentSupport-height}px,0) rotateX(-56deg) rotateY(24deg)`;
+ cube.querySelectorAll('.dice-face').forEach(face=>{const normal=m.multiply(new DOMMatrix(getComputedStyle(face).transform));const light=Math.max(.68,Math.min(1, .81-normal.m31*.16-normal.m32*.2+normal.m33*.12));face.style.filter=`brightness(${light})`});
+}
+// Fixed-volume die, ballistic arcs, diminishing impacts, then a short weighted rock to rest.
+async function tossDice(result){
+ const rotations={1:[0,0],2:[-90,0],3:[0,-90],4:[0,90],5:[90,0],6:[0,180]},[rx,ry]=rotations[result];
+ if(reducedMotion()){setDicePose(rx,ry,0,0,0);await wait(100);return}
+ setDicePose(rx+300,ry+200,70,-92,22);
+ await new Promise(resolve=>{const start=performance.now();function frame(now){
+  const elapsed=now-start;let x,height,ax,ay,az,phase;
+  if(elapsed<700){const u=elapsed/700;x=-92+75*u;height=22*(1-u)+100*4*u*(1-u);ax=300-200*u;ay=200-120*u;az=70-50*u;phase='throw'}
+  else if(elapsed<1140){const u=(elapsed-700)/440;x=-17+28*u;height=30*4*u*(1-u);ax=100-75*u;ay=80-67*u;az=20-29*u;phase='bounce'}
+  else if(elapsed<1450){const u=(elapsed-1140)/310;x=11-9*u;height=9*4*u*(1-u);ax=25-31*u;ay=13-17*u;az=-9+12*u;phase='bounce'}
+  else{const u=Math.min(1,(elapsed-1450)/650),decay=(1-u)**2,wobble=Math.cos(u*Math.PI*2.5)*decay;x=2*decay;height=Math.abs(wobble)*1.3;ax=-6*wobble;ay=-4*wobble;az=3*wobble;phase='rock'}
+  $('diceOverlay').dataset.phase=phase;setDicePose(rx+ax,ry+ay,az,x,height);
+  if(elapsed<2100)requestAnimationFrame(frame);else{setDicePose(rx,ry,0,0,0);resolve()}
+ }requestAnimationFrame(frame)});
+}
+async function roll(){
+ if(LIVE.active)return liveRoll();
+ if(S.rolling||S.dice<1||S.pendingWish||$('sheet').open)return;
+ S.rolling=true;S.dice--;lapBonus=0;updateStats();$('mapNudge').classList.add('quiet');
+ const result=Math.floor(Math.random()*6)+1,overlay=$('diceOverlay');
+ overlay.hidden=false;overlay.dataset.phase='throw';delete overlay.dataset.result;
+ $('diceMessage').textContent='掷出一颗小期待';$('diceSub').textContent='等它慢慢停稳';
+ document.querySelector('.workspace').inert=true;document.querySelector('.header').inert=true;
+ await tossDice(result);
+ overlay.dataset.result=result;overlay.dataset.phase='settled';$('diceMessage').textContent=`前进 ${result} 步`;$('diceSub').textContent='一步一步，沿小路出发';$('miniDie').innerHTML=pipMarkup(result);
+ await wait(reducedMotion()?450:1000);
+ overlay.hidden=true;
+ await move(result);
+ document.querySelector('.workspace').inert=false;document.querySelector('.header').inert=false;
+ S.rolling=false;updateStats();land();
+}
+/* 正式会话：骰子与落点由 CRM 结算，前端只负责动画和展示。 */
+async function liveRoll(){
+ if(S.rolling||S.dice<1||$('sheet').open)return;
+ S.rolling=true;updateStats();$('mapNudge').classList.add('quiet');
+ let body;
+ try{
+  body=await liveApi('/api/v1/brand-member/game/session/roll',{method:'POST',body:'{}'});
+ }catch(error){
+  S.rolling=false;updateStats();toast(error&&error.message?error.message:'暂时无法掷骰，请稍后再试');return;
+ }
+ const result=body.dice,overlay=$('diceOverlay');
+ overlay.hidden=false;overlay.dataset.phase='throw';delete overlay.dataset.result;
+ $('diceMessage').textContent='掷出一颗小期待';$('diceSub').textContent='等它慢慢停稳';
+ document.querySelector('.workspace').inert=true;document.querySelector('.header').inert=true;
+ await tossDice(result);
+ overlay.dataset.result=result;overlay.dataset.phase='settled';$('diceMessage').textContent=`前进 ${result} 步`;$('diceSub').textContent='一步一步，沿小路出发';$('miniDie').innerHTML=pipMarkup(result);
+ await wait(reducedMotion()?450:1000);
+ overlay.hidden=true;
+ const target=liveTileOf(body.station);
+ let steps=(target-S.pos+TILES.length)%TILES.length;
+ if(steps===0)steps=TILES.length;
+ S.dice=body.balance;
+ await move(steps);
+ S.laps=body.lap;S.dice=body.balance;
+ const earned=Math.max(0,Number(body.points)||0);
+ if(earned){LIVE.points+=earned;S.pts=LIVE.points}
+ if(body.board&&Array.isArray(body.board.cells)){LIVE.cells=body.board.cells;paintLiveTiles()}
+ if(body.prize){
+  S.prizes.push({id:body.prize.id,name:body.prize.name,used:false,live:true,expiresAt:new Date(body.prize.expiresAt).getTime(),station:body.prize.station});
+ }
+ document.querySelector('.workspace').inert=false;document.querySelector('.header').inert=false;
+ S.rolling=false;S.selected=S.pos;updatePlayer();updateStats();updateFeature();setVisibleZone(TILES[S.pos].zone);
+ $('liveStatus').textContent=`掷出 ${result} 点，走到第 ${String(body.station).padStart(2,'0')} 站`;
+ if(body.prize){
+  showReward('收到一份免费体验券',`${escapeHtml(body.prize.name)}<br>到店由店员在会员后台确认核销。`,'cabin',true);
+ }else if(earned){
+  toast(`前进 ${result} 步，获得 ${earned} 积分，剩余 ${body.balance} 颗骰子`);
+ }else{
+  toast(`前进 ${result} 步，剩余 ${body.balance} 颗骰子`);
+ }
+}
+function leaveFootstep(path,distance,leftFoot){
+ const length=path.getTotalLength(),p=path.getPointAtLength(distance),q=path.getPointAtLength(Math.min(length,distance+2));
+ const angle=Math.atan2(q.y-p.y,q.x-p.x),side=leftFoot?4:-4;
+ const mark=document.createElement('i');mark.className='footstep';
+ mark.style.cssText=`left:calc(${p.x/420*100}% + ${-Math.sin(angle)*side}px);top:${p.y+Math.cos(angle)*side}px;transform:translate(-50%,-50%) rotate(${angle*180/Math.PI+90}deg)`;
+ $('footprints').append(mark);setTimeout(()=>mark.remove(),1800);
+}
+// Move along the same cubic path that is painted on the map, with a gentle walking cadence.
+async function walkTo(next){
+ const traveler=$('traveler'),figure=$('walkerFigure'),vp=$('mapViewport');
+ if(reducedMotion()){traveler.dataset.progress='1';await wait(50);return}
+ const path=$('trail').querySelector(`[data-walk-to="${next}"]`),length=path.getTotalLength();
+ const duration=next===0?6000:Math.max(1100,Math.min(1900,length*7.5));
+ const startScroll=vp.scrollTop;let nextFoot=14,foot=0;traveler.classList.add('walking');traveler.dataset.progress='0';
+ await new Promise(resolve=>{const start=performance.now();function frame(now){
+  const t=Math.min(1,(now-start)/duration),progress=t-Math.sin(t*Math.PI*2)*.12/(Math.PI*2),distance=length*progress;
+  const p=path.getPointAtLength(distance),cadence=(now-start)/520*Math.PI*2;
+  traveler.style.left=p.x/420*100+'%';traveler.style.top=p.y-18+'px';traveler.dataset.progress=String(progress);
+  figure.style.transform=`translateY(${-Math.abs(Math.sin(cadence))*2.4}px) rotate(${Math.sin(cadence)*2.8}deg)`;
+  figure.querySelector('.left-leg').style.transform=`rotate(${Math.sin(cadence)*19}deg)`;
+  figure.querySelector('.right-leg').style.transform=`rotate(${-Math.sin(cadence)*19}deg)`;
+  if(distance>=nextFoot){leaveFootstep(path,Math.max(0,distance-9),foot++%2===0);nextFoot=distance+25}
+  const desired=Math.max(0,Math.min(vp.scrollHeight-vp.clientHeight,p.y-vp.clientHeight*.56));
+  const cameraBlend=t*t*(3-2*t);
+  vp.scrollTo({top:startScroll+(desired-startScroll)*cameraBlend,behavior:'instant'});
+  if(t<1)requestAnimationFrame(frame);else resolve();
+ }requestAnimationFrame(frame)});
+ traveler.classList.remove('walking');figure.style.transform='';figure.querySelectorAll('.walker-leg').forEach(e=>e.style.transform='');
+}
+async function move(steps){
+ for(let n=0;n<steps;n++){
+  const next=(S.pos+1)%TILES.length;
+  $('rollLabel').textContent=`慢慢走 · ${n+1} / ${steps} 步`;
+  await walkTo(next);S.pos=next;
+  if(S.pos===0&&!LIVE.active){S.laps++;S.pts+=50;S.dice++;lapBonus++}
+  updatePlayer();updateStats();setVisibleZone(TILES[S.pos].zone);
+  if(reducedMotion())returnToPlayer(false);
+  $('liveStatus').textContent=LIVE.active?`走到${liveTileName(S.pos)}`:`走到第 ${S.pos} 站，${TILES[S.pos].title}`;
+  await wait(reducedMotion()?30:n===steps-1?380:180);
+ }
+}
+function grantPrize(t){const prize={id:crypto.randomUUID?crypto.randomUUID():`demo-${Date.now()}-${Math.random()}`,tileId:t.id,name:t.title,art:t.art,used:false,createdAt:Date.now(),expiresAt:Date.now()+t.days*864e5};S.prizes.push(prize);return prize}
+function land(){
+ const t=TILES[S.pos];S.selected=S.pos;updateFeature();
+ if(S.pos!==0)S.visits[t.zone]++;
+ const allLit=S.visits.every(n=>n>=3);let energyNote='';if(allLit&&!S.fullEnergyAwarded){S.fullEnergyAwarded=true;energyNote='<br>五站全部点亮：已解锁年度大奖抽奖资格（演示）。'}
+ const lapNote=lapBonus?`<br>完成一圈，另得 ${lapBonus*50} 积分与 ${lapBonus} 颗骰子。`:'';
+ if(t.kind==='wish'){S.pendingWish=true;updateStats();openSheet('wish','A LITTLE CHOICE FOR YOU',`<div class="dialog-art">${art('wish')}</div><h2 id="dialogTitle" class="dialog-title">这份心意，你来选</h2><p class="dialog-desc">想收下积分，还是再多走一段？${lapNote}${energyNote}</p><div class="choice-row"><button class="primary" onclick="chooseWish('points')">收下 20 积分</button><button class="outline-btn" onclick="chooseWish('dice')">再得 1 颗骰子</button></div><p class="micro-note">两份奖励只能选择一份</p>`);return}
+ let title=t.title,desc='',image=t.art;
+ if(t.kind==='points'){S.pts+=t.amount;desc='已自动记入你的演示积分账户。'}
+ if(t.kind==='prize'){grantPrize(t);desc=`已放入「我的奖品」。<br>${t.expiry}。`;if(t.rare)confetti()}
+ if(t.kind==='event'){
+  const outcomes=[{title:'+2 颗骰子',desc:'呼吸顺畅，再多走一段。',dice:2},{title:'+20 积分',desc:'把这一刻的轻松收进口袋。',points:20},{title:'+30 积分',desc:'灵感涌现，惊喜多一点。',points:30},{title:'+15 积分',desc:'闭目养神，给自己一点奖励。',points:15}];
+  const result=outcomes[Math.floor(Math.random()*outcomes.length)];S.dice+=result.dice||0;S.pts+=result.points||0;title=result.title;desc=`五感卡 · ${result.desc}`;
+ }
+ if(t.kind==='start'){title='一圈旅途，圆满抵达';desc='圈奖已到账，下一段惊喜等着你。'}
+ updateStats();showReward(title,desc+lapNote+energyNote,image,t.kind==='prize');
+}
+function chooseWish(choice){if(!S.pendingWish)return;S.pendingWish=false;if(choice==='points')S.pts+=20;else S.dice++;updateStats();showReward(choice==='points'?'+20 积分':'+1 颗骰子','心意已收下，继续自在前行。','wish',false)}
+function showReward(title,desc,image,hasPrize){openSheet('reward','A GIFT ALONG THE WAY',`<div class="dialog-art">${art(image)}</div><div class="reward-kicker">旅途里的小收获</div><h2 id="dialogTitle" class="dialog-title">${title}</h2><p class="dialog-desc">${desc}</p><button class="primary full" onclick="closeSheet()">收下，继续旅程</button>${hasPrize?'<button class="text-btn full" onclick="showBag()">去我的奖品，查看兑换方式 ↗</button>':''}<p class="micro-note">${LIVE.active?'奖励以会员中心记录为准':'演示奖励，不具有实际兑换价值'}</p>`)}
+function showBag(){if(LIVE.active)return showLiveBag();openSheet('bag','MY LITTLE COLLECTION',`<h2 id="dialogTitle" class="dialog-title">我的旅途礼物</h2><p class="dialog-desc">把路上的惊喜，带进真实生活。</p>${S.prizes.length?`<div class="bag-list">${S.prizes.map(p=>{const expired=p.expiresAt<=Date.now(),t=TILES[p.tileId];return `<article class="prize-card">${art(p.art)}<div><h3>${escapeHtml(p.name)}</h3><small>${p.used?'已领取 · 不可重复领取':expired?'已过期':`${new Date(p.expiresAt).toLocaleDateString('zh-CN')} 前${t.physical?'到店领取':'预约使用'}`}</small><button class="${p.used||expired?'outline-btn':'primary'}" ${p.used||expired?'disabled':''} onclick="openRedeem('${p.id}')">${p.used?'已领取':expired?'已过期':'到店兑换'}</button></div></article>`}).join('')}</div>`:`<div class="empty">${art('candle')}<p>礼物还在路上。<br>停在茶杯、喷雾、体验或香氛驿站，<br>相应奖品就会收进这里。</p></div><button class="primary full" onclick="closeSheet()">去地图上走走</button>`}<p class="micro-note">本地交互演示；刷新页面后演示记录重置。<br>正式领取由门店人员人工确认，不需要扫码。</p>`)}
+function showLiveBag(){
+ const rows=S.prizes.filter(p=>p.live);
+ openSheet('bag','MY LITTLE COLLECTION',`<h2 id="dialogTitle" class="dialog-title">我的旅途礼物</h2><p class="dialog-desc">把路上的惊喜，带进真实生活。</p>${rows.length?`<div class="bag-list">${rows.map(p=>{const expired=p.expiresAt<=Date.now();return `<article class="prize-card">${art('cabin')}<div><h3>${escapeHtml(p.name)}</h3><small>${p.used?'已领取 · 不可重复领取':expired?'已过期':`${new Date(p.expiresAt).toLocaleDateString('zh-CN')} 前到店领取`}</small><button class="${p.used||expired?'outline-btn':'primary'}" ${p.used||expired?'disabled':''} onclick="openLiveRedeem('${escapeHtml(p.id)}')">${p.used?'已领取':expired?'已过期':'到店领取'}</button></div></article>`}).join('')}</div>`:`<div class="empty">${art('candle')}<p>礼物还在路上。<br>停在礼物站，下一份惊喜就会收进这里。</p></div><button class="primary full" onclick="closeSheet()">去地图上走走</button>`}<p class="micro-note">礼物由门店人员在会员后台确认交付。<br>不需要扫码，也不能凭截图领取。</p>`);
+}
+function openLiveRedeem(id){
+ const p=S.prizes.find(p=>p.id===id);if(!p||p.used||p.expiresAt<=Date.now())return;
+ openSheet('redeem','A GIFT WAITING FOR YOU',`<div class="dialog-art">${art('cabin')}</div><h2 id="dialogTitle" class="dialog-title">这份礼物，等你来领</h2><p class="dialog-desc">${escapeHtml(p.name)}<br>到店出示此页，由工作人员核对后交付</p><div class="receipt-ticket"><span>待领取 · 仅可使用一次</span><small>${new Date(p.expiresAt).toLocaleDateString('zh-CN')} 前有效</small></div><p class="receipt-instruction">到店后请店员在会员后台确认领取。<br>不用扫码，也不用输入任何号码。</p><button class="primary full" onclick="showLiveBag()">查看全部礼物</button><p class="micro-note">页面只作领取提示；交付记录以会员后台为准。</p>`);
+}
+function openRedeem(id){
+ const p=S.prizes.find(p=>p.id===id);if(S.rolling||!p||p.used||p.expiresAt<=Date.now())return;
+ openSheet('redeem','A GIFT WAITING FOR YOU',`<div class="dialog-art">${art(p.art)}</div><h2 id="dialogTitle" class="dialog-title">这份礼物，等你来领</h2><p class="dialog-desc">${escapeHtml(p.name)}<br>到店出示此页，由工作人员确认交付</p><div class="receipt-ticket"><span>待领取 · 仅可使用一次</span><small>${new Date(p.expiresAt).toLocaleDateString('zh-CN')} 前有效</small></div><p class="receipt-instruction">先领到礼物，再请店员确认。<br>不用扫码，也不用输入任何号码。</p><button class="primary full" id="reviewReceipt" onclick="reviewReceipt()">店员确认领取（演示）</button><button class="text-btn full" onclick="showBag()">还没到店，先收好</button><p class="micro-note">本页模拟人工领取流程，不校验店员身份。<br>正式使用时需由已登录的店员确认，不能凭截图领取。</p>`);
+ redeemSession={prizeId:id,stage:'show'};
+}
+function reviewReceipt(){
+ const session=redeemSession;if(!session||dialogMode!=='redeem')return false;
+ const p=S.prizes.find(p=>p.id===session.prizeId);
+ if(!p||p.used||p.expiresAt<=Date.now()){showBag();return false}
+ openSheet('confirm','ONE LAST LITTLE CHECK',`<div class="dialog-art">${art(p.art)}</div><h2 id="dialogTitle" class="dialog-title">礼物已经交付了吗？</h2><p class="dialog-desc">${escapeHtml(p.name)}<br>请店员核对奖品，并确认已交付或已使用。</p><div class="receipt-ticket"><span>确认后将标记为「已领取」</span><small>不能重复领取，请勿提前确认</small></div><div class="buttons-row receipt-actions"><button class="outline-btn" id="cancelReceipt" onclick="openRedeem('${p.id}')">还没有，返回</button><button class="primary" id="confirmReceipt" onclick="confirmReceipt()">已交付，确认领取</button></div><p class="micro-note">店员操作演示 · 不发生真实兑换</p>`);
+ redeemSession={prizeId:p.id,stage:'confirm'};
+ $('cancelReceipt').focus();return true;
+}
+function confirmReceipt(){
+ const session=redeemSession;
+ if(!session||session.stage!=='confirm'||dialogMode!=='confirm')return false;
+ const p=S.prizes.find(p=>p.id===session.prizeId);
+ if(!p||p.used||p.expiresAt<=Date.now()){showBag();return false}
+ p.used=true;p.usedAt=Date.now();p.usedBy='演示店员';redeemSession=null;updateStats();
+ openSheet('success','A LITTLE KINDNESS TO TAKE HOME',`<div class="gift-keepsake" aria-hidden="true"><div class="keepsake-handle"></div><div class="keepsake-gift">${art(p.art)}</div><div class="keepsake-pocket"><span>Full愈</span><small>给自己的一份心意</small></div><div class="receipt-stamp"><svg class="ui-icon" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg><span>已领取</span></div></div><h2 id="dialogTitle" class="dialog-title">礼物已领取</h2><p class="dialog-desc">${escapeHtml(p.name)}<br>把这份小小的放松，带回日常。</p><div class="receipt-record">${new Date(p.usedAt).toLocaleString('zh-CN')}<br>由演示店员确认 · 仅此一份，已妥善记录</div><button class="primary full" id="receiptDone" onclick="showBag()">收好这份心意</button><p class="micro-note">仅为本地领取演示，未发生真实门店兑换</p>`);
+ $('liveStatus').textContent=`${p.name}已领取，不能重复领取`;return true;
+}
+function confetti(){if(reducedMotion())return;const colors=['var(--wood-700)','var(--taupe)','var(--sand)','var(--paper)'];for(let i=0;i<28;i++){const el=document.createElement('i');el.className='confetti';el.style.cssText=`left:${30+Math.random()*40}%;--dx:${(Math.random()-.5)*300}px;background:${colors[i%4]};animation-delay:${Math.random()*.25}s;border-radius:${i%3?'1px':'50%'};`; $('confettiWrap').append(el);setTimeout(()=>el.remove(),2300)}}
+let scrollTick=false;
+$('mapViewport').addEventListener('scroll',()=>{if(scrollTick)return;scrollTick=true;requestAnimationFrame(()=>{const vp=$('mapViewport'),center=vp.scrollTop+vp.clientHeight*.5;let nearest=0;ZONES.forEach((z,i)=>{if(Math.abs(z.center-center)<Math.abs(ZONES[nearest].center-center))nearest=i});setVisibleZone(nearest);scrollTick=false})});
+$('mapViewport').addEventListener('wheel',()=>$('mapNudge').classList.add('quiet'),{passive:true});
+$('mapViewport').addEventListener('touchmove',()=>$('mapNudge').classList.add('quiet'),{passive:true});
+buildMap();
+bootLive();
+</script>
+<style>
+/* 三端 web-view 嵌入：去掉桌面外框留白，铺满视口；页面自身已有移动端断点。 */
+body.live-mode .energy-grid,body.live-mode .side-note{display:none}
+body.live-mode .tile.scenery{opacity:.6}
+body.live-mode .tile.scenery .tile-label{background:transparent;box-shadow:none;border-color:transparent}
+body.live-mode .tile.live-voucher .tile-label{background:var(--wood-700);color:var(--paper);border-color:var(--wood-700)}
+body.live-mode .tile.live-voucher .tile-label small{color:var(--peach)}
+body.fy-embed{background:var(--peach)}
+body.fy-embed .app{width:100%;height:100vh;height:100dvh;margin:0;border:0;border-radius:0;box-shadow:none}
+</style>
+<script>
+(function () {
+  try {
+    var params = new URLSearchParams(location.search);
+    if (params.get('embed') === '1') document.body.classList.add('fy-embed');
+    var host = params.get('host');
+    if (host) document.documentElement.setAttribute('data-host', host);
+  } catch (error) {
+    /* 旧内核不支持 URLSearchParams 时保持桌面样式 */
+  }
+})();
+</script>
+</body>
+</html>

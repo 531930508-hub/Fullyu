@@ -1,0 +1,27 @@
+{
+  "name": "fullyu-crm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Full愈 CRM 中台（会员、积分、年卡唯一账本）",
+  "scripts": {
+    "dev:server": "pnpm --filter @fullyu/crm-shared build && pnpm --filter @fullyu/crm-server dev",
+    "build": "pnpm -r build",
+    "build:server": "pnpm --filter @fullyu/crm-shared build && pnpm --filter @fullyu/crm-server build",
+    "test": "pnpm --filter @fullyu/crm-server test",
+    "db:push": "pnpm --filter @fullyu/crm-server db:push",
+    "db:seed": "pnpm --filter @fullyu/crm-server db:seed",
+    "lint": "pnpm -r lint"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild"
+    ]
+  }
+}

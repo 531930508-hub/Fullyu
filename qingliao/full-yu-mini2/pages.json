@@ -1,0 +1,327 @@
+{
+	"pages": [
+		{
+			"path": "pages/splash/splash",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/index/index",
+			/*首页*/
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/mall/index",
+			/* 购卡页面 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+
+		{
+			"path": "pages/user/order/order-detail",
+			/* 订单详细 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/user/order/order",
+			/* 订单列表页面 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+
+		{
+			"path": "pages/user/order/order-product-detail",
+			/* 订单产品详细 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/user/enterprise-code/enterprise-code",
+			/* 企业微信 */
+			"style": {
+				 "navigationStyle": "custom",
+				"navigationBarTitleText": "Full愈"
+			}
+		},
+		{
+			"path": "pages/user/collect/collect",
+			/* 个人收藏 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/user/points/points",
+			/* 个人积分 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/user/index",
+			/* 个人中心主页 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/mall/buy-card/buy-card-success",
+			/* 购买卡券成功页面 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/mall/detail",
+			/* 购买卡券详情页面 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+
+		{
+			"path": "pages/mall/my-card/my-card",
+			/* 我的券卡 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/user/member-card/member-card",
+			/* Full愈年卡 · 开通与续费 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/user/brand-member/brand-member",
+			/* Full愈年卡 · 品牌会员身份 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "Full愈年卡"
+			}
+		},
+		{
+			"path": "pages/user/brand-member/stories",
+			/* Full愈年卡 · 会员故事 */
+			"style": {
+				"navigationBarTitleText": "会员故事"
+			}
+		},
+		{
+			"path": "pages/user/brand-member/game",
+			/* 愈行之旅 */
+			"style": {
+				"navigationBarTitleText": "愈行之旅"
+			}
+		},
+		{
+			"path": "pages/user/brand-member/rules",
+			/* Full愈年卡 · 会员权益与规则 */
+			"style": {
+				"navigationBarTitleText": "会员权益与规则"
+			}
+		},
+		{
+			"path": "pages/index/select-project",
+			/*预约页面*/
+			"style": {
+				"navigationBarTitleText": "",
+				"navigationStyle": "custom"
+			}
+		},
+
+		{
+			"path": "pages/index/pay-success/get-share",
+			/* 分享给好友  好友查看页面 */
+			"style": {
+				"navigationBarTitleText": "Full愈"
+			}
+		},
+		{
+			"path": "pages/index/pay-success/appointment-share",
+			/* 预约成功分享页面 */
+			"style": {
+				"navigationBarTitleText": "Full愈"
+			}
+		},
+		{
+			"path": "pages/index/pay-success/appointment-success",
+			/* 多个预约成功页面 */
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/index/pay-success/pay-fail",
+			/*卡券支付失败页面*/
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/index/pay-success/pay-success",
+			/*卡券支付成功页面*/
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": ""
+			}
+		},
+
+		{
+			"path": "components/PayModelPage",
+			/*支付页面*/
+			"style": {
+				"navigationBarTitleText": ""
+			}
+		},
+
+
+
+		{
+			"path": "pages/index/shop/shop",
+			/*推荐门店*/
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "推荐门店"
+			}
+		},
+
+		{
+			"path": "pages/index/nature-detail",
+			/*自然之力详情页*/
+			"style": {
+				"navigationBarTitleText": "Full愈"
+			}
+		},
+		{
+			"path": "pages/login/login",
+			"style": {
+				"navigationBarTitleText": "登录"
+			}
+		},
+		{
+			"path": "pages/user/about",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "关于"
+			}
+		},
+		{
+			"path": "pages/user/terms-policy",
+			"style": {
+				"navigationBarTitleText": ""
+			}
+		},
+		{
+			"path": "pages/user/lottery",
+			"style": {
+				"navigationBarTitleText": "抽积分",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/mall/mall",
+			"style": {
+				"navigationBarTitleText": "Full愈商城",
+				"enablePullDownRefresh": false,
+				"onReachBottomDistance": 20,
+				"navigationStyle": "custom"
+			}
+		},
+		
+		{
+			"path": "pages/index/booking",
+			"style": {
+				"navigationBarTitleText": "智能预约",
+				"navigationBarBackgroundColor": "#FFFFFF",
+				"navigationBarTextStyle": "black"
+			}
+		},
+		{
+			"path": "pages/mall/gift",
+			"style": {
+				"navigationBarTitleText": "礼物接收"
+			}
+		},
+		{
+			"path": "pages/index/banner-detail",
+			"style": {
+				"navigationBarTitleText": "Full愈"
+			}
+		},
+		{
+			"path": "pages/user/invitation-reward",
+			"style": {
+				"navigationBarTitleText": "推荐有礼",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/user/redeem-coupons",
+			"style": {
+				"navigationBarTitleText": "礼品卡兑换",
+				"navigationStyle": "custom"
+			}
+		}
+	],
+	"tabBar": {
+		"custom": true,
+		"color": "#584219",
+		"selectedColor": "#584219",
+		"borderStyle": "black",
+		"backgroundColor": "#FFFFFF",
+		"list": [{
+				"pagePath": "pages/index/index",
+				"text": ""
+
+			},
+			{
+				"pagePath": "pages/mall/mall",
+				"text": ""
+			},
+			{
+				"pagePath": "pages/mall/my-card/my-card",
+				"text": ""
+			},
+			{
+				"pagePath": "pages/user/order/order",
+				"text": ""
+			},
+			{
+				"pagePath": "pages/user/index",
+				"text": ""
+			}
+		]
+	},
+	"globalStyle": {
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "Full愈",
+		"navigationBarBackgroundColor": "#FFFFFF",
+		"backgroundColor": "#F6F6F6"
+
+	}
+}

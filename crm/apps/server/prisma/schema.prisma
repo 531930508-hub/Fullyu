@@ -1,0 +1,652 @@
+// Full愈 CRM 数据库（第一期第一批）
+// 开发用 SQLite；上线切 MySQL：provider 改 mysql，Json 字段以 String 存储，迁移与演练另行授权。
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Counter {
+  name  String @id
+  value Int    @default(0)
+
+  @@map("counters")
+}
+
+model Staff {
+  id           String      @id
+  name         String
+  username     String      @unique
+  passwordHash String      @map("password_hash")
+  active       Boolean     @default(true)
+  tokenVersion Int         @default(1) @map("token_version")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  roles        StaffRole[]
+
+  @@map("staff")
+}
+
+model CrmRole {
+  id          String      @id
+  name        String
+  description String      @default("")
+  builtin     Boolean     @default(false)
+  permsJson   String      @map("perms_json")
+  staff       StaffRole[]
+
+  @@map("crm_roles")
+}
+
+model StaffRole {
+  staffId String @map("staff_id")
+  roleId  String @map("role_id")
+
+  staff Staff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  role  CrmRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([staffId, roleId])
+  @@map("staff_roles")
+}
+
+model Member {
+  id             String    @id
+  memberNo       String    @unique @map("member_no")
+  phone          String?   @unique
+  name           String    @default("会员")
+  gender         Int?
+  birthday       DateTime?
+  avatarUrl      String?   @map("avatar_url")
+  status         String    @default("ACTIVE") // ACTIVE | MERGED | DEACTIVATING | DEACTIVATED
+  profileVersion Int       @default(1) @map("profile_version")
+  mergedIntoId   String?   @map("merged_into_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  identities  MemberIdentity[]
+  batches     PointBatch[]
+  ledger      PointLedger[]
+  brandCards  MemberBrandCard[]
+  quotes      BrandCardQuote[]
+  gameState   MemberGameState?
+  gameTickets GameTicket[]
+  diceLedger  DiceLedger[]
+  gameRolls   GameRoll[]
+  gamePrizes  GamePrize[]
+  savings     MemberOrder[]
+  vouchers    PickupVoucher[]
+  feedback    MemberFeedback[]
+  giftClaims  GiftClaim[]
+
+  @@map("members")
+}
+
+model MemberIdentity {
+  id          String  @id
+  business    String
+  localUserId String  @map("local_user_id")
+  appId       String? @map("app_id")
+  openId      String? @map("open_id")
+  unionId     String? @map("union_id")
+  memberId    String  @map("member_id")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([business, localUserId])
+  @@index([memberId])
+  @@index([unionId])
+  @@map("member_identities")
+}
+
+model PointBatch {
+  id             String   @id
+  memberId       String   @map("member_id")
+  issuerBusiness String   @map("issuer_business")
+  sourceRef      String   @default("") @map("source_ref")
+  amount         Int
+  remaining      Int
+  status         String   @default("ACTIVE") // PENDING | ACTIVE | DEPLETED | EXPIRED | REVOKED
+  earnedAt       DateTime @map("earned_at")
+  expireAt       DateTime @map("expire_at")
+
+  member Member @relation(fields: [memberId], references: [id])
+
+  @@index([memberId, status, expireAt])
+  @@map("point_batches")
+}
+
+model PointLedger {
+  id              String   @id
+  memberId        String   @map("member_id")
+  type            String // EARN | CONSUME | REFUND | REVOKE | EXPIRE | ADJUST | MIGRATE
+  delta           Int
+  balanceAfter    Int      @map("balance_after")
+  business        String   @default("")
+  ref             String   @default("")
+  allocationsJson String   @default("") @map("allocations_json")
+  idemKey         String?  @unique @map("idem_key")
+  operatorId      String?  @map("operator_id")
+  operatorName    String?  @map("operator_name")
+  note            String   @default("")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  member Member @relation(fields: [memberId], references: [id])
+
+  @@index([memberId, createdAt])
+  @@index([createdAt])
+  @@index([type, createdAt])
+  @@index([business, createdAt])
+  @@map("point_ledger")
+}
+
+model AdjustmentRequest {
+  id              String    @id
+  kind            String // SINGLE | BATCH
+  status          String    @default("PENDING") // PENDING | APPLIED | REJECTED
+  reason          String
+  totalPoints     Int       @map("total_points")
+  payloadJson     String    @map("payload_json")
+  requestedBy     String    @map("requested_by")
+  requestedByName String    @map("requested_by_name")
+  approvedBy      String?   @map("approved_by")
+  approvedByName  String?   @map("approved_by_name")
+  comment         String    @default("")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  decidedAt       DateTime? @map("decided_at")
+  appliedAt       DateTime? @map("applied_at")
+
+  @@index([status, createdAt])
+  @@map("adjustment_requests")
+}
+
+model AuditLog {
+  id        String   @id
+  actorId   String?  @map("actor_id")
+  actorName String   @map("actor_name")
+  action    String
+  target    String   @default("")
+  detail    String   @default("")
+  at        DateTime @default(now())
+
+  @@index([at])
+  @@map("audit_logs")
+}
+
+model IdempotencyKey {
+  key         String   @id
+  requestHash String   @map("request_hash")
+  resultJson  String   @map("result_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("idempotency_keys")
+}
+
+// 1B 大会员卡：产品与不可变版本。改价/改权益必须新建版本，已生效版本不原地修改。
+model BrandCardProduct {
+  code           String             @id
+  name           String
+  status         String             @default("ACTIVE") // ACTIVE | ARCHIVED
+  sort           Int                @default(0)
+  currentVersion Int?               @map("current_version")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  versions       BrandCardVersion[]
+
+  @@index([status, sort])
+  @@map("brand_card_products")
+}
+
+model BrandCardVersion {
+  id              String    @id
+  productCode     String    @map("product_code")
+  version         Int
+  status          String    @default("DRAFT") // DRAFT | ACTIVE | ARCHIVED
+  priceCents      Int       @map("price_cents")
+  validDays       Int       @map("valid_days")
+  benefitsJson    String    @default("[]") @map("benefits_json")
+  pointsSpendJson String    @default("{}") @map("points_spend_json")
+  gameEnabled     Boolean   @default(true) @map("game_enabled")
+  // 开通即送的实物礼：[{title, desc, valueCents}]；只配在年卡上，月卡/赠送卡不发。
+  giftsJson       String    @default("[]") @map("gifts_json")
+  // 业态专属权益开关：{presence:{prioritySeat, tierPrice, invitesPerMonth}}
+  perksJson       String    @default("{}") @map("perks_json")
+  note            String    @default("")
+  createdBy       String    @map("created_by")
+  createdByName   String    @map("created_by_name")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  activatedAt     DateTime? @map("activated_at")
+  archivedAt      DateTime? @map("archived_at")
+
+  product BrandCardProduct @relation(fields: [productCode], references: [code], onDelete: Cascade)
+
+  @@unique([productCode, version])
+  @@index([productCode, status])
+  @@map("brand_card_versions")
+}
+
+// 1B 业务会员卡目录：只描述各业务自有卡，CRM 不接管卡期与核销。
+model BusinessCardCatalog {
+  id            String   @id
+  business      String
+  cardCode      String   @map("card_code")
+  name          String
+  benefit       String
+  description   String   @default("")
+  sourceSystem  String   @map("source_system") // crm | presence | retreat
+  readOnly      Boolean  @default(true) @map("read_only")
+  sellableInCrm Boolean  @default(false) @map("sellable_in_crm")
+  managePath    String   @default("") @map("manage_path")
+  status        String   @default("ACTIVE") // ACTIVE | HIDDEN
+  sort          Int      @default(0)
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([business, cardCode])
+  @@index([business, status, sort])
+  @@map("business_card_catalog")
+}
+
+// 1C 三端签名接口：nonce 只保留一个有效窗口，过期即清理，防重放。
+model ApiNonce {
+  keyId     String   @map("key_id")
+  nonce     String
+  createdAt DateTime @default(now()) @map("created_at")
+  expireAt  DateTime @map("expire_at")
+
+  @@id([keyId, nonce])
+  @@index([expireAt])
+  @@map("api_nonces")
+}
+
+// 1C 会员品牌卡期：权益与价格按开卡时的版本快照，后续改价不影响已购。
+model MemberBrandCard {
+  id              String    @id
+  memberId        String    @map("member_id")
+  productCode     String    @map("product_code")
+  version         Int
+  productName     String    @map("product_name")
+  priceCents      Int       @map("price_cents")
+  validDays       Int       @map("valid_days")
+  validFrom       DateTime  @map("valid_from")
+  validUntil      DateTime  @map("valid_until")
+  state           String    @default("ACTIVE") // ACTIVE | PENDING | REFUND_LOCKED | REFUNDED
+  benefitsJson    String    @default("[]") @map("benefits_json")
+  pointsSpendJson String    @default("{}") @map("points_spend_json")
+  gameEnabled     Boolean   @default(true) @map("game_enabled")
+  soldBy          String    @map("sold_by")
+  soldByName      String    @map("sold_by_name")
+  orderRef        String    @map("order_ref")
+  paidCents       Int       @map("paid_cents")
+  paidAt          DateTime  @map("paid_at")
+  refundType      String?   @map("refund_type") // WITHIN_7D | AFTER_7D | NEGOTIATED | BUNDLE_REVOKED（旧数据可能为 PRORATED）
+  refundCents     Int?      @map("refund_cents")
+  refundedAt      DateTime? @map("refunded_at")
+  refundReason    String?   @map("refund_reason")
+  // PAID 付费开通 | GIFT 会员码赠送 | MANUAL CRM 手工发卡（可含线下实收） | BUNDLE 在场畅练卡附赠
+  source          String    @default("PAID")
+  giftCampaignId  String?   @map("gift_campaign_id")
+  perksJson       String    @default("{}") @map("perks_json")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([soldBy, orderRef])
+  @@index([memberId, state, validUntil])
+  @@map("member_brand_cards")
+}
+
+model BrandCardQuote {
+  id           String    @id
+  business     String
+  keyId        String    @map("key_id")
+  memberId     String    @map("member_id")
+  productCode  String    @map("product_code")
+  version      Int
+  priceCents   Int       @map("price_cents")
+  validDays    Int       @map("valid_days")
+  benefitsJson String    @default("[]") @map("benefits_json")
+  gameEnabled  Boolean   @default(true) @map("game_enabled")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  expiresAt    DateTime  @map("expires_at")
+  usedAt       DateTime? @map("used_at")
+  usedCardId   String?   @map("used_card_id")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, createdAt])
+  @@index([expiresAt])
+  @@map("brand_card_quotes")
+}
+
+// 愈行之旅：骰子与站点进度归 CRM，规则引擎与奖品核销属后续批次。
+model MemberGameState {
+  memberId        String   @id @map("member_id")
+  diceBalance     Int      @default(0) @map("dice_balance")
+  station         Int      @default(0)
+  lap             Int      @default(0)
+  monthlyEarned   Int      @default(0) @map("monthly_earned")
+  monthKey        String   @default("") @map("month_key")
+  // 不足 1 颗骰子的累计实付（分），跨订单结转
+  spendCarryCents Int      @default(0) @map("spend_carry_cents")
+  // 当前圈棋盘布局（每站奖励），换圈时按规则重新生成
+  boardJson       String   @default("") @map("board_json")
+  boardLap        Int      @default(-1) @map("board_lap")
+  stateVersion    Int      @default(1) @map("state_version")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("member_game_states")
+}
+
+// 游戏票据只存哈希；H5 换会话时使用，不把会员号或手机号放进 URL。
+model GameTicket {
+  id        String    @id
+  tokenHash String    @unique @map("token_hash")
+  memberId  String    @map("member_id")
+  business  String
+  keyId     String    @map("key_id")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, expiresAt])
+  @@map("game_tickets")
+}
+
+// 1D 规则版本：积分按业务、骰子全业务通用。新版本生效前只读，到期自动切换现行。
+model RuleSetVersion {
+  id            String    @id
+  ruleKey       String    @map("rule_key") // points | dice
+  scope         String // sx | ql | zc | all
+  version       Int
+  status        String    @default("SCHEDULED") // SCHEDULED | CURRENT | RETIRED | CANCELED
+  effectiveFrom DateTime  @map("effective_from")
+  rulesJson     String    @map("rules_json")
+  reason        String    @default("")
+  createdBy     String    @map("created_by")
+  createdByName String    @map("created_by_name")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  retiredAt     DateTime? @map("retired_at")
+  canceledAt    DateTime? @map("canceled_at")
+
+  @@unique([ruleKey, scope, version])
+  @@index([ruleKey, scope, status, effectiveFrom])
+  @@map("rule_set_versions")
+}
+
+// 1D 骰子只追加流水：订单/签到幂等发放，退款收回，掷骰消耗。
+model DiceLedger {
+  id           String   @id
+  memberId     String   @map("member_id")
+  business     String
+  kind         String // EARN_ORDER | EARN_CHECKIN | REFUND | ROLL | ADJUST
+  ref          String
+  delta        Int
+  balanceAfter Int      @map("balance_after")
+  ruleVersion  Int?     @map("rule_version")
+  // 订单得骰：本单实付与未封顶应得颗数，退款时据此反推结转
+  paidCents    Int      @default(0) @map("paid_cents")
+  rawDice      Int      @default(0) @map("raw_dice")
+  note         String   @default("")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, business, kind, ref])
+  @@index([memberId, createdAt])
+  @@map("dice_ledger")
+}
+
+// 1D 掷骰记录：一次掷骰一行，幂等键防重复消耗。
+model GameRoll {
+  id          String   @id
+  memberId    String   @map("member_id")
+  business    String
+  keyId       String   @map("key_id")
+  idemKey     String?  @unique @map("idem_key")
+  dice        Int
+  fromStation Int      @map("from_station")
+  toStation   Int      @map("to_station")
+  fromLap     Int      @map("from_lap")
+  toLap       Int      @map("to_lap")
+  prizeId     String?  @map("prize_id")
+  // 落在积分格时本次发放的积分（体验券格为 0）
+  points      Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, createdAt])
+  @@map("game_rolls")
+}
+
+// 1D 旅途礼物：到店人工确认交付，不扫码；同一礼物只能确认一次。
+model GamePrize {
+  id              String    @id
+  memberId        String    @map("member_id")
+  rollId          String    @map("roll_id")
+  station         Int
+  name            String
+  business        String
+  // 面值（分），用于宝箱月预算与成本测算
+  faceCents       Int       @default(0) @map("face_cents")
+  status          String    @default("PENDING") // PENDING | COLLECTED | EXPIRED
+  wonAt           DateTime  @default(now()) @map("won_at")
+  expiresAt       DateTime  @map("expires_at")
+  collectedAt     DateTime? @map("collected_at")
+  collectedBy     String?   @map("collected_by")
+  collectedByName String?   @map("collected_by_name")
+  note            String    @default("")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, status, expiresAt])
+  @@map("game_prizes")
+}
+
+// 1C 收尾：CRM 事件 outbox 与业务端拉取状态。失败超过上限进入异常队列。
+model OutboxEvent {
+  id            String    @id
+  topic         String
+  business      String
+  memberId      String?   @map("member_id")
+  payloadJson   String    @map("payload_json")
+  status        String    @default("PENDING") // PENDING | DELIVERED | FAILED | IGNORED
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at")
+  lastError     String    @default("") @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  deliveredAt   DateTime? @map("delivered_at")
+
+  @@index([status, nextAttemptAt])
+  @@index([business, createdAt])
+  @@map("outbox_events")
+}
+
+model BusinessSyncState {
+  business   String   @id
+  lastSeenAt DateTime @map("last_seen_at")
+  lastPath   String   @default("") @map("last_path")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("business_sync_states")
+}
+
+// 2026-11-08 会议：三端订单上报 → 真实净消费与会员节省金额；退款规则按节省反算。
+model MemberOrder {
+  id         String   @id
+  memberId   String   @map("member_id")
+  business   String
+  orderRef   String   @map("order_ref")
+  kind       String   @default("ORDER") // ORDER | REFUND
+  paidCents  Int      @map("paid_cents") // 退款为负
+  savedCents Int      @default(0) @map("saved_cents") // 品牌会员权益带来的节省；退款为负
+  cardId     String?  @map("card_id")
+  occurredAt DateTime @map("occurred_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([business, orderRef, kind])
+  @@index([memberId, occurredAt])
+  @@index([cardId])
+  @@map("member_orders")
+}
+
+// 年卡实物礼提货券：任意门店出示，店员人工核销一次即失效。
+model PickupVoucher {
+  id             String    @id
+  code           String    @unique
+  memberId       String    @map("member_id")
+  cardId         String    @map("card_id")
+  title          String
+  desc           String    @default("")
+  valueCents     Int       @default(0) @map("value_cents")
+  status         String    @default("ISSUED") // ISSUED | REDEEMED | VOID
+  issuedAt       DateTime  @default(now()) @map("issued_at")
+  redeemedAt     DateTime? @map("redeemed_at")
+  redeemedBy     String?   @map("redeemed_by")
+  redeemedByName String?   @map("redeemed_by_name")
+  redeemedStore  String    @default("") @map("redeemed_store")
+  voidReason     String    @default("") @map("void_reason")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, status])
+  @@index([cardId])
+  @@map("pickup_vouchers")
+}
+
+// 赠送会员码：活动/渠道/推荐人/天数/名额/截止；超过默认天数需另一人审批。
+model GiftCampaign {
+  id             String    @id
+  code           String    @unique
+  name           String
+  channelTag     String    @default("") @map("channel_tag")
+  referrerType   String    @default("") @map("referrer_type") // STAFF | THERAPIST | PARTNER | ''
+  referrerName   String    @default("") @map("referrer_name")
+  days           Int       @default(30)
+  quota          Int?
+  claimed        Int       @default(0)
+  // 扫码打开的小程序会员页：sx=时叙 / zc=在场 / ql=轻疗
+  appTarget      String    @default("sx") @map("app_target")
+  claimDeadline  DateTime? @map("claim_deadline")
+  status         String    @default("ACTIVE") // PENDING_APPROVAL | ACTIVE | PAUSED | REJECTED
+  note           String    @default("")
+  createdBy      String    @map("created_by")
+  createdByName  String    @map("created_by_name")
+  approvedBy     String?   @map("approved_by")
+  approvedByName String?   @map("approved_by_name")
+  approvedAt     DateTime? @map("approved_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  claims GiftClaim[]
+
+  @@index([status, createdAt])
+  @@map("gift_campaigns")
+}
+
+model GiftClaim {
+  id         String   @id
+  campaignId String   @map("campaign_id")
+  memberId   String   @map("member_id")
+  business   String
+  cardId     String   @map("card_id")
+  claimedAt  DateTime @default(now()) @map("claimed_at")
+
+  campaign GiftCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  member   Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, memberId])
+  @@index([memberId])
+  @@map("gift_claims")
+}
+
+// 会员意见反馈：仅品牌会员可提交；后台全部可见。
+model MemberFeedback {
+  id            String   @id
+  memberId      String   @map("member_id")
+  business      String
+  content       String
+  allowQuote    Boolean  @default(false) @map("allow_quote") // 同意匿名摘录进会员故事
+  status        String   @default("NEW") // NEW | READ | ARCHIVED
+  staffNote     String   @default("") @map("staff_note")
+  handledBy     String?  @map("handled_by")
+  handledByName String?  @map("handled_by_name")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("member_feedback")
+}
+
+// 会员故事：摘录会员原话 + 我们做了什么改变；只在会员中心对品牌会员展示。
+model FeedbackStory {
+  id            String    @id
+  feedbackId    String?   @map("feedback_id")
+  business      String    @default("")
+  title         String
+  quote         String
+  quoteBy       String    @default("") @map("quote_by")
+  story         String
+  status        String    @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+  sort          Int       @default(0)
+  publishedAt   DateTime? @map("published_at")
+  createdBy     String    @map("created_by")
+  createdByName String    @map("created_by_name")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, publishedAt])
+  @@map("feedback_stories")
+}
+
+// 会员公告：后台发布后只对有效品牌会员展示，可按业务定向（all / teahour / presence / retreat）。
+model MemberNotice {
+  id            String    @id
+  title         String
+  body          String
+  business      String    @default("all")
+  status        String    @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+  pinned        Boolean   @default(false)
+  /// 门店名，留空表示全部门店通用。
+  store         String    @default("")
+  /// 黑板报封面图，HTTPS 图片地址；留空则只显示文字纸条。
+  coverUrl      String    @default("")
+  /// 展示有效期（含当日），过期后会员端不再下发。
+  expireAt      DateTime? @map("expire_at")
+  publishedAt   DateTime? @map("published_at")
+  createdBy     String    @map("created_by")
+  createdByName String    @map("created_by_name")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, business, publishedAt])
+  @@index([status, business, expireAt])
+  @@map("member_notices")
+}
+
+// 在场品牌会员邀请：每月 N 张（会员卡 perks 配置），好友领取后由在场发放免费体验课券。
+model MemberInvite {
+  id        String    @id
+  code      String    @unique
+  inviterId String    @map("inviter_id")
+  business  String
+  monthKey  String    @map("month_key")
+  status    String    @default("ISSUED") // ISSUED | CLAIMED | VOID
+  inviteeId String?   @map("invitee_id")
+  claimedAt DateTime? @map("claimed_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([inviterId, monthKey])
+  @@index([inviteeId])
+  @@map("member_invites")
+}
