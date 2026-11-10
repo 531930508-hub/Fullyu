@@ -126,6 +126,10 @@ jobs:
               rm -rf "$dest"/*
               tar -xzf "$tarball" -C "$dest"
             done
+            # 备份只保留最近 2 份，避免 /tmp 里的历史产物持续堆积
+            for base in dist h5; do
+              ls -1t "/tmp/${base}.bak-"*.tar.gz 2>/dev/null | tail -n +3 | xargs -r rm -f || true
+            done
             rm -f /tmp/fullyu-ci/admin-dist.tar.gz /tmp/fullyu-ci/h5-dist.tar.gz
 
       # 后端：git pull 源码 → 构建 shared → tsc 编译 → 重启 PM2
