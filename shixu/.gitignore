@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+unpackage/
+.DS_Store
+*.log
+
+# 本地数据库与上传文件不入库
+apps/server/prisma/*.db
+apps/server/prisma/*.db-journal
+apps/server/uploads/
+.env
+.env.local

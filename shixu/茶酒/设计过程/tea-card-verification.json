@@ -1,0 +1,98 @@
+{
+  "cards": [
+    {
+      "id": "01",
+      "name": "鸡嘴白 × 雪落",
+      "copy": "PASS",
+      "pdf_boxes": "PASS",
+      "page_order": "PASS",
+      "fonts_and_colors": "PASS",
+      "svg": "PASS",
+      "png": "PASS",
+      "minimum_image_dpi": 471
+    },
+    {
+      "id": "02",
+      "name": "红泥醅 × 围炉",
+      "copy": "PASS",
+      "pdf_boxes": "PASS",
+      "page_order": "PASS",
+      "fonts_and_colors": "PASS",
+      "svg": "PASS",
+      "png": "PASS",
+      "minimum_image_dpi": 395
+    },
+    {
+      "id": "03",
+      "name": "春风渡 × 流水",
+      "copy": "PASS",
+      "pdf_boxes": "PASS",
+      "page_order": "PASS",
+      "fonts_and_colors": "PASS",
+      "svg": "PASS",
+      "png": "PASS",
+      "minimum_image_dpi": 475
+    },
+    {
+      "id": "04",
+      "name": "鸡嘴白 × 晚来",
+      "copy": "PASS",
+      "pdf_boxes": "PASS",
+      "page_order": "PASS",
+      "fonts_and_colors": "PASS",
+      "svg": "PASS",
+      "png": "PASS",
+      "minimum_image_dpi": 399
+    },
+    {
+      "id": "05",
+      "name": "敛馀红 × 微澜",
+      "copy": "PASS",
+      "pdf_boxes": "PASS",
+      "page_order": "PASS",
+      "fonts_and_colors": "PASS",
+      "svg": "PASS",
+      "png": "PASS",
+      "minimum_image_dpi": 452
+    },
+    {
+      "id": "06",
+      "name": "落花游 × 酒肆",
+      "copy": "PASS",
+      "pdf_boxes": "PASS",
+      "page_order": "PASS",
+      "fonts_and_colors": "PASS",
+      "svg": "PASS",
+      "png": "PASS",
+      "minimum_image_dpi": 480
+    },
+    {
+      "id": "07",
+      "name": "红泥醅 × 留盏",
+      "copy": "PASS",
+      "pdf_boxes": "PASS",
+      "page_order": "PASS",
+      "fonts_and_colors": "PASS",
+      "svg": "PASS",
+      "png": "PASS",
+      "minimum_image_dpi": 395
+    },
+    {
+      "id": "08",
+      "name": "带露",
+      "copy": "PASS",
+      "pdf_boxes": "PASS",
+      "page_order": "PASS",
+      "fonts_and_colors": "PASS",
+      "svg": "PASS",
+      "png": "PASS",
+      "minimum_image_dpi": 460
+    }
+  ],
+  "count": 8,
+  "format": "65 x 125 mm, single-sided",
+  "bleed_mm": 3,
+  "copy": "All supplied prose retained; Liuzhan ABV confirmed and set to approximately 12%.",
+  "physical_proof": "Not performed. Printer should confirm stock and ICC/output profile. Not claimed as PDF/X.",
+  "visual_review": "PASS: all eight cards individually reviewed; final eight-card overview, layout guide and bleed sample also reviewed after motif-crop refinement. No text clipping, missing glyphs or overlaps observed."
+}

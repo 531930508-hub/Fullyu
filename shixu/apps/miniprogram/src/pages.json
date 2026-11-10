@@ -1,0 +1,44 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "时叙"
+      }
+    },
+    {
+      "path": "pages/legal/index",
+      "style": {
+        "navigationBarTitleText": "用户协议与隐私政策"
+      }
+    },
+    {
+      "path": "pages/brand-member/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "Full愈年卡"
+      }
+    },
+    {
+      "path": "pages/brand-member/stories/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "会员故事"
+      }
+    },
+    {
+      "path": "pages/brand-member/game",
+      "style": {
+        "navigationBarTitleText": "愈行之旅"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "Full愈·时叙",
+    "navigationBarBackgroundColor": "#f6f4ef",
+    "backgroundColor": "#f6f4ef",
+    "backgroundTextStyle": "dark"
+  }
+}

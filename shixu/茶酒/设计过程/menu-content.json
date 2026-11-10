@@ -1,0 +1,32 @@
+{
+  "title": "山的微醺",
+  "subtitle": "茶与酒",
+  "intro": "一片叶子的两种泡法，一杯茶，一杯酒。",
+  "brand": "山醒 MONTEVEIL",
+  "size_mm": [105, 210],
+  "sections": [
+    {
+      "number": "壹", "name": "清", "caption": ["气泡", "长饮"],
+      "items": [
+        {"name": "敛馀红 × 微澜", "price": "98", "ingredients": "古树滇红 · 白酒苏打 · 约 7%", "description": "浅金透粉。酸很轻，薯香与蜜甜跟在后面，不抢。"},
+        {"name": "鸡嘴白 × 雪落", "price": "98", "ingredients": "古树白茶 · 金汤力 · 约 8%", "description": "凉的。奶香先到，气泡散开，收在一点清苦里。"},
+        {"name": "春风渡 × 流水", "price": "98", "ingredients": "普洱生茶 · 斯普利兹 · 约 8%", "description": "青草的绿、一点石头的凉，花香在中段扬起来。"},
+        {"name": "落花游 × 酒肆", "price": "98", "ingredients": "普洱晒红 · 嗨棒 · 约 8%", "description": "麦芽的暖，熟果的甜被气泡冲开，畅快两个字。"}
+      ]
+    },
+    {
+      "number": "贰", "name": "浓", "caption": ["慢酌", "短饮"],
+      "items": [
+        {"name": "红泥醅 × 围炉", "price": "98", "ingredients": "古树熟茶 · 古典 · 约 25%", "description": "入口绵。糖的暖推到舌根，咽下后茶慢慢收口。"},
+        {"name": "鸡嘴白 × 晚来", "price": "98", "ingredients": "古树白茶 · 尼格罗尼 · 约 25%", "description": "先苦，后甘。与旁边那杯热茶交替着喝。"}
+      ]
+    },
+    {
+      "number": "叁", "name": "夜", "caption": ["茶席", "之后"],
+      "items": [
+        {"name": "红泥醅 × 留盏", "price": "68", "ingredients": "古树熟茶 · 梅子酒底 · 约 12%", "description": "先是梅子的酸甜，往后是陈香与木感。让人想多坐一会儿。"},
+        {"name": "带露", "price": "58", "ingredients": "玫瑰酿 · 小甜酒 · 3–5%", "description": "香很浓，酒很轻。酸酸甜甜，收口干净。"}
+      ]
+    }
+  ]
+}

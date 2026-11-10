@@ -1,0 +1,14 @@
+f2f66593740e802e0c4aa498e704d5bff56a531cf5b1f8cb044071a5cfabe723  AGENTS.md
+35f15091b73cc2598662ee483c2620e1f269828713d779cdc19159915f199db4  docs/system-audit-2026-10-30/00-阅读入口.md
+1808ff72fd17246e38ba993adfba2477f53a918aec45cab1e09d0367ded0cdee  docs/system-audit-2026-10-30/01-系统审计报告.md
+c8f5dd5eadda6cd232ae206268fa977d7a4c1f9277077f179b82f3b9818d5b9f  docs/system-audit-2026-10-30/02-可复用AI开发方法论.md
+31dee5419ec9c64edd207ef0fe6aaefac4265a699234c2269b9b7629b5fe0176  docs/system-audit-2026-10-30/03-功能契约与验收模板.md
+f27d9a7f83f2c6840bf8bd1ced5b1e802ddb8c8a9678fdf80411b3481b601f62  docs/system-audit-2026-10-30/04-在场对照与复用边界.md
+e089983697a6797efa2fdaa77099eb7a5c3aa5e5373d5db1344047eb60fe91b3  docs/system-audit-2026-10-30/05-时叙配置与数据完整性清单.md
+57891dc1b6c9ee352812907ee004e02d7c8cbbee4f679aa282ef4907b8231c81  docs/system-audit-2026-10-30/06-整改台账.csv
+060b9c4bcaa6a94491136304a286120f41f895aa6b1b5e1be1867ee2bb059691  docs/system-audit-2026-10-30/evidence/builds.txt
+2f9afebb7e366bfe94d9a0ec1ed957f00b549d57b61084a90844597c65086b09  docs/system-audit-2026-10-30/evidence/delivery-verification.json
+692c3cbc6d15613158994961a573ff6e4e8af566286d64dc38d38e07e30c6617  docs/system-audit-2026-10-30/evidence/local-probes.cjs
+1cd4f6b116d4bda870df26eb3c9d8fdc9a6af25080b8ed4a57995d96491cb1b7  docs/system-audit-2026-10-30/evidence/local-probes.json
+f2556737f6f37316dd985d2424bf0b9b875be0a97148cf1f6e2c8ff797e97886  docs/system-audit-2026-10-30/evidence/server-tests.txt
+7f2212427e7c602440ecfde2fd73b3d5128945c707bca11aa273f87a56940539  docs/system-audit-2026-10-30/evidence/source-fingerprints.json

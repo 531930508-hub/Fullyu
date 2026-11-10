@@ -1,0 +1,10 @@
+/* 品牌衬线字体（H5 专用）：与小程序共用同一份 Noto Serif SC 子集字体，
+   H5 直接用独立 woff2 文件加载，避免 300+ KB base64 进入首屏 CSS 阻塞渲染。
+   小程序 wxss 不支持本地字体文件，仍使用 serif-font.css 的内嵌 base64 版本。 */
+@font-face {
+  font-family: "TeaHour Serif";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/TeaHourSerif.woff2") format("woff2");
+}

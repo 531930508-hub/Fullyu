@@ -1,0 +1,81 @@
+[
+  {
+    "name": "customer-home",
+    "violations": [],
+    "incomplete": [
+      "aria-prohibited-attr",
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "customer-menu",
+    "violations": [],
+    "incomplete": [
+      "aria-prohibited-attr",
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "product-dialog",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "checkout",
+    "violations": [],
+    "incomplete": [
+      "aria-prohibited-attr",
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "payment-error",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "workbench",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "assisted-order",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "products",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "dashboard",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "stores",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "orders",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "refund-dialog",
+    "violations": [],
+    "incomplete": []
+  }
+]

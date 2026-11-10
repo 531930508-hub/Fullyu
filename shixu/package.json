@@ -1,0 +1,30 @@
+{
+  "name": "@teahour/workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full愈·时叙茶饮 - 微信小程序 + 运营管理后台（平板营业台同一套）",
+  "scripts": {
+    "dev:server": "pnpm --filter @teahour/server dev",
+    "dev:admin": "pnpm --filter @teahour/admin dev",
+    "dev:mp": "pnpm --filter @teahour/miniprogram dev:h5",
+    "dev:mp-weixin": "pnpm --filter @teahour/miniprogram dev:mp-weixin",
+    "build:server": "pnpm --filter @teahour/server build",
+    "build:admin": "pnpm --filter @teahour/admin build",
+    "build:mp": "pnpm --filter @teahour/miniprogram build:mp-weixin",
+    "test": "pnpm --filter @teahour/server test",
+    "lint": "pnpm -r lint"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
+  }
+}

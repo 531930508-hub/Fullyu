@@ -1,0 +1,33 @@
+{
+  "content_check": "PASS: all 8 names, all prices, all ingredients/ABVs and descriptions match original PDF reading",
+  "source_text_normalization": "Kangxi radical normalization; U+2F1C mapped to intended mouth radical 口; whitespace and dash normalization only",
+  "trim_mm": [
+    105,
+    210
+  ],
+  "bleed_mm": 3,
+  "print_media_mm": [
+    111,
+    216
+  ],
+  "colors": "DeviceCMYK for all vectors and logo image; grayscale body text uses K only",
+  "type": "All delivery type outlined; no missing-font substitution possible",
+  "body_size_pt": 7.4,
+  "ingredients_size_pt": 7.0,
+  "small_type_note": "4.8–6.7pt is limited to decorative chapter numbers, brand metadata and category captions",
+  "logo_effective_dpi": 1086,
+  "safe_margin_mm": 5,
+  "checked_text_runs": 53,
+  "ICC_output_intent": "Not assigned: printer and stock not specified; not claimed as PDF/X",
+  "fonts": {
+    "hand": "LongCang-Regular",
+    "name": "STSongti-SC-Regular",
+    "sans": "PingFangSC-Regular",
+    "latin": "Baskerville"
+  },
+  "visual_inspection": "PASS: rendered menu, print bleed and revised footer inspected; all items readable with no clipping or overlap. Physical paper proof remains to be checked by printer.",
+  "geometry_check": "PASS: all actual glyph ink bounds within 5 mm; no text-run overlaps",
+  "pdf_box_check": "PASS",
+  "svg_check": "PASS",
+  "preview_check": "PASS: 1240 x 2480 at 300 dpi"
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@teahour/integrations",
+  "version": "1.0.0",
+  "private": true,
+  "description": "时叙对外接口对接包：支付、云打印、泡茶机、外卖平台、会员、微信小程序、头像存储、资料同步",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}

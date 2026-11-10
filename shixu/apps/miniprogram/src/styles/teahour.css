@@ -1,0 +1,1957 @@
+/* 自动生成：由 teahour.source.css 按 750rpx/400px=1.875 换算。请修改源文件后运行 styles 脚本。 */
+/* Full愈·时叙 顾客端小程序 · 视觉基线
+   1:1 取自 teahour-app/web/src/v7.css 的顾客端段落、styles.css 基础排版与
+   app-parity.css 的衔接规则；只补充小程序容器（状态栏、安全区、弹层遮罩）
+   所需的最小适配。设计宽度 750rpx，构建时按 750rpx / 750rpx = 1.875 换算。 */
+
+page {
+  --paper: #f6f4ef;
+  --canvas: #eeece6;
+  --card: #fffefa;
+  --ink: #352f2b;
+  --muted: #68625b;
+  --line: #dedbd3;
+  --line-soft: #e9e5dd;
+  --wood: #694b3d;
+  --accent: #a26843;
+  --apricot: #f1deca;
+  --sage: #dde5d9;
+  --rose: #edd9cf;
+  --lilac: #e5e0ee;
+  --blue: #e0e9ed;
+  --success: #46684f;
+  --danger: #a34338;
+  --warning: #86571d;
+  --shadow: 0 26.25rpx 103.13rpx #352f2b15;
+  --r-sm: 18.75rpx;
+  --r: 33.75rpx;
+  --r-lg: 52.5rpx;
+  /* 字体只保留三种角色，同一层级不再因页面不同而换字族：
+     1. 界面/正文 → 系统无衬线，保证小字号清晰；
+     2. 标题/品名 → 衬线，字形气质取自首页四张系列图；
+     3. 取餐码/杯号 → 等宽，保证数字对齐。 */
+  --font-ui: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  /* Georgia / Times 负责西文与数字；汉字交给内嵌的 TeaHour Serif（见 serif-font.css），
+     再以各平台自带宋体兜底，避免 Android 只装黑体时整段掉回无衬线。 */
+  --font-display: Georgia, "Times New Roman", "TeaHour Serif", "Songti SC", "STSong", "SimSun", "NSimSun", "Noto Serif SC", "Noto Serif CJK SC", "Source Han Serif SC", "Source Han Serif CN", serif;
+  --font-code: ui-monospace, Menlo, "SF Mono", monospace;
+  --font: var(--font-ui);
+  --serif: var(--font-display);
+  --mono: var(--font-code);
+  /* 取自首页系列图：醒/庆的深棕字色与松/眠的米白底色。 */
+  --art-ink: #68370f;
+  --art-cream: #f5f6ee;
+  /* 字距只有四档，全部从「松一点」出发，不再逐页写负值或 0：
+     1. 正文：0.04em（26.25rpx 下约 1.05rpx）；
+     2. 衬线标题：0.06em（48.75rpx 下约 2.81rpx）；
+     3. 小标签：0.12em；
+     4. 全大写眉题/编号：0.18em。
+     品牌统一要求：宁可松，不要挤；新增样式直接引用变量。 */
+  --tracking: 0.05em;
+  --tracking-title: 0.06em;
+  --tracking-label: 0.12em;
+  --tracking-wide: 0.18em;
+}
+:root {
+  --paper: #f6f4ef;
+  --canvas: #eeece6;
+  --card: #fffefa;
+  --ink: #352f2b;
+  --muted: #68625b;
+  --line: #dedbd3;
+  --line-soft: #e9e5dd;
+  --wood: #694b3d;
+  --accent: #a26843;
+  --apricot: #f1deca;
+  --sage: #dde5d9;
+  --rose: #edd9cf;
+  --lilac: #e5e0ee;
+  --blue: #e0e9ed;
+  --success: #46684f;
+  --danger: #a34338;
+  --warning: #86571d;
+  --shadow: 0 26.25rpx 103.13rpx #352f2b15;
+  --r-sm: 18.75rpx;
+  --r: 33.75rpx;
+  --r-lg: 52.5rpx;
+  /* 字体只保留三种角色，同一层级不再因页面不同而换字族：
+     1. 界面/正文 → 系统无衬线，保证小字号清晰；
+     2. 标题/品名 → 衬线，字形气质取自首页四张系列图；
+     3. 取餐码/杯号 → 等宽，保证数字对齐。 */
+  --font-ui: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  /* Georgia / Times 负责西文与数字；汉字交给内嵌的 TeaHour Serif（见 serif-font.css），
+     再以各平台自带宋体兜底，避免 Android 只装黑体时整段掉回无衬线。 */
+  --font-display: Georgia, "Times New Roman", "TeaHour Serif", "Songti SC", "STSong", "SimSun", "NSimSun", "Noto Serif SC", "Noto Serif CJK SC", "Source Han Serif SC", "Source Han Serif CN", serif;
+  --font-code: ui-monospace, Menlo, "SF Mono", monospace;
+  --font: var(--font-ui);
+  --serif: var(--font-display);
+  --mono: var(--font-code);
+  /* 取自首页系列图：醒/庆的深棕字色与松/眠的米白底色。 */
+  --art-ink: #68370f;
+  --art-cream: #f5f6ee;
+  /* 字距只有四档，全部从「松一点」出发，不再逐页写负值或 0：
+     1. 正文：0.04em（26.25rpx 下约 1.05rpx）；
+     2. 衬线标题：0.06em（48.75rpx 下约 2.81rpx）；
+     3. 小标签：0.12em；
+     4. 全大写眉题/编号：0.18em。
+     品牌统一要求：宁可松，不要挤；新增样式直接引用变量。 */
+  --tracking: 0.05em;
+  --tracking-title: 0.06em;
+  --tracking-label: 0.12em;
+  --tracking-wide: 0.18em;
+}
+
+page {
+  background: var(--paper);
+  font-family: var(--font);
+  color: var(--ink);
+  font-size: 26.25rpx;
+  line-height: 1.6;
+  letter-spacing: var(--tracking);
+}
+
+view,
+text,
+button,
+input,
+textarea,
+scroll-view,
+image {
+  box-sizing: border-box;
+}
+
+/* 小程序原生 button 带白底、内边距、圆角与 33.75rpx 行高；
+   H5 端渲染为 uni-button，且框架基础样式在应用样式之后注入，
+   因此用 page/uni-page-body 前缀提高优先级，同时不压过组件类名。 */
+page button,
+uni-page-body uni-button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  line-height: 1.6;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  text-align: inherit;
+  overflow: visible;
+}
+
+page button::after,
+uni-page-body uni-button::after {
+  border: 0;
+}
+
+/* 微信原生 button 默认 hover-class="button-hover" 会在按下瞬间盖一层 #dedede 灰块，
+   看起来像点击后闪现的灰色阴影框。页面里的按钮统一 hover-class="none"，
+   这里再兜底一次，避免漏写的按钮又出现灰块。 */
+page .button-hover,
+uni-page-body .button-hover {
+  background-color: transparent;
+  color: inherit;
+}
+
+/* H5 移动端浏览器的默认点击高亮同样是灰块，一并去掉。 */
+page,
+uni-page-body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* H5 端 input 组件把行高与高度固定成 1.4，输入框比网页基线矮一截；
+   uni-app 编译时会把 input 标签选择器改写成 uni-input，内层输入框用类名对齐。
+   小程序端使用原生 input，不受这些规则影响。 */
+uni-input,
+uni-input .uni-input-input {
+  height: auto;
+  line-height: 1.6;
+}
+uni-input .uni-input-input { height: 1.6em; }
+
+input {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  border: 1.88rpx solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 18.75rpx 22.5rpx;
+  background: var(--card);
+  /* 微信原生 input 默认高度很低，只给 padding 会在真机上被压扁；
+     显式高度 + 行高让输入框在 H5 与小程序里保持同一可视高度。 */
+  height: 78.75rpx;
+  line-height: 37.5rpx;
+}
+
+/* ------------------------------ utilities ------------------------------ */
+
+.muted { color: var(--muted); }
+.small { font-size: 22.5rpx; }
+.tiny { font-size: 20.63rpx; }
+.serif { font-family: var(--serif); }
+.flex { display: flex; align-items: center; gap: 22.5rpx; }
+.between { justify-content: space-between; }
+.grow { flex: 1; min-width: 0; }
+.centered { text-align: center; }
+.section-space { margin-top: 30rpx; margin-bottom: 30rpx; }
+.eyebrow {
+  display: inline-block;
+  font-size: 18.75rpx;
+  letter-spacing: var(--tracking-wide);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.divider { border: 0; border-top: 1.88rpx solid var(--line); margin: 33.75rpx 0; height: 0; }
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3.75rpx 15rpx;
+  border-radius: 1873.13rpx;
+  font-size: 20.63rpx;
+  color: var(--muted);
+  background: #352f2b08;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15rpx;
+  border: 1.88rpx solid var(--line);
+  border-radius: 18.75rpx;
+  min-height: 82.5rpx;
+  padding: 18.75rpx 31.88rpx;
+  background: var(--card);
+  font-weight: 500;
+  font-size: 24.38rpx;
+  white-space: nowrap;
+}
+.btn.primary { background: var(--ink); color: var(--card); border-color: var(--ink); }
+.btn.soft { background: var(--paper); border-color: transparent; }
+.btn.danger { color: var(--danger); border-color: #dcbeb9; }
+.btn.compact { padding: 13.13rpx 22.5rpx; min-height: 71.25rpx; font-size: 22.5rpx; }
+.btn.full { width: 100%; }
+
+.text-btn {
+  padding: 15rpx 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7.5rpx;
+  font-size: 22.5rpx;
+  color: var(--wood);
+  min-height: 75rpx;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 75rpx;
+  height: 75rpx;
+  border-radius: 50%;
+  border: 1.88rpx solid var(--line);
+  background: var(--card);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9.38rpx;
+  height: 45rpx;
+  border-radius: 11.25rpx;
+  background: var(--paper);
+  padding: 5.63rpx 15rpx;
+  font-size: 20.63rpx;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pill.green { color: var(--success); background: #eaf0e7; }
+.pill.warn { color: var(--warning); background: #f6ecd8; }
+.pill.calm { color: var(--muted); background: var(--paper); }
+.pill.closed { color: #857a6e; background: #eeeae3; }
+
+.note {
+  font-size: 22.5rpx;
+  line-height: 1.75;
+  color: var(--muted);
+  background: var(--paper);
+  padding: 22.5rpx 26.25rpx;
+  border-radius: 18.75rpx;
+  display: block;
+}
+.note.danger { color: var(--danger); background: #f8e8e3; }
+
+.notice {
+  padding: 22.5rpx 30rpx;
+  background: #f5e8d2;
+  color: #654719;
+  border: 1.88rpx solid #e9d1a8;
+  border-radius: 22.5rpx;
+  margin-bottom: 30rpx;
+  display: flex;
+  align-items: center;
+  gap: 18.75rpx;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 78.75rpx 30rpx;
+  gap: 13.13rpx;
+  color: var(--muted);
+}
+.empty-title { display: block; color: var(--ink); font-size: 30rpx; font-weight: 550; margin: 22.5rpx 0 9.38rpx; }
+.empty .btn { margin-top: 30rpx; }
+.stale-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18.75rpx;
+  padding: 16.88rpx 22.5rpx;
+  margin-bottom: 18.75rpx;
+  border: 1.88rpx solid var(--line);
+  border-radius: 18.75rpx;
+  background: var(--paper);
+  color: var(--muted);
+}
+
+.loading-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18.75rpx;
+  padding: 90rpx 30rpx;
+  color: var(--muted);
+  font-size: 24.38rpx;
+}
+.spinner {
+  width: 31.88rpx;
+  height: 31.88rpx;
+  border-radius: 50%;
+  border: 3.75rpx solid #d7d1c7;
+  border-top-color: var(--wood);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 与网页端顾客预览一致：顶部整条提示，避免压住底部购物袋栏 */
+.toast {
+  position: fixed;
+  top: 18.75rpx;
+  left: 18.75rpx;
+  right: 18.75rpx;
+  z-index: 120;
+  display: flex;
+  align-items: flex-start;
+  gap: 16.88rpx;
+  padding: 20.63rpx 26.25rpx;
+  border-radius: 22.5rpx;
+  background: #354e3b;
+  color: #fdfaf4;
+  box-shadow: var(--shadow);
+  font-size: 24.38rpx;
+  line-height: 1.5;
+  animation: toast-in 180ms ease;
+}
+.toast-warn { background: #6d4c1a; }
+.toast-danger { background: #8a3930; }
+.toast-text { flex: 1; min-width: 0; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-11.25rpx); } to { opacity: 1; transform: none; } }
+
+/* ------------------------------ app shell ------------------------------ */
+
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.mini-header {
+  /* 品牌靠左；垂直位置由 JS 按语言切换按钮实际位置计算，两者中线对齐。 */
+  padding: 0 30rpx 15rpx;
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  position: relative;
+  flex-shrink: 0;
+}
+/* 品牌靠左上，与门店栏左缘对齐；宽度按图形自身比例（中文 449×83、英文 449×232），
+   不额外加左边距，避免小屏被挤到中间。 */
+/* 品牌行与语言切换同高（56.25rpx），中线对齐；英文 logo 更高，向上回移一半差值。 */
+.mini-header .brand { display: flex; align-items: center; min-width: 0; height: 56.25rpx; }
+.locale-en .mini-header .brand { height: 90rpx; margin-top: -16.87rpx; }
+.mini-logo { display: block; width: 225rpx; height: 41.25rpx; }
+.mini-logo.en { width: 174.38rpx; height: 90rpx; }
+
+.language-switch {
+  position: absolute;
+  width: 82.5rpx;
+  height: 56.25rpx;
+  border: 1.88rpx solid #d8c9b4;
+  border-radius: 28.13rpx;
+  font-size: 22.5rpx;
+  font-weight: 600;
+  color: var(--wood);
+  background: #fbf8f2;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.phone-content {
+  flex: 1;
+  height: 0;
+  position: relative;
+}
+.screen { display: block; padding-bottom: 26.25rpx; }
+.mini-pad { padding: 0 33.75rpx; }
+.mini-pad .note { font-size: 20.63rpx; }
+
+/* 底部菜单与在场/轻疗统一为悬浮圆角条：两侧留白、底部让出安全区，
+   不再通栏贴底。放在文档流里而不是 fixed，购物袋/支付栏仍能稳定叠在它上方。 */
+.nav-bottom {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  min-height: 108.75rpx;
+  margin: 0 37.5rpx calc(22.5rpx + env(safe-area-inset-bottom));
+  padding: 13.13rpx 7.5rpx;
+  background: var(--card);
+  border: 1.88rpx solid var(--line-soft);
+  border-radius: 1873.13rpx;
+  box-shadow: 0 11.25rpx 37.5rpx #352f2b1f;
+  flex-shrink: 0;
+}
+.nav-bottom button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5.63rpx;
+  min-width: 0;
+  padding: 0 3.75rpx;
+  font-size: 18.75rpx;
+  color: var(--muted);
+}
+.nav-bottom button.active { color: var(--wood); font-weight: 600; }
+
+.bag-bar {
+  margin: 0 37.5rpx 18.75rpx;
+  border-radius: 22.5rpx;
+  background: var(--ink);
+  color: var(--card);
+  padding: 18.75rpx 24.38rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22.5rpx;
+  box-shadow: 0 13.13rpx 37.5rpx #352f2b22;
+  flex-shrink: 0;
+}
+.bag-bar .bag-open {
+  display: flex;
+  align-items: center;
+  gap: 22.5rpx;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.bag-bar .bag-summary { min-width: 0; }
+.bag-bar .bag-checkout {
+  background: #e7d3b6;
+  color: var(--ink);
+  border-radius: 15rpx;
+  padding: 15rpx 24.38rpx;
+  font-size: 22.5rpx;
+  flex-shrink: 0;
+}
+.price { font-size: 37.5rpx; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bag-bar .price { font-size: 33.75rpx; }
+.bag-bar .tiny { color: #ded5c9; }
+
+/* 结算页常驻支付栏：合计与支付入口固定在底部，不跟随商品列表滚动。
+   两侧与悬浮底部菜单同为 37.5rpx，视觉上保持一条对齐的中轴。 */
+.pay-bar {
+  margin: 0 37.5rpx 18.75rpx;
+  border-radius: 22.5rpx;
+  background: var(--ink);
+  color: var(--card);
+  padding: 18.75rpx 24.38rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22.5rpx;
+  box-shadow: 0 13.13rpx 37.5rpx #352f2b22;
+  flex-shrink: 0;
+}
+.pay-bar-total { min-width: 0; }
+.pay-bar-total .tiny { display: block; color: #ded5c9; font-size: 18.75rpx; line-height: 1.3; }
+.pay-bar-amount {
+  display: block;
+  font-size: 37.5rpx;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.pay-bar-btn {
+  background: #e7d3b6;
+  color: var(--ink);
+  border-radius: 15rpx;
+  padding: 0 33.75rpx;
+  min-height: 78.75rpx;
+  font-size: 24.38rpx;
+  font-weight: 600;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pay-bar-btn[disabled] { opacity: 0.6; }
+.bag-icon { position: relative; display: flex; align-items: center; }
+.bag-icon .count {
+  position: absolute;
+  right: -15rpx;
+  top: -15rpx;
+  min-width: 30rpx;
+  height: 30rpx;
+  line-height: 30rpx;
+  text-align: center;
+  background: #e7d3b6;
+  color: var(--ink);
+  border-radius: 50%;
+  font-size: 18.75rpx;
+}
+
+/* 加购反馈：杯子飞入后袋图标与数量一起回弹，不再额外弹文字提示。 */
+.bag-dock { position: relative; flex-shrink: 0; z-index: 20; }
+.bag-icon.bump { animation: bag-bump 480ms cubic-bezier(0.3, 1.4, 0.5, 1); }
+.bag-icon.bump .count { animation: count-pop 480ms cubic-bezier(0.3, 1.4, 0.5, 1); }
+@keyframes bag-bump {
+  0% { transform: scale(1); }
+  32% { transform: scale(1.22) rotate(-5deg); }
+  62% { transform: scale(0.96) rotate(2deg); }
+  100% { transform: scale(1); }
+}
+@keyframes count-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+.fly-cup {
+  position: fixed;
+  z-index: 130;
+  border-radius: 22.5rpx;
+  overflow: hidden;
+  pointer-events: none;
+  box-shadow: 0 15rpx 37.5rpx #352f2b33;
+  transition: transform 520ms cubic-bezier(0.22, 0.61, 0.25, 1), opacity 520ms ease-in;
+  will-change: transform, opacity;
+}
+.fly-cup .product-thumb { width: 100%; height: 100%; border-radius: 22.5rpx; display: block; }
+.fly-cup .product-thumb .art,
+.fly-cup .product-thumb .art-img { width: 100%; height: 100%; }
+
+/* -------------------------------- home -------------------------------- */
+
+.location-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 33.75rpx 18.75rpx;
+  gap: 11.25rpx;
+}
+.location-bar button {
+  font-size: 22.5rpx;
+  display: flex;
+  align-items: center;
+  gap: 9.38rpx;
+  text-align: left;
+}
+.location-bar > .pill { margin-top: 15rpx; }
+.store-trigger { flex: 1; min-width: 0; min-height: 86.25rpx; }
+.store-trigger .trigger-text { min-width: 0; flex: 1; }
+.trigger-name { display: block; font-size: 22.5rpx; font-weight: 600; }
+.trigger-desc { display: block; font-size: 16.88rpx; color: var(--muted); line-height: 1.45; margin-top: 5.63rpx; }
+
+/* 首页广告轮播：整张 1600×900 成品图，按 16:9 铺满卡面，不再叠加文字。 */
+.home-banner {
+  display: block;
+  margin: 0 26.25rpx 31.88rpx;
+  height: calc((100vw - 52.5rpx) * 9 / 16);
+  border-radius: 33.75rpx;
+  overflow: hidden;
+  background: #e7d6bd;
+}
+.home-banner-slide {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  line-height: 0;
+  border-radius: 0;
+}
+.home-banner-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tea-hero {
+  margin: 0 26.25rpx 31.88rpx;
+  height: 367.5rpx;
+  border-radius: 33.75rpx;
+  overflow: hidden;
+  background: #e7d6bd;
+  position: relative;
+  padding: 45rpx 37.5rpx;
+}
+.hero-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+.hero-scrim {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #f0e7d7ce 0, #f0e7d780 43%, transparent 65%);
+}
+.hero-body { position: relative; }
+.photo-note {
+  position: absolute;
+  bottom: 16.88rpx;
+  right: 20.63rpx;
+  padding: 1.88rpx 9.38rpx;
+  border-radius: 7.5rpx;
+  background: #f6f4efde;
+  color: var(--muted);
+  font-size: 16.88rpx;
+}
+.hero-title {
+  display: block;
+  font-family: var(--serif);
+  font-size: 54.38rpx;
+  line-height: 1.5;
+  letter-spacing: var(--tracking-title);
+  margin: 15rpx 0;
+  font-weight: 550;
+  color: var(--art-ink);
+}
+.hero-title .hero-line { display: block; }
+.hero-sub { display: block; font-size: 20.63rpx; font-family: var(--serif); font-weight: 500; }
+/* 首页主视觉的文字层与图片字体一致：眉题、副题都用衬线，不再出现图内宋体、图外黑体。 */
+.tea-hero .eyebrow {
+  font-family: var(--serif);
+  font-weight: 550;
+}
+
+.section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 18.75rpx;
+}
+.section-heading {
+  display: block;
+  font-family: var(--serif);
+  font-size: 33.75rpx;
+  font-weight: 550;
+  letter-spacing: var(--tracking-title);
+  color: var(--art-ink);
+}
+/* 「看茶单」与左侧系列标题同一字族；只作用于首页标题行，不影响其它文字按钮。 */
+.section-title .text-btn {
+  font-family: var(--serif);
+  font-size: 24.38rpx;
+  font-weight: 550;
+  letter-spacing: var(--tracking-title);
+}
+
+.series-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18.75rpx; }
+.series-card {
+  min-height: 215.63rpx;
+  padding: 28.13rpx 28.13rpx 22.5rpx;
+  border-radius: 28.13rpx;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+/* 系列卡改为成品图：文字、图形与箭头都在图内，按钮只保留圆角裁切与点击区域。 */
+.series-card-art { padding: 0; min-height: 0; line-height: 0; }
+.series-card-art .series-art { display: block; width: 100%; height: auto; }
+.apricot { background: var(--apricot); }
+.sage { background: var(--sage); }
+.rose { background: var(--rose); }
+.lilac { background: var(--lilac); }
+.blue { background: var(--blue); }
+
+.celebrate-strip {
+  display: flex;
+  align-items: center;
+  gap: 28.13rpx;
+  background: #e9dfd0;
+  border-radius: 26.25rpx;
+  margin: 30rpx 0 15rpx;
+  overflow: hidden;
+  text-align: left;
+  width: 100%;
+  padding: 0 22.5rpx 0 0;
+}
+.celebrate-strip .cover { width: 161.25rpx; height: 176.25rpx; flex-shrink: 0; }
+/* 香槟茶条与首页系列图保持同一套衬线字族和深棕字色，不再出现图片衬线、文字无衬线的断层。 */
+.celebrate-strip .eyebrow {
+  font-family: var(--serif);
+  font-weight: 550;
+}
+.celebrate-title {
+  display: block;
+  font-family: var(--serif);
+  font-size: 26.25rpx;
+  margin: 7.5rpx 0;
+  font-weight: 550;
+  letter-spacing: var(--tracking-title);
+  color: var(--art-ink);
+}
+.celebrate-sub {
+  display: block;
+  font-family: var(--serif);
+  font-size: 18.75rpx;
+  letter-spacing: var(--tracking);
+  color: var(--art-ink);
+  opacity: 0.78;
+}
+
+/* 首页「继续查看取茶凭证」：沿用庆祝条的卡片质感，但更轻，不抢主视觉。 */
+.resume-strip {
+  display: flex;
+  align-items: center;
+  gap: 22.5rpx;
+  width: calc(100% - 67.5rpx);
+  margin: 26.25rpx 33.75rpx 0;
+  padding: 20.63rpx 26.25rpx;
+  background: var(--card);
+  border: 1.88rpx solid var(--line-soft);
+  border-radius: 26.25rpx;
+  text-align: left;
+}
+.resume-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60rpx;
+  height: 60rpx;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--apricot);
+  color: var(--wood);
+}
+.resume-line { display: flex; align-items: center; gap: 15rpx; flex-wrap: wrap; }
+.resume-title { display: block; font-size: 24.38rpx; font-weight: 550; letter-spacing: var(--tracking-title); }
+.resume-sub { display: block; font-size: 18.75rpx; color: var(--muted); margin-top: 1.88rpx; }
+.resume-code {
+  display: inline-flex;
+  align-items: center;
+  padding: 1.88rpx 13.13rpx;
+  border-radius: 11.25rpx;
+  background: #f3efe7;
+  color: var(--muted);
+  font-family: var(--font-code);
+  font-size: 20.63rpx;
+  font-weight: 550;
+  line-height: 1.5;
+  letter-spacing: var(--tracking);
+}
+/* 已出餐是顾客要行动的时刻：整条提亮，编号用识别度更高的绿底。 */
+.resume-strip.ready {
+  background: #fbfcf7;
+  border-color: #d8e1d1;
+}
+.resume-strip.ready .resume-icon {
+  background: var(--sage);
+  color: var(--success);
+}
+.resume-strip.ready .resume-title { color: var(--art-ink); }
+.resume-strip.ready .resume-code {
+  background: #eaf0e7;
+  color: var(--success);
+}
+
+/* -------------------------------- menu -------------------------------- */
+
+.page-heading { padding: 7.5rpx 33.75rpx 30rpx; }
+.heading-title {
+  display: block;
+  font-family: var(--serif);
+  font-size: 48.75rpx;
+  letter-spacing: var(--tracking-title);
+  margin-bottom: 7.5rpx;
+  font-weight: 550;
+  color: var(--art-ink);
+}
+.heading-sub { display: block; font-size: 20.63rpx; color: var(--muted); }
+.title-line { display: block; }
+
+.chips {
+  display: flex;
+  gap: 13.13rpx;
+  overflow: auto;
+  padding: 0 33.75rpx 22.5rpx;
+  white-space: nowrap;
+}
+.chips button {
+  white-space: nowrap;
+  min-height: 63.75rpx;
+  padding: 9.38rpx 22.5rpx;
+  font-size: 22.5rpx;
+  border: 1.88rpx solid var(--line);
+  border-radius: 37.5rpx;
+  background: var(--card);
+  flex-shrink: 0;
+  /* min-height 大于行高时，块级按钮的文字会贴顶；筛选项统一垂直居中。 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.chips button.active { background: var(--ink); color: var(--card); border-color: var(--ink); }
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 15rpx;
+  margin: 0 33.75rpx 22.5rpx;
+  padding: 0 22.5rpx;
+  height: 75rpx;
+  border: 1.88rpx solid var(--line);
+  border-radius: 37.5rpx;
+  background: var(--card);
+}
+.search input {
+  border: 0;
+  background: transparent;
+  width: 100%;
+  height: 71.25rpx;
+  line-height: 37.5rpx;
+  padding: 0;
+  font-size: 24.38rpx;
+  outline: none;
+  border-radius: 0;
+}
+/* H5 端 input 组件外面还有一层 uni-input，用更高优先级让搜索框同样占满 71.25rpx */
+.search uni-input,
+.search uni-input .uni-input-input {
+  height: 71.25rpx;
+  line-height: 71.25rpx;
+}
+
+.product-list { padding: 0 33.75rpx; }
+.product-row {
+  display: flex;
+  align-items: center;
+  gap: 24.38rpx;
+  padding: 26.25rpx 0;
+  border-bottom: 1.88rpx solid var(--line);
+}
+.product-thumb {
+  width: 155.63rpx;
+  height: 168.75rpx;
+  flex-shrink: 0;
+  border-radius: 24.38rpx;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.product-thumb .art {
+  width: 142.5rpx;
+  height: 155.63rpx;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: center;
+}
+.product-thumb .art-img { width: 100%; height: 100%; }
+.product-hit { display: block; width: 100%; padding: 0; text-align: left; }
+.product-name {
+  display: block;
+  font-family: var(--serif);
+  font-size: 26.25rpx;
+  font-weight: 550;
+  letter-spacing: var(--tracking-title);
+  color: var(--art-ink);
+}
+.product-row .meta-line { display: flex; align-items: center; gap: 13.13rpx; margin: 5.63rpx 0 15rpx; }
+.product-row .tag { font-size: 18.75rpx; color: var(--muted); }
+.product-row .temp-note { font-size: 18.75rpx; letter-spacing: var(--tracking); color: var(--muted); opacity: 0.85; }
+.product-row .price { font-size: 30rpx; }
+
+.add-btn {
+  background: var(--ink);
+  color: var(--card);
+  width: 60rpx;
+  height: 60rpx;
+  min-width: 60rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: transform 160ms ease, background 160ms ease;
+}
+.add-btn:active { transform: scale(0.9); }
+/* 已在袋里的商品在加号旁显示数量，再点就是按上次口味再来一杯。 */
+.add-btn .add-count {
+  position: absolute;
+  top: -9.37rpx;
+  right: -9.37rpx;
+  min-width: 30rpx;
+  height: 30rpx;
+  line-height: 30rpx;
+  padding: 0 7.5rpx;
+  border-radius: 16.88rpx;
+  background: #e7d3b6;
+  color: var(--ink);
+  font-size: 16.88rpx;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 3.75rpx var(--card);
+}
+.add-btn.just-added { animation: add-pop 420ms cubic-bezier(0.3, 1.5, 0.5, 1); }
+.add-btn.has-count { background: #4b3a31; }
+@keyframes add-pop {
+  0% { transform: scale(0.86); }
+  42% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+/* ------------------------------- retail ------------------------------- */
+
+.retail-intro {
+  background: var(--sage);
+  border-radius: 30rpx;
+  margin: 9.38rpx 33.75rpx 30rpx;
+  padding: 37.5rpx;
+  display: flex;
+  align-items: center;
+  gap: 30rpx;
+}
+.retail-intro .heading-title { font-size: 48.75rpx; line-height: 1.4; margin: 15rpx 0 18.75rpx; }
+.retail-intro .small { display: block; }
+.retail-intro .product-thumb { width: 161.25rpx; height: 206.25rpx; background: transparent; }
+.retail-intro .product-thumb .art { width: 187.5rpx; height: 217.5rpx; }
+
+.pickup-promise { display: flex; gap: 22.5rpx; align-items: flex-start; padding: 28.13rpx 0 35.63rpx; }
+.pickup-promise-title { display: block; font-size: 24.38rpx; }
+.pickup-promise-sub { display: block; font-size: 20.63rpx; color: var(--muted); margin-top: 7.5rpx; }
+.mini-card.pickup-promise { padding: 30rpx; }
+
+/* ------------------------------ checkout ------------------------------ */
+
+.mini-card {
+  margin: 0 33.75rpx 22.5rpx;
+  background: var(--card);
+  border: 1.88rpx solid var(--line);
+  padding: 30rpx;
+  border-radius: 26.25rpx;
+  display: block;
+}
+
+.mode-toggle {
+  display: flex;
+  border: 1.88rpx solid var(--line);
+  padding: 3.75rpx;
+  border-radius: 13.13rpx;
+  flex-shrink: 0;
+}
+.mode-toggle button {
+  padding: 5.63rpx 16.88rpx;
+  border-radius: 9.38rpx;
+  font-size: 20.63rpx;
+  min-height: 48.75rpx;
+  /* 微信按钮默认基线对齐，文字会顶在左上角；显式用 flex 居中。 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mode-toggle .active { background: var(--ink); color: var(--card); }
+.checkout-mode { display: flex; margin: 31.88rpx 0; width: 100%; }
+.checkout-mode button { flex: 1; min-height: 75rpx; font-size: 24.38rpx; line-height: 1.2; }
+
+/* 堂食座位：扫过桌签就显示固定桌号，没扫就按吧台取餐口自取，不再让顾客自己挑位置。 */
+.seat-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 18.75rpx;
+  padding-top: 22.5rpx;
+  border-top: 1.88rpx solid var(--line-soft);
+}
+.seat-status .text-btn { flex-shrink: 0; min-height: 56.25rpx; }
+.seat-status-value { display: block; margin: 5.63rpx 0 7.5rpx; font-size: 28.13rpx; font-weight: 550; color: var(--ink); }
+
+.options { display: flex; gap: 16.88rpx; flex-wrap: wrap; }
+.option {
+  border: 1.88rpx solid var(--line);
+  border-radius: 15rpx;
+  padding: 15rpx 35.63rpx;
+  font-size: 22.5rpx;
+  min-height: 75rpx;
+  background: var(--paper);
+  display: inline-flex;
+  align-items: center;
+}
+.option.selected { background: var(--ink); color: var(--card); border-color: var(--ink); }
+
+.store-ack {
+  display: flex;
+  gap: 16.88rpx;
+  align-items: flex-start;
+  margin-top: 26.25rpx;
+  padding: 18.75rpx 22.5rpx;
+  border-radius: 18.75rpx;
+  background: var(--paper);
+  font-size: 20.63rpx;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.checkout-item {
+  display: flex;
+  gap: 22.5rpx;
+  align-items: center;
+  border-bottom: 1.88rpx solid var(--line);
+  padding: 24.38rpx 0;
+}
+.checkout-item:last-child { border: 0; }
+.checkout-item .product-thumb { width: 93.75rpx; height: 112.5rpx; border-radius: 15rpx; }
+.checkout-item .product-thumb .art { width: 90rpx; height: 101.25rpx; }
+.checkout-item .product-name { font-size: 24.38rpx; }
+.checkout-item .checkout-name { display: block; font-family: var(--serif); font-size: 24.38rpx; font-weight: 550; color: var(--art-ink); }
+.checkout-item .checkout-amount { display: block; }
+
+.qty { display: flex; align-items: center; gap: 24.38rpx; }
+.qty button {
+  width: 56.25rpx;
+  height: 56.25rpx;
+  border: 1.88rpx solid var(--line);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  padding: 0;
+}
+.qty .qty-num { min-width: 30rpx; text-align: center; font-variant-numeric: tabular-nums; }
+.checkout-item .qty { gap: 11.25rpx; }
+.checkout-item .qty button { width: 52.5rpx; height: 52.5rpx; }
+
+.bill-line { display: flex; justify-content: space-between; margin: 16.88rpx 0; font-size: 22.5rpx; gap: 30rpx; }
+.bill-line .bill-label { min-width: 0; }
+.bill-line .bill-value { flex-shrink: 0; }
+.bill-total { border-top: 1.88rpx solid var(--line); padding-top: 22.5rpx; margin-top: 22.5rpx; }
+.bill-total .amount { font-size: 45rpx; font-weight: 550; }
+
+.pay-store-card { background: var(--paper); border: 1.88rpx solid var(--line); border-radius: 26.25rpx; padding: 33.75rpx; }
+.pay-store-card .card-title { font-size: 37.5rpx; margin: 13.13rpx 0; font-weight: 550; }
+/* 超过 1km 的门店距离：从地址行拆出，单独用暖色块提醒核对。 */
+.pay-store-distance {
+  display: flex;
+  align-items: center;
+  gap: 11.25rpx;
+  margin-top: 18.75rpx;
+  padding: 16.88rpx 20.63rpx;
+  border-radius: 18.75rpx;
+  background: #f6e7d8;
+  color: #8a4b1f;
+  font-size: 24.38rpx;
+  font-weight: 600;
+}
+.pay-store-distance-text { font-variant-numeric: tabular-nums; }
+.pay-store-distance-tag {
+  margin-left: auto;
+  padding: 3.75rpx 13.13rpx;
+  border-radius: 1873.13rpx;
+  background: #8a4b1f;
+  color: #fff8ef;
+  font-size: 18.75rpx;
+  font-weight: 500;
+}
+
+/* ------------------------------- receipt ------------------------------- */
+
+/* 从订单列表进入的回执是「订单」的子页面：左上角悬浮返回，不再占用一行 banner。
+   位置由 JS 按状态栏高度内联，H5 回退到 135rpx。 */
+.float-back {
+  position: fixed;
+  left: 26.25rpx;
+  z-index: 30;
+  width: 71.25rpx;
+  height: 71.25rpx;
+  border-radius: 50%;
+  border: 1.88rpx solid var(--line);
+  background: rgba(253, 250, 244, 0.96);
+  box-shadow: 0 11.25rpx 33.75rpx rgba(60, 45, 35, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+}
+
+.receipt { padding: 41.25rpx 33.75rpx 52.5rpx; text-align: center; }
+.receipt .receipt-circle {
+  margin: 0 auto 26.25rpx;
+  width: 97.5rpx;
+  height: 97.5rpx;
+  border: 1.88rpx solid var(--line);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sage);
+}
+.receipt-title {
+  display: block;
+  font-family: var(--serif);
+  font-size: 37.5rpx;
+  margin: 15rpx 0;
+  font-weight: 550;
+  letter-spacing: var(--tracking-title);
+  color: var(--art-ink);
+}
+.receipt .order-number {
+  display: block;
+  font-size: 97.5rpx;
+  font-weight: 500;
+  letter-spacing: var(--tracking-title);
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+.receipt .order-number.long {
+  font-size: 45rpx;
+  letter-spacing: var(--tracking);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.receipt .mini-card { text-align: left; margin: 41.25rpx 0 26.25rpx; }
+
+/* 收据里的说明文字在网页端是段落 <p>；小程序 text 默认行内，会按父级行高撑高，
+   这里让它们独占一行，行距才与网页端一致。 */
+.receipt > .small,
+.receipt .mini-card > .tiny { display: block; }
+
+.pickup-box {
+  background: var(--card);
+  border: 1.88rpx solid var(--line);
+  border-radius: 26.25rpx;
+  padding: 30rpx;
+  margin: 30rpx 0;
+  text-align: center;
+}
+.pickup-code {
+  font-family: var(--mono);
+  font-size: 30rpx;
+  letter-spacing: var(--tracking-title);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pickup-code.full { display: block; font-size: 37.5rpx; letter-spacing: var(--tracking-label); margin: 11.25rpx 0 7.5rpx; white-space: normal; overflow-wrap: anywhere; }
+.qr-wrap { display: flex; justify-content: center; margin: 18.75rpx 0; }
+.qr-svg {
+  width: 228.75rpx;
+  height: 228.75rpx;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: center;
+}
+
+.cup-progress {
+  background: var(--card);
+  border: 1.88rpx solid var(--line);
+  border-radius: 24.38rpx;
+  padding: 26.25rpx 30rpx;
+  margin: 30rpx 0;
+  text-align: left;
+}
+.cup-progress .cup-row {
+  background: transparent;
+  border: 0;
+  border-bottom: 1.88rpx solid var(--line);
+  border-radius: 0;
+  padding: 15rpx 0;
+}
+.cup-progress .cup-row:last-child { border-bottom: 0; }
+.cup-progress-title { font-size: 26.25rpx; font-weight: 600; }
+.cup-row { display: flex; align-items: center; gap: 16.88rpx; font-size: 22.5rpx; }
+.cup-no {
+  font-family: var(--mono);
+  font-size: 20.63rpx;
+  font-weight: 600;
+  letter-spacing: var(--tracking);
+  color: var(--wood);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 取茶/提货进度：纵向时间线，每一步都有状态、说明和时间，不再用三个小框。 */
+.progress-card {
+  background: var(--card);
+  border: 1.88rpx solid var(--line);
+  border-radius: 24.38rpx;
+  padding: 28.13rpx 30rpx 24.38rpx;
+  margin: 30rpx 0;
+  text-align: left;
+}
+.progress-card .cup-progress-title { font-size: 26.25rpx; }
+.progress-list { display: flex; flex-direction: column; }
+.progress-item { display: flex; gap: 20.63rpx; }
+.progress-rail { width: 30rpx; display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+.progress-dot {
+  width: 30rpx;
+  height: 30rpx;
+  margin-top: 1.88rpx;
+  border-radius: 50%;
+  border: 2.81rpx solid #d8c9b4;
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.progress-item.done .progress-dot { background: var(--sage); border-color: var(--sage); }
+.progress-item.active .progress-dot { background: var(--wood); border-color: var(--wood); box-shadow: 0 0 0 7.5rpx rgba(105, 75, 61, 0.12); }
+.progress-line { flex: 1; width: 2.81rpx; min-height: 33.75rpx; margin: 5.63rpx 0; background: var(--line); }
+.progress-item.done .progress-line { background: var(--sage); }
+.progress-body { flex: 1; min-width: 0; padding-bottom: 30rpx; }
+.progress-item:last-child .progress-body { padding-bottom: 0; }
+.progress-label { display: block; font-size: 24.38rpx; font-weight: 600; color: var(--muted); }
+.progress-item.done .progress-label,
+.progress-item.active .progress-label { color: var(--ink); }
+.progress-hint { display: block; font-size: 20.63rpx; color: var(--muted); margin-top: 5.63rpx; }
+.progress-time { display: block; font-size: 20.63rpx; color: var(--wood); margin-top: 5.63rpx; font-variant-numeric: tabular-nums; }
+.progress-item.todo .progress-hint { opacity: 0.72; }
+
+/* -------------------------------- orders ------------------------------- */
+
+.mini-card .card-title { display: block; font-size: 28.13rpx; font-weight: 550; }
+.order-meta { display: block; font-size: 22.5rpx; color: var(--muted); }
+.order-items-line { display: block; font-size: 22.5rpx; margin-top: 30rpx; }
+.order-total { font-size: 26.25rpx; font-weight: 600; }
+.order-card-no { font-size: 30rpx; font-weight: 600; }
+.strong { font-weight: 600; }
+
+/* -------------------------------- profile ------------------------------ */
+
+.profile-row { display: flex; align-items: center; gap: 22.5rpx; width: 100%; text-align: left; }
+.profile-avatar {
+  width: 93.75rpx;
+  height: 93.75rpx;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sage);
+  color: var(--wood);
+  flex-shrink: 0;
+}
+.profile-avatar-img { width: 100%; height: 100%; border-radius: 50%; }
+/* 个人资料弹层的头像选择区：沿用圆形头像，只补居中与说明文字间距 */
+.profile-edit-head { display: grid; justify-items: center; gap: 11.25rpx; margin-bottom: 7.5rpx; }
+.avatar-picker { padding: 0; display: grid; place-items: center; }
+.form-row input { width: 100%; }
+.profile-identity { padding: 28.13rpx; }
+.profile-name { display: block; font-size: 30rpx; font-weight: 600; }
+.profile-sub { display: block; font-size: 18.75rpx; color: var(--muted); line-height: 1.4; }
+
+/* 品牌会员入口：未开通用米白卡，生效后用深棕卡；
+   入口只暴露两个数（积分、骰子），明细与游戏放进会员中心，保持「我的」页短。
+   几何与 mini-card 对齐（左右 33.75rpx、圆角 26.25rpx、无外阴影），
+   否则会横向撑出、并与上下卡片粘在一起。 */
+.brand-entry {
+  display: block;
+  width: auto;
+  margin: 0 33.75rpx 22.5rpx;
+  padding: 30rpx;
+  text-align: left;
+  border-radius: 26.25rpx;
+  border: 1.88rpx solid var(--line);
+  background: var(--card);
+}
+.brand-entry.is-active {
+  border-color: transparent;
+  background: linear-gradient(145deg, #4d3a2c 0%, #6b4a35 58%, #7b5a41 100%);
+  color: #f7f1e7;
+}
+.brand-entry-head { display: flex; align-items: center; justify-content: space-between; gap: 18.75rpx; }
+.brand-entry-eyebrow {
+  font-size: 16.88rpx;
+  letter-spacing: var(--tracking-wide);
+  color: var(--wood);
+}
+.brand-entry.is-active .brand-entry-eyebrow { color: #e8c58d; }
+.brand-entry-state {
+  flex: none;
+  font-size: 16.88rpx;
+  letter-spacing: var(--tracking-label);
+  padding: 5.63rpx 16.88rpx;
+  border: 1.88rpx solid var(--line);
+  border-radius: 1873.13rpx;
+  color: var(--muted);
+}
+.brand-entry.is-active .brand-entry-state {
+  border-color: rgba(247, 241, 231, 0.35);
+  color: #f7f1e7b8;
+}
+.brand-entry-title {
+  display: block;
+  margin-top: 13.13rpx;
+  font-size: 43.13rpx;
+  letter-spacing: var(--tracking-title);
+}
+.brand-entry-sub {
+  display: block;
+  margin-top: 7.5rpx;
+  font-size: 18.75rpx;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.brand-entry.is-active .brand-entry-sub { color: #f7f1e7cc; }
+.brand-entry-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20.63rpx;
+  padding-top: 18.75rpx;
+  border-top: 1.88rpx solid var(--line-soft);
+  font-size: 20.63rpx;
+  color: var(--wood);
+}
+.brand-entry.is-active .brand-entry-foot {
+  border-top-color: rgba(247, 241, 231, 0.18);
+  color: #e8c58d;
+}
+/* 编辑入口只有一行字，必须显式 flex 居中；否则 min-height 会在下方留空，文字偏上。 */
+.profile-edit-link {
+  padding: 0;
+  flex-shrink: 0;
+  min-height: 71.25rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3.75rpx;
+}
+/* AppIcon 组件样式为 scoped（0,2,0），这里用 page 前缀提高优先级，让图标与文字同行 */
+page .profile-edit-link .app-icon,
+uni-page-body .profile-edit-link .app-icon { display: inline-block; vertical-align: middle; }
+.qr-shortcut {
+  width: 67.5rpx;
+  height: 67.5rpx;
+  flex-shrink: 0;
+  background: var(--paper);
+  border-color: transparent;
+  color: var(--wood);
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.88rpx solid transparent;
+}
+
+.member-card {
+  background: var(--ink);
+  color: var(--card);
+  margin: 0 33.75rpx 26.25rpx;
+  padding: 41.25rpx;
+  border-radius: 33.75rpx;
+  position: relative;
+  overflow: hidden;
+  display: block;
+}
+.member-card:after {
+  content: '';
+  width: 281.25rpx;
+  height: 281.25rpx;
+  border: 1.88rpx solid #cdbb9b50;
+  border-radius: 50%;
+  position: absolute;
+  right: -56.25rpx;
+  top: -103.12rpx;
+  pointer-events: none;
+}
+.member-card .eyebrow { color: #d9c9af; }
+.member-sub { display: block; font-size: 20.63rpx; color: #d8d0c6; }
+.member-card button { margin-top: 31.88rpx; background: #e4d5ba; color: var(--ink); border: 0; min-height: 73.13rpx; }
+
+.profile-assets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 33.75rpx 26.25rpx;
+  border: 1.88rpx solid var(--line);
+  border-radius: 26.25rpx;
+  background: var(--card);
+  padding: 30rpx 0;
+}
+.asset-item { display: flex; flex-direction: column; align-items: center; padding: 0 7.5rpx; gap: 5.63rpx; width: 100%; }
+.asset-item + .asset-item { border-left: 1.88rpx solid var(--line); }
+.asset-item .asset-value { font-size: 45rpx; font-weight: 500; }
+.asset-item .asset-label { font-size: 20.63rpx; color: var(--muted); }
+
+/* 登录与会员权益：未登录展示登录卡；券与积分替代原会员码占位。 */
+.login-card { margin-bottom: 26.25rpx; }
+.login-card .card-title { font-size: 33.75rpx; margin: 15rpx 0 11.25rpx; }
+.asset-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18.75rpx;
+  margin-bottom: 22.5rpx;
+}
+.asset-summary-item {
+  background: var(--paper);
+  border: 1.88rpx solid var(--line);
+  border-radius: 22.5rpx;
+  padding: 22.5rpx;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 5.63rpx;
+}
+.asset-summary-value { font-size: 45rpx; font-weight: 550; font-variant-numeric: tabular-nums; }
+.coupon-card {
+  display: flex;
+  align-items: center;
+  gap: 22.5rpx;
+  border: 1.88rpx solid var(--line);
+  border-radius: 22.5rpx;
+  padding: 22.5rpx;
+  background: var(--card);
+  margin-top: 18.75rpx;
+}
+.coupon-card.disabled { opacity: 0.55; }
+.coupon-card.picked { border-color: var(--wood); box-shadow: inset 0 0 0 1.88rpx var(--wood); }
+.coupon-amount {
+  min-width: 142.5rpx;
+  text-align: center;
+  border-right: 1.88rpx dashed var(--line);
+  padding-right: 18.75rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 3.75rpx;
+}
+.coupon-value {
+  font-size: 37.5rpx;
+  font-weight: 600;
+  color: var(--wood);
+  font-variant-numeric: tabular-nums;
+}
+.coupon-title { display: block; font-size: 24.38rpx; font-weight: 600; margin-bottom: 5.63rpx; }
+.coupon-card .pill { flex-shrink: 0; }
+.coupon-order-note { display: block; margin-top: 3.75rpx; }
+.coupon-row-card .card-title { margin-bottom: 3.75rpx; }
+
+/* 茶单「全部」按系列分组，避免只看到第一个系列。 */
+.menu-group-block + .menu-group-block { margin-top: 37.5rpx; }
+.menu-series-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18.75rpx;
+  padding: 7.5rpx 3.75rpx 15rpx;
+  border-bottom: 1.88rpx solid var(--line);
+  margin-bottom: 18.75rpx;
+}
+.menu-series-name {
+  font-family: var(--serif);
+  font-size: 33.75rpx;
+  font-weight: 600;
+  letter-spacing: var(--tracking-title);
+  color: var(--art-ink);
+  flex-shrink: 0;
+}
+.menu-series-side { display: flex; align-items: center; gap: 15rpx; min-width: 0; }
+.menu-series-tag {
+  font-family: var(--serif);
+  font-size: 18.75rpx;
+  letter-spacing: var(--tracking);
+  line-height: 1.35;
+  text-align: right;
+  color: var(--muted);
+}
+.series-head-motif {
+  width: 41.25rpx;
+  height: 41.25rpx;
+  flex-shrink: 0;
+  opacity: 0.5;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: center;
+}
+/* 系列内的二级标题（鲜酿茶 / 康普茶 / 气泡茶），名称来自后台分类。 */
+.menu-cat-block + .menu-cat-block { margin-top: 22.5rpx; }
+.menu-cat-head { display: flex; align-items: center; gap: 15rpx; padding: 3.75rpx 3.75rpx 11.25rpx; }
+.menu-cat-name {
+  font-family: var(--serif);
+  font-size: 24.38rpx;
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  color: var(--art-ink);
+  flex-shrink: 0;
+}
+.menu-cat-en {
+  font-size: 15rpx;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+.menu-cat-rule { flex: 1; height: 1.88rpx; background: var(--line-soft); }
+
+/* 订单按生命周期分档：茶饮/零售是订单属性，放在卡片上，不再当作筛选标签。 */
+.order-tabs {
+  display: flex;
+  gap: 7.5rpx;
+  margin: 0 33.75rpx 26.25rpx;
+  padding: 5.63rpx;
+  border-radius: 22.5rpx;
+  background: #ece8e0;
+}
+.order-tabs button {
+  flex: 1;
+  min-height: 67.5rpx;
+  padding: 7.5rpx 15rpx;
+  border-radius: 16.88rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9.38rpx;
+  font-size: 22.5rpx;
+  color: var(--muted);
+  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+.order-tabs button.active {
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 3.75rpx 15rpx #352f2b12;
+}
+.tab-count {
+  min-width: 30rpx;
+  height: 30rpx;
+  line-height: 30rpx;
+  padding: 0 7.5rpx;
+  border-radius: 15rpx;
+  background: #e7dfd3;
+  color: var(--wood);
+  font-size: 18.75rpx;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.order-tabs button.active .tab-count { background: var(--ink); color: var(--card); }
+
+.order-card-head { align-items: flex-start; gap: 18.75rpx; }
+.order-title-row { gap: 15rpx; min-width: 0; }
+.order-title-row .tag { flex-shrink: 0; }
+.order-type {
+  display: inline-flex;
+  align-items: center;
+  height: 37.5rpx;
+  padding: 0 13.13rpx;
+  border-radius: 11.25rpx;
+  background: #f1ece4;
+  color: var(--wood);
+  font-size: 18.75rpx;
+  letter-spacing: var(--tracking);
+  flex-shrink: 0;
+}
+.order-type.retail { background: #efe7d5; color: #6d5a2e; }
+.order-retail { background: #fbfaf6; }
+/* 取消/退款订单收进「已取消」，卡片整体降一档，不与进行中的茶单抢视觉。 */
+.order-closed { background: #f9f7f2; border-color: #e7e2d9; box-shadow: none; opacity: 0.78; }
+.order-closed .order-card-no { color: var(--muted); }
+.order-closed .order-total { color: var(--muted); font-weight: 500; }
+/* 未支付取消后可在订单卡片与回执里「再来一单」。 */
+.order-card-actions { display: inline-flex; align-items: center; gap: 26.25rpx; flex-shrink: 0; }
+.order-card-actions .text-btn { min-height: 67.5rpx; }
+.order-again { color: var(--ink); font-weight: 550; }
+
+.menu-group { padding: 3.75rpx 30rpx; }
+.profile-menu {
+  display: flex;
+  align-items: center;
+  gap: 22.5rpx;
+  width: 100%;
+  min-height: 103.13rpx;
+  text-align: left;
+  font-size: 22.5rpx;
+  border-bottom: 1.88rpx solid var(--line);
+}
+.profile-menu:last-child { border: 0; }
+.profile-menu .grow { line-height: 1.4; }
+/* 我的页底部留白：帮助与隐私上移后，仍需一块呼吸空间，不贴着底部导航。 */
+.profile-tail { padding-bottom: calc(86.25rpx + env(safe-area-inset-bottom)); }
+
+/* ------------------------------- sheets -------------------------------- */
+
+.sheet-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: #241f1ab3;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  /* 与网页端 <dialog>::backdrop 一致；小程序端不支持时会自动忽略 */
+  -webkit-backdrop-filter: blur(5.63rpx);
+  backdrop-filter: blur(5.63rpx);
+}
+.sheet {
+  background: var(--card);
+  color: var(--ink);
+  border: 1.88rpx solid var(--line);
+  border-radius: 37.5rpx 37.5rpx 0 0;
+  width: 100%;
+  max-width: 900rpx;
+  max-height: 91vh;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+.sheet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 26.25rpx 33.75rpx;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  border-bottom: 1.88rpx solid var(--line);
+  background: var(--card);
+  flex-shrink: 0;
+}
+.sheet-title {
+  display: block;
+  font-family: var(--serif);
+  font-size: 33.75rpx;
+  font-weight: 550;
+  letter-spacing: var(--tracking-title);
+  color: var(--art-ink);
+}
+.sheet-body { padding: 33.75rpx; padding-bottom: calc(33.75rpx + env(safe-area-inset-bottom)); }
+.sheet-body .lede { display: block; font-size: 37.5rpx; line-height: 1.5; font-weight: 550; margin-bottom: 11.25rpx; }
+.sheet-footer { display: flex; align-items: center; justify-content: space-between; gap: 18.75rpx; margin-top: 41.25rpx; }
+.sheet-footer .btn { font-size: 22.5rpx; }
+
+/* 短决策与单张卡片：选店、登录、会员码、支付前确认、帮助、分享、商品详情居中；
+   购物袋、优惠券、个人资料这类长列表/长表单仍从底部拉起。 */
+.sheet-mask-center {
+  align-items: center;
+  padding: calc(37.5rpx + env(safe-area-inset-top)) 37.5rpx calc(37.5rpx + env(safe-area-inset-bottom));
+}
+.sheet-center {
+  border-radius: 41.25rpx;
+  max-width: 787.5rpx;
+  max-height: 86vh;
+  box-shadow: 0 45rpx 120rpx rgba(36, 31, 26, 0.28);
+}
+.sheet-center .sheet-head { border-radius: 41.25rpx 41.25rpx 0 0; }
+.sheet-center .sheet-body { padding-bottom: 33.75rpx; }
+@media (min-height: 1537.5rpx) {
+  .sheet-center { max-height: 1275rpx; }
+}
+
+/* 分享给朋友：卡片预览与小程序码海报，配色沿用个人中心的米色底与棕色字。 */
+.share-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 45rpx 33.75rpx 37.5rpx;
+  border-radius: var(--r);
+  background: var(--art-cream);
+  text-align: center;
+}
+.share-brand-logo { display: block; }
+.share-sub { margin-top: 11.25rpx; font-size: 18.75rpx; letter-spacing: var(--tracking-wide); color: #8a6a40; }
+.share-title { margin-top: 26.25rpx; font-family: var(--serif); font-size: 30rpx; font-weight: 600; color: var(--art-ink); }
+.share-code-card {
+  width: 315rpx;
+  height: 315rpx;
+  margin-top: 30rpx;
+  padding: 22.5rpx;
+  border-radius: 26.25rpx;
+  background: #ffffff;
+  box-shadow: 0 11.25rpx 33.75rpx #58411f14;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.share-code-img { width: 100%; height: 100%; }
+.share-code-empty { padding: 0 15rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 11.25rpx; font-size: 22.5rpx; line-height: 1.5; color: #8a6a40; text-align: center; }
+.share-code-retry { font-size: 20.63rpx; color: #58411f; text-decoration: underline; }
+.share-hint { margin-top: 26.25rpx; font-size: 20.63rpx; letter-spacing: var(--tracking); color: #58411f; }
+.share-note { display: block; margin-top: 22.5rpx; text-align: center; line-height: 1.6; }
+/* 离屏画布：只用于导出相册图片，不参与页面显示。 */
+.share-canvas { position: fixed; left: -18748.12rpx; top: 0; width: 1406.25rpx; height: 1875rpx; pointer-events: none; z-index: -1; }
+
+.product-showcase {
+  height: 300rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 26.25rpx;
+  margin-bottom: 33.75rpx;
+  overflow: hidden;
+}
+.product-showcase .sheet-art { display: flex; align-items: center; justify-content: center; }
+.product-showcase .sheet-art .art {
+  width: 318.75rpx;
+  height: 337.5rpx;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: center;
+}
+.product-showcase .sheet-art .art-img { width: 318.75rpx; height: 337.5rpx; border-radius: 22.5rpx; }
+
+.option-title { display: block; font-size: 22.5rpx; font-weight: 500; margin: 33.75rpx 0 16.88rpx; }
+.sheet-product-name {
+  display: block;
+  font-family: var(--serif);
+  font-size: 37.5rpx;
+  line-height: 1.5;
+  font-weight: 600;
+  margin-bottom: 3.75rpx;
+  color: var(--art-ink);
+}
+.product-desc { display: block; margin-top: 15rpx; font-size: 24.38rpx; line-height: 1.8; color: var(--muted); }
+
+.form-row { margin: 28.13rpx 0; }
+.form-row .form-label { display: block; font-size: 22.5rpx; margin-bottom: 11.25rpx; }
+.form-row .form-select {
+  width: 100%;
+  border: 1.88rpx solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 18.75rpx 22.5rpx;
+  background: var(--card);
+  font-size: 24.38rpx;
+  min-height: 78.75rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.member-code-sheet { text-align: center; padding: 7.5rpx 0; }
+.member-code-sheet .member-qr {
+  background: var(--card);
+  border: 1.88rpx solid var(--line);
+  border-radius: 22.5rpx;
+  padding: 16.88rpx;
+  width: max-content;
+  margin: 24.38rpx auto 15rpx;
+}
+.member-qr .qr-svg { width: 206.25rpx; height: 206.25rpx; }
+.member-qr-img { width: 315rpx; height: 315rpx; border-radius: 22.5rpx; background: #fffefa; background-repeat: no-repeat; background-size: contain; background-position: center; }
+.member-code {
+  display: block;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 33.75rpx;
+  letter-spacing: var(--tracking-label);
+  color: var(--wood);
+  font-variant-numeric: tabular-nums;
+  margin: 18.75rpx 0 11.25rpx;
+}
+
+/* 选店列表：整行可点，已选只用底色/描边和角标表示，不再放按钮或“已选择”文字。 */
+.store-options { display: flex; flex-direction: column; gap: 16.88rpx; }
+.store-locate { display: flex; align-items: center; gap: 18.75rpx; margin: 0 0 18.75rpx; }
+.store-locate-hint { display: block; flex: 1; min-width: 0; }
+.store-locate-btn { flex: none; padding: 0 11.25rpx; }
+.store-cities { padding: 0 0 22.5rpx; }
+.store-option {
+  display: block;
+  width: 100%;
+  border: 1.88rpx solid var(--line);
+  padding: 30rpx;
+  border-radius: 26.25rpx;
+  background: var(--paper);
+  text-align: left;
+  position: relative;
+}
+.store-option.chosen { border-color: var(--wood); background: var(--card); }
+/* 筹备中门店：可见、可读到开业计划，但不能选中。 */
+.store-option.closed { opacity: 0.72; }
+.store-option.closed .store-name { color: var(--muted); }
+.store-option .store-line { display: flex; align-items: center; gap: 15rpx; }
+.store-option .store-name { display: inline-block; font-size: 26.25rpx; font-weight: 600; }
+.store-option .store-meta { display: block; font-size: 20.63rpx; color: var(--muted); margin: 11.25rpx 0 0; }
+.store-status {
+  display: inline-flex;
+  align-items: center;
+  height: 37.5rpx;
+  padding: 0 15rpx;
+  border-radius: 18.75rpx;
+  background: var(--paper);
+  border: 1.88rpx solid var(--line);
+  font-size: 20.63rpx;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.store-distance {
+  display: inline-flex;
+  align-items: center;
+  height: 37.5rpx;
+  padding: 0 15rpx;
+  border-radius: 18.75rpx;
+  background: var(--paper);
+  border: 1.88rpx solid var(--line);
+  font-size: 20.63rpx;
+  color: var(--wood);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.store-option.chosen .store-distance { background: var(--paper); }
+.store-distance.inline { height: auto; padding: 0; border: 0; background: transparent; font-size: 20.63rpx; color: var(--muted); }
+.store-check {
+  margin-left: auto;
+  width: 37.5rpx;
+  height: 37.5rpx;
+  border-radius: 50%;
+  background: var(--wood);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.scan-frame {
+  width: 315rpx;
+  height: 281.25rpx;
+  margin: 15rpx auto 26.25rpx;
+  border: 1.88rpx dashed #b9b3a8;
+  border-radius: 26.25rpx;
+  background: linear-gradient(180deg, #fbf9f4, #f1eee7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--wood);
+  position: relative;
+  overflow: hidden;
+  flex-direction: column;
+  gap: 15rpx;
+}
+.scan-frame:after {
+  content: '';
+  position: absolute;
+  left: 26.25rpx;
+  right: 26.25rpx;
+  height: 3.75rpx;
+  background: var(--accent);
+  top: 50%;
+  opacity: 0.45;
+}
+
+/* ---------------------------- english locale ---------------------------- */
+/* 网页端通过 html[lang=en] 微调英文排版，这里用根节点 .locale-en 保持同一套规则。 */
+.locale-en .hero-scrim {
+  background: linear-gradient(90deg, rgba(240, 231, 215, 0.95) 0%, rgba(240, 231, 215, 0.95) 62%, rgba(240, 231, 215, 0.08) 92%);
+}
+.locale-en .hero-title { font-size: 48.75rpx; line-height: 1.35; }
+.locale-en .series-card { padding: 28.13rpx 22.5rpx; min-height: 247.5rpx; }
+.locale-en .series-card .phrase { max-width: 206.25rpx; padding-right: 9.38rpx; line-height: 1.35; }
+.locale-en .series-card .series-en { font-size: 15rpx; letter-spacing: var(--tracking-label); }
+.locale-en .series-card-art { padding: 0; min-height: 0; }
+.locale-en .heading-title { font-size: 48.75rpx; line-height: 1.35; }
+
+/* ------------------------- consent / privacy ------------------------- */
+/* 登录前隐私协议：默认不勾选，勾选后才允许拉起手机号授权。 */
+.login-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 15rpx;
+  margin-top: 26.25rpx;
+  font-size: 20.63rpx;
+  color: var(--muted);
+  text-align: left;
+}
+.consent-check {
+  width: 33.75rpx;
+  height: 33.75rpx;
+  min-height: 33.75rpx;
+  margin-top: 1.88rpx;
+  border: 1.88rpx solid #b9b3a8;
+  border-radius: 7.5rpx;
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.consent-check.checked { background: var(--wood); border-color: var(--wood); }
+.consent-copy { flex: 1; line-height: 1.6; }
+.link-btn {
+  padding: 0;
+  margin: 0;
+  min-height: 0;
+  line-height: 1.5;
+  display: inline;
+  font-size: 20.63rpx;
+  color: var(--wood);
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 3.75rpx;
+}
+/* 未勾选时点击登录的二次确认层：条款集中列出，主按钮直接同意并继续登录。 */
+.consent-lead {
+  display: block;
+  font-size: 22.5rpx;
+  line-height: 1.75;
+  color: var(--muted);
+  text-align: left;
+}
+.consent-docs {
+  margin-top: 26.25rpx;
+  border: 1.88rpx solid var(--line);
+  border-radius: 22.5rpx;
+  overflow: hidden;
+  background: var(--paper);
+}
+.consent-doc {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18.75rpx;
+  width: 100%;
+  min-height: 86.25rpx;
+  padding: 0 26.25rpx;
+  font-size: 24.38rpx;
+  color: var(--wood);
+  text-align: left;
+}
+.consent-doc + .consent-doc { border-top: 1.88rpx solid var(--line); }
+.consent-doc text { flex: 1; }
+.btn.consent-cancel {
+  margin-top: 3.75rpx;
+  min-height: 78.75rpx;
+  font-size: 24.38rpx;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+

@@ -1,0 +1,234 @@
+{
+  "capturedAt": "2026-10-30T08:04:52.405800+00:00",
+  "scope": "Only files cited by these documents; no source content or credentials copied",
+  "files": {
+    "/Users/th/Desktop/Full愈-时叙/apps/server/prisma/schema.prisma": {
+      "sha256": "6dc70d308e90e675658b4f1516bef2e2674cb65917c64c377790c6d098bbf53f",
+      "lines": 402
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/auth/auth.controller.ts": {
+      "sha256": "14b6ed7f811402d42eb07b09b70e4a3b49e5e51f5915a337fef64fdb383d917c",
+      "lines": 51
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/auth/auth.service.ts": {
+      "sha256": "cbdcfec9bf390d158fd08f5f9c0c157bf07c99cb19c17f509e4fa33f8e16f2ed",
+      "lines": 268
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/common/mappers.ts": {
+      "sha256": "78b0b9d5f70429fb20879fd7c8c9dc0095aa2d343cbdeaf4799c964972e448c9",
+      "lines": 158
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/api/customer.controller.ts": {
+      "sha256": "3f25af4e02a4a726764c6d3c860bc528cff8f0921d482197fbf130531955c581",
+      "lines": 198
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/auth/staff.guard.ts": {
+      "sha256": "899883d9af3150ee5b9287776b94eea5f535d299c32da5f205e4f746c4942bc7",
+      "lines": 40
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/api/store.controller.ts": {
+      "sha256": "68ff2d422824527efa0571b304cdd3cbde2a357e34e0ec4491978e37b37bc446",
+      "lines": 309
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/orders/orders.service.ts": {
+      "sha256": "021ad063b5e7df3884aad4d958ed743e396fc609fed5ae5d6981ab2847845b24",
+      "lines": 1007
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/printing/printing.service.ts": {
+      "sha256": "e0752ea8ad5ba8d068863a73cf6f13ce4a6f266529cfd026cca9f42cb0f484d8",
+      "lines": 122
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/losses/losses.service.ts": {
+      "sha256": "e2735f71dc5045bf2731d34648b4ce9cd3ec9ea6ce90d7bf5ffccb8933ae04ff",
+      "lines": 334
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/approvals/approvals.service.ts": {
+      "sha256": "224de718aabd184a41b7f92daa9d285799ff70f7ee91860dc4a7fb4a9e0b421f",
+      "lines": 186
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/finance/expenses.service.ts": {
+      "sha256": "52461f3895e723ed0858d79fab0f335109c1aca17657ee48e1bf8be1547083d8",
+      "lines": 291
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/miniprogram/src/pages/index/index.vue": {
+      "sha256": "129341137b3cc667e4dd1afcfec16d5e9bb2fd0c9db4c46114b869dcdde4a5d3",
+      "lines": 1660
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/miniprogram/src/lib/wechat.js": {
+      "sha256": "48e7876b14533d694ba6f210a2f3215443710b033cbe173490aa3856f00dd92c",
+      "lines": 128
+    },
+    "/Users/th/Desktop/Full愈-时叙/packages/integrations/src/providers/mock/member.ts": {
+      "sha256": "5b88ce0ba6a5addb957ed2e008daa98d0724ab9bbfb73dd1fa3fdc316799772d",
+      "lines": 16
+    },
+    "/Users/th/Desktop/Full愈-时叙/packages/integrations/src/providers/mock/wechat.ts": {
+      "sha256": "2d2b708e92f07a8f8ee25091221cd10eb7c64b49db75085dc4980106e91024fd",
+      "lines": 82
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/admin/src/pages/AdminApp.tsx": {
+      "sha256": "fb97cd872ca1482a590fb5c898453369cd6dec1ff9a392b55cbf7df03e9170f1",
+      "lines": 3606
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/admin/src/pages/StoreApp.tsx": {
+      "sha256": "5d345d8aa79f9e69aa66287312284ed62ec94d4ec648f56abac9f2d9b56b8759",
+      "lines": 2109
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/miniprogram/src/store/index.js": {
+      "sha256": "b673ea101ff40d892910a45f5611c89bdfa9e436321bd4950d394a8f8d22c025",
+      "lines": 450
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/app.module.ts": {
+      "sha256": "1c1d596b64efb867f7b6deb98eef7a9a65e61272612fdfa42eafc993ce4b0a3e",
+      "lines": 25
+    },
+    "/Users/th/Desktop/Full愈-时叙/packages/integrations/src/config.ts": {
+      "sha256": "79612e910eef3e664b6f448eef437e45d8e74c1323efd9a9a4e5777b5338a94d",
+      "lines": 48
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/prisma/seed.ts": {
+      "sha256": "767a4aeba31726bdab67290b05b924620048bfff682bcb7f733de77efda2a39c",
+      "lines": 515
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/main.ts": {
+      "sha256": "c77574a9cc396e56811e4366d833776568f8a0e9dbca38e9a6ed7a3e1a8923b7",
+      "lines": 42
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/api/health.controller.ts": {
+      "sha256": "05845b9b59a3368a2728056122de6aeb0c3f38321b7e3a6e82085c75ed7153d5",
+      "lines": 29
+    },
+    "/Users/th/Desktop/Full愈-时叙/packages/integrations/src/providers/live/index.ts": {
+      "sha256": "64d5187918904a6699704ae159d4f37b8a5065a3cd06d76baf186356d395c2d3",
+      "lines": 33
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/auth/auth.spec.ts": {
+      "sha256": "3bb7ba8a58387e75277b627a4e650faefd2060425bdec432b1178a9a5287d02f",
+      "lines": 121
+    },
+    "/Users/th/Desktop/Full愈-时叙/package.json": {
+      "sha256": "aeaecd72786ff9b6c4d2369ebd75f42744a3cb531e6ddd2d6f21f4af7f52aa46",
+      "lines": 30
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-admin-web/src/views/incentive/dashboard/index.vue": {
+      "sha256": "35510d5cffd2f44a6e135b037432fdfebff8a146800bbc49edd7ad9351ed4cab",
+      "lines": 574
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-admin-web/src/api/incentive.js": {
+      "sha256": "925478816a93f7e818bbf616a5c3afb22bb75f1749a74574a2dd30598876fd0b",
+      "lines": 100
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/incentive/controller/IncentiveController.java": {
+      "sha256": "2fb9f89fb6dbfa8adfc47e970b2a54075317b0ea8972f234c6b8e4e8d9bca1da",
+      "lines": 170
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/incentive/service/IncentiveDataService.java": {
+      "sha256": "f242eb78b5417bad17569eba40bdf2c366e0599d89d77a7a700492452702acd8",
+      "lines": 1147
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/incentive/service/IncentiveAccessService.java": {
+      "sha256": "708aba7c832ccde59cff4f414dfebc1a65787646834f04067d30bf6b65690ebc",
+      "lines": 174
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-admin-web/src/views/goods/product/ProductForm.vue": {
+      "sha256": "e10d59a25d807b7e232620e7c8900591826d8191c139625f404a468a53bd1c82",
+      "lines": 188
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-admin-web/src/api/goods/product.js": {
+      "sha256": "37e0b28bbe9f84f5f99eff45a957f6172194af95be3467d70f3867fbcbe41b16",
+      "lines": 38
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/controller/ProductController.java": {
+      "sha256": "94bc48af96e2bdf46be0ed1c01f34e0701e1062a5cadf0db61084c8221ed23e4",
+      "lines": 91
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/service/ProductService.java": {
+      "sha256": "7f871565f971e56f2d9fe9dea8021f44205ab702846a7fa0a8794e337c45ea32",
+      "lines": 372
+    },
+    "/Users/th/Desktop/Full愈-轻疗/full-yu-mini2/utils/payUtils.js": {
+      "sha256": "2976b32c4d7dac362e79e1d418cd6c88c51af0b5d7e506da3a80cd961216c024",
+      "lines": 169
+    },
+    "/Users/th/Desktop/Full愈-轻疗/full-yu-mini2/api/order.js": {
+      "sha256": "4ab8f961a39000202b217eade35ae0c3e2e198b932d52284e12e323583aaf884",
+      "lines": 180
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/controller/OrderController.java": {
+      "sha256": "feceb9696151a11ba7cd4ff3865d348b13279743585321d732f97b0bb1d88b77",
+      "lines": 451
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/service/OrderService.java": {
+      "sha256": "168969750b6a68781393c3925add96f4bb929dc8a321bedec3d36e54a9e10a93",
+      "lines": 4542
+    },
+    "/Users/th/Desktop/Full愈-轻疗/full-yu-mini2/pages/index/booking.vue": {
+      "sha256": "e8411f22171b644bb999b0e048fcca047d8be95f5a2aeab647ea5e8ab31a035b",
+      "lines": 1147
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/component/RabbitMqReceiver.java": {
+      "sha256": "eb32e0ad754f78eb7af4e74d658ef263706daa509ff30cc3ee899963c782a0f9",
+      "lines": 61
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/service/job/JobService.java": {
+      "sha256": "749a24376da58fc76cc29fd5eea308b857427de7a4f1064308c01d7b4b902fd3",
+      "lines": 90
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/incentive/calc/SettlementCalculator.java": {
+      "sha256": "e170f679856d5f32dba0945784fccb088b1163b2e7b2b3d5345230100160daf4",
+      "lines": 137
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/incentive/service/IncentiveConfigService.java": {
+      "sha256": "f369f7ebfe42843e015dafeb17b9d3493c914af5c5696b3c77d0662acaca57b6",
+      "lines": 339
+    },
+    "/Users/th/Desktop/Full愈-轻疗/full-yu-mini2/pages/user/index.vue": {
+      "sha256": "1da296a396f39bd3a2201899a11597e071d1089b7e1fd0a45649d2fd80b807fa",
+      "lines": 748
+    },
+    "/Users/th/Desktop/Full愈-轻疗/full-yu-mini2/api/customer.js": {
+      "sha256": "7ae6dd295f847dcde8300bcbf72bc3915306b52d6c1158c0b0cecc7ce44b4811",
+      "lines": 62
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/controller/CustomerController.java": {
+      "sha256": "6a879721f10d9eafd88a7dcab44eaeaa9ada22c3ca4000004a15d87cbb8cdeac",
+      "lines": 130
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/service/CustomerService.java": {
+      "sha256": "388dbae400ff2c722e91deb5bdbec74930bf11aa0eb81ee92776d006af6b14f5",
+      "lines": 883
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-admin-web/src/store/modules/permission.js": {
+      "sha256": "51459db22e6eeeb4f7b0bacac7e250d502e73fc850194156b53f5954aa5f719b",
+      "lines": 111
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-security/src/main/java/com/macro/mall/security/component/DynamicAccessDecisionManager.java": {
+      "sha256": "c07be0ad0258c7a11b4c3480ae60fe73c11cc1bb0888ee7ba0c248a4e2c3af16",
+      "lines": 51
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-admin-web/src/views/goods/product/index.vue": {
+      "sha256": "c97f471464e6a9bddb352c2edc468ad0d7cbe4371969ff82b03380b26e47cb53",
+      "lines": 262
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/mall-admin/src/main/java/com/macro/mall/service/impl/PmsSkuStockServiceImpl.java": {
+      "sha256": "b72a3ade5d70a2b38daeeefb5215a0821bcdc739a401c3949a08e4cb207b77ac",
+      "lines": 43
+    },
+    "/Users/th/Desktop/Full愈-轻疗/docs/designs/2026-10-21-疗愈师激励V5-开发交接说明.md": {
+      "sha256": "00532c4a72d9eaf03122e01032f640a6c6bd080da392f48dbae0a3fc11b1fc79",
+      "lines": 554
+    },
+    "/Users/th/Desktop/Full愈-轻疗/tou-mall-server/pom.xml": {
+      "sha256": "8b3808b4cf602b3a567a04a807ad1c4ff93b93d1ac40d7854998a13fe09a8c2f",
+      "lines": 317
+    },
+    "/Users/th/Desktop/Full愈-轻疗/Full愈轻疗-AI-Coding设计开发标准.md": {
+      "sha256": "53b3c7bedbce5385c4c2985be4eede2472a17b3f0b1e8ac23edb903914154eac",
+      "lines": 288
+    },
+    "/Users/th/Desktop/Full愈-时叙/apps/server/src/api/admin.controller.ts": {
+      "sha256": "d3b5c94abf9cc38fd69c20b91c0ce33de8d0c1cedc0fa16783af76ff52a90aaa",
+      "lines": 486
+    }
+  }
+}

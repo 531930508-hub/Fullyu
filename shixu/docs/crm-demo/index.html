@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Full愈 CRM 总部后台 · 交互 demo（合成数据）</title>
+<link rel="stylesheet" href="crm.css">
+</head>
+<body>
+<div class="ops-shell">
+  <aside class="sidebar" id="sidebar" aria-label="主导航"></aside>
+  <main class="ops-main">
+    <header class="topbar" id="topbar"></header>
+    <div id="page"></div>
+  </main>
+</div>
+<dialog id="dlg"></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<!-- 脚本顺序：数据 → 外壳 → 各页面；合并版 crm-admin.html 按同一顺序内联 -->
+<script src="data.js"></script>
+<script src="data-profile.js"></script>
+<script src="shell.js"></script>
+<script src="page-members.js"></script>
+<script src="page-points.js"></script>
+<script src="page-benefits.js"></script>
+<script src="page-approvals.js"></script>
+<script src="page-sync.js"></script>
+<script src="page-queue.js"></script>
+<script src="page-config.js"></script>
+<script>CRM.start()</script>
+</body>
+</html>

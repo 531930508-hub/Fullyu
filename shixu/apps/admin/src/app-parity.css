@@ -1,0 +1,377 @@
+/* App integration layer.
+   v7.css carries the approved V7 demo visual language verbatim.
+   This file reconnects the React component classes to that language
+   without changing the demo's customer / operations dimensions. */
+
+:root {
+  --muted: #68625b;
+  --r: 18px;
+  --r-lg: 28px;
+  --serif: Georgia, "Songti SC", "STSong", serif;
+}
+
+/* Customer stage sits on its own, without the demo's 66px surface bar. */
+.mini-stage { min-height: 100dvh; }
+
+/* The demo's bag bar button is a light capsule inside the dark bar. */
+.bag-bar .btn.primary {
+  background: #e7d3b6;
+  color: var(--ink);
+  border: 0;
+  border-radius: 8px;
+  min-height: 0;
+  padding: 8px 13px;
+  font-size: 12px;
+}
+
+/* React wraps product copy in a button so the whole block opens the sheet. */
+.product-hit {
+  display: block;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+}
+
+.product-row h3 { margin: 0; }
+
+/* Sheet artwork follows the demo showcase sizes. */
+.product-showcase .sheet-art {
+  background: transparent;
+  display: grid;
+  place-items: center;
+  width: auto;
+  height: auto;
+}
+.product-showcase .sheet-art svg { width: 170px; height: 180px; }
+.product-showcase .sheet-art > img { width: 170px; height: 180px; object-fit: cover; border-radius: 12px; }
+
+.member-qr-img {
+  width: 168px;
+  height: 168px;
+  border-radius: 12px;
+  background: #fffefa;
+}
+
+.qr-wrap img.qr-svg { display: block; }
+
+/* Demo `.icons` helper does not exist in React; nothing to map. */
+
+/* ---------- staff shell: demo layout, not the old fixed 244px console ---------- */
+.app-shell { min-height: 100dvh; background: var(--canvas); }
+/* 顶部横栏已移除：品牌由侧边栏承担，运营台直接从视口顶部开始。 */
+.ops-shell { min-height: 100dvh; }
+/* 右侧粘性栏原本按顶部 66px 横栏留位，现贴视口顶部。 */
+.recent-panel,
+.cart-panel { top: 20px; }
+@media (max-width: 680px) {
+  .ops-shell { min-height: 100dvh; }
+}
+.sidebar {
+  position: sticky;
+  inset: auto;
+  top: 0;
+  z-index: auto;
+  align-self: flex-start;
+  height: 100dvh;
+  overflow: hidden;
+  width: 196px;
+  padding: 29px 16px;
+  background: var(--card);
+  border-right: 1px solid var(--line);
+}
+.sidebar-brand { border-bottom: 0; padding: 0 12px 30px; display: block; }
+.sidebar-brand small {
+  display: block;
+  margin-top: 10px;
+  font-size: 9px;
+  letter-spacing: 1.6px;
+  color: var(--muted);
+}
+/* 菜单项已增至 21 个：导航区独立滚动，品牌与账号区固定在侧栏上下两端。 */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #d9d1c4 transparent;
+  padding-right: 2px;
+}
+.sidebar-nav::-webkit-scrollbar { width: 6px; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: #d9d1c4; border-radius: 999px; }
+.sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+/* 一级分组：默认只展开当前页面所在组，21 个入口收拢为 5 组，后续新增菜单继续归入已有分组。 */
+.nav-group { display: flex; flex-direction: column; gap: 2px; }
+.nav-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 12px 7px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  text-align: left;
+  border-radius: 8px;
+}
+.nav-group-toggle:hover { color: var(--ink); }
+.nav-group-toggle.has-active { color: var(--ink); }
+.nav-group-name { flex: 1 1 auto; }
+.nav-group-count { font-size: 9px; letter-spacing: 0; color: var(--muted); opacity: .7; }
+.nav-group-chevron { flex-shrink: 0; opacity: .65; transform: rotate(-90deg); transition: transform 160ms ease; }
+.nav-group-chevron.expanded { transform: rotate(0deg); }
+.nav-group-items { display: flex; flex-direction: column; gap: 4px; }
+.nav-group-items.collapsed { display: none; }
+/* 左上角 logo 可点击回默认首页；品牌区外观保持不变。 */
+.sidebar-brand-link { display: block; color: inherit; text-decoration: none; border-radius: 10px; }
+.sidebar-brand-link:hover { opacity: .86; }
+.sidebar-brand-link:focus-visible { outline: 2px solid var(--wood); outline-offset: 4px; }
+/* 营业台固定在分组上方，一次点击直达；不参与手风琴折叠。 */
+.side-link-pinned {
+  background: var(--sage);
+  color: var(--wood);
+  font-weight: 550;
+  margin-bottom: 2px;
+}
+.side-link-pinned:hover { background: #e3e7da; }
+.side-link-pinned.active { background: var(--ink); color: var(--card); }
+.nav-pinned-divider { height: 1px; background: var(--line); margin: 8px 12px 10px; }
+.side-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  min-height: 46px;
+  color: var(--muted);
+}
+.side-link:hover { background: var(--paper); color: var(--ink); }
+.side-link.active { background: var(--ink); color: var(--card); }
+.side-link .badge {
+  margin-left: auto;
+  font-size: 10px;
+  background: #ffffff26;
+  color: inherit;
+  padding: 0 6px;
+  border-radius: 4px;
+}
+.sidebar-user { border-top: 0; }
+
+/* Search fields inside the phone keep the demo's 36px height. */
+.search input { min-height: 0; }
+.search input:focus { box-shadow: none; }
+
+/* ---------- staff console: keep demo density with React page primitives ---------- */
+.page-head {
+  align-items: center;
+  margin-bottom: 23px;
+  gap: 12px;
+}
+.page-head h1 {
+  font-size: 27px;
+  line-height: 1.35;
+  letter-spacing: 1px;
+  font-weight: 550;
+}
+.page-head p { font-size: 12px; max-width: 760px; }
+.page-head .eyebrow { margin-bottom: 2px; }
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.stat {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px 20px;
+  min-height: 0;
+  gap: 2px;
+  box-shadow: none;
+}
+.stat-label {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.stat-value {
+  font-size: 33px;
+  font-weight: 450;
+  letter-spacing: -1px;
+  line-height: 1.5;
+}
+.stat-hint { font-size: 10px; color: var(--muted); }
+.stat-dark .stat-label, .stat-dark .stat-hint { color: #d7d0c7; }
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: none;
+}
+.panel + .panel { margin-top: 18px; }
+.panel-head { padding: 18px 20px 14px; }
+.panel-head h2 { font-size: 17px; font-weight: 550; }
+.panel-desc { font-size: 11px; color: var(--muted); }
+.panel-body { padding: 0 20px 20px; }
+
+.table-wrap {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+table.tbl { min-width: 640px; font-size: 12px; }
+table.tbl th {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  padding: 13px 16px;
+  background: #f0eee8;
+  border-bottom: 1px solid var(--line);
+}
+table.tbl td { padding: 13px 16px; border-bottom: 1px solid var(--line); }
+table.tbl tbody tr:last-child td { border-bottom: 0; }
+table.tbl tbody tr:hover td { background: #fbf8f2; }
+table.tbl tfoot td { background: #f7f4ee; }
+
+/* 热销商品只有四列且内容短：取消全局 640px 最小宽度，收紧后三列，保证概览一屏可见。 */
+table.tbl.tbl-compact { min-width: 0; }
+table.tbl.tbl-compact th,
+table.tbl.tbl-compact td { padding-left: 10px; padding-right: 10px; }
+table.tbl.tbl-compact th:nth-child(2),
+table.tbl.tbl-compact td:nth-child(2) { width: 68px; }
+table.tbl.tbl-compact th:nth-child(3),
+table.tbl.tbl-compact td:nth-child(3) { width: 58px; }
+table.tbl.tbl-compact th:nth-child(4),
+table.tbl.tbl-compact td:nth-child(4) { width: 88px; }
+
+/* Keep the compact admin buttons compact after the demo .btn base wins. */
+.btn-sm {
+  min-height: 32px;
+  padding: 5px 11px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+.btn-lg {
+  min-height: 50px;
+  padding: 13px 24px;
+  font-size: 15px;
+  border-radius: 13px;
+}
+.btn-block { width: 100%; }
+.btn-primary {
+  background: var(--ink);
+  color: var(--card);
+  border-color: var(--ink);
+  box-shadow: none;
+}
+.btn-primary:hover:not(:disabled) { background: #26211e; }
+.btn-outline { border-color: var(--line); background: transparent; }
+.btn-outline:hover:not(:disabled) { border-color: var(--ink); background: #ffffff80; }
+.btn-ghost { background: transparent; color: var(--muted); border-color: transparent; }
+.btn-ghost:hover:not(:disabled) { background: #352f2b0a; color: var(--ink); }
+.btn-soft { background: var(--paper); color: var(--wood); border-color: transparent; }
+.btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn-danger-soft { background: var(--danger-bg); color: var(--danger); border-color: transparent; }
+.btn-success-soft { background: var(--success-bg); color: var(--success); border-color: transparent; }
+.btn-dark { background: var(--wood); color: #fff; border-color: var(--wood); }
+.btn-accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn { font-weight: 500; }
+
+/* The demo `.icon-btn` is a 40px circle; admin rows keep a smaller control. */
+.console .icon-btn,
+.page-head .icon-btn { width: 34px; height: 34px; }
+
+/* Ops shell brand logo */
+.sidebar-brand .logo img { height: 40px; }
+.sidebar-brand .logo-sub { display: none; }
+.sidebar-user { margin-top: auto; padding: 26px 12px 0; display: flex; gap: 10px; align-items: center; }
+.sidebar-user > span:first-child {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--paper); border: 1px solid var(--line);
+  font-size: 13px;
+}
+.sidebar-user div { min-width: 0; }
+.sidebar-user strong { display: block; font-size: 12px; font-weight: 550; }
+.sidebar-user small { display: block; font-size: 10px; color: var(--muted); }
+.sidebar-user .icon-btn { margin-left: auto; width: 32px; height: 32px; border: 0; background: transparent; }
+
+/* Login page keeps its own calm centered card. */
+.login-shell { min-height: 100dvh; display: grid; place-items: center; padding: 32px 18px; }
+
+@media (max-width: 1150px) {
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sidebar { width: 158px; padding: 24px 10px; }
+}
+@media (max-width: 900px) {
+  .sidebar {
+    transform: none;
+    box-shadow: none;
+    width: 72px;
+    padding: 22px 8px;
+  }
+  .sidebar-brand, .side-link span { display: none; }
+  /* 图标栏放不下分组标题：取消折叠，全部菜单按原顺序平铺，导航区单独滚动。 */
+  .nav-group-toggle { display: none; }
+  .nav-group-items.collapsed { display: flex; }
+  .nav-group + .nav-group {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+  .side-link { justify-content: center; padding: 13px 8px; }
+  .sidebar-user div { display: none; }
+  .sidebar-user .icon-btn { display: none; }
+  .sidebar-scrim { display: none !important; }
+}
+@media (max-width: 680px) {
+  .page-head h1 { font-size: 23px; }
+  .stat-grid { gap: 10px; }
+  .stat { padding: 14px 15px; }
+  .stat-value { font-size: 27px; }
+}
+
+/* shell toolbar bar (store switch + quick links, no title) */
+.shell-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  min-height: 40px;
+}
+.shell-topbar .shell-topbar-note {
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+.shell-topbar .ops-toolbar {
+  margin-bottom: 0;
+  flex-wrap: nowrap;
+}
+
+/* stat tone variants (v7 .stat re-asserts card background later in cascade) */
+.stat-dark {
+  background: var(--ink) !important;
+  border-color: var(--ink) !important;
+  color: var(--card);
+}
+.stat-dark .stat-label,
+.stat-dark .stat-hint { color: #d7d0c7; }
+.stat-soft {
+  background: var(--accent-soft) !important;
+  border-color: transparent !important;
+}
+
+/* axe AA（WCAG 2.1）：辅助文字对比度 ≥4.5:1（对照在场小程序无障碍标准） */
+:root { --faint: #68625b; }
+.page-meta { color: var(--muted); }
+.series-tile .t-en, .series-tile .t-qty { opacity: 1; }

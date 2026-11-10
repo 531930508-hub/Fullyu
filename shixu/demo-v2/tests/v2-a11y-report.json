@@ -1,0 +1,398 @@
+[
+  {
+    "name": "zh-home",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "zh-menu",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "zh-retail",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "zh-profile",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "zh-orders",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "zh-stores",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "zh-table-qr",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "zh-member-code",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "zh-product",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "zh-checkout",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "zh-pay-store",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "zh-payment-error",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "zh-receipt",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "zh-timeline",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "en-home",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "en-menu",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "en-retail",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "en-profile",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "en-orders",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "en-stores",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "en-table-qr",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "en-member-code",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "en-product",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "en-checkout",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "en-pay-store",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "en-payment-error",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "en-receipt",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "en-timeline",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "hq-overview",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "finance",
+    "violations": [],
+    "incomplete": [
+      "th-has-data-cells"
+    ]
+  },
+  {
+    "name": "products",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "categories",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "mappings",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "hq-stores",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "approvals",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "rbac",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "hq-logs",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "hq-loss",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "approval-detail",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "approval-records",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "approval-flow",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "staff-new",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "rbac-roles",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "role-view",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "role-new",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "series-detail",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "bulk-dose",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "product-editor",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "category-editor",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "workbench",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "pos",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "retail",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "orders",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "availability",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "inventory",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "dashboard",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "stores",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "logs",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "loss",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "order-process",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "pos-member-scan",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "pos-payment-qr",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "pos-payment-scan",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "receipt-import",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "order-detail",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "handover",
+    "violations": [],
+    "incomplete": []
+  },
+  {
+    "name": "refund",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  {
+    "name": "small-phone-en-home",
+    "violations": [],
+    "incomplete": [
+      "color-contrast"
+    ]
+  }
+]
