@@ -12,31 +12,11 @@ import { mapProduct, mapStaffSummary, mapStore } from '../common/mappers';
 import { newId } from '../common/ids';
 import { logAction } from '../common/logs';
 import { UPLOAD_ROOT } from '../common/assets';
+import { IMAGE_CONTENT_TYPES, matchesImageSignature } from '../common/image';
 import { StaffService } from '../auth/staff.service';
-
-const PRODUCT_IMAGE_TYPES: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/jpg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp'
-};
 
 /** 与顾客端一致：醒 → 松 → 庆 → 眠。 */
 const SERIES_RANK_ORDER: Record<string, number> = { xing: 0, song: 1, qing: 2, mian: 3 };
-
-/** 只认文件头，避免把任意内容改个后缀当图片存进静态目录。 */
-const matchesImageSignature = (buffer: Buffer, ext: string): boolean => {
-  if (ext === 'jpg') return buffer.length > 2 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-  if (ext === 'png') {
-    const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    return buffer.length > 8 && buffer.subarray(0, 8).equals(signature);
-  }
-  return (
-    buffer.length > 12 &&
-    buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
-    buffer.subarray(8, 12).toString('ascii') === 'WEBP'
-  );
-};
 
 export type ProductInput = {
   name?: string;
@@ -377,7 +357,7 @@ export class AdminService {
     if (!buffer.length) throw badRequest('图片内容为空');
     if (buffer.length > 2 * 1024 * 1024) throw badRequest('商品图片不能超过 2MB');
 
-    const ext = PRODUCT_IMAGE_TYPES[String(input.contentType || '').toLowerCase()];
+    const ext = IMAGE_CONTENT_TYPES[String(input.contentType || '').toLowerCase()];
     if (!ext) throw badRequest('仅支持 JPG、PNG 或 WebP 图片');
     if (!matchesImageSignature(buffer, ext)) throw badRequest('图片内容与文件格式不符，请重新选择');
 
@@ -695,7 +675,9 @@ export class AdminService {
     if (input.id) {
       const row = await this.prisma.role.findUnique({ where: { id: input.id } });
       if (!row) throw notFound('角色不存在');
-      if (row.builtin) throw conflict('内置角色不可修改，请克隆为自定义角色');
+      // 内置岗位角色允许直接调整权限，只有通配的超级管理员保持系统保留，避免误删后失联。
+      const fixedSuper = row.builtin && (row.id === 'r-super' || (JSON.parse(row.permsJson) as string[]).includes('*'));
+      if (fixedSuper) throw conflict('超级管理员角色不可修改');
       await this.prisma.role.update({
         where: { id: input.id },
         data: {

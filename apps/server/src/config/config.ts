@@ -32,7 +32,10 @@ const DEFAULT_CORS_ORIGINS = [
   'http://localhost:5190',
   'http://127.0.0.1:5190',
   'http://localhost:5173',
-  'http://127.0.0.1:5173'
+  'http://127.0.0.1:5173',
+  // 顾客端 H5 本地开发固定 5174（vite.config.js strictPort），需与代理外的直连一致。
+  'http://localhost:5174',
+  'http://127.0.0.1:5174'
 ];
 
 /**

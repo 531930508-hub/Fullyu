@@ -372,7 +372,39 @@ export const api = {
       body: { phones }
     }),
 
-  adminMe: () => request<{ permissions: string[]; hasProfit: boolean }>('/admin/me')
+  adminMe: () => request<{ permissions: string[]; hasProfit: boolean }>('/admin/me'),
+
+  /** 首页内容：轮播与系列图；权限沿用商品查看 / 编辑。 */
+  adminHomeContent: () => request<import('./types').HomeContent>('/admin/content'),
+  adminCreateBanner: (body: {
+    title: string;
+    base64: string;
+    contentType: string;
+    linkType: import('./types').BannerLinkType;
+    linkValue?: string;
+    active?: boolean;
+  }) => request<{ banner: import('./types').Banner }>('/admin/banners', { method: 'POST', body }),
+  adminUpdateBanner: (
+    id: string,
+    body: {
+      title?: string;
+      base64?: string;
+      contentType?: string;
+      linkType?: import('./types').BannerLinkType;
+      linkValue?: string;
+      active?: boolean;
+    }
+  ) => request<{ banner: import('./types').Banner }>(`/admin/banners/${id}`, { method: 'PUT', body }),
+  adminDeleteBanner: (id: string) =>
+    request<{ ok: boolean }>(`/admin/banners/${id}`, { method: 'DELETE' }),
+  adminReorderBanners: (ids: string[]) =>
+    request<{ banners: import('./types').Banner[] }>('/admin/banners/order', { method: 'PUT', body: { ids } }),
+  adminUploadSeriesImage: (key: string, body: { base64: string; contentType: string }) =>
+    request<{ series: import('./types').HomeSeriesSlot[] }>(`/admin/content/series/${key}`, { method: 'PUT', body }),
+  adminResetSeriesImage: (key: string) =>
+    request<{ series: import('./types').HomeSeriesSlot[] }>(`/admin/content/series/${key}`, {
+      method: 'DELETE'
+    })
 };
 
 export type RangeQuery = { range?: string; from?: string; to?: string };

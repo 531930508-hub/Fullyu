@@ -159,6 +159,7 @@ describe('汇付天下支付适配', () => {
     const result = await gateway.prepay!({
       openId: 'openid-1',
       orderId: 'SO-abc',
+      orderNumber: 'SO0000001',
       amountCents: 1,
       description: '时叙 A001',
       storeId: 'sh'
@@ -177,6 +178,7 @@ describe('汇付天下支付适配', () => {
     const result = await gateway.query!({
       orderId: 'SO-abc',
       storeId: 'sh',
+      method: 'wechat',
       requestedAt: new Date('2026-11-01T10:00:00+08:00').getTime()
     });
 

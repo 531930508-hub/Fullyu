@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storage = new Map();
 
@@ -28,6 +28,9 @@ function storeTable(entry) {
 
 describe('桌号缓存按天恢复', () => {
   beforeEach(() => {
+    // 用例里的“今天/昨天”是固定日期，冻结 Date 以免真实时间跨天后误判。
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(cst('2026-11-02T10:00:00'));
     storage.clear();
     Object.assign(state, {
       store: null,
@@ -46,6 +49,10 @@ describe('桌号缓存按天恢复', () => {
       retail: []
     });
     api.ensureCustomerSession.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('昨天扫的桌号不恢复，并清掉缓存', async () => {

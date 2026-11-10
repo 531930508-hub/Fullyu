@@ -30,7 +30,9 @@
      2. 标题/品名 → 衬线，字形气质取自首页四张系列图；
      3. 取餐码/杯号 → 等宽，保证数字对齐。 */
   --font-ui: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --font-display: Georgia, "Times New Roman", "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif;
+  /* Georgia / Times 负责西文与数字；汉字交给内嵌的 TeaHour Serif（见 serif-font.css），
+     再以各平台自带宋体兜底，避免 Android 只装黑体时整段掉回无衬线。 */
+  --font-display: Georgia, "Times New Roman", "TeaHour Serif", "Songti SC", "STSong", "SimSun", "NSimSun", "Noto Serif SC", "Noto Serif CJK SC", "Source Han Serif SC", "Source Han Serif CN", serif;
   --font-code: ui-monospace, Menlo, "SF Mono", monospace;
   --font: var(--font-ui);
   --serif: var(--font-display);
@@ -361,32 +363,35 @@ input {
 .mini-pad { padding: 0 18px; }
 .mini-pad .note { font-size: 11px; }
 
+/* 底部菜单与在场/轻疗统一为悬浮圆角条：两侧留白、底部让出安全区，
+   不再通栏贴底。放在文档流里而不是 fixed，购物袋/支付栏仍能稳定叠在它上方。 */
 .nav-bottom {
   display: flex;
   justify-content: space-around;
   align-items: center;
-  min-height: 68px;
+  min-height: 58px;
+  margin: 0 20px calc(12px + env(safe-area-inset-bottom));
+  padding: 7px 4px;
   background: var(--card);
-  border-top: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  box-shadow: 0 6px 20px #352f2b1f;
   flex-shrink: 0;
-  padding: 6px 0;
-  /* 微信 WXSS 对 max()/min() 支持不稳定，用 calc 保证安全区一定被加上；
-     height 改为 min-height，避免安全区占位后把图标和文字挤扁。 */
-  padding-bottom: calc(6px + env(safe-area-inset-bottom));
 }
 .nav-bottom button {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  min-width: 60px;
+  min-width: 0;
+  padding: 0 2px;
   font-size: 10px;
   color: var(--muted);
 }
 .nav-bottom button.active { color: var(--wood); font-weight: 600; }
 
 .bag-bar {
-  margin: 0 12px 10px;
+  margin: 0 20px 10px;
   border-radius: 12px;
   background: var(--ink);
   color: var(--card);
@@ -422,9 +427,10 @@ input {
 .bag-bar .price { font-size: 18px; }
 .bag-bar .tiny { color: #ded5c9; }
 
-/* 结算页常驻支付栏：合计与支付入口固定在底部，不跟随商品列表滚动。 */
+/* 结算页常驻支付栏：合计与支付入口固定在底部，不跟随商品列表滚动。
+   两侧与悬浮底部菜单同为 20px，视觉上保持一条对齐的中轴。 */
 .pay-bar {
-  margin: 0 12px 10px;
+  margin: 0 20px 10px;
   border-radius: 12px;
   background: var(--ink);
   color: var(--card);
@@ -474,31 +480,8 @@ input {
   font-size: 10px;
 }
 
-/* 加购反馈：提示贴在购物袋上方，杯子飞入后袋图标与数量一起回弹。 */
+/* 加购反馈：杯子飞入后袋图标与数量一起回弹，不再额外弹文字提示。 */
 .bag-dock { position: relative; flex-shrink: 0; z-index: 20; }
-.added-note {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: calc(100% + 3px);
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: #3d5744;
-  color: #fdfaf4;
-  font-size: 11px;
-  line-height: 1.45;
-  box-shadow: 0 8px 22px #352f2b2e;
-  pointer-events: none;
-  animation: added-note-in 220ms ease both;
-}
-.added-note-text { flex: 1; min-width: 0; }
-@keyframes added-note-in {
-  from { opacity: 0; transform: translateY(6px) scale(0.98); }
-  to { opacity: 1; transform: none; }
-}
 .bag-icon.bump { animation: bag-bump 480ms cubic-bezier(0.3, 1.4, 0.5, 1); }
 .bag-icon.bump .count { animation: count-pop 480ms cubic-bezier(0.3, 1.4, 0.5, 1); }
 @keyframes bag-bump {
@@ -549,6 +532,32 @@ input {
 .trigger-name { display: block; font-size: 12px; font-weight: 600; }
 .trigger-desc { display: block; font-size: 9px; color: var(--muted); line-height: 1.45; margin-top: 3px; }
 
+/* 首页广告轮播：整张 1600×900 成品图，按 16:9 铺满卡面，不再叠加文字。 */
+.home-banner {
+  display: block;
+  margin: 0 14px 17px;
+  height: calc((100vw - 28px) * 9 / 16);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #e7d6bd;
+}
+.home-banner-slide {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  line-height: 0;
+  border-radius: 0;
+}
+.home-banner-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .tea-hero {
   margin: 0 14px 17px;
   height: 196px;
@@ -595,7 +604,12 @@ input {
   color: var(--art-ink);
 }
 .hero-title .hero-line { display: block; }
-.hero-sub { display: block; font-size: 11px; }
+.hero-sub { display: block; font-size: 11px; font-family: var(--serif); font-weight: 500; }
+/* 首页主视觉的文字层与图片字体一致：眉题、副题都用衬线，不再出现图内宋体、图外黑体。 */
+.tea-hero .eyebrow {
+  font-family: var(--serif);
+  font-weight: 550;
+}
 
 .section-title {
   display: flex;
@@ -610,6 +624,13 @@ input {
   font-weight: 550;
   letter-spacing: var(--tracking-title);
   color: var(--art-ink);
+}
+/* 「看茶单」与左侧系列标题同一字族；只作用于首页标题行，不影响其它文字按钮。 */
+.section-title .text-btn {
+  font-family: var(--serif);
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: var(--tracking-title);
 }
 
 .series-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -645,6 +666,10 @@ input {
 }
 .celebrate-strip .cover { width: 86px; height: 94px; flex-shrink: 0; }
 /* 香槟茶条与首页系列图保持同一套衬线字族和深棕字色，不再出现图片衬线、文字无衬线的断层。 */
+.celebrate-strip .eyebrow {
+  font-family: var(--serif);
+  font-weight: 550;
+}
 .celebrate-title {
   display: block;
   font-family: var(--serif);
@@ -687,8 +712,36 @@ input {
   background: var(--apricot);
   color: var(--wood);
 }
+.resume-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .resume-title { display: block; font-size: 13px; font-weight: 550; letter-spacing: var(--tracking-title); }
 .resume-sub { display: block; font-size: 10px; color: var(--muted); margin-top: 1px; }
+.resume-code {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: #f3efe7;
+  color: var(--muted);
+  font-family: var(--font-code);
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.5;
+  letter-spacing: var(--tracking);
+}
+/* 已出餐是顾客要行动的时刻：整条提亮，编号用识别度更高的绿底。 */
+.resume-strip.ready {
+  background: #fbfcf7;
+  border-color: #d8e1d1;
+}
+.resume-strip.ready .resume-icon {
+  background: var(--sage);
+  color: var(--success);
+}
+.resume-strip.ready .resume-title { color: var(--art-ink); }
+.resume-strip.ready .resume-code {
+  background: #eaf0e7;
+  color: var(--success);
+}
 
 /* -------------------------------- menu -------------------------------- */
 
@@ -1172,6 +1225,74 @@ input {
 .profile-identity { padding: 15px; }
 .profile-name { display: block; font-size: 16px; font-weight: 600; }
 .profile-sub { display: block; font-size: 10px; color: var(--muted); line-height: 1.4; }
+
+/* 品牌会员入口：未开通用米白卡，生效后用深棕卡；
+   入口只暴露两个数（积分、骰子），明细与游戏放进会员中心，保持「我的」页短。
+   几何与 mini-card 对齐（左右 18px、圆角 14px、无外阴影），
+   否则会横向撑出、并与上下卡片粘在一起。 */
+.brand-entry {
+  display: block;
+  width: auto;
+  margin: 0 18px 12px;
+  padding: 16px;
+  text-align: left;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+.brand-entry.is-active {
+  border-color: transparent;
+  background: linear-gradient(145deg, #4d3a2c 0%, #6b4a35 58%, #7b5a41 100%);
+  color: #f7f1e7;
+}
+.brand-entry-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.brand-entry-eyebrow {
+  font-size: 9px;
+  letter-spacing: var(--tracking-wide);
+  color: var(--wood);
+}
+.brand-entry.is-active .brand-entry-eyebrow { color: #e8c58d; }
+.brand-entry-state {
+  flex: none;
+  font-size: 9px;
+  letter-spacing: var(--tracking-label);
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+}
+.brand-entry.is-active .brand-entry-state {
+  border-color: rgba(247, 241, 231, 0.35);
+  color: #f7f1e7b8;
+}
+.brand-entry-title {
+  display: block;
+  margin-top: 7px;
+  font-size: 23px;
+  letter-spacing: var(--tracking-title);
+}
+.brand-entry-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.brand-entry.is-active .brand-entry-sub { color: #f7f1e7cc; }
+.brand-entry-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11px;
+  color: var(--wood);
+}
+.brand-entry.is-active .brand-entry-foot {
+  border-top-color: rgba(247, 241, 231, 0.18);
+  color: #e8c58d;
+}
 /* 编辑入口只有一行字，必须显式 flex 居中；否则 min-height 会在下方留空，文字偏上。 */
 .profile-edit-link {
   padding: 0;

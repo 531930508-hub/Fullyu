@@ -45,9 +45,13 @@ const build = (
   new FeieLabelPrinter({
     user: 'test-user',
     ukey: 'test-ukey',
-    sn: options.sn,
-    storeSn: options.storeSn,
+    sn: options.sn ?? '',
+    storeSn: options.storeSn ?? {},
     apiBase: 'https://feie.test',
+    timeoutMs: 10000,
+    labelWidthMm: 40,
+    labelHeightMm: 30,
+    labelGap: '2,0',
     fetchImpl,
     now: options.now || (() => 1_700_000_000_000)
   });
@@ -190,8 +194,8 @@ describe('飞鹅云标签机 live 适配', () => {
   });
 
   it('缺少 user 或 UKEY 时启动即失败，错误信息只提变量名不回显密钥', () => {
-    expect(() => new FeieLabelPrinter({ user: '', ukey: 'u', sn: 'SN' })).toThrow(/FEIE_USER/);
-    expect(() => new FeieLabelPrinter({ user: 'u', ukey: '', sn: 'SN' })).toThrow(/FEIE_UKEY/);
+    expect(() => new FeieLabelPrinter({ user: '', ukey: 'u', sn: 'SN', storeSn: {}, apiBase: 'https://feie.test', timeoutMs: 10000, labelWidthMm: 40, labelHeightMm: 30, labelGap: '2,0' })).toThrow(/FEIE_USER/);
+    expect(() => new FeieLabelPrinter({ user: 'u', ukey: '', sn: 'SN', storeSn: {}, apiBase: 'https://feie.test', timeoutMs: 10000, labelWidthMm: 40, labelHeightMm: 30, labelGap: '2,0' })).toThrow(/FEIE_UKEY/);
   });
 
   it('status 用 Open_queryPrinterStatus 返回在线/离线，未配 SN 时诚实离线', async () => {

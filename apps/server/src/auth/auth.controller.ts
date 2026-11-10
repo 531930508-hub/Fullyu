@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
-import { AuthService, customerPayload } from './auth.service';
+import { AuthService } from './auth.service';
 import { CustomerGuard } from './customer.guard';
 import { StaffGuard } from './staff.guard';
 import { Customer, Staff } from './decorators';
@@ -41,7 +41,7 @@ export class AuthController {
   async customerSession(@Body() body: unknown) {
     const input = parseInput(sessionSchema, body ?? {});
     const { token, customer } = await this.authService.createCustomerSession(input);
-    return { token, customer: customerPayload(customer) };
+    return { token, customer };
   }
 
   @Get('customer/me')

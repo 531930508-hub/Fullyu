@@ -122,7 +122,7 @@ describe('账号、角色、门店配置与操作记录', () => {
     expect(blocked.status).toBe(401);
   });
 
-  it('自定义角色可创建，内置角色不可改，越权权限会被拒绝', async () => {
+  it('自定义角色可创建，内置角色可直接编辑但超级管理员受保护，越权权限会被拒绝', async () => {
     const created = await h.api('post', '/admin/roles', superToken, {
       name: '值班主管',
       description: '只读订单与经营数据',
@@ -146,12 +146,27 @@ describe('账号、角色、门店配置与操作记录', () => {
     });
     expect(unknown.status).toBe(400);
 
+    // 内置岗位角色允许直接调整权限（默认模板只是初始值），但超级管理员固定保留通配权限。
     const builtin = await h.api('post', '/admin/roles', superToken, {
-      id: 'r-staff',
-      name: '篡改店员',
+      id: 'r-ops',
+      name: '总部运营',
+      description: '商品、分类、映射、门店配置、报损规则与经营数据，不含财务',
+      scope: 'ALL',
+      perms: ['dashboard:view', 'product:view', 'product:edit', 'order:view', 'log:view']
+    });
+    expect(builtin.status).toBe(201);
+    expect(builtin.body.role.builtin).toBe(true);
+    expect(builtin.body.role.perms).toEqual([
+      'dashboard:view', 'product:view', 'product:edit', 'order:view', 'log:view'
+    ]);
+
+    const superRole = await h.api('post', '/admin/roles', superToken, {
+      id: 'r-super',
+      name: '超级管理员',
       perms: ['pos:use']
     });
-    expect(builtin.status).toBe(409);
+    expect(superRole.status).toBe(409);
+    expect(superRole.body.message).toContain('超级管理员');
 
     const finance = await h.login(ACCOUNTS.finance);
     const denied = await h.api('post', '/admin/roles', finance, {

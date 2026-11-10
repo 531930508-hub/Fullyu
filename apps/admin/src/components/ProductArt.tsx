@@ -60,7 +60,7 @@ export function ProductArt({
   if (product.kind === 'bottle') {
     return (
       <div className={className}>
-        <img src="/assets/celebration.jpg" alt={name} />
+        <img src="/img/celebration.webp" alt={name} />
       </div>
     );
   }

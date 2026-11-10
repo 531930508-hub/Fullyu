@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { productQtyInCart, repeatSpecFor } from './cartLines';
+import { lastSpecFor, needsSpecChoice, productQtyInCart } from './cartLines';
 
 const line = (id, temp, ice, qty = 1) => ({
   key: `${id}-${temp}`,
@@ -9,20 +9,41 @@ const line = (id, temp, ice, qty = 1) => ({
   qty
 });
 
-describe('repeatSpecFor', () => {
-  test('同商品已在袋中时沿用上次的温度与冰量', () => {
+describe('lastSpecFor', () => {
+  test('同商品已在袋中时返回上次的温度与冰量，用于弹层预选', () => {
     const lines = [line('tea-a', '冰', '少冰')];
-    expect(repeatSpecFor(lines, 'tea-a')).toEqual({ temp: '冰', ice: '少冰' });
+    expect(lastSpecFor(lines, 'tea-a')).toEqual({ temp: '冰', ice: '少冰' });
   });
 
-  test('没有该商品时返回 null，让页面继续打开规格弹层', () => {
-    expect(repeatSpecFor([line('tea-a', '热', null)], 'tea-b')).toBeNull();
-    expect(repeatSpecFor([], 'tea-a')).toBeNull();
-    expect(repeatSpecFor(null, 'tea-a')).toBeNull();
+  test('没有该商品时返回 null', () => {
+    expect(lastSpecFor([line('tea-a', '热', null)], 'tea-b')).toBeNull();
+    expect(lastSpecFor([], 'tea-a')).toBeNull();
+    expect(lastSpecFor(null, 'tea-a')).toBeNull();
+  });
+
+  test('同款已分成冷热两行时，预选最后加入的那一行', () => {
+    const lines = [line('tea-a', '热', null), line('tea-a', '冰', '少冰')];
+    expect(lastSpecFor(lines, 'tea-a')).toEqual({ temp: '冰', ice: '少冰' });
   });
 
   test('热饮不携带冰量', () => {
-    expect(repeatSpecFor([line('tea-a', '热', null)], 'tea-a')).toEqual({ temp: '热', ice: null });
+    expect(lastSpecFor([line('tea-a', '热', null)], 'tea-a')).toEqual({ temp: '热', ice: null });
+  });
+});
+
+describe('needsSpecChoice', () => {
+  test('多温度或可选冰量的茶必须先选规格，不能直接沿用上一杯', () => {
+    expect(needsSpecChoice({ temps: ['热', '冰'], ice: true })).toBe(true);
+    expect(needsSpecChoice({ temps: ['冰'], ice: true })).toBe(true);
+    expect(needsSpecChoice({ temps: ['热', '冰'], ice: false })).toBe(true);
+  });
+
+  test('只有一种温度且没有冰量选择时可以直接加购', () => {
+    expect(needsSpecChoice({ temps: ['热'], ice: false })).toBe(false);
+    // 后端给眠系列保留了 ice 标记，但只有热饮，实际没有可选项。
+    expect(needsSpecChoice({ temps: ['热'], ice: true })).toBe(false);
+    expect(needsSpecChoice({})).toBe(false);
+    expect(needsSpecChoice(null)).toBe(false);
   });
 });
 

@@ -60,7 +60,7 @@ export function LoginPage() {
   return (
     <div className="login-page">
       <section className="login-brand" aria-label="品牌">
-        <img className="bg" src="/assets/tea.jpg" alt="" />
+        <img className="bg" src="/img/tea.webp" alt="" />
         <div>
           <Logo variant="zh" size="lg" subtitle="Tea Hour · Operations" />
           <h1>时叙<br />门店运营系统</h1>

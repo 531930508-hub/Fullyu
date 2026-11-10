@@ -32,6 +32,18 @@ describe('小程序微信能力适配层', () => {
     expect(saved?.phone).toBe('13700000001');
   });
 
+  it('境外手机号保留国家码，不按大陆 11 位规则拒绝', async () => {
+    const res = await h.api('post', '/customer/wechat/login', null, {
+      code: 'code-hk',
+      phone: '+852 9123 4567'
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.customer.phone).toBe('+85291234567');
+
+    const saved = await h.prisma.customer.findUnique({ where: { id: res.body.customer.id } });
+    expect(saved?.phone).toBe('+85291234567');
+  });
+
   it('同一手机号换一次微信授权仍复用同一顾客', async () => {
     const first = await h.api('post', '/customer/wechat/login', null, {
       code: 'code-bbb',

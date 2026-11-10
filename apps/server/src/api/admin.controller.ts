@@ -14,6 +14,7 @@ import { ApprovalsService } from '../approvals/approvals.service';
 import { LossesService } from '../losses/losses.service';
 import { AdminService } from '../admin/admin.service';
 import { CatalogService } from '../catalog/catalog.service';
+import { ContentService } from '../content/content.service';
 import { CouponsService } from '../coupons/coupons.service';
 
 const rangeSchema = z.object({
@@ -49,6 +50,16 @@ const productImageSchema = z.object({
   // 允许带 data URL 前缀，服务端会剥离；2MB 图片的 base64 约 2.8MB 字符
   base64: z.string().min(1).max(3_000_000),
   contentType: z.enum(['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
+});
+
+const bannerSchema = z.object({
+  title: z.string().max(40).optional(),
+  // 图片与商品图同一套上传约束；编辑时不传则保留原图。
+  base64: z.string().min(1).max(3_000_000).optional(),
+  contentType: z.enum(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']).optional(),
+  linkType: z.enum(['none', 'menu', 'series', 'retail', 'orders', 'profile', 'product']).optional(),
+  linkValue: z.string().max(64).optional(),
+  active: z.boolean().optional()
 });
 
 const expenseSchema = z.object({
@@ -149,6 +160,7 @@ export class AdminController {
     private readonly losses: LossesService,
     private readonly admin: AdminService,
     private readonly catalog: CatalogService,
+    private readonly content: ContentService,
     private readonly coupons: CouponsService
   ) {}
 
@@ -408,6 +420,54 @@ export class AdminController {
       body
     );
     return { category: await this.admin.saveCategory(staff, input) };
+  }
+
+  /** 首页内容：轮播与 8 个系列图槽位。沿用商品权限，不新增角色迁移。 */
+  @Get('content')
+  @RequirePerm('product:view')
+  async homeContent() {
+    return this.content.adminOverview();
+  }
+
+  @Post('banners')
+  @RequirePerm('product:edit')
+  async createBanner(@Body() body: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(bannerSchema, body);
+    return this.content.createBanner(staff, input);
+  }
+
+  /** 顺序整体提交，必须在 banners/:id 之前注册。 */
+  @Put('banners/order')
+  @RequirePerm('product:edit')
+  async reorderBanners(@Body() body: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(z.object({ ids: z.array(z.string().min(1)).min(1).max(8) }), body);
+    return this.content.reorderBanners(staff, input.ids);
+  }
+
+  @Put('banners/:id')
+  @RequirePerm('product:edit')
+  async updateBanner(@Param('id') id: string, @Body() body: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(bannerSchema, body);
+    return this.content.updateBanner(staff, id, input);
+  }
+
+  @Delete('banners/:id')
+  @RequirePerm('product:edit')
+  async deleteBanner(@Param('id') id: string, @Staff() staff: StaffContext) {
+    return this.content.deleteBanner(staff, id);
+  }
+
+  @Put('content/series/:key')
+  @RequirePerm('product:edit')
+  async setSeriesImage(@Param('key') key: string, @Body() body: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(productImageSchema, body);
+    return this.content.setSeriesImage(staff, key, input);
+  }
+
+  @Delete('content/series/:key')
+  @RequirePerm('product:edit')
+  async resetSeriesImage(@Param('key') key: string, @Staff() staff: StaffContext) {
+    return this.content.resetSeriesImage(staff, key);
   }
 
   @Get('stores')

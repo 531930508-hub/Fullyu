@@ -430,3 +430,32 @@ export type CouponIssueResult = {
   skipped: Array<{ phone: string; reason: string }>;
   template: Coupon;
 };
+
+/** 首页轮播：图片是整张成品图，跳转只支持站内。 */
+export type BannerLinkType = 'none' | 'menu' | 'series' | 'retail' | 'orders' | 'profile' | 'product';
+
+export type Banner = {
+  id: string;
+  title: string;
+  imageUrl: string;
+  linkType: BannerLinkType;
+  linkValue: string;
+  sortOrder: number;
+  active: boolean;
+  updatedAt: number;
+};
+
+/** 首页系列图槽位：key 为 xing-zh 等固定 8 位；imageUrl 为空表示使用内置图。 */
+export type HomeSeriesSlot = {
+  key: string;
+  series: Exclude<Series, 'retail'>;
+  locale: 'zh' | 'en';
+  imageUrl: string;
+  updatedAt: number | null;
+};
+
+export type HomeContent = {
+  banners: Banner[];
+  series: HomeSeriesSlot[];
+  products: Array<Pick<Product, 'id' | 'name' | 'nameEn' | 'series' | 'kind' | 'status'>>;
+};

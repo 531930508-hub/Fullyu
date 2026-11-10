@@ -28,6 +28,30 @@ model Setting {
   @@map("settings")
 }
 
+/// 首页轮播：图片本身是完整广告图，linkType/linkValue 只描述站内跳转。
+model Banner {
+  id        String   @id
+  title     String
+  imageUrl  String   @map("image_url")
+  linkType  String   @map("link_type")
+  linkValue String   @default("") @map("link_value")
+  sortOrder Int      @default(0) @map("sort_order")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("banners")
+}
+
+/// 首页系列图覆盖：key 为 xing-zh 等 8 个固定槽位；没有记录时小程序使用内置图。
+model HomeAsset {
+  key       String   @id
+  imageUrl  String   @map("image_url")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("home_assets")
+}
+
 model Store {
   id            String   @id
   city          String

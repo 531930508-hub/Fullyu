@@ -18,7 +18,7 @@ export const PERMISSIONS = [
   { code: 'finance:view', name: '财务流水', module: 'finance', level: 'MENU' },
   { code: 'finance:export', name: '导出流水', module: 'finance', level: 'ACTION' },
   { code: 'finance:expense', name: '录入与导入运营费用', module: 'finance', level: 'ACTION' },
-  { code: 'product:view', name: '商品目录', module: 'product', level: 'MENU' },
+  { code: 'product:view', name: '商品目录与首页内容', module: 'product', level: 'MENU' },
   { code: 'product:edit', name: '编辑商品与分类', module: 'product', level: 'ACTION' },
   { code: 'product:price', name: '查看与调整售价（敏感）', module: 'product', level: 'FIELD' },
   { code: 'product:publish', name: '上架 / 下架', module: 'product', level: 'ACTION' },

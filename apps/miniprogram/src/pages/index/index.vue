@@ -50,8 +50,32 @@
               </button>
             </view>
 
-            <view class="tea-hero">
-              <image class="hero-bg" src="/static/tea.jpg" aria-hidden="true" mode="aspectFill" />
+            <!-- 后台配置了轮播时展示整张成品图，点击按后台设定的站内去处跳转；
+                 未配置时保留默认品牌主视觉，避免首屏出现空白广告位。 -->
+            <swiper
+              v-if="homeBanners.length"
+              class="home-banner"
+              :circular="homeBanners.length > 1"
+              :autoplay="homeBanners.length > 1"
+              :interval="5000"
+              :duration="450"
+              indicator-dots
+              indicator-color="rgba(253, 250, 244, 0.36)"
+              indicator-active-color="#fdfaf4"
+            >
+              <swiper-item v-for="banner in homeBanners" :key="banner.id">
+                <button
+                  hover-class="none"
+                  class="home-banner-slide"
+                  :aria-label="tt('查看首页活动', 'View this promotion')"
+                  @click="onBannerTap(banner)"
+                >
+                  <image class="home-banner-img" :src="banner.imageUrl" mode="aspectFill" />
+                </button>
+              </swiper-item>
+            </swiper>
+            <view v-else class="tea-hero">
+              <image class="hero-bg" src="/static/tea.webp" aria-hidden="true" mode="aspectFill" />
               <view class="hero-scrim" />
               <view class="hero-body">
                 <text class="eyebrow">A MOMENT, ALL YOURS</text>
@@ -63,13 +87,24 @@
               </view>
             </view>
 
-            <button hover-class="none" v-if="resumeOrderId" class="resume-strip" @click="resumeReceipt">
+            <!-- 只看仍在进行、且已支付到店的订单；已完成、取消和未支付都不挂在首页。
+                 已出餐优先并直接露出取餐号，制作中只做轻提示。 -->
+            <button
+              hover-class="none"
+              v-if="state.customer && resumePickup"
+              class="resume-strip"
+              :class="{ ready: resumeReady }"
+              @click="resumeReceipt"
+            >
               <view class="resume-icon">
                 <AppIcon name="cup" :size="16" />
               </view>
               <view class="grow">
-                <text class="resume-title">{{ tt('上一单的取茶凭证', 'Your last pickup receipt') }}</text>
-                <text class="resume-sub">{{ tt('继续查看取茶进度', 'Check how your tea is coming along') }}</text>
+                <view class="resume-line">
+                  <text class="resume-title">{{ resumeTitle }}</text>
+                  <text v-if="resumeCode" class="resume-code" :class="{ muted: !resumeReady }">{{ resumeCode }}</text>
+                </view>
+                <text class="resume-sub">{{ resumeSub }}</text>
               </view>
               <AppIcon name="arrowRight" :size="16" />
             </button>
@@ -97,7 +132,7 @@
               </view>
 
               <button hover-class="none" v-if="bottle" class="celebrate-strip" @click="detail = bottle">
-                <image class="cover" src="/static/celebration.jpg" aria-hidden="true" mode="aspectFill" lazy-load />
+                <image class="cover" src="/static/celebration.webp" aria-hidden="true" mode="aspectFill" lazy-load />
                 <view class="grow">
                   <text class="eyebrow">CELEBRATE THE EVERYDAY</text>
                   <text class="celebrate-title">{{ tt('让这一刻，值得碰杯。', 'Here’s to this moment.') }}</text>
@@ -674,6 +709,28 @@
               <button hover-class="none" class="btn primary full section-space" @click="openLogin()">{{ isWeixin ? tt('手机号登录', 'Continue with phone') : tt('在小程序内登录', 'Sign in in the mini program') }}</button>
             </view>
 
+            <!-- 未登录也保留品牌会员入口：先看清楚一张卡三店通用，再决定登录。 -->
+            <button
+              v-if="!state.customer"
+              hover-class="none"
+              class="brand-entry section-space"
+              :aria-label="tt('了解 Full愈年卡', 'About the Full Yu annual card')"
+              @click="openBrandMember"
+            >
+              <view class="brand-entry-head">
+                <text class="brand-entry-eyebrow">FULL YU ANNUAL MEMBER</text>
+                <text class="brand-entry-state">{{ tt('权益卡 · 三店通用', 'Benefit card') }}</text>
+              </view>
+              <text class="brand-entry-title serif">Full愈年卡</text>
+              <text class="brand-entry-sub">
+                {{ tt(`一张卡，时叙 / 在场 / 轻疗通用 · ¥${brandPriceText}/年`, `One card for Tea Hours, Presence and Retreat · ¥${brandPriceText}/year`) }}
+              </text>
+              <view class="brand-entry-foot">
+                <text>{{ tt('了解会员权益', 'See member benefits') }}</text>
+                <AppIcon name="chevronRight" :size="14" />
+              </view>
+            </button>
+
             <template v-else>
               <view class="mini-card profile-identity">
                 <view class="profile-row">
@@ -698,6 +755,34 @@
                   </button>
                 </view>
               </view>
+
+              <!-- 品牌会员入口：一张卡三店通用；点卡进入身份页与愈行之旅。 -->
+              <button
+                hover-class="none"
+                class="brand-entry"
+                :class="{ 'is-active': brandActive }"
+                :aria-label="tt('打开 Full愈年卡会员中心', 'Open Full Yu annual member center')"
+                @click="openBrandMember"
+              >
+                <view class="brand-entry-head">
+                  <text class="brand-entry-eyebrow">FULL YU ANNUAL MEMBER</text>
+                  <text class="brand-entry-state">
+                    {{ brandActive ? tt(`还有 ${brandRemaining} 天`, `${brandRemaining} days left`) : tt('权益卡 · 三店通用', 'Benefit card') }}
+                  </text>
+                </view>
+                <text class="brand-entry-title serif">Full愈年卡</text>
+                <text v-if="brandActive" class="brand-entry-sub">
+                  {{ tt(`有效期至 ${brandValidUntil} · ${brandPoints} 积分 · ${brandDice} 颗骰子`, `Valid until ${brandValidUntil} · ${brandPoints} points · ${brandDice} dice`) }}
+                </text>
+                <text v-else-if="brandLoading" class="brand-entry-sub">{{ tt('正在读取会员状态…', 'Loading membership…') }}</text>
+                <text v-else class="brand-entry-sub">
+                  {{ tt(`一张卡，时叙 / 在场 / 轻疗通用 · ¥${brandPriceText}/年`, `One card for Tea Hours, Presence and Retreat · ¥${brandPriceText}/year`) }}
+                </text>
+                <view class="brand-entry-foot">
+                  <text>{{ brandActive ? tt('进入会员中心', 'Member center') : tt('开通年卡', 'Join annual') }}</text>
+                  <AppIcon name="chevronRight" :size="14" />
+                </view>
+              </button>
 
               <view class="profile-assets">
                 <button hover-class="none" class="asset-item" @click="openAssets('coupons')">
@@ -755,11 +840,6 @@
     </scroll-view>
 
     <view v-if="showBag && state.store" class="bag-dock">
-      <!-- 加购回执贴着购物袋出现：视线不用从商品跳到屏幕顶端，也能确认「真的加进去了」。 -->
-      <view v-if="addedNote" class="added-note">
-        <AppIcon name="check" :size="13" color="#fffefa" />
-        <text class="added-note-text">{{ addedNote }}</text>
-      </view>
       <view class="bag-bar">
         <button hover-class="none" class="bag-open" :aria-label="tt('查看购物袋', 'View bag')" @click="bagOpen = true">
           <view class="bag-icon" :class="{ bump: bagBump }">
@@ -768,7 +848,7 @@
           </view>
           <view class="grow bag-summary">
             <text class="price">{{ money(bagTotal) }}</text>
-            <view class="tiny">{{ bagSubtitle }} · {{ tt('点开可调整', 'Tap to edit') }}</view>
+            <view class="tiny">{{ bagSubtitle }}</view>
           </view>
         </button>
         <button hover-class="none" class="bag-checkout" @click="startCheckout(bagKind)">{{ tt('选好了', 'Checkout') }}</button>
@@ -1274,8 +1354,6 @@ import {
   clearCart,
   submitOrder,
   refreshCatalog,
-  lastOrderId,
-  forgetLastOrder,
   freshCount,
   retailCount,
   freshGross,
@@ -1305,9 +1383,18 @@ import {
 import { parseTableCode } from '@/lib/tableCode';
 import { isSameVisitDay } from '@/lib/visitDay';
 import { bucketOrders, orderBucket, orderBucketCounts } from '@/lib/orderBuckets';
-import { productQtyInCart, repeatSpecFor } from '@/lib/cartLines';
+import { lastSpecFor, needsSpecChoice, productQtyInCart } from '@/lib/cartLines';
+import { isPickupOrder, isReadyPickup, pickupOrders, pickupTarget, readyFirst } from '@/lib/pickupOrders';
 import { distanceKm, formatDistance } from '@/lib/geo';
 import { POSTER_HEIGHT, POSTER_WIDTH, drawSharePoster, logoSrcCandidates } from '@/lib/sharePoster';
+import {
+  CARD_PRODUCTS as BRAND_CARD_PRODUCTS,
+  claimGiftCode,
+  formatDate as formatBrandDate,
+  loadBrandMember,
+  peekPendingGift,
+  takePendingGift
+} from '@/lib/brandMember';
 import AppIcon from '@/components/AppIcon.vue';
 import ProductArt from '@/components/ProductArt.vue';
 import SeriesMotif from '@/components/SeriesMotif.vue';
@@ -1320,9 +1407,13 @@ const tempOptions = ['全部', '热', '冰'];
 const iceOptions = ['标准冰', '少冰', '去冰'];
 
 const locale = ref('zh');
-/** 首页系列卡使用设计好的中英文成品图，文件名与 src/static/series 一一对应。 */
+/** 后台配置的首页轮播；为空时首页显示默认品牌主视觉。 */
+const homeBanners = computed(() => (state.home && state.home.banners) || []);
+/** 首页系列卡使用后台覆盖图，未上传时回落到设计好的中英文成品图。 */
 function seriesArt(key) {
-  return `/static/series/${key}-${locale.value === 'en' ? 'en' : 'zh'}.png`;
+  const slot = `${key}-${locale.value === 'en' ? 'en' : 'zh'}`;
+  const override = state.home && state.home.series ? state.home.series[slot] : '';
+  return override || `/static/series/${slot}.webp`;
 }
 // 自定义导航栏：小程序页面从屏幕顶部开始绘制，必须自己让出状态栏高度。
 // CSS 变量 --status-bar-height 在微信真机不可靠，统一用 JS 读取后以内联样式写入。
@@ -1379,7 +1470,6 @@ const checkoutKind = ref('fresh');
 const receiptOrder = ref(null);
 // 从订单列表查看提货码：回执作为「订单」内的子页面，底部导航与筛选保持不动，关闭即回到列表。
 const receiptFromOrders = ref(false);
-const resumeOrderId = ref('');
 const orders = ref([]);
 // 订单列表三态分离（UI-09）：加载中 / 失败（区分有无旧数据）/ 真实空单，不再把失败当空。
 const ordersLoading = ref(false);
@@ -1405,6 +1495,8 @@ const loginConsent = ref(false);
 // 未勾选时点击登录：先弹出品牌内的确认层，同意后同一次手势完成授权与登录。
 const consentOpen = ref(false);
 let pendingAfterLogin = null;
+/** 扫码带会员码时只自动弹一次登录层，避免顾客关闭后反复打断。 */
+let giftLoginPrompted = false;
 // 从支付确认弹层跳去换店时，选完店后自动回到确认弹层。
 const reopenConfirmAfterStore = ref(false);
 const coupons = ref([]);
@@ -1444,15 +1536,13 @@ const paying = ref(false);
 const payError = ref('');
 const toastText = ref('');
 const toastTone = ref('ok');
-// 加购反馈：飞入购物袋的杯子、袋内提示、袋图标弹动与商品按钮回弹。
+// 加购反馈：飞入购物袋的杯子、袋图标弹动与商品按钮回弹。
 // 这几个状态都只影响视觉，不参与购物袋数据；购物袋仍由 store 统一维护。
-const addedNote = ref('');
 const bagBump = ref(false);
 const recentAddId = ref('');
 const flyVisible = ref(false);
 const flyProduct = ref(null);
 const flyStyle = ref('');
-let noteTimer = null;
 let bumpTimer = null;
 let recentTimer = null;
 let flyTimer = null;
@@ -1475,6 +1565,50 @@ const profileSub = computed(() => {
     ? tt(`大会员 · ${masked}`, `Member · ${masked}`)
     : tt(`会员 · ${masked}`, `Member · ${masked}`);
 });
+
+/**
+ * 品牌会员（Full愈年卡）入口。
+ * 页面只消费 CRM 适配层返回的状态；加载失败保持空态，不把失败显示成「未开通」。
+ */
+const brandMember = ref(null);
+const brandLoading = ref(false);
+const brandAnnualPrice = ref(
+  (BRAND_CARD_PRODUCTS.find((item) => item.code === 'FY_ANNUAL') || {}).priceCents || 29900
+);
+const brandState = computed(
+  () => (brandMember.value && brandMember.value.card && brandMember.value.card.state) || 'NONE'
+);
+const brandActive = computed(() => ['ACTIVE', 'EXPIRING', 'PENDING'].includes(brandState.value));
+const brandRemaining = computed(() => (brandMember.value && brandMember.value.card && brandMember.value.card.remainingDays) || 0);
+const brandValidUntil = computed(() => formatBrandDate(brandMember.value && brandMember.value.card && brandMember.value.card.validUntil));
+const brandPoints = computed(() => (brandMember.value && brandMember.value.points && brandMember.value.points.balance) || 0);
+const brandDice = computed(() => (brandMember.value && brandMember.value.dice && brandMember.value.dice.balance) || 0);
+const brandPending = computed(() => (brandMember.value && brandMember.value.prizes && brandMember.value.prizes.pending) || 0);
+const brandPriceText = computed(() => String(Math.round(brandAnnualPrice.value / 100)));
+
+async function loadBrand() {
+  if (!state.customer) {
+    brandMember.value = null;
+    return;
+  }
+  brandLoading.value = true;
+  try {
+    brandMember.value = await loadBrandMember();
+  } catch (error) {
+    brandMember.value = null;
+  } finally {
+    brandLoading.value = false;
+  }
+}
+
+function openBrandMember() {
+  // 未登录先走登录，否则会员页只会拿到「请先登录」的错误态，看起来像功能坏了。
+  if (!state.customer) {
+    openLogin();
+    return;
+  }
+  uni.navigateTo({ url: '/pages/brand-member/index' });
+}
 
 const genderOptions = computed(() => [
   { value: 1, label: tt('男', 'Male') },
@@ -1574,10 +1708,13 @@ const bagTotal = computed(() =>
 const showBag = computed(
   () => bagQty.value > 0 && !['checkout', 'receipt', 'orders', 'profile'].includes(screen.value)
 );
-const bagSubtitle = computed(() => {
-  if (bagKind.value === 'retail') return tt('零售 · 任意店取', 'Retail · Any-store pickup');
-  return storeChosen.value ? sn(state.store) : tt('鲜酿 · 下单前选店', 'Fresh tea · Choose a store');
-});
+// 袋栏不展示品类或门店：一袋可能同时有鲜酿、康普茶和香槟，且香槟也能堂食。
+// 只报一个总数，具体是什么点开可看。
+const bagSubtitle = computed(() =>
+  bagKind.value === 'retail'
+    ? tt(`共 ${bagQty.value} 件`, `${bagQty.value} ${bagQty.value === 1 ? 'item' : 'items'}`)
+    : tt(`共 ${bagQty.value} 杯`, `${bagQty.value} ${bagQty.value === 1 ? 'cup' : 'cups'}`)
+);
 /** 购物袋弹层复用现有袋数据，鲜酿与零售各看各的，避免串单。 */
 const bagRetail = computed(() => bagKind.value === 'retail');
 const bagLines = computed(() => (bagRetail.value ? state.retailCart : state.freshCart));
@@ -1833,7 +1970,11 @@ const orderTabs = computed(() => [
   { key: 'completed', label: tt('已完成', 'Completed'), count: orderCounts.value.completed },
   { key: 'closed', label: tt('已取消', 'Closed'), count: orderCounts.value.closed }
 ]);
-const filteredOrders = computed(() => bucketOrders(orders.value, ordersTab.value));
+const filteredOrders = computed(() => {
+  const list = bucketOrders(orders.value, ordersTab.value);
+  // 进行中里把已出餐/待提货排前面，从首页「N 单可取」进来时不用再翻找。
+  return ordersTab.value === 'active' ? readyFirst(list) : list;
+});
 const ordersEmptyTitle = computed(() => {
   if (!orders.value.length) return tt('第一杯，还在等你', 'Your first moment awaits');
   if (ordersTab.value === 'completed') return tt('还没有已完成的订单', 'No completed orders yet');
@@ -1849,6 +1990,68 @@ const ordersEmptyHint = computed(() => {
 const pickups = computed(
   () => orders.value.filter((order) => order.business === 'retail' && order.status === 'awaiting').length
 );
+
+// 首页取茶入口只看仍需要到店的已支付订单。
+// 已出餐是顾客唯一要行动的时刻：优先展示并直接露出取餐号；制作中只作为轻提示。
+const resumePickupList = computed(() => pickupOrders(orders.value));
+const resumeReadyList = computed(() => resumePickupList.value.filter(isReadyPickup));
+const resumePendingList = computed(() => resumePickupList.value.filter((order) => !isReadyPickup(order)));
+const resumePickup = computed(() => resumePickupList.value[0] || null);
+const resumeReady = computed(() => resumeReadyList.value.length > 0);
+const resumeReadyCount = computed(() => resumeReadyList.value.length);
+const resumePendingCount = computed(() => resumePendingList.value.length);
+const resumeCodeOrder = computed(() => {
+  if (resumeReadyCount.value === 1) return resumeReadyList.value[0];
+  if (!resumeReadyCount.value && resumePendingCount.value === 1) return resumePendingList.value[0];
+  return null;
+});
+const resumeCode = computed(() => {
+  const order = resumeCodeOrder.value;
+  if (!order) return '';
+  // 零售看 4 位提货码，茶饮看订单号；都用真实值，不自己截尾号。
+  return isRetailOrder(order) ? order.pickupCode || '' : order.number || '';
+});
+const resumeTitle = computed(() => {
+  const ready = resumeReadyList.value;
+  const pending = resumePendingCount.value;
+  if (ready.length > 1) {
+    const retail = ready.filter(isRetailOrder).length;
+    if (retail === ready.length) return tt(`${ready.length} 单待取货`, `${ready.length} orders to collect`);
+    if (!retail) return tt(`${ready.length} 单已出餐`, `${ready.length} orders ready`);
+    return tt(`${ready.length} 单可取`, `${ready.length} orders to collect`);
+  }
+  if (ready.length === 1) {
+    return isRetailOrder(ready[0])
+      ? tt('可以取货了', 'Ready to collect')
+      : tt('可以取茶了', 'Your tea is ready');
+  }
+  if (pending > 1) return tt(`${pending} 单制作中`, `${pending} orders brewing`);
+  return tt('正在制作', 'Brewing');
+});
+const resumeSub = computed(() => {
+  const ready = resumeReadyList.value;
+  const pending = resumePendingCount.value;
+  const extra = pending
+    ? tt(`另有 ${pending} 单制作中`, `${pending} more ${pending === 1 ? 'order' : 'orders'} brewing`)
+    : '';
+  if (ready.length > 1) {
+    const retail = ready.filter(isRetailOrder).length;
+    const open =
+      retail === ready.length
+        ? tt('点开查看提货码', 'Open to see your pickup codes')
+        : retail === 0
+          ? tt('点开查看取餐号', 'Open to see your pickup numbers')
+          : tt('点开查看取餐号与提货码', 'Open to see your pickup numbers and codes');
+    return [open, extra].filter(Boolean).join(' · ');
+  }
+  if (ready.length === 1) {
+    const main = isRetailOrder(ready[0])
+      ? tt('到店出示提货码', 'Show your pickup code in store')
+      : tt('到取餐口报号', 'Tell the counter this number');
+    return [main, extra].filter(Boolean).join(' · ');
+  }
+  return tt('出餐后这里会变成取餐号', 'This becomes your pickup number when ready');
+});
 
 const showcaseTone = computed(() => (detail.value ? productTone(detail.value) : 'sage'));
 
@@ -1900,8 +2103,14 @@ watch(receiptFromOrders, () => {
 
 watch(detail, (product) => {
   if (!product) return;
-  detailTemp.value = (product.temps && product.temps[0]) || '热';
-  detailIce.value = product.ice && detailTemp.value !== '热' ? '标准冰' : '';
+  // 再点同款时预选上次温度/冰量，但保留完整规格弹层，顾客可以改成另一杯冷/热。
+  const last = lastSpecFor(state.freshCart, product.id);
+  const temps = Array.isArray(product.temps) ? product.temps : [];
+  detailTemp.value = last && temps.includes(last.temp) ? last.temp : temps[0] || '热';
+  detailIce.value =
+    product.ice && detailTemp.value !== '热'
+      ? (last && last.ice && iceOptions.includes(last.ice) ? last.ice : '标准冰')
+      : '';
   detailQty.value = 1;
 });
 
@@ -2239,6 +2448,7 @@ function navGo(key) {
     go(key);
     return;
   }
+  if (key === 'profile' && state.customer) loadBrand();
   go(key);
 }
 
@@ -2317,6 +2527,48 @@ function openRetailDetail(item, categoryId) {
   detail.value = matched
     ? { ...matched, kind: 'retail' }
     : { id: item.id, name: item.name, nameEn: item.name, series: 'retail', kind: 'retail', categoryId };
+}
+
+/**
+ * 首页轮播跳转只走站内去处（后台配置）。
+ * 目标被下架或删除时明确提示，避免点了没反应让人以为卡住。
+ */
+function onBannerTap(banner) {
+  if (!banner || !banner.linkType || banner.linkType === 'none') return;
+  const value = banner.linkValue || '';
+  if (banner.linkType === 'menu') {
+    openMenu('all');
+    return;
+  }
+  if (banner.linkType === 'series') {
+    openMenu(['xing', 'song', 'qing', 'mian'].includes(value) ? value : 'all');
+    return;
+  }
+  if (banner.linkType === 'retail') {
+    navGo('retail');
+    return;
+  }
+  if (banner.linkType === 'orders') {
+    navGo('orders');
+    return;
+  }
+  if (banner.linkType === 'profile') {
+    navGo('profile');
+    return;
+  }
+  if (banner.linkType !== 'product') return;
+  const product = state.products.find((item) => item.id === value);
+  if (product) {
+    if (product.kind === 'retail') openRetailDetail(product, product.categoryId);
+    else detail.value = product;
+    return;
+  }
+  const retail = state.retail.find((item) => item.id === value);
+  if (retail) {
+    openRetailDetail(retail, categoryOf(retail.id));
+    return;
+  }
+  notify(tt('这件商品暂时不在售', 'This item is not available right now'), 'info');
 }
 
 function retailArt(line) {
@@ -2401,48 +2653,32 @@ function launchFly(from, to, product) {
   }, 640);
 }
 
-function showAddedNote(name, spec, total, unit) {
-  const unitText = unit === 'pack' ? tt('件', 'item') : tt('杯', 'cup');
-  const label = [name, spec].filter(Boolean).join(' · ');
-  addedNote.value = `${tt('已加入', 'Added')} ${label} · ${tt(`袋内 ${total} ${unitText}`, `${total} in bag`)}`;
-  if (noteTimer) clearTimeout(noteTimer);
-  noteTimer = setTimeout(() => {
-    addedNote.value = '';
-  }, 1900);
-}
-
-async function celebrateAdd({ product, name, spec = '', total = 0, unit = 'cup', sourceRect = null }) {
+async function celebrateAdd({ product, sourceRect = null }) {
   tapFeedback();
   markRecent(product && product.id);
   bumpBag();
-  showAddedNote(name, spec, total, unit);
   await nextTick();
   const target = await rectOf('.bag-icon');
   launchFly(sourceRect, target, product);
 }
 
-/** 已在袋里的茶直接按上次温度/冰量再加一杯；第一次加仍进详情选规格。 */
+/**
+ * 列表 + 号：有温度/冰量可选的茶先进规格弹层，预选上次规格；
+ * 同款想一杯热一杯冷时，在弹层改温度即可各成一行。
+ */
 async function quickAddTea(product) {
   if (!product) return;
   if (product.available === false) {
     notify(tt('本店暂时售罄', 'Sold out at this store'), 'warn');
     return;
   }
-  const repeat = repeatSpecFor(state.freshCart, product.id);
-  if (!repeat) {
+  if (needsSpecChoice(product)) {
     detail.value = product;
     return;
   }
   const sourceRect = await rectOf(`#add-${product.id}`);
-  addFresh(product, { temp: repeat.temp, ice: repeat.ice, qty: 1 });
-  await celebrateAdd({
-    product,
-    name: pn(product),
-    spec: [repeat.temp ? sp(repeat.temp) : '', repeat.ice ? sp(repeat.ice) : ''].filter(Boolean).join(' · '),
-    total: freshCount(),
-    unit: 'cup',
-    sourceRect
-  });
+  addFresh(product, { temp: (product.temps && product.temps[0]) || '热', ice: null, qty: 1 });
+  await celebrateAdd({ product, sourceRect });
 }
 
 /** 零售没有温度/冰量，加号直接加入；点商品名仍可查看详情。 */
@@ -2460,9 +2696,6 @@ async function quickAddRetail(item, categoryId) {
       categoryId,
       imageUrl: item.imageUrl
     },
-    name: item.name,
-    total: retailCount(),
-    unit: 'pack',
     sourceRect
   });
 }
@@ -2477,29 +2710,19 @@ async function addFromSheet() {
   };
   // 详情是居中弹层，先量加购按钮的位置，关掉弹层后再让杯子从原位置飞出。
   const sourceRect = await rectOf('#detail-add');
-  let name = '';
-  let spec = '';
-  let total = 0;
-  let unit = 'cup';
   if (product.kind === 'retail') {
     const item = state.retail.find((entry) => entry.id === product.id);
     if (!item) return;
     addRetail(item, options.qty, product.categoryId);
-    name = item.name;
-    total = retailCount();
-    unit = 'pack';
   } else if (product.available === false) {
     notify(tt('本店暂时售罄', 'Sold out at this store'), 'warn');
     detail.value = null;
     return;
   } else {
     addFresh(product, options);
-    name = pn(product);
-    spec = [options.temp ? sp(options.temp) : '', options.ice ? sp(options.ice) : ''].filter(Boolean).join(' · ');
-    total = freshCount();
   }
   detail.value = null;
-  await celebrateAdd({ product, name, spec, total, unit, sourceRect });
+  await celebrateAdd({ product, sourceRect });
 }
 
 function startCheckout(kind) {
@@ -2765,7 +2988,6 @@ async function payNow() {
       couponId: checkoutCoupon.value ? checkoutCoupon.value.id : undefined
     });
     receiptOrder.value = result.order;
-    resumeOrderId.value = result.order.id;
     confirmOpen.value = false;
     selectedCouponId.value = '';
     go('receipt');
@@ -2975,6 +3197,23 @@ async function finishLogin(customer) {
   consentOpen.value = false;
   loginError.value = '';
   notify(tt('登录成功', 'Signed in'));
+  // 扫会员码小程序码但未登录：登录完成后立即领取，并回到会员页看结果。
+  const pendingGift = takePendingGift();
+  if (pendingGift) {
+    try {
+      const res = await claimGiftCode(pendingGift);
+      const days = res && res.days;
+      uni.showToast({
+        title: res && res.replayed ? '这个会员码已兑换过' : days ? `已领取 ${days} 天会员` : '会员码已领取',
+        icon: 'none'
+      });
+      setTimeout(() => {
+        uni.navigateTo({ url: '/pages/brand-member/index' });
+      }, 900);
+    } catch (err) {
+      uni.showToast({ title: (err && err.message) || '会员码领取失败，请稍后重试', icon: 'none' });
+    }
+  }
   await loadCoupons({ silent: true });
   const next = pendingAfterLogin;
   pendingAfterLogin = null;
@@ -3204,20 +3443,31 @@ function onReceiptTouchEnd(event) {
   if (dx <= -70 && Math.abs(dy) <= 60) closeReceipt();
 }
 
-/** 首页入口：按缓存的订单号取回取茶凭证；只有确认订单不存在时才清缓存。 */
+/**
+ * 首页入口：只有一单可取时直接打开它，哪怕还有别的在制作；
+ * 两单以上可取、或全部制作中且不止一单时进入「进行中」列表，由顾客自己选。
+ */
 async function resumeReceipt() {
-  const id = resumeOrderId.value;
-  if (!id) return;
+  const target = pickupTarget(orders.value);
+  if (!target) {
+    if (resumePickupList.value.length) goPickups();
+    return;
+  }
   try {
-    const result = await api.myOrder(id);
+    const result = await api.myOrder(target.id);
+    // 首页停留期间订单可能已被取消或完成；取到最新状态后再决定是否还展示凭证。
+    // 这里只校验订单是否仍可取，不按一小时窗口拒绝：顾客已经点开的凭证不应因刚过整点而失效。
+    if (!isPickupOrder(result.order)) {
+      loadOrders({ silent: true });
+      notify(tt('这单已经结束，取茶入口已收起', 'That order has ended, so the receipt is tucked away'));
+      return;
+    }
     receiptOrder.value = result.order;
-    resumeOrderId.value = result.order.id;
     go('receipt');
   } catch (error) {
     if (error && error.status === 404) {
-      resumeOrderId.value = '';
-      forgetLastOrder();
-      notify(tt('上一单已完成，凭证已收起', 'That order is complete, so the receipt is tucked away'));
+      loadOrders({ silent: true });
+      notify(tt('这单已经结束，取茶入口已收起', 'That order has ended, so the receipt is tucked away'));
       return;
     }
     notify(tt('暂时取不到取茶凭证，请稍后再试', 'Could not load the receipt. Please try again.'));
@@ -3312,12 +3562,12 @@ const shareTitle = () => SHARE_TITLES[locale.value] || SHARE_TITLES.zh;
 onShareAppMessage(() => ({
   title: shareTitle(),
   path: '/pages/index/index',
-  imageUrl: '/static/tea.jpg'
+  imageUrl: '/static/tea.webp'
 }));
 
 onShareTimeline(() => ({
   title: shareTitle(),
-  imageUrl: '/static/tea.jpg'
+  imageUrl: '/static/tea.webp'
 }));
 
 function openShare() {
@@ -3605,7 +3855,6 @@ onMounted(async () => {
   uni.$on('teahour:scene', onScene);
   // 不注册 onNeedPrivacyAuthorization：保留微信官方隐私弹窗，首次授权一次后不再重复。
   await init();
-  resumeOrderId.value = lastOrderId();
   // uni-app H5 的 scroll-view 内层是可滚动 div，补上键盘焦点以支持键盘用户（小程序端无 document）。
   if (typeof document !== 'undefined') {
     const scroller = document.querySelector('.phone-content .uni-scroll-view .uni-scroll-view');
@@ -3614,6 +3863,7 @@ onMounted(async () => {
   if (state.customer) {
     loadOrders();
     loadCoupons({ silent: true });
+    loadBrand();
   }
   if (state.store) {
     const current = state.stores.find((item) => item.id === state.store.id);
@@ -3624,6 +3874,12 @@ onMounted(async () => {
 // 回前台（UI-08）：目录与订单静默刷新，让改价、售罄、出餐、退款跨端可见；
 // init 内部也会触发一次目录刷新，这里补订单、权益与变化提示。
 onShow(() => {
+  // 扫会员码小程序码进来但还没登录：自动打开登录层，登录后 finishLogin 自动领取。
+  if (!state.customer && !giftLoginPrompted && peekPendingGift()) {
+    giftLoginPrompted = true;
+    uni.showToast({ title: '登录后自动领取会员码', icon: 'none' });
+    setTimeout(() => openLogin(), 500);
+  }
   if (state.customer) {
     loadOrders({ silent: true });
     loadCoupons({ silent: true });
@@ -3633,7 +3889,7 @@ onShow(() => {
 
 onUnmounted(() => {
   uni.$off('teahour:scene', onScene);
-  [noteTimer, bumpTimer, recentTimer, flyTimer].forEach((timer) => {
+  [bumpTimer, recentTimer, flyTimer].forEach((timer) => {
     if (timer) clearTimeout(timer);
   });
 });

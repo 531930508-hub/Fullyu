@@ -14,7 +14,7 @@ export function Logo({
 }) {
   return (
     <div className={`logo logo-${size}`}>
-      <img src={variant === 'en' ? '/assets/logo-en.png' : '/assets/logo-zh.png'} alt="Full愈·时叙 TEA HOUR" />
+      <img src={variant === 'en' ? '/img/logo-en.png' : '/img/logo-zh.png'} alt="Full愈·时叙 TEA HOUR" />
       {subtitle ? <span className="logo-sub">{subtitle}</span> : null}
     </div>
   );

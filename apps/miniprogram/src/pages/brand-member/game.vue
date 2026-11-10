@@ -1,16 +1,18 @@
 <template>
   <web-view v-if="url" :src="url" />
   <view v-else class="game-empty">
-    <text class="game-title serif">愈行之旅</text>
-    <text class="game-desc">游戏服务地址尚未配置。配置 CRM 的游戏地址后，会员可在这里掷骰、得积分与旅途礼物。</text>
-    <button hover-class="none" class="game-back" @click="goBack">返回会员中心</button>
+    <text class="game-title serif">{{ tt('愈行之旅', 'The Healing Journey') }}</text>
+    <text class="game-desc">{{ tt('游戏服务地址尚未配置。配置 CRM 的游戏地址后，会员可在这里掷骰、得积分与旅途礼物。', 'The game address is not configured yet. Once CRM provides it, members can roll dice here for points and journey gifts.') }}</text>
+    <button hover-class="none" class="game-back" @click="goBack">{{ tt('返回会员中心', 'Back to membership') }}</button>
   </view>
 </template>
 
 <script setup>
 import { ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
+import { useLocale } from '@/lib/useLocale';
 
+const { tt } = useLocale();
 const url = ref('');
 
 onLoad((query) => {

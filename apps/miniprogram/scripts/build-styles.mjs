@@ -17,7 +17,10 @@ const toRpx = (match, value) => {
 
 let css = fs.readFileSync(source, 'utf8');
 css = css.replace(/(-?\d*\.?\d+)px/g, toRpx);
-css = css.replace(/:root\s*\{/, 'page,\n:root {');
+// 小程序 WXSS 不认识 :root。若把 token 写成 `page, :root {…}`，微信会因选择器列表
+// 含非法项而丢掉整条规则，所有 var(--token) 全部失效（页面变白、按钮无底色）。
+// 因此拆成两条独立规则：page 供小程序，:root 供 H5；两条各自独立失效互不影响。
+css = css.replace(/:root\s*\{([\s\S]*?)\n\}/, (_, body) => `page {${body}\n}\n:root {${body}\n}`);
 css = `/* 自动生成：由 teahour.source.css 按 750rpx/400px=1.875 换算。请修改源文件后运行 styles 脚本。 */\n${css}`;
 
 fs.writeFileSync(target, css);

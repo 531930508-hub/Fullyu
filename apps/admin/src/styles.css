@@ -509,6 +509,20 @@ table.tbl tfoot td { padding: 11px 12px; font-weight: 600; border-top: 1px solid
 .product-image-preview { width: 96px; height: 96px; border-radius: 16px; overflow: hidden; display: grid; place-items: center; background: var(--apricot); color: #654b36; font-family: var(--serif); font-size: 30px; flex: none; }
 .product-image-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .product-image-actions { display: grid; gap: 6px; }
+/* 首页内容：轮播缩略图与系列图槽位 */
+.banner-thumb { width: 148px; aspect-ratio: 16 / 9; border-radius: 10px; object-fit: cover; display: block; background: #e7d6bd; }
+.banner-preview { width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #e7d6bd; }
+.banner-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.banner-preview.empty { display: grid; place-items: center; border: 1px dashed var(--line); color: var(--faint); font-size: 12px; }
+.banner-preview + .tiny { display: block; margin-top: 6px; }
+.home-series-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.series-slot { border: 1px solid var(--line-soft); border-radius: 16px; overflow: hidden; background: var(--card); display: flex; flex-direction: column; }
+.series-slot-art { aspect-ratio: 16 / 9; background: #f3ece1; display: grid; place-items: center; overflow: hidden; }
+.series-slot-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.series-slot-art span { font-family: var(--serif); font-size: 36px; color: #68370f; }
+.series-slot-body { padding: 11px 13px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.series-slot-title { font-size: 12.5px; font-weight: 550; display: flex; align-items: center; gap: 6px; }
+.series-slot-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .product-info { flex: 1; min-width: 0; }
 .product-name { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 550; }
 .product-desc { font-size: 10.5px; color: var(--faint); margin-top: 2px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -805,6 +819,15 @@ table.tbl tfoot td { padding: 11px 12px; font-weight: 600; border-top: 1px solid
 .role-card h3 { font-size: 13px; display: flex; gap: 7px; align-items: center; }
 .role-card p { font-size: 10.5px; color: var(--faint); margin-top: 3px; }
 .role-perms { font-size: 9.5px; color: var(--muted); margin-top: 5px; }
+.role-perm-names { font-size: 10.5px; color: var(--muted); margin-top: 4px; line-height: 1.65; max-width: 720px; }
+.perm-level {
+  font-size: 9px;
+  line-height: 1.4;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #edeae3;
+  color: var(--muted);
+}
 .scope-pill { font-size: 9px; padding: 1px 6px; border-radius: 4px; background: #edeae3; color: var(--muted); }
 .mapping-list { display: flex; flex-direction: column; }
 .mapping-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); font-size: 12px; }

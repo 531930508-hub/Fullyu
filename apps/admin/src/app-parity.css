@@ -66,21 +66,14 @@
 @media (max-width: 680px) {
   .ops-shell { min-height: 100dvh; }
 }
-.sidebar-about {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0 0 12px;
-  font-size: 11px;
-  color: var(--muted);
-}
-.sidebar-about:hover { color: var(--ink); }
 .sidebar {
-  position: static;
+  position: sticky;
   inset: auto;
+  top: 0;
   z-index: auto;
-  overflow: visible;
+  align-self: flex-start;
+  height: 100dvh;
+  overflow: hidden;
   width: 196px;
   padding: 29px 16px;
   background: var(--card);
@@ -94,13 +87,59 @@
   letter-spacing: 1.6px;
   color: var(--muted);
 }
-.sidebar-nav { display: flex; flex-direction: column; gap: 4px; margin-top: 0; }
-.sidebar-label {
+/* 菜单项已增至 21 个：导航区独立滚动，品牌与账号区固定在侧栏上下两端。 */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #d9d1c4 transparent;
+  padding-right: 2px;
+}
+.sidebar-nav::-webkit-scrollbar { width: 6px; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: #d9d1c4; border-radius: 999px; }
+.sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+/* 一级分组：默认只展开当前页面所在组，21 个入口收拢为 5 组，后续新增菜单继续归入已有分组。 */
+.nav-group { display: flex; flex-direction: column; gap: 2px; }
+.nav-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 12px 7px;
   font-size: 10px;
   letter-spacing: 1px;
   color: var(--muted);
-  padding: 18px 12px 7px;
+  text-align: left;
+  border-radius: 8px;
 }
+.nav-group-toggle:hover { color: var(--ink); }
+.nav-group-toggle.has-active { color: var(--ink); }
+.nav-group-name { flex: 1 1 auto; }
+.nav-group-count { font-size: 9px; letter-spacing: 0; color: var(--muted); opacity: .7; }
+.nav-group-chevron { flex-shrink: 0; opacity: .65; transform: rotate(-90deg); transition: transform 160ms ease; }
+.nav-group-chevron.expanded { transform: rotate(0deg); }
+.nav-group-items { display: flex; flex-direction: column; gap: 4px; }
+.nav-group-items.collapsed { display: none; }
+/* 左上角 logo 可点击回默认首页；品牌区外观保持不变。 */
+.sidebar-brand-link { display: block; color: inherit; text-decoration: none; border-radius: 10px; }
+.sidebar-brand-link:hover { opacity: .86; }
+.sidebar-brand-link:focus-visible { outline: 2px solid var(--wood); outline-offset: 4px; }
+/* 营业台固定在分组上方，一次点击直达；不参与手风琴折叠。 */
+.side-link-pinned {
+  background: var(--sage);
+  color: var(--wood);
+  font-weight: 550;
+  margin-bottom: 2px;
+}
+.side-link-pinned:hover { background: #e3e7da; }
+.side-link-pinned.active { background: var(--ink); color: var(--card); }
+.nav-pinned-divider { height: 1px; background: var(--line); margin: 8px 12px 10px; }
 .side-link {
   display: flex;
   align-items: center;
@@ -124,7 +163,6 @@
   border-radius: 4px;
 }
 .sidebar-user { border-top: 0; }
-.sidebar-bottom { margin-top: 0; }
 
 /* Search fields inside the phone keep the demo's 36px height. */
 .search input { min-height: 0; }
@@ -280,7 +318,15 @@ table.tbl.tbl-compact td:nth-child(4) { width: 88px; }
     width: 72px;
     padding: 22px 8px;
   }
-  .sidebar-brand, .sidebar-label, .side-link span, .sidebar-bottom { display: none; }
+  .sidebar-brand, .side-link span { display: none; }
+  /* 图标栏放不下分组标题：取消折叠，全部菜单按原顺序平铺，导航区单独滚动。 */
+  .nav-group-toggle { display: none; }
+  .nav-group-items.collapsed { display: flex; }
+  .nav-group + .nav-group {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+  }
   .side-link { justify-content: center; padding: 13px 8px; }
   .sidebar-user div { display: none; }
   .sidebar-user .icon-btn { display: none; }
@@ -329,16 +375,3 @@ table.tbl.tbl-compact td:nth-child(4) { width: 88px; }
 :root { --faint: #68625b; }
 .page-meta { color: var(--muted); }
 .series-tile .t-en, .series-tile .t-qty { opacity: 1; }
-
-/* 窄屏侧边栏只留图标，说明入口跟随侧边栏一起收成图标（须排在 900px 隐藏规则之后）。 */
-@media (max-width: 900px) {
-  .sidebar-bottom {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 18px 0 0;
-  }
-  .sidebar-bottom > div { display: none; }
-  .sidebar-about { justify-content: center; width: 100%; padding: 0; }
-  .sidebar-about span { display: none; }
-}

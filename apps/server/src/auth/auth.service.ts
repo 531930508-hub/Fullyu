@@ -11,11 +11,18 @@ import { logAction } from '../common/logs';
 import { mapCustomer, mapStaffSummary } from '../common/mappers';
 import { LoginAttemptLimiter } from './login-attempts';
 import { loginRateLimit } from '../config/config';
+import { CrmClient, type CrmIdentity } from '../crm/crm.client';
 
 export type CustomerSessionInput = {
   memberCode?: string;
   name?: string;
   phone?: string;
+};
+
+/** 顾客档案行 + CRM 身份字段；积分展示以 CRM 为准，本地 points 仅在未接入时使用。 */
+type CrmCustomer = Parameters<typeof customerPayload>[0] & {
+  unionId?: string | null;
+  openId?: string | null;
 };
 
 /** 微信返回的这些 code 表示登录/手机号授权 code 已用过或过期，需要顾客重新授权。 */
@@ -33,7 +40,8 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly staffService: StaffService,
-    private readonly hardware: HardwareService
+    private readonly hardware: HardwareService,
+    private readonly crm: CrmClient
   ) {}
 
   async login(username: string, password: string, sourceIp = 'unknown') {
@@ -93,7 +101,7 @@ export class AuthService {
       { kind: 'customer', sub: customer.id, ver: customer.sessionVersion },
       { expiresIn: '30d' }
     );
-    return { token, customer };
+    return { token, customer: await this.customerView(customer) };
   }
 
   /**
@@ -129,7 +137,7 @@ export class AuthService {
           code: input.phoneCode
         })
       );
-      phone = normalizePhone(result.phone);
+      phone = normalizePhone(result.phone, result.countryCode);
     }
     if (!phone) throw badRequest('请使用手机号登录，手机号是会员唯一身份');
 
@@ -142,7 +150,7 @@ export class AuthService {
       { kind: 'customer', sub: customer.id, ver: customer.sessionVersion },
       { expiresIn: '30d' }
     );
-    return { token, customer: customerPayload(customer), provider: this.hardware.wechat.mode };
+    return { token, customer: await this.customerView(customer), provider: this.hardware.wechat.mode };
   }
 
   /**
@@ -210,7 +218,7 @@ export class AuthService {
       where: { id: customer.id },
       data: { phone: result.phone }
     });
-    return { customer: customerPayload(updated), provider: this.hardware.wechat.mode };
+    return { customer: await this.customerView(updated), provider: this.hardware.wechat.mode };
   }
 
   /**
@@ -260,7 +268,7 @@ export class AuthService {
   async customerMe(id: string) {
     const customer = await this.prisma.customer.findUnique({ where: { id } });
     if (!customer) throw unauthorized('顾客会话不存在');
-    return customerPayload(customer);
+    return this.customerView(customer);
   }
 
   /** 支付等场景需要的顾客原始行（含 openId 等未对外字段）；不存在返回 null。 */
@@ -314,7 +322,7 @@ export class AuthService {
       detail: Object.keys(data).join(','),
       type: 'customer'
     });
-    return customerPayload(updated);
+    return this.customerView(updated);
   }
 
   /** 头像上传：base64 交 AvatarStorageProvider 落盘，库里只存 key。 */
@@ -342,7 +350,30 @@ export class AuthService {
       action: '更新头像',
       type: 'customer'
     });
-    return customerPayload(updated);
+    return this.customerView(updated);
+  }
+
+  /**
+   * 顾客对外视图：积分以 CRM 为唯一账本。
+   * 未开启 CRM 时沿用本地只读字段；开启后调用失败必须报错，绝不静默回退本地 0 分。
+   */
+  private async customerView(customer: CrmCustomer): Promise<ReturnType<typeof customerPayload>> {
+    if (!this.crm.enabled) return customerPayload(customer);
+    const member = await this.crm.resolve(this.crmIdentity(customer));
+    return customerPayload(customer, member.balance);
+  }
+
+  /** 只传业务端本地标识与档案字段；会员号由 CRM 生成，业务端不持有。 */
+  private crmIdentity(customer: CrmCustomer): CrmIdentity {
+    return {
+      localUserId: customer.id,
+      phone: customer.phone ?? null,
+      name: customer.name,
+      unionId: customer.unionId ?? null,
+      openId: customer.openId ?? null,
+      gender: customer.gender ?? null,
+      birthday: customer.birthday ? customer.birthday.toISOString().slice(0, 10) : null
+    };
   }
 
   private async syncProfile(customer: {
@@ -365,10 +396,15 @@ export class AuthService {
 }
 
 /** 手机号是会员唯一身份：只接受中国大陆 11 位手机号，去空格后统一存库。 */
-function normalizePhone(value: string | undefined | null): string {
-  const phone = String(value || '').replace(/[\s-]/g, '');
-  if (!/^1\d{10}$/.test(phone)) throw badRequest('请填写正确的手机号');
-  return phone;
+function normalizePhone(value: string | undefined | null, countryCode?: string): string {
+  let phone = String(value || '').replace(/[\s\-()]/g, '');
+  if (!phone) throw badRequest('请填写正确的手机号');
+  if (phone.startsWith('00')) phone = `+${phone.slice(2)}`;
+  const cc = String(countryCode || '').trim();
+  if (cc && cc !== '86' && /^\d+$/.test(phone)) phone = `+${cc}${phone}`;
+  if (/^\+861\d{10}$/.test(phone)) phone = phone.slice(3);
+  if (/^1\d{10}$/.test(phone) || /^\+\d{7,15}$/.test(phone)) return phone;
+  throw badRequest('请填写正确的手机号');
 }
 
 function normalizeName(value: string): string {
@@ -413,25 +449,29 @@ export function annualDiscountCents(customer: {
   return active ? ANNUAL_DISCOUNT_PER_CUP_CENTS : 0;
 }
 
-export function customerPayload(customer: {
-  id: string;
-  memberCode: string;
-  name: string;
-  phone: string | null;
-  points?: number;
-  avatarKey?: string | null;
-  gender?: number | null;
-  birthday?: Date | null;
-  memberTier?: string | null;
-  memberUntil?: Date | null;
-}) {
+export function customerPayload(
+  customer: {
+    id: string;
+    memberCode: string;
+    name: string;
+    phone: string | null;
+    points?: number;
+    avatarKey?: string | null;
+    gender?: number | null;
+    birthday?: Date | null;
+    memberTier?: string | null;
+    memberUntil?: Date | null;
+  },
+  /** 会员中心余额；传入时以它为准，用于替换业务端本地只读积分。 */
+  pointsOverride?: number
+) {
   // UI-02：会员等级与折扣由服务端按库内记录和有效期判定，不信任客户端申报。
   const discount = annualDiscountCents(customer);
   return {
     ...mapCustomer(customer),
     memberTier: discount ? 'annual' : 'standard',
     discountPerCupCents: discount,
-    // 积分全平台共享；入账规则未确认前只展示余额，不提供前端自增入口。
-    points: customer.points ?? 0
+    // 积分全平台共享，CRM 接入后余额来自会员中心；未接入时只展示本地余额。
+    points: pointsOverride === undefined ? customer.points ?? 0 : pointsOverride
   };
 }

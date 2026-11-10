@@ -11,6 +11,9 @@ export const QUALITY = 0.82;
 export const SKIP_COMPRESS_BYTES = 300 * 1024;
 /** 与服务端上限一致。 */
 export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+/** 首页轮播与系列图的固定画布，与服务端 storeImage 的校验一致。 */
+export const HOME_IMAGE_WIDTH = 1600;
+export const HOME_IMAGE_HEIGHT = 900;
 
 export type PreparedImage = {
   /** 带 data URL 前缀的 base64；服务端会自行剥离前缀。 */
@@ -119,4 +122,43 @@ export async function prepareProductImage(
     throw new Error('图片压缩后仍超过 2MB，请换一张更小的图片');
   }
   return { base64, contentType, preview };
+}
+
+/**
+ * 首页运营图（轮播 / 系列图）：画布固定 1600×900，不做缩放或裁切。
+ * 尺寸不符直接拒绝并回显当前尺寸；体积超限时在同一画布上降质重编码，
+ * 避免运营为了传图先自己找工具压图。
+ */
+export async function prepareHomeImage(file: File): Promise<PreparedImage> {
+  if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
+    throw new Error('仅支持 JPG、PNG 或 WebP 图片');
+  }
+  const img = await decode(file);
+  if (img.naturalWidth !== HOME_IMAGE_WIDTH || img.naturalHeight !== HOME_IMAGE_HEIGHT) {
+    throw new Error(
+      `需要 ${HOME_IMAGE_WIDTH}×${HOME_IMAGE_HEIGHT} 的图片，当前是 ${img.naturalWidth}×${img.naturalHeight}`
+    );
+  }
+  if (file.size <= MAX_UPLOAD_BYTES) {
+    const preview = await readAsDataUrl(file);
+    return { base64: preview, contentType: file.type, preview };
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = HOME_IMAGE_WIDTH;
+  canvas.height = HOME_IMAGE_HEIGHT;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('当前浏览器不支持图片处理，请换用新版浏览器');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, HOME_IMAGE_WIDTH, HOME_IMAGE_HEIGHT);
+  ctx.drawImage(img, 0, 0, HOME_IMAGE_WIDTH, HOME_IMAGE_HEIGHT);
+
+  const encoding = pickEncoding(supportsWebp(), file.type);
+  for (const quality of [0.9, 0.82, 0.72, 0.62]) {
+    const preview = canvas.toDataURL(encoding, quality);
+    if (Math.ceil((preview.length * 3) / 4) <= MAX_UPLOAD_BYTES) {
+      return { base64: preview, contentType: encoding, preview };
+    }
+  }
+  throw new Error('图片压缩后仍超过 2MB，请换一张体积更小的图片');
 }

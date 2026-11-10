@@ -21,6 +21,13 @@
       }
     },
     {
+      "path": "pages/brand-member/stories/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "会员故事"
+      }
+    },
+    {
       "path": "pages/brand-member/game",
       "style": {
         "navigationBarTitleText": "愈行之旅"

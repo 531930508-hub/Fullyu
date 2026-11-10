@@ -38,14 +38,18 @@ import {
   percent,
   todayText
 } from '../lib/format';
-import { MAX_UPLOAD_BYTES, prepareProductImage } from '../lib/image';
+import { HOME_IMAGE_HEIGHT, HOME_IMAGE_WIDTH, MAX_UPLOAD_BYTES, prepareHomeImage, prepareProductImage } from '../lib/image';
 import type {
   Approval,
+  Banner,
+  BannerLinkType,
   Category,
   Coupon,
   CouponIssueResult,
   Expense,
   FinanceEntry,
+  HomeContent,
+  HomeSeriesSlot,
   LogEntry,
   Loss,
   LossPolicy,
@@ -72,6 +76,7 @@ type Section =
   | 'approvals'
   | 'losses'
   | 'coupons'
+  | 'content'
   | 'products'
   | 'mappings'
   | 'stores'
@@ -87,6 +92,7 @@ const SECTION_TITLE: Record<Section, string> = {
   approvals: '审批中心',
   losses: '报损与损耗',
   coupons: '优惠券',
+  content: '首页内容',
   products: '商品目录',
   mappings: '原料映射',
   stores: '门店配置',
@@ -104,6 +110,7 @@ const SECTION_PERM: Record<Section, string> = {
   approvals: 'approval:view',
   losses: 'loss:view',
   coupons: 'coupon:view',
+  content: 'product:view',
   products: 'product:view',
   mappings: 'mapping:view',
   stores: 'store:config',
@@ -120,6 +127,7 @@ const SECTION_ORDER: Section[] = [
   'approvals',
   'losses',
   'coupons',
+  'content',
   'products',
   'mappings',
   'stores',
@@ -276,6 +284,7 @@ export function AdminApp() {
       {allowed && section === 'approvals' ? <ApprovalsPage onChanged={refreshApprovalCount} /> : null}
       {allowed && section === 'losses' ? <LossesPage /> : null}
       {allowed && section === 'coupons' ? <CouponsPage /> : null}
+      {allowed && section === 'content' ? <ContentPage /> : null}
       {allowed && section === 'products' ? <ProductsPage /> : null}
       {allowed && section === 'mappings' ? <MappingsPage /> : null}
       {allowed && section === 'stores' ? <StoresPage /> : null}
@@ -4102,12 +4111,15 @@ function RolesPage() {
     } as Role);
   };
 
+  const permissionName = new Map(data.catalog.permissions.map((permission) => [permission.code, permission.name]));
+  const isFixedSuper = (role: Role) => role.perms.includes('*');
+
   return (
     <>
       <PageHead
         eyebrow="品牌总部 · 组织"
         title="角色权限"
-        description="角色决定可访问的页面与可执行的操作；内置角色不可修改，可克隆后调整。"
+        description="角色决定可见菜单与可执行操作；内置岗位角色可直接编辑，超级管理员固定保留全部权限。"
         meta={<span>{data.roles.length} 个角色 · {data.catalog.permissions.length} 项权限</span>}
         actions={
           can('rbac:edit') ? (
@@ -4128,21 +4140,33 @@ function RolesPage() {
               </h3>
               <p>{role.description || '未填写说明'}</p>
               <div className="role-perms">
-                {role.perms.includes('*')
-                  ? '全部权限'
+                {isFixedSuper(role)
+                  ? '全部权限 · 系统保留'
                   : `${role.perms.length} 项权限 · ${role.users || 0} 个账号使用`}
               </div>
+              {isFixedSuper(role) ? null : (
+                <div className="role-perm-names">
+                  {role.perms.length
+                    ? role.perms.map((code) => permissionName.get(code) || code).join(' · ')
+                    : '尚未选择权限'}
+                </div>
+              )}
             </div>
             <div className="row-gap">
               {can('rbac:edit') ? (
-                role.builtin ? (
-                  <button type="button" className="btn btn-sm btn-outline" onClick={() => cloneRole(role)}>
-                    克隆
-                  </button>
+                isFixedSuper(role) ? (
+                  <span className="faint tiny">系统保留</span>
                 ) : (
-                  <button type="button" className="btn btn-sm btn-outline" onClick={() => setEditing(role)}>
-                    编辑
-                  </button>
+                  <>
+                    <button type="button" className="btn btn-sm btn-outline" onClick={() => setEditing(role)}>
+                      编辑
+                    </button>
+                    {role.builtin ? (
+                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => cloneRole(role)}>
+                        克隆
+                      </button>
+                    ) : null}
+                  </>
                 )
               ) : null}
             </div>
@@ -4160,7 +4184,7 @@ function RolesPage() {
         }}
       />
       <p className="page-foot-note">
-        自定义角色不能授予自己未拥有的权限；超级管理员角色使用通配符，仅系统内置。门店范围与角色相互独立，账号必须同时拥有角色与门店授权。
+        带「菜单」标记的权限决定左侧导航是否出现；角色修改保存后立即对所有使用该角色的账号生效。自定义角色不能授予自己没有的权限；超级管理员使用通配符，固定不可修改。门店范围与角色相互独立，账号必须同时拥有角色与门店授权。
       </p>
     </>
   );
@@ -4260,6 +4284,9 @@ function RoleDrawer({
         <h2>权限</h2>
         <span className="faint tiny">{perms.length} 项已选</span>
       </div>
+      <p className="faint tiny" style={{ marginBottom: 10 }}>
+        带「菜单」标记的权限决定左侧导航是否出现；其余为页面内操作或敏感字段权限。
+      </p>
       <div className="permission-matrix">
         {catalog.modules.map((module) => {
           const list = catalog.permissions.filter((permission) => permission.module === module.key);
@@ -4275,6 +4302,7 @@ function RoleDrawer({
                       onChange={() => toggle(permission.code)}
                     />
                     {permission.name}
+                    {permission.level === 'MENU' ? <span className="perm-level">菜单</span> : null}
                   </label>
                 ))}
               </div>
@@ -4288,6 +4316,503 @@ function RoleDrawer({
 }
 
 /* ------------------------------- logs ------------------------------- */
+
+/* ------------------------------- 首页内容 ------------------------------- */
+
+const BANNER_LINK_LABEL: Record<BannerLinkType, string> = {
+  none: '不跳转',
+  menu: '茶单',
+  series: '茶单系列',
+  retail: '带回家',
+  orders: '我的订单',
+  profile: '个人中心',
+  product: '商品详情'
+};
+
+function bannerTargetText(banner: Banner, products: HomeContent['products']) {
+  if (banner.linkType === 'series') {
+    const series = SERIES[banner.linkValue as Series];
+    return `${BANNER_LINK_LABEL.series} · ${series ? series.name : '系列已失效'}`;
+  }
+  if (banner.linkType === 'product') {
+    const product = products.find((item) => item.id === banner.linkValue);
+    return `${BANNER_LINK_LABEL.product} · ${product ? product.name : '商品已不存在'}`;
+  }
+  return BANNER_LINK_LABEL[banner.linkType] || '不跳转';
+}
+
+function ContentPage() {
+  const { can } = useStaffAuth();
+  const notify = useToast();
+  const confirm = useConfirm();
+  const query = useApi(() => api.adminHomeContent(), []);
+  const [editing, setEditing] = useState<Banner | 'new' | null>(null);
+  const [bannerBusy, setBannerBusy] = useState('');
+  const [seriesBusy, setSeriesBusy] = useState('');
+  const [seriesError, setSeriesError] = useState<string | null>(null);
+  const canEdit = can('product:edit');
+
+  if (query.loading && !query.data) return <Spinner label="正在读取首页内容" />;
+  if (query.error && !query.data) return <InlineError message={query.error} />;
+  const data = query.data;
+  if (!data) return null;
+
+  const moveBanner = async (banner: Banner, direction: -1 | 1) => {
+    const index = data.banners.findIndex((item) => item.id === banner.id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= data.banners.length) return;
+    const ids = data.banners.map((item) => item.id);
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    setBannerBusy(banner.id);
+    try {
+      await api.adminReorderBanners(ids);
+      notify('轮播顺序已更新', 'ok');
+      query.reload({ silent: true });
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '调整顺序失败', 'danger');
+    } finally {
+      setBannerBusy('');
+    }
+  };
+
+  const toggleBanner = async (banner: Banner) => {
+    setBannerBusy(banner.id);
+    try {
+      await api.adminUpdateBanner(banner.id, { active: !banner.active });
+      notify(banner.active ? '轮播已停用' : '轮播已启用', 'ok');
+      query.reload({ silent: true });
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '操作失败', 'danger');
+    } finally {
+      setBannerBusy('');
+    }
+  };
+
+  const removeBanner = async (banner: Banner) => {
+    const ok = await confirm({
+      title: '删除这屏轮播？',
+      message: `${banner.title}。删除后图片文件会一并清理，无法恢复。`,
+      confirmText: '删除',
+      tone: 'danger'
+    });
+    if (!ok) return;
+    setBannerBusy(banner.id);
+    try {
+      await api.adminDeleteBanner(banner.id);
+      notify('轮播已删除', 'ok');
+      query.reload({ silent: true });
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '删除失败', 'danger');
+    } finally {
+      setBannerBusy('');
+    }
+  };
+
+  const uploadSeries = async (slot: HomeSeriesSlot, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // 清空 input，允许连续选择同一个文件重新上传。
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      setSeriesError('图片超过 20MB，请换一张更小的图片');
+      return;
+    }
+    setSeriesBusy(slot.key);
+    setSeriesError(null);
+    try {
+      const prepared = await prepareHomeImage(file);
+      await api.adminUploadSeriesImage(slot.key, {
+        base64: prepared.base64,
+        contentType: prepared.contentType
+      });
+      notify(`${SERIES[slot.series].name} · ${slot.locale === 'en' ? '英文' : '中文'}图已更新`, 'ok');
+      query.reload({ silent: true });
+    } catch (err) {
+      setSeriesError(err instanceof ApiError || err instanceof Error ? err.message : '上传失败');
+    } finally {
+      setSeriesBusy('');
+    }
+  };
+
+  const resetSeries = async (slot: HomeSeriesSlot) => {
+    const ok = await confirm({
+      title: '恢复内置系列图？',
+      message: `${SERIES[slot.series].name} · ${slot.locale === 'en' ? '英文' : '中文'}将回到小程序内置图片，后台上传的这张会被删除。`,
+      confirmText: '恢复内置图'
+    });
+    if (!ok) return;
+    setSeriesBusy(slot.key);
+    setSeriesError(null);
+    try {
+      await api.adminResetSeriesImage(slot.key);
+      notify('已恢复内置系列图', 'ok');
+      query.reload({ silent: true });
+    } catch (err) {
+      setSeriesError(err instanceof ApiError ? err.message : '恢复失败');
+    } finally {
+      setSeriesBusy('');
+    }
+  };
+
+  return (
+    <>
+      <PageHead
+        eyebrow="品牌总部 · 首页"
+        title="首页内容"
+        description="小程序首页的轮播广告与四系列图。图片按 1600×900 整张上传，文案直接做在图里；轮播可配置站内跳转并按顺序自动播放。"
+        meta={<span>{data.banners.length} / 8 屏轮播 · 8 个系列图槽位</span>}
+        actions={
+          canEdit ? (
+            <button type="button" className="btn btn-sm btn-primary" onClick={() => setEditing('new')}>
+              <Icon name="plus" size={14} /> 新建轮播
+            </button>
+          ) : null
+        }
+      />
+
+      <Panel title="首页轮播" flush>
+        <div className="table-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>顺序</th>
+                <th>预览</th>
+                <th>名称</th>
+                <th>点击跳转</th>
+                <th>状态</th>
+                <th className="actions">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.banners.map((banner, index) => (
+                <tr key={banner.id}>
+                  <td>
+                    {canEdit ? (
+                      <div className="order-actions">
+                        <button
+                          type="button"
+                          className="order-btn"
+                          aria-label={`${banner.title} 上移`}
+                          disabled={Boolean(bannerBusy) || index <= 0}
+                          onClick={() => moveBanner(banner, -1)}
+                        >
+                          <Icon name="arrowUp" size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          className="order-btn"
+                          aria-label={`${banner.title} 下移`}
+                          disabled={Boolean(bannerBusy) || index >= data.banners.length - 1}
+                          onClick={() => moveBanner(banner, 1)}
+                        >
+                          <Icon name="arrowDown" size={13} />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="tiny muted">{index + 1}</span>
+                    )}
+                  </td>
+                  <td>
+                    <img className="banner-thumb" src={banner.imageUrl} alt={`${banner.title} 预览`} loading="lazy" />
+                  </td>
+                  <td>
+                    <span className="cell-title">{banner.title}</span>
+                  </td>
+                  <td>
+                    <span className="small">{bannerTargetText(banner, data.products)}</span>
+                  </td>
+                  <td>
+                    <Badge tone={banner.active ? 'ok' : 'neutral'}>{banner.active ? '展示中' : '已停用'}</Badge>
+                  </td>
+                  <td className="actions">
+                    {canEdit ? (
+                      <>
+                        <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEditing(banner)}>
+                          编辑
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          disabled={Boolean(bannerBusy)}
+                          onClick={() => toggleBanner(banner)}
+                        >
+                          {banner.active ? '停用' : '启用'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-danger-soft"
+                          disabled={Boolean(bannerBusy)}
+                          onClick={() => removeBanner(banner)}
+                        >
+                          删除
+                        </button>
+                      </>
+                    ) : (
+                      <span className="tiny muted">只读</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!data.banners.length ? (
+            <EmptyState
+              icon="sparkle"
+              title="还没有轮播广告"
+              description="未配置时，小程序首页显示默认品牌主视觉。新建后按这里从上到下的顺序自动轮播。"
+            />
+          ) : null}
+        </div>
+      </Panel>
+
+      <Panel
+        title="首页系列图"
+        actions={<span className="tiny muted">四系列 × 中英两套，固定 1600×900</span>}
+      >
+        <div className="home-series-grid">
+          {data.series.map((slot) => (
+            <div className="series-slot" key={slot.key}>
+              <div className="series-slot-art">
+                {slot.imageUrl ? (
+                  <img src={slot.imageUrl} alt={`${SERIES[slot.series].name}系列图预览`} loading="lazy" />
+                ) : (
+                  <span>{SERIES[slot.series].char}</span>
+                )}
+              </div>
+              <div className="series-slot-body">
+                <div>
+                  <div className="series-slot-title">
+                    {SERIES[slot.series].name} · {slot.locale === 'en' ? '英文' : '中文'}
+                    {slot.imageUrl ? <Badge tone="accent">后台上传</Badge> : <Badge tone="neutral">内置图</Badge>}
+                  </div>
+                  <span className="tiny muted">{slot.key}</span>
+                </div>
+                {canEdit ? (
+                  <div className="series-slot-actions">
+                    <label className="btn btn-sm btn-ghost">
+                      {seriesBusy === slot.key ? '上传中…' : '上传'}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        hidden
+                        disabled={Boolean(seriesBusy)}
+                        onChange={(event) => uploadSeries(slot, event)}
+                      />
+                    </label>
+                    {slot.imageUrl ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost"
+                        disabled={Boolean(seriesBusy)}
+                        onClick={() => resetSeries(slot)}
+                      >
+                        恢复内置
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+        <InlineError message={seriesError} />
+        <p className="page-foot-note">
+          上传后顾客端立即使用新图；替换会删除上一张，恢复内置图会回到小程序包内的原始图。中文/英文模式各用对应一套，
+          尺寸必须是 {HOME_IMAGE_WIDTH}×{HOME_IMAGE_HEIGHT}，与首页轮播一致。
+        </p>
+      </Panel>
+
+      <BannerDrawer
+        editing={editing}
+        products={data.products}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          notify('轮播已保存', 'ok');
+          query.reload({ silent: true });
+        }}
+      />
+    </>
+  );
+}
+
+function BannerDrawer({
+  editing,
+  products,
+  onClose,
+  onSaved
+}: {
+  editing: Banner | 'new' | null;
+  products: HomeContent['products'];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isNew = editing === 'new';
+  const banner = editing && editing !== 'new' ? editing : null;
+  const [title, setTitle] = useState('');
+  const [linkType, setLinkType] = useState<BannerLinkType>('none');
+  const [linkValue, setLinkValue] = useState('');
+  const [active, setActive] = useState(true);
+  const [image, setImage] = useState<{ base64: string; contentType: string; preview: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!editing) return;
+    setError(null);
+    setImage(null);
+    setBusy(false);
+    if (editing === 'new') {
+      setTitle('');
+      setLinkType('none');
+      setLinkValue('');
+      setActive(true);
+      return;
+    }
+    setTitle(editing.title);
+    setLinkType(editing.linkType);
+    setLinkValue(editing.linkValue);
+    setActive(editing.active);
+  }, [editing]);
+
+  const changeLinkType = (next: BannerLinkType) => {
+    setLinkType(next);
+    if (next === 'series') {
+      setLinkValue((value) => (['xing', 'song', 'qing', 'mian'].includes(value) ? value : 'xing'));
+    } else if (next === 'product') {
+      setLinkValue((value) => (products.some((item) => item.id === value) ? value : products[0]?.id || ''));
+    } else {
+      setLinkValue('');
+    }
+  };
+
+  const pickImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      setError('图片超过 20MB，请换一张更小的图片');
+      return;
+    }
+    try {
+      const prepared = await prepareHomeImage(file);
+      setError(null);
+      setImage(prepared);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '读取图片失败，请重新选择');
+    }
+  };
+
+  const submit = async () => {
+    if (!title.trim()) {
+      setError('请填写轮播名称');
+      return;
+    }
+    if (isNew && !image) {
+      setError(`请上传 ${HOME_IMAGE_WIDTH}×${HOME_IMAGE_HEIGHT} 的轮播图`);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const payload = { title: title.trim(), linkType, linkValue, active };
+      if (isNew && image) {
+        await api.adminCreateBanner({ ...payload, base64: image.base64, contentType: image.contentType });
+      } else if (banner) {
+        await api.adminUpdateBanner(banner.id, image ? { ...payload, base64: image.base64, contentType: image.contentType } : payload);
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '保存失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Drawer
+      open={!!editing}
+      title={isNew ? '新建轮播' : `编辑轮播 · ${banner?.title || ''}`}
+      subtitle={`整张成品图 ${HOME_IMAGE_WIDTH}×${HOME_IMAGE_HEIGHT}，小程序默认自动播放`}
+      onClose={busy ? () => undefined : onClose}
+      footer={
+        <>
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
+            取消
+          </button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}>
+            {busy ? '保存中…' : '保存轮播'}
+          </button>
+        </>
+      }
+    >
+      <div className="product-image-field">
+        <div className="cust-sheet-label">轮播图片</div>
+        {image || banner?.imageUrl ? (
+          <div className="banner-preview">
+            <img src={image ? image.preview : banner?.imageUrl} alt="轮播图预览" />
+          </div>
+        ) : (
+          <div className="banner-preview empty">尚未选择图片</div>
+        )}
+        <div className="row-gap" style={{ marginTop: 10 }}>
+          <label className="btn btn-sm btn-ghost">
+            <Icon name="upload" size={14} /> {image || banner?.imageUrl ? '更换图片' : '上传图片'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={pickImage} />
+          </label>
+          <span className="tiny muted">
+            必须正好 {HOME_IMAGE_WIDTH}×{HOME_IMAGE_HEIGHT}，JPG / PNG / WebP；超过 2MB 会在浏览器内自动降质，不会裁切。
+          </span>
+        </div>
+      </div>
+
+      <div className="form-grid">
+        <Field label="轮播名称" hint="仅后台识别用，不显示在顾客端（文案请做在图片里）。">
+          <input value={title} maxLength={40} onChange={(event) => setTitle(event.target.value)} />
+        </Field>
+        <Field label="点击跳转" hint="仅支持站内页面；顾客点击整张图跳转。">
+          <select value={linkType} onChange={(event) => changeLinkType(event.target.value as BannerLinkType)}>
+            {(Object.keys(BANNER_LINK_LABEL) as BannerLinkType[]).map((key) => (
+              <option key={key} value={key}>
+                {BANNER_LINK_LABEL[key]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {linkType === 'series' ? (
+          <Field label="跳转到哪个系列">
+            <select value={linkValue} onChange={(event) => setLinkValue(event.target.value)}>
+              {(['xing', 'song', 'qing', 'mian'] as Series[]).map((key) => (
+                <option key={key} value={key}>
+                  {SERIES[key].char} · {SERIES[key].nameEn}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : null}
+        {linkType === 'product' ? (
+          <Field label="跳转到哪个商品" hint="已归档或草稿商品在茶单里不可售，请谨慎选择。">
+            <select value={linkValue} onChange={(event) => setLinkValue(event.target.value)}>
+              {products.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name}
+                  {product.status !== 'published' ? '（不可售）' : ''}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : null}
+        <div className="span-2">
+          <label className="check-line">
+            <input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} />
+            在顾客首页展示
+          </label>
+        </div>
+      </div>
+      <InlineError message={error} />
+    </Drawer>
+  );
+}
 
 function LogsPage() {
   const [range, setRange] = useStoredRange('logs', '7');

@@ -21,7 +21,7 @@ $warning: #86571d;
 
 /* 字体与 CSS 变量保持一致：界面无衬线、标题衬线、编码等宽。 */
 $font-ui: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-$font-display: Georgia, 'Times New Roman', 'Songti SC', 'STSong', 'Noto Serif SC', 'Source Han Serif SC', serif;
+$font-display: Georgia, 'Times New Roman', 'TeaHour Serif', 'Songti SC', 'STSong', 'SimSun', 'NSimSun', 'Noto Serif SC', 'Noto Serif CJK SC', 'Source Han Serif SC', 'Source Han Serif CN', serif;
 $font-code: ui-monospace, Menlo, 'SF Mono', monospace;
 $font: $font-ui;
 $serif: $font-display;

@@ -11,7 +11,7 @@
     <image
       v-else-if="product.kind === 'bottle'"
       class="art-img"
-      src="/static/celebration.jpg"
+      src="/static/celebration.webp"
       aria-hidden="true"
       mode="aspectFill"
       lazy-load

@@ -6,7 +6,6 @@ import { isTableEntryFresh } from '@/lib/visitDay';
 const STORE_KEY = 'teahour.customer.store';
 const CART_KEY = 'teahour.customer.bags';
 const TABLE_KEY = 'teahour.customer.table';
-const LAST_KEY = 'teahour.customer.lastOrder';
 const CART_VERSION = 3;
 
 export const state = reactive({
@@ -19,11 +18,12 @@ export const state = reactive({
   categories: [],
   products: [],
   retail: [],
+  /** 后台配置的首页轮播与系列图覆盖；未配置时页面回落到内置图。 */
+  home: { banners: [], series: {} },
   freshCart: [],
   retailCart: [],
   dining: 'takeaway',
   seat: '',
-  lastOrder: null,
   submitting: false
 });
 
@@ -276,8 +276,6 @@ export function setCustomer(customer) {
 export function logout() {
   api.clearSession();
   state.customer = null;
-  state.lastOrder = null;
-  forgetLastOrder();
 }
 
 export async function init(force = false) {
@@ -364,6 +362,10 @@ function applyCatalog(boot, opts = {}) {
   state.categories = boot.categories || [];
   state.products = boot.products || [];
   state.retail = boot.retail || [];
+  state.home = {
+    banners: (boot.home && boot.home.banners) || [],
+    series: (boot.home && boot.home.series) || {}
+  };
   // 缓存里的门店已下线时，后端会兜底返回门店；改写缓存，避免每次启动都试错。
   if (opts.requestedStoreId && state.store && state.store.id !== opts.requestedStoreId) {
     try {
@@ -490,8 +492,6 @@ export async function submitOrder(kind, options = {}) {
   state.submitting = true;
   try {
     const result = await api.createOrder(body);
-    state.lastOrder = result.order;
-    rememberLastOrder(result.order);
     clearCart(kind);
     return result;
   } finally {
@@ -499,30 +499,3 @@ export async function submitOrder(kind, options = {}) {
   }
 }
 
-/** 只记订单号：首页据此提供「继续查看取茶凭证」，订单内容仍以后端为准。 */
-function rememberLastOrder(order) {
-  if (!order || !order.id) return;
-  try {
-    uni.setStorageSync(LAST_KEY, order.id);
-  } catch (error) {
-    /* storage unavailable */
-  }
-}
-
-export function lastOrderId() {
-  try {
-    const id = uni.getStorageSync(LAST_KEY);
-    return typeof id === 'string' ? id : '';
-  } catch (error) {
-    return '';
-  }
-}
-
-/** 订单已失效或查询不到时清掉缓存，避免首页一直挂着打不开的入口。 */
-export function forgetLastOrder() {
-  try {
-    uni.removeStorageSync(LAST_KEY);
-  } catch (error) {
-    /* storage unavailable */
-  }
-}

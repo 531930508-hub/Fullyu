@@ -61,7 +61,7 @@ function fakeGateway(): FakeGateway {
     query: jest.fn(async () => ({ ok: true, status: 'pending' as const })),
     handleCallback: jest.fn(async () => ({ ok: true })),
     merchantFor: (storeId: string) => (storeId === 'sh' ? 'MER-SH' : '')
-  } as FakeGateway;
+  } as unknown as FakeGateway;
 }
 
 describe('异步支付渠道订单链路（汇付模式）', () => {

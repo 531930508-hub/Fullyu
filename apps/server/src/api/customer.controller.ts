@@ -9,6 +9,7 @@ import { Customer } from '../auth/decorators';
 import { AuthService, annualDiscountCents } from '../auth/auth.service';
 import type { CustomerContext } from '../common/auth.types';
 import { CatalogService } from '../catalog/catalog.service';
+import { ContentService } from '../content/content.service';
 import { CouponsService } from '../coupons/coupons.service';
 import { OrdersService } from '../orders/orders.service';
 import { HardwareService } from '../hardware/hardware.module';
@@ -60,7 +61,8 @@ export class CustomerController {
     private readonly orders: OrdersService,
     private readonly hardware: HardwareService,
     private readonly auth: AuthService,
-    private readonly coupons: CouponsService
+    private readonly coupons: CouponsService,
+    private readonly content: ContentService
   ) {}
 
   /** 首页小程序码缓存：微信生成结果长期有效，24 小时内直接复用。 */
@@ -128,6 +130,8 @@ export class CustomerController {
       categories: catalog.categories,
       products: catalog.products,
       retail: await this.catalog.retailAvailability(),
+      // 首页轮播与系列图覆盖；后台未配置时小程序回落到内置图。
+      home: await this.content.publicHome(),
       hardware: {
         payment: this.hardware.payment.mode,
         member: this.hardware.member.mode,

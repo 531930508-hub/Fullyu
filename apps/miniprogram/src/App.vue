@@ -33,5 +33,13 @@ export default {
 </script>
 
 <style>
+/* H5 用独立 woff2 文件，避免 base64 字体把首屏 CSS 撑到 400+ KB；
+   小程序 wxss 只认 base64，继续用内嵌版本。 */
+/* #ifdef H5 */
+@import './styles/serif-font-web.css';
+/* #endif */
+/* #ifndef H5 */
+@import './styles/serif-font.css';
+/* #endif */
 @import './styles/teahour.css';
 </style>
