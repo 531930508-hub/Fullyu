@@ -1,11 +1,13 @@
 <template>
-  <view v-if="show" class="sheet-mask" @tap="close" @touchmove.stop.prevent>
-    <view ref="dialogRef" class="bottom-sheet" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1" @tap.stop>
-      <view class="sheet-grab"></view>
-      <view class="sheet-heading">
+  <view v-if="show" class="sheet-mask" :class="{ 'sheet-mask-center': center }" @tap="close" @touchmove.stop.prevent>
+    <view ref="dialogRef" class="bottom-sheet" :class="{ 'sheet-center': center }" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1" @tap.stop>
+      <view v-if="!center" class="sheet-grab"></view>
+      <!-- center 模式：卡片自带居中欢迎区，隐藏标题条；关闭按钮悬浮右上角（已批准提案） -->
+      <view v-if="!center" class="sheet-heading">
         <text class="sheet-title serif">{{ title }}</text>
         <button class="sheet-close" :aria-label="tr('关闭', 'Close')" :disabled="busy" @tap="close"><PresenceIcon name="close" :size="36" /></button>
       </view>
+      <button v-else class="sheet-close sheet-close-float" :aria-label="tr('关闭', 'Close')" :disabled="busy" @tap="close"><PresenceIcon name="close" :size="32" /></button>
       <scroll-view scroll-y class="sheet-scroll"><slot /></scroll-view>
       <view v-if="$slots.actions" class="sheet-actions"><slot name="actions" /></view>
     </view>
@@ -15,7 +17,8 @@
 import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import PresenceIcon from './PresenceIcon.vue'
 import { tr } from '@/locale'
-const props = withDefaults(defineProps<{ show: boolean; title: string; busy?: boolean }>(), { busy: false })
+// center：登录等需要视线居中的弹层使用居中卡片；其余保持底部抽屉（对齐时叙 BottomSheet center 模式）
+const props = withDefaults(defineProps<{ show: boolean; title: string; busy?: boolean; center?: boolean }>(), { busy: false, center: false })
 const emit = defineEmits<{ (e: 'close'): void }>()
 const dialogRef = ref<any>(null)
 function close() { if (!props.busy) emit('close') }
@@ -69,7 +72,15 @@ onBeforeUnmount(releaseFocus)
 </script>
 <style scoped>
 .sheet-mask { position: fixed; inset: 0; z-index: 2000; background: rgba(58,42,26,.4); display: flex; align-items: flex-end; justify-content: center; }
+/* 居中卡片模式：屏幕正中弹窗，登录使用（已批准提案：无标题条、内容自带欢迎区） */
+.sheet-mask-center { align-items: center; padding: calc(40rpx + env(safe-area-inset-top)) 48rpx calc(40rpx + env(safe-area-inset-bottom)); }
 .bottom-sheet { width: 100%; max-width: 480px; max-height: 90vh; display: flex; flex-direction: column; padding: 16rpx 36rpx calc(32rpx + env(safe-area-inset-bottom)); border-radius: 40rpx 40rpx 0 0; background: var(--c-card); outline: none; }
+.sheet-center { width: 100%; max-width: 620rpx; max-height: 80vh; border-radius: 40rpx; padding: 20rpx 36rpx 40rpx; box-shadow: 0 24rpx 64rpx rgba(58,42,26,.28); position: relative; }
+/* 居中弹窗：关闭按钮绝对定位右上角，不占用内容行 */
+.sheet-close-float { position: absolute; right: 16rpx; top: 16rpx; width: 64rpx; height: 64rpx; min-height: 0; padding: 0; margin: 0; border: 0; display: flex; justify-content: center; align-items: center; background: var(--c-card-2); border-radius: 50%; z-index: 2; }
+.sheet-center .sheet-scroll { text-align: center; }
+.sheet-center .sheet-actions { flex-direction: column; }
+.sheet-center .sheet-actions :deep(button) { width: 100%; margin: 0; flex: none; }
 .sheet-grab { width: 72rpx; height: 8rpx; border-radius: 8rpx; background: var(--line-soft); margin: 0 auto 20rpx; flex-shrink: 0; }
 .sheet-heading { display: flex; align-items: center; justify-content: space-between; gap: 24rpx; padding-bottom: 20rpx; flex-shrink: 0; }
 .sheet-title { font-size: 40rpx; color: var(--c-ink); }

@@ -76,7 +76,7 @@ export interface CommunityEvent {
 
 export interface CommunityComment {
   id: string
-  author: { name: string; avatar: string }
+  author: { id?: string; name: string; avatar: string }
   content: string
   time: string
 }
@@ -111,6 +111,28 @@ export interface MemberCard {
   privacy: 'NONE' | 'COMPLETED' | 'ALL'
   interests: string[]
   activities: { id: string; title: string; date: string; time: string; ended: boolean }[]
+}
+
+/** 主理人资料（公开；不含手机号等联系方式） */
+export interface HostCard {
+  userId: string
+  name: string
+  title: string
+  avatar: string
+  hostRole: 'BASIC' | 'EXTENDED'
+  /** 本社群创建时间，作为「主理自」展示 */
+  hostSince: string
+  communityCount: number
+  eventCount: number
+  communities: {
+    id: string
+    name: string
+    slogan: string
+    category: string
+    memberCount: number
+    cover: string
+    current: boolean
+  }[]
 }
 
 /** 我与社群的关系（V2） */
@@ -154,7 +176,7 @@ export interface CommunityInvitePublic {
   }
 }
 
-export type ShareType = 'course' | 'community' | 'event' | 'host' | 'invite'
+export type ShareType = 'course' | 'community' | 'event' | 'host' | 'invite' | 'voucher'
 
 export interface SharePayload {
   type: ShareType
@@ -191,6 +213,11 @@ export interface ShareResolveResult {
 
 export const COMMUNITY_CATEGORIES = ['全部', '疗愈', '瑜伽', '身心成长', '手作', '健身']
 
+/** 《Full愈 社群代结算服务协议》版本号；必须与后端 SETTLEMENT_AGREEMENT_VERSION 保持一致 */
+export const SETTLEMENT_AGREEMENT_VERSION = 'v1.0-2026-10-29'
+/** 平台服务费比例（订阅制社群年费），与协议文本保持一致 */
+export const SETTLEMENT_SERVICE_FEE_RATE = 0.1
+
 export type CommunitySort = 'recommend' | 'newest' | 'hot'
 
 // ==================== 查询接口 ====================
@@ -203,6 +230,11 @@ export function fetchCommunities(category = '全部', keyword = '', sort: Commun
 /** 社群详情 */
 export function fetchCommunity(id: string) {
   return get<Community>(`/communities/${id}`, undefined, { auth: false, silent: true })
+}
+
+/** 主理人视角详情（待审核社群也可查看，需登录） */
+export function fetchManagedCommunity(id: string) {
+  return get<Community & { status?: string; isActive?: boolean }>(`/communities/${id}/managed`, undefined, { silent: true })
 }
 
 /** 我与社群的关系（需登录，静默） */
@@ -246,6 +278,11 @@ export function fetchMembers(id: string) {
 /** 成员名片（按对方隐私设置展示活动） */
 export function fetchMemberCard(communityId: string, userId: string) {
   return get<MemberCard>(`/communities/${communityId}/members/${userId}/card`, undefined, { silent: true })
+}
+
+/** 主理人资料（公开，不含联系方式） */
+export function fetchHostCard(communityId: string) {
+  return get<HostCard>(`/communities/${communityId}/host`, undefined, { auth: false, silent: true })
 }
 
 /** 我的社群：{ managed, joined } */
@@ -343,6 +380,11 @@ export function postComment(communityId: string, postId: string, content: string
   return post<CommunityComment>(`/communities/${communityId}/posts/${postId}/comments`, { content })
 }
 
+/** 点赞/取消点赞（一人一赞，返回最新计数） */
+export function togglePostLike(communityId: string, postId: string) {
+  return post<{ liked: boolean; likes: number }>(`/communities/${communityId}/posts/${postId}/like`)
+}
+
 /** 主理人小程序内隐藏/恢复/删除动态或评论 */
 export function moderateContent(communityId: string, body: {
   targetType: 'POST' | 'COMMENT'
@@ -361,6 +403,8 @@ export function submitCommunity(body: {
   tags: string[]
   yearlyFee: number
   description?: string
+  /** 订阅制社群必须为 true：已阅读并同意《社群代结算服务协议》 */
+  settlementAgreed?: boolean
 }) {
   return post<{ id: string; status: string }>('/communities', body)
 }

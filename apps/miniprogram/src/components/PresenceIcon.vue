@@ -3,7 +3,7 @@
 </template>
 <script setup lang="ts">
 import { computed } from 'vue'
-const props = withDefaults(defineProps<{ name: string; size?: number; color?: string }>(), { size: 40, color: '#96581c' })
+const props = withDefaults(defineProps<{ name: string; size?: number; color?: string; filled?: boolean }>(), { size: 40, color: '#96581c', filled: false })
 const paths: Record<string, string> = {
   home: '<path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-7h6v7"/>',
   calendar: '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4m8-4v4M4 11h16m-11 4h2m3 0h2m-7 3h2"/>',
@@ -28,8 +28,10 @@ const paths: Record<string, string> = {
   edit: '<path d="m4 16-1 5 5-1L20 8l-4-4ZM13 7l4 4"/>',
   camera: '<path d="M3 7h4l2-3h6l2 3h4v14H3Z"/><circle cx="12" cy="13" r="4"/>',
   ticket: '<path d="M3 6h18v4a2 2 0 0 0 0 4v4H3v-4a2 2 0 0 0 0-4Zm12 0v3m0 3v1m0 3v2"/>',
+  share: '<circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="m8.3 10.6 7.4-4.2m-7.4 7 7.4 4.2"/>',
+  heart: '<path d="M12 20s-7-4.4-7-9.4A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7 3C19 15.6 12 20 12 20Z"/>',
 }
-const source = computed(() => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${props.color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${paths[props.name] || paths.leaf}</svg>`))
+const source = computed(() => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${props.filled ? props.color : 'none'}" stroke="${props.color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${paths[props.name] || paths.leaf}</svg>`))
 </script>
 <style scoped>
 .presence-icon { display: inline-block; flex-shrink: 0; vertical-align: middle; }

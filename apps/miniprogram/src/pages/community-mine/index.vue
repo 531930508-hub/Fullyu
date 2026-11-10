@@ -25,7 +25,7 @@
             <view class="community-info"><text class="community-name">{{ c.name }}</text><text class="meta">{{ isEnglish() ? `${c.memberCount} members` : `${c.memberCount} 位成员` }} · {{ currentSegment === 'managed' ? (isEnglish() ? `${c.activeToday} active today` : '今日 ' + c.activeToday + ' 活跃') : (isEnglish() ? 'Host ' + (c.owner.name || 'Not provided') : '主理人 ' + (c.owner.name || '未填写')) }}</text></view>
             <PresenceIcon name="arrow" :size="28" />
           </view>
-          <view v-if="currentSegment === 'managed'" class="manage-footer"><text class="meta">{{ c.yearlyFee ? (isEnglish() ? `Annual fee ¥${Number((c.yearlyFee / 100).toFixed(2))}` : '年费 ¥' + Number((c.yearlyFee / 100).toFixed(2))) : tr('免费社群', 'Free community') }}</text><button class="small-button" @tap="openCommunity(c.id)">{{ tr('进入工作台', 'Open workspace') }}</button></view>
+          <view v-if="currentSegment === 'managed'" class="manage-footer"><text class="meta">{{ c.yearlyFee ? (isEnglish() ? `Annual fee ¥${(c.yearlyFee / 100).toFixed(2)}` : '年费 ¥' + (c.yearlyFee / 100).toFixed(2)) : tr('免费社群', 'Free community') }}</text><button class="small-button" @tap="openCommunity(c.id)">{{ tr('进入工作台', 'Open workspace') }}</button></view>
         </view>
       </view>
       <button v-if="!guest && !loading && !loadError && visibleCommunities.length" class="outline-button" @tap="onEmptyAction">{{ currentSegment === 'joined' ? tr('去社群广场逛逛', 'Browse community hub') : tr('创建社群', 'Create community') }}</button>
@@ -36,9 +36,10 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { fetchMine, type Community } from '@/api/skool'
 import { tr, isEnglish } from '@/locale'
+import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 import { readCapsuleLayout } from '@/utils/capsule'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
@@ -88,6 +89,13 @@ function goCreate() { uni.navigateTo({ url: '/pages/community-create/index' }) }
 function goDiscover() { uni.navigateTo({ url: '/pages/community-list/index' }) }
 function goLogin() { uni.switchTab({ url: '/pages/profile/index' }) }
 function goBack() { uni.navigateBack({ fail: goLogin }) }
+
+const shareTitle = () => tr('Full愈 · 我的社群｜与同频的人相遇', 'Full愈 · My communities | Meet like-minded people')
+onShareAppMessage(() => brandShareMessage(shareTitle()))
+// #ifdef MP-WEIXIN
+onShareTimeline(() => brandShareTimeline(shareTitle()))
+// #endif
+
 </script>
 
 <style scoped>

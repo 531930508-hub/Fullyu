@@ -41,9 +41,17 @@
         <view v-if="isTrainer" class="view-switch"><button :class="{ active: activeView === 'student' }" @tap="setView('student')">{{ tr('学员视角', 'Student') }}</button><button :class="{ active: activeView === 'trainer' }" @tap="setView('trainer')">{{ tr('导师视角', 'Trainer') }}</button></view>
         <view v-if="!userStore.isLoggedIn" class="guest-card"><view><text class="entry-title">{{ tr('登录，开启你的在场体验', 'Sign in to begin your practice') }}</text><text class="muted">{{ tr('查看预约、会员卡与积分', 'See bookings, membership and points') }}</text></view><button class="btn-primary" @tap="goProfile">{{ tr('去登录', 'Sign in') }}</button></view>
         <view v-else class="entry-grid">
-          <button class="entry-card" @tap="activeView === 'trainer' ? goTrainerWorkspace() : goMember()"><PresenceIcon :name="activeView === 'trainer' ? 'chart' : 'card'" :size="42" /><text class="entry-title">{{ activeView === 'trainer' ? tr('导师工作台', 'Trainer Studio') : activeCard ? tr('我的会员卡', 'My membership') : tr('在场会员', 'Presence membership') }}</text><text class="muted">{{ activeView === 'trainer' ? tr('查看课程与合作记录', 'Classes and collaborations') : activeCard ? tr(`有效至 ${formatDate(activeCard.expiresAt)}`, `Valid until ${formatDate(activeCard.expiresAt)}`) : tr('了解当前会员权益', 'View membership benefits') }}</text></button>
+          <button class="entry-card" @tap="activeView === 'trainer' ? goTrainerWorkspace() : goMember()"><PresenceIcon :name="activeView === 'trainer' ? 'chart' : 'card'" :size="42" /><text class="entry-title">{{ activeView === 'trainer' ? tr('导师工作台', 'Trainer Studio') : activeCard ? tr('我的畅练卡', 'My Pass') : tr('在场畅练卡', 'Presence Pass') }}</text><text class="muted">{{ activeView === 'trainer' ? tr('查看课程与合作记录', 'Classes and collaborations') : activeCard ? tr(`有效至 ${formatFullDate(activeCard.endDate || activeCard.expiresAt)}`, `Valid until ${formatFullDate(activeCard.endDate || activeCard.expiresAt)}`) : tr('有效期内报课 0 元', '¥0 classes during the term') }}</text></button>
           <button class="entry-card light" @tap="activeView === 'trainer' ? goCommunityMine() : goBookings()"><PresenceIcon :name="activeView === 'trainer' ? 'users' : 'calendar'" :size="42" /><text class="entry-title">{{ activeView === 'trainer' ? tr('我的社群', 'My communities') : tr('我的预约', 'My bookings') }}</text><text class="muted">{{ activeView === 'trainer' ? tr('与学员保持连接', 'Stay connected with students') : tr('课程安排与待支付订单', 'Schedule and pending orders') }}</text></button>
         </view>
+        <button v-if="userStore.isLoggedIn && activeView !== 'trainer'" class="brand-entry" :class="{ active: brandActive }" @tap="goBrand">
+          <view class="brand-entry-main">
+            <text class="brand-entry-eyebrow latin">FULL YU ANNUAL</text>
+            <text class="brand-entry-title serif">{{ tr('Full愈年卡 · 三店通用', 'Full Yu Annual · all three stores') }}</text>
+            <text class="brand-entry-sub">{{ brandActive ? tr(`积分 ${brandPoints} · 有效至 ${brandValidUntil}`, `${brandPoints} points · valid until ${brandValidUntil}`) : tr('¥299 / 年 · 月卡 ¥45 · 含统一积分', '¥299 / year · ¥45 / month · shared points') }}</text>
+          </view>
+          <view class="brand-entry-cta">{{ brandActive ? tr('进入', 'Open') : tr('开通', 'Join') }}<PresenceIcon name="arrow" :size="24" :color="brandActive ? '#eec76f' : '#683611'" /></view>
+        </button>
       </view>
 
       <template v-if="activeView === 'trainer'">
@@ -59,7 +67,7 @@
         <button v-if="nextCourse" class="next-course" @tap="goBookings"><view class="next-icon"><PresenceIcon name="calendar" :size="40" /></view><view class="next-body"><text class="muted">{{ tr('下一场在场', 'Next session') }}</text><text class="entry-title">{{ nextCourse.course.title }}</text><text class="muted">{{ formatDate(nextCourse.course.startDate) }} {{ nextCourse.course.startTime }}</text></view><PresenceIcon name="arrow" :size="32" /></button>
         <view class="section-head"><view><text class="section-title serif">{{ tr('发现好课', 'Find a class') }}</text><text class="section-caption latin">MAKE SPACE FOR YOURSELF</text></view><text class="muted">{{ tr(`${filteredCourses.length} 场课程`, `${filteredCourses.length} classes`) }}</text></view>
         <view class="filter-panel">
-          <scroll-view scroll-x class="category-scroll" :show-scrollbar="false"><view class="category-row"><button v-for="category in categories" :key="category" class="category-button" :class="{ active: selectedCategory === category }" @tap="selectedCategory = category">{{ category || tr('全部课程', 'All classes') }}</button></view></scroll-view>
+          <scroll-view scroll-x class="category-scroll" :show-scrollbar="false"><view class="category-row"><button v-for="category in categories" :key="category" class="category-button" :class="{ active: selectedCategory === category }" @tap="selectedCategory = category">{{ category ? courseTagLabel(category) : tr('全部课程', 'All classes') }}</button></view></scroll-view>
           <scroll-view scroll-x class="date-scroll" :show-scrollbar="false"><view class="date-row"><button class="date-button" :class="{ active: !selectedDate }" @tap="selectedDate = ''"><text>{{ tr('全部', 'All') }}</text><text class="date-number">{{ tr('日期', 'Date') }}</text></button><button v-for="day in days" :key="day.value" class="date-button" :class="{ active: selectedDate === day.value }" @tap="selectedDate = day.value"><text>{{ day.label }}</text><text class="date-number latin">{{ day.day }}</text></button></view></scroll-view>
           <view class="filter-bottom"><picker mode="selector" :range="venues" range-key="name" :value="venueIndex" @change="venueIndex = Number($event.detail.value)"><view class="filter-picker">{{ venues[venueIndex]?.name || tr('全部场地', 'All venues') }}⌄</view></picker><picker mode="selector" :range="difficultyOptions" range-key="label" :value="difficultyIndex" @change="difficultyIndex = Number($event.detail.value)"><view class="filter-picker">{{ difficultyOptions[difficultyIndex].label }}⌄</view></picker><button class="availability" :class="{ selected: onlyAvailable }" @tap="onlyAvailable = !onlyAvailable"><PresenceIcon :name="onlyAvailable ? 'check' : 'users'" :size="26" />{{ tr('仅看有位', 'Available only') }}</button></view>
           <picker mode="date" :value="selectedDate || today" @change="selectedDate = $event.detail.value"><view class="other-date">{{ selectedDate ? tr(`已选 ${selectedDate} · 更换日期`, `${selectedDate} selected · change`) : tr('选择其他日期', 'Choose another date') }}</view></picker>
@@ -68,13 +76,13 @@
         <PageState v-else-if="loadError" state="error" :message="tr('课程加载失败，请检查网络后重试。', 'Unable to load classes. Check your connection and try again.')" :action="tr('重新加载', 'Reload')" @action="loadCourses" />
         <PageState v-else-if="!filteredCourses.length" state="empty" :title="tr('这次还没有合适的课程', 'No matching classes yet')" :message="tr('换个日期或筛选条件，再找找看。', 'Try another date or filter.')" :action="tr('清除筛选', 'Clear filters')" @action="clearFilters" />
         <view v-else class="course-list"><view v-for="course in filteredCourses" :key="course.id" class="course-card" role="link" tabindex="0" @tap="goDetail(course.id)" @keydown.enter="goDetail(course.id)">
-          <view class="card-cover" @tap.stop="previewImage(course.coverImage)"><image v-if="course.coverImage" class="card-cover-img" :src="course.coverImage" mode="aspectFill" :aria-label="course.title" /><BrandCover v-else height="200rpx" :label="tr('在场', 'Presence')" /></view>
+          <view class="card-cover" @tap.stop="previewImage(course.coverImage)"><image v-if="course.coverImage" class="card-cover-img" :src="course.coverImage" mode="aspectFill" :aria-label="course.title" lazy-load /><BrandCover v-else height="200rpx" :label="tr('在场', 'Presence')" /></view>
           <view class="card-body"><view class="card-tags"><text class="course-tag">{{ typeLabel(course.type) }}</text><text v-if="course.phaseLabel" class="course-tag phase">{{ phaseLabel(course) }}</text><text v-if="course.difficulty" class="muted">{{ difficultyLabel(course.difficulty) }}</text></view><text class="card-title serif">{{ course.title }}</text><text class="card-meta">{{ formatDate(course.startDate) }} {{ course.startTime }}–{{ course.endTime }}</text><text class="card-meta">{{ course.venue?.name || tr('场地待确认', 'Venue TBC') }} · {{ course.trainer?.displayName || tr('导师待确认', 'Guide TBC') }}</text><view class="card-bottom"><text class="card-price latin">¥{{ toYuan(course.originalPrice) }}<text class="price-unit"> / {{ tr('人', 'person') }}</text></text><text class="seat-label" :class="{ full: course.currentEnrolled >= course.maxCapacity }">{{ course.currentEnrolled >= course.maxCapacity ? tr('已满员', 'Full') : tr(`余 ${Math.max(0, course.maxCapacity - course.currentEnrolled)} 位`, `${Math.max(0, course.maxCapacity - course.currentEnrolled)} seats left`) }}</text></view></view>
         </view></view>
         <view class="section-head community-heading"><view><text class="section-title serif">{{ tr('与同路人相遇', 'Meet your community') }}</text><text class="section-caption latin">FIND YOUR COMMUNITY</text></view><button class="text-button" @tap="goCommunityList">{{ tr('全部社群', 'All communities') }} ›</button></view>
         <PageState v-if="communitiesLoading" state="loading" />
         <PageState v-else-if="communityError" state="error" :message="tr('社群暂时未能加载', 'Communities are unavailable')" :action="tr('重试', 'Retry')" @action="loadCommunities" />
-        <scroll-view v-else-if="hotCommunities.length" scroll-x class="community-scroll" :show-scrollbar="false"><view class="community-row"><button v-for="c in hotCommunities" :key="c.id" class="community-mini" @tap="goCommunityDetail(c.id)"><image v-if="c.cover" class="community-image" :src="c.cover" mode="aspectFill" /><BrandCover v-else height="180rpx" :label="tr('在场社群', 'Presence community')" icon="users" /><view class="community-body"><text class="entry-title">{{ c.name }}</text><text class="muted">{{ c.owner?.name || tr('主理人', 'Host') }} · {{ c.category }}</text><text class="community-count">{{ tr(`${c.memberCount} 位同路人`, `${c.memberCount} members`) }}</text></view></button></view></scroll-view>
+        <scroll-view v-else-if="hotCommunities.length" scroll-x class="community-scroll" :show-scrollbar="false"><view class="community-row"><button v-for="c in hotCommunities" :key="c.id" class="community-mini" @tap="goCommunityDetail(c.id)"><image v-if="c.cover" class="community-image" :src="c.cover" mode="aspectFill" lazy-load /><BrandCover v-else height="180rpx" :label="tr('在场社群', 'Presence community')" icon="users" /><view class="community-body"><text class="entry-title">{{ c.name }}</text><text class="muted">{{ c.owner?.name || tr('主理人', 'Host') }} · {{ communityCategoryLabel(c.category) }}</text><text class="community-count">{{ tr(`${c.memberCount} 位同路人`, `${c.memberCount} members`) }}</text></view></button></view></scroll-view>
         <PageState v-else state="empty" :title="tr('社群正在生长', 'Communities are growing')" :message="tr('新的相遇，值得期待。', 'New connections are on the way.')" />
       </template>
     </view>
@@ -103,22 +111,26 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onPullDownRefresh, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import { listCourses } from '@/api/course'
 import { listBanners, type BannerItem } from '@/api/banner'
 import { listVenues, type VenueItem } from '@/api/venue'
 import { fetchCommunities, fetchMine, type Community } from '@/api/skool'
+import { courseTagLabel, communityCategoryLabel } from '@/utils/course-labels'
 import { getActiveCard, type MemberCard } from '@/api/member'
-import { listMyOrders } from '@/api/order'
+import { loadBrandMember, type BrandMemberData } from '@/api/brandMember'
+import { fetchNextCourse } from '@/api/order'
 import { updateTabBarLanguage, tr, isEnglish } from '@/locale'
 import { cityLabel, cityOptionsFromVenues, filterCourseList, normalizeCity, venueIdsForCity } from '@/utils/presence-view'
+import { cacheFresh, homeCache } from '@/utils/home-cache'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
 import PageState from '@/components/PageState.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
+import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 
 const userStore = useUserStore()
 const { isTrainer, activeView } = storeToRefs(userStore)
@@ -201,9 +213,14 @@ const days = computed(() => Array.from({ length: 7 }, (_, index) => {
   return { value: localDate(date), day: date.getDate(), label: index === 0 ? tr('今天', 'Today') : index === 1 ? tr('明天', 'Tomorrow') : (isEnglish() ? enWeek : zhWeek) }
 }))
 let courseRequest = 0
-async function loadCourses() {
+async function loadCourses(force = false) {
+  const cached = homeCache.courses
+  if (cached) courses.value = cached.data
+  if (!force && cacheFresh(cached)) return
   const requestId = ++courseRequest
-  loading.value = true
+  const hadData = courses.value.length > 0
+  // 已有内容时静默刷新，不用骨架屏把页面清空一次。
+  if (!hadData) loading.value = true
   loadError.value = false
   try {
     // 完整读取分页后再本地筛选，避免“仅看有位”等条件漏掉后续页。
@@ -214,54 +231,126 @@ async function loadCourses() {
       const next = await listCourses({ page, pageSize: 50 })
       rows.push(...(next?.items || []))
     }
-    if (requestId === courseRequest) { courses.value = rows; venueIndex.value = 0 }
-  } catch { if (requestId === courseRequest) loadError.value = true }
-  finally { if (requestId === courseRequest) loading.value = false }
-}
-async function loadVenues() {
-  const requestId = ++venuesRequest
-  venuesLoading.value = true
-  venuesError.value = false
-  try {
-    const rows = await listVenues()
-    if (requestId === venuesRequest) allVenues.value = Array.isArray(rows) ? rows : []
+    if (requestId === courseRequest) {
+      courses.value = rows
+      homeCache.courses = { data: rows, at: Date.now() }
+      if (!hadData) venueIndex.value = 0
+    }
   } catch {
-    // 刷新失败时保留上一次成功结果，避免城市与场地筛选突然清空。
-    if (requestId === venuesRequest) venuesError.value = true
+    if (requestId === courseRequest && !courses.value.length) loadError.value = true
   } finally {
-    if (requestId === venuesRequest) venuesLoading.value = false
+    if (requestId === courseRequest && !hadData) loading.value = false
+  }
+}
+async function loadVenues(force = false) {
+  const cached = homeCache.venues
+  if (cached) allVenues.value = cached.data
+  const fresh = !force && cacheFresh(cached)
+  if (!fresh) {
+    const requestId = ++venuesRequest
+    const hadData = allVenues.value.length > 0
+    if (!hadData) venuesLoading.value = true
+    venuesError.value = false
+    try {
+      const rows = await listVenues()
+      if (requestId === venuesRequest) {
+        allVenues.value = Array.isArray(rows) ? rows : []
+        homeCache.venues = { data: allVenues.value, at: Date.now() }
+      }
+    } catch {
+      // 刷新失败时保留上一次成功结果，避免城市与场地筛选突然清空。
+      if (requestId === venuesRequest) venuesError.value = !allVenues.value.length
+    } finally {
+      if (requestId === venuesRequest && !hadData) venuesLoading.value = false
+    }
+    if (!hadData) venueIndex.value = 0
   }
   if (!cityOptions.value.includes(selectedCity.value)) {
     selectedCity.value = cityOptions.value.includes('上海') ? '上海' : cityOptions.value[0]
     uni.setStorageSync('presence_city', selectedCity.value)
   }
-  venueIndex.value = 0
 }
 function clearFilters() { selectedCategory.value = ''; selectedDate.value = ''; venueIndex.value = 0; difficultyIndex.value = 0; onlyAvailable.value = false }
-async function loadBanners() { try { const rows = await listBanners(); banners.value = rows?.length ? rows : DEFAULT_BANNERS() } catch { banners.value = DEFAULT_BANNERS() } }
+async function loadBanners(force = false) {
+  const cached = homeCache.banners
+  if (cached) banners.value = cached.data
+  if (!force && cacheFresh(cached)) return
+  try {
+    const rows = await listBanners()
+    if (rows?.length) {
+      banners.value = rows
+      homeCache.banners = { data: rows, at: Date.now() }
+    } else if (!banners.value.length) {
+      banners.value = DEFAULT_BANNERS()
+    }
+  } catch {
+    if (!banners.value.length) banners.value = DEFAULT_BANNERS()
+  }
+}
 function onBannerTap(item: BannerItem) { if (item.linkType === 'course' && item.linkValue) goDetail(item.linkValue) }
 const hotCommunities = ref<Community[]>([])
 const managedCommunities = ref<Community[]>([])
 const communitiesLoading = ref(false)
 const communityError = ref(false)
 const managedError = ref(false)
-async function loadCommunities() {
-  communitiesLoading.value = true; communityError.value = false; managedError.value = false
-  try { const rows = await fetchCommunities(); hotCommunities.value = rows.slice(0, 4) } catch { communityError.value = true }
-  if (uni.getStorageSync('token') && isTrainer.value) { try { const mine = await fetchMine(); managedCommunities.value = mine?.managed || [] } catch { managedError.value = true } } else managedCommunities.value = []
+async function loadCommunities(force = false) {
+  const cachedList = homeCache.communities
+  const cachedManaged = homeCache.managed
+  if (cachedList) hotCommunities.value = cachedList.data
+  if (cachedManaged) managedCommunities.value = cachedManaged.data
+  const loggedIn = Boolean(uni.getStorageSync('token'))
+  const freshList = !force && cacheFresh(cachedList)
+  const freshManaged = !force && (!isTrainer.value || cacheFresh(cachedManaged))
+  if (freshList && freshManaged) return
+  communitiesLoading.value = activeView.value === 'trainer' ? !managedCommunities.value.length : !hotCommunities.value.length
+  communityError.value = false
+  managedError.value = false
+  if (!freshList) {
+    try {
+      const rows = await fetchCommunities()
+      hotCommunities.value = rows.slice(0, 4)
+      homeCache.communities = { data: hotCommunities.value, at: Date.now() }
+    } catch {
+      if (!hotCommunities.value.length) communityError.value = true
+    }
+  }
+  if (loggedIn && isTrainer.value) {
+    if (!freshManaged) {
+      try {
+        const mine = await fetchMine()
+        managedCommunities.value = mine?.managed || []
+        homeCache.managed = { data: managedCommunities.value, at: Date.now() }
+      } catch {
+        if (!managedCommunities.value.length) managedError.value = true
+      }
+    }
+  } else managedCommunities.value = []
   communitiesLoading.value = false
 }
 const activeCard = ref<MemberCard | null>(null)
+const brandMember = ref<BrandMemberData | null>(null)
+const brandActive = computed(() => ['ACTIVE', 'EXPIRING', 'PENDING'].includes(brandMember.value?.card?.state || ''))
+const brandPoints = computed(() => brandMember.value?.points?.balance || 0)
+const brandValidUntil = computed(() => brandMember.value?.card?.validUntil || '')
 const nextCourse = ref<any>(null)
 async function loadAccount() {
-  activeCard.value = null; nextCourse.value = null
-  if (!uni.getStorageSync('token')) return
+  if (!uni.getStorageSync('token')) { activeCard.value = null; brandMember.value = null; nextCourse.value = null; return }
+  // 账号数据变化频繁，每次进入都静默刷新，但不先清空旧值。
   await Promise.all([
     getActiveCard().then(card => { activeCard.value = card }).catch(() => {}),
-    listMyOrders().then(orders => { nextCourse.value = orders.filter(o => o.orderType === 'COURSE' && o.status === 'PAID' && o.course?.startDate && new Date(`${o.course.startDate.slice(0, 10)}T${o.course.startTime || '00:00'}:00`).getTime() > Date.now()).sort((a, b) => String(a.course.startDate + a.course.startTime).localeCompare(String(b.course.startDate + b.course.startTime)))[0] || null }).catch(() => {}),
+    fetchNextCourse().then(order => { nextCourse.value = order || null }).catch(() => {}),
+    loadBrandMember().then(data => { brandMember.value = data }).catch(() => { brandMember.value = null }),
   ])
 }
 onShow(() => { if (!uni.getStorageSync('token') && userStore.isLoggedIn) userStore.logout(); today.value = localDate(new Date()); updateTabBarLanguage(); loadVenues(); loadCourses(); loadBanners(); loadCommunities(); loadAccount() })
+onPullDownRefresh(async () => {
+  today.value = localDate(new Date())
+  try {
+    await Promise.all([loadVenues(true), loadCourses(true), loadBanners(true), loadCommunities(true), loadAccount()])
+  } finally {
+    uni.stopPullDownRefresh()
+  }
+})
 function setView(mode: 'student' | 'trainer') { userStore.setViewMode(mode) }
 function switchLang() {
   userStore.switchLanguage()
@@ -291,10 +380,18 @@ function formatDate(value: string) {
   if (isEnglish()) return `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.getMonth()]} ${date.getDate()}`
   return `${date.getMonth() + 1}月${date.getDate()}日`
 }
+function formatFullDate(value?: string) {
+  if (!value) return tr('时间待确认', 'Time TBC')
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return tr('时间待确认', 'Time TBC')
+  if (isEnglish()) return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
 function goDetail(id: string) { uni.navigateTo({ url: `/pages/course-detail/index?id=${id}` }) }
 function previewImage(url: string) { if (url) uni.previewImage({ urls: [url], current: url }) }
 function goProfile() { uni.switchTab({ url: '/pages/profile/index' }) }
 function goMember() { uni.switchTab({ url: '/pages/member/index' }) }
+function goBrand() { uni.navigateTo({ url: '/pages/brand-member/index' }) }
 function goBookings() { uni.switchTab({ url: '/pages/my-courses/index' }) }
 function goTrainerWorkspace() { uni.navigateTo({ url: '/pages/trainer-workspace/index' }) }
 function goCommunityList() { uni.navigateTo({ url: '/pages/community-list/index' }) }
@@ -302,6 +399,12 @@ function goCommunityDetail(id: string) { uni.navigateTo({ url: `/pages/community
 function goCommunityWorkspace(id: string) { uni.navigateTo({ url: `/pages/community-workspace/index?id=${id}` }) }
 function goCommunityCreate() { uni.navigateTo({ url: '/pages/community-create/index' }) }
 function goCommunityMine() { uni.navigateTo({ url: '/pages/community-mine/index' }) }
+
+const shareTitle = () => tr('Full愈 · 在场｜给自己一点在场的时间', 'Full愈 · Presence | Make a little time for yourself')
+onShareAppMessage(() => brandShareMessage(shareTitle()))
+// #ifdef MP-WEIXIN
+onShareTimeline(() => brandShareTimeline(shareTitle()))
+// #endif
 </script>
 
 <style scoped>
@@ -322,6 +425,12 @@ function goCommunityMine() { uni.navigateTo({ url: '/pages/community-mine/index'
 .banner-section { padding: 0 32rpx; }
 .banner { height: 300rpx; border-radius: var(--radius-card); overflow: hidden; }
 .banner-card,.banner-image { width: 100%; height: 300rpx; }
+/* #ifdef H5 */
+/* H5 桌面端页面宽度被 480px 限制，rpx 仍按窗口宽度换算，会把 Banner 拉高产生留白；按设计比例固定高度 */
+@media (min-width: 500px) {
+  .banner, .banner-card, .banner-image { height: 187px; }
+}
+/* #endif */
 .brand-banner { position: relative; height: 100%; padding: 36rpx; background: linear-gradient(120deg, #f1dba0, #f3efe0); display: flex; flex-direction: column; justify-content: center; gap: 12rpx; }
 .brand-banner :deep(.presence-icon) { position: absolute; right: 32rpx; bottom: 36rpx; opacity: .5; }
 .eyebrow { color: var(--c-brown); font-size: 18rpx; letter-spacing: 3rpx; }
@@ -337,12 +446,23 @@ function goCommunityMine() { uni.navigateTo({ url: '/pages/community-mine/index'
 .entry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20rpx; }
 .entry-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10rpx; width: 100%; margin: 0; padding: 28rpx; border-radius: var(--radius-card); background: var(--c-card-2); text-align: left; line-height: 1.5; }
 .entry-card.light { background: var(--c-card); }
+/* 品牌会员：独立于畅练卡的第二张卡，首页只保留一条入口 */
+.brand-entry { display: flex; align-items: center; gap: 20rpx; width: 100%; margin: 20rpx 0 0; padding: 26rpx 28rpx; border-radius: var(--radius-card); background: var(--c-card); border: 1rpx solid var(--line-soft); text-align: left; line-height: 1.5; color: var(--c-ink); }
+.brand-entry.active { background: linear-gradient(145deg, #4d3a2c 0%, #6b4a35 58%, #7b5a41 100%); border-color: transparent; color: #f7f1e7; box-shadow: 0 14rpx 32rpx rgba(53, 47, 43, .18); }
+.brand-entry-main { flex: 1; min-width: 0; }
+.brand-entry-eyebrow { display: block; font-size: 16rpx; letter-spacing: 3rpx; color: var(--c-brown); }
+.brand-entry.active .brand-entry-eyebrow { color: #e8c58d; }
+.brand-entry-title { display: block; margin-top: 6rpx; font-size: 30rpx; line-height: 1.35; }
+.brand-entry-sub { display: block; margin-top: 4rpx; font-size: 20rpx; color: var(--c-muted); }
+.brand-entry.active .brand-entry-sub { color: rgba(247, 241, 231, .76); }
+.brand-entry-cta { flex: none; display: flex; align-items: center; gap: 2rpx; font-size: 22rpx; color: var(--c-primary); }
+.brand-entry.active .brand-entry-cta { color: #e8c58d; }
 .guest-card { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; background: var(--c-card); border-radius: var(--radius-card); padding: 28rpx; }
 .guest-card .btn-primary { flex-shrink: 0; margin: 0; padding: 16rpx 24rpx; }
 .view-switch { display: flex; padding: 6rpx; background: var(--c-card-2); border-radius: 24rpx; margin-bottom: 24rpx; }
 .view-switch button { flex: 1; margin: 0; border-radius: 20rpx; background: transparent; color: var(--c-muted); font-size: 26rpx; }
 .view-switch .active { background: var(--c-primary); color: white; }
-.next-course { display: flex; align-items: center; gap: 20rpx; width: 100%; margin: 0 0 36rpx; padding: 26rpx; background: var(--c-card); border: 1rpx solid var(--line-soft); border-radius: var(--radius-card); text-align: left; line-height: 1.5; }
+.next-course { display: flex; align-items: center; gap: 20rpx; width: 100%; margin: 0 0 36rpx; padding: 26rpx; background: var(--c-card); border: 2rpx solid var(--line-soft); border-radius: var(--radius-card); text-align: left; line-height: 1.5; }
 .next-icon { padding: 20rpx; border-radius: 24rpx; background: var(--c-card-2); }
 .next-body { flex: 1; min-width: 0; }
 .next-body .muted { display: block; }
@@ -386,7 +506,7 @@ function goCommunityMine() { uni.navigateTo({ url: '/pages/community-mine/index'
 .managed-card image { width: 96rpx; height: 96rpx; border-radius: 20rpx; flex-shrink: 0; }
 .managed-info { flex: 1; min-width: 0; }
 .city-list { display: flex; flex-direction: column; gap: 12rpx; padding-bottom: 8rpx; }
-.city-option { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; width: 100%; margin: 0; padding: 24rpx 26rpx; background: var(--c-cream); border: 1rpx solid transparent; border-radius: 24rpx; text-align: left; line-height: 1.4; }
+.city-option { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; width: 100%; margin: 0; padding: 24rpx 26rpx; background: var(--c-cream); border: 2rpx solid transparent; border-radius: 24rpx; text-align: left; line-height: 1.4; }
 .city-option.active { background: var(--c-card-2); border-color: rgba(104, 54, 17, .28); }
 .city-name { display: block; font-size: 30rpx; font-weight: 600; color: var(--c-deep); }
 .city-note { display: block; font-size: 22rpx; color: var(--c-muted); margin-top: 4rpx; }

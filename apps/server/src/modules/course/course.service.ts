@@ -64,8 +64,29 @@ export class CourseService {
     const rows = await this.prisma.course.findMany({
       where,
       orderBy,
-      include: {
-        trainer: { select: { displayName: true, avatar: true, level: true } },
+      // 发现流只取卡片需要的列，避免把图集/富文本等大字段读出数据库。
+      select: {
+        id: true,
+        status: true,
+        title: true,
+        coverImage: true,
+        coverType: true,
+        coverColor: true,
+        type: true,
+        categories: true,
+        difficulty: true,
+        startDate: true,
+        endDate: true,
+        startTime: true,
+        endTime: true,
+        enrollStartAt: true,
+        enrollEndAt: true,
+        originalPrice: true,
+        currentEnrolled: true,
+        maxCapacity: true,
+        minCapacity: true,
+        venueId: true,
+        trainer: { select: { displayName: true } },
         venue: { select: { name: true, address: true } },
       },
     })
@@ -73,9 +94,44 @@ export class CourseService {
     const total = visible.length
     const items = visible
       .slice((page - 1) * pageSize, page * pageSize)
-      .map((course) => decorateCourseLifecycle(course, now))
+      .map((course) => this.toListItem(decorateCourseLifecycle(course, now)))
 
     return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) }
+  }
+
+  /**
+   * 发现流只返回卡片需要的字段。
+   * 图集、富文本、退款规则、阶梯价等详情字段留在 GET /courses/:id，避免首页为不展示的数据买单。
+   */
+  private toListItem(course: any) {
+    return {
+      id: course.id,
+      title: course.title,
+      coverImage: course.coverImage,
+      coverType: course.coverType,
+      coverColor: course.coverColor,
+      type: course.type,
+      categories: course.categories,
+      difficulty: course.difficulty,
+      startDate: course.startDate,
+      endDate: course.endDate,
+      startTime: course.startTime,
+      endTime: course.endTime,
+      originalPrice: course.originalPrice,
+      currentEnrolled: course.currentEnrolled,
+      maxCapacity: course.maxCapacity,
+      minCapacity: course.minCapacity,
+      venueId: course.venueId,
+      venue: course.venue ? { name: course.venue.name, address: course.venue.address } : null,
+      trainer: course.trainer ? { displayName: course.trainer.displayName } : null,
+      phase: course.phase,
+      phaseLabel: course.phaseLabel,
+      bookable: course.bookable,
+      discoverable: course.discoverable,
+      startAt: course.startAt,
+      endAt: course.endAt,
+      enrollDeadline: course.enrollDeadline,
+    }
   }
 
   /**

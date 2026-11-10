@@ -39,9 +39,11 @@ import { StorageModule } from './common/storage/storage.module'
 import { NotificationModule } from './common/notification/notification.module'
 import { SmsModule } from './common/sms/sms.module'
 import { PricingModule } from './modules/pricing/pricing.module'
+import { CrmModule } from './common/crm/crm.module'
 import { HttpExceptionFilter } from './common/filters/http-exception.filter'
 import { TransformInterceptor } from './common/interceptors/transform.interceptor'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
+import { ImageUrlInterceptor } from './common/interceptors/image-url.interceptor'
 
 // 仅本地开发开关：启动时传入 DISABLE_SCHEDULER=true 可关掉所有 @Cron 定时任务（order-tasks / waitlist-tasks 等）。
 // 开关只通过启动命令传入（不写入 .env.local / git / 镜像），生产启动时天然无此变量，cron 照常运行。
@@ -75,6 +77,7 @@ if (SCHEDULER_DISABLED) {
     NotificationModule,
     SmsModule,
     PricingModule,
+    CrmModule,
     // 业务模块
     AuthModule,
     UserModule,
@@ -109,6 +112,8 @@ if (SCHEDULER_DISABLED) {
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
     { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
+    // 放在 Transform 之后：让原始业务数据先完成图片签名，再统一包 { code, data }
+    { provide: APP_INTERCEPTOR, useClass: ImageUrlInterceptor },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })

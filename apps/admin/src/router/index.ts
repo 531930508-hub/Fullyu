@@ -111,7 +111,7 @@ const routes: RouteRecordRaw[] = [
         path: 'sales/vouchers',
         name: 'Vouchers',
         component: () => import('@/views/sales/voucher/index.vue'),
-        meta: { title: '代金券管理', icon: 'GiftOutlined', module: 'sales', perm: ['voucher:view'] },
+        meta: { title: '代金券与发券', icon: 'GiftOutlined', module: 'sales', perm: ['voucher:view'] },
       },
       {
         path: 'sales/orders',
@@ -187,6 +187,18 @@ const routes: RouteRecordRaw[] = [
         name: 'StockAdjust',
         component: () => import('@/views/scm/adjust/index.vue'),
         meta: { title: '库存调整', icon: 'DiffOutlined', module: 'scm', perm: ['scm:stock:view'] },
+      },
+      {
+        path: 'scm/transfer',
+        name: 'StockTransfer',
+        component: () => import('@/views/scm/transfer/index.vue'),
+        meta: { title: '库存调拨', icon: 'SwapOutlined', module: 'scm', perm: ['scm:transfer:view'] },
+      },
+      {
+        path: 'scm/production',
+        name: 'ProductionOrders',
+        component: () => import('@/views/scm/production/index.vue'),
+        meta: { title: '生产工单', icon: 'BuildOutlined', module: 'scm', perm: ['scm:production:view'] },
       },
       // 财务模块
       {

@@ -18,6 +18,33 @@
       @action="open"
     />
 
+    <view v-else-if="brandCode" class="content">
+      <view class="hero">
+        <BrandCover :label="tr('在场 · 好友邀请', 'Presence · invitation')" height="320rpx" icon="leaf" />
+      </view>
+      <view class="content-inner">
+        <view class="card invite-card">
+          <text class="eyebrow">{{ tr('Full愈会员好友邀请', 'Invited by a Full Yu member') }}</text>
+          <text class="invite-title serif">{{ tr('来在场上一节免费体验课', 'A free trial class at Presence') }}</text>
+          <text class="muted slogan">{{ tr('领取后得 1 节体验课券，登录后在课程页预约时自动抵扣为 0 元。', 'Claim a one-class voucher; it reduces a class to ¥0 when you book.') }}</text>
+          <view class="facts">
+            <view class="fact"><text class="fact-label">{{ tr('权益', 'Benefit') }}</text><text class="fact-value">{{ tr('免费体验课 1 节', '1 free class') }}</text></view>
+            <view class="fact"><text class="fact-label">{{ tr('有效期', 'Valid') }}</text><text class="fact-value">{{ brandVoucher ? expiryLabel({ expiresAt: brandVoucher.expiresAt } as any) : tr('领取后 30 天', '30 days after claim') }}</text></view>
+          </view>
+          <view class="notice">
+            <PresenceIcon name="info" :size="30" />
+            <text>{{ tr('每张邀请只能被一位好友领取，每个账号只能领取一次好友邀请；邀请人本人不能领取。', 'Each invite can be claimed once, each account can claim one friend invite, and the inviter cannot claim their own.') }}</text>
+          </view>
+          <text v-if="claimError" class="error-text">{{ claimError }}</text>
+          <button v-if="brandVoucher" class="btn-primary full-width" @tap="goBook">{{ tr('去选课预约', 'Find a class') }}</button>
+          <button v-else class="btn-primary full-width" :disabled="claimBusy" @tap="onClaimBrand">
+            {{ claimBusy ? tr('处理中…', 'Processing…') : guest ? tr('登录后领取', 'Log in to claim') : tr('领取体验课', 'Claim the class') }}
+          </button>
+          <button class="btn-secondary full-width spacing" @tap="goBook">{{ tr('先看看课程', 'Browse classes first') }}</button>
+        </view>
+      </view>
+    </view>
+
     <view v-else-if="payload && payload.type === 'invite' && invite" class="content">
       <view class="hero">
         <image v-if="invite.community.cover && !coverFailed" class="hero-image" :src="invite.community.cover" mode="aspectFill" @error="coverFailed = true" />
@@ -76,6 +103,7 @@ import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { fetchInvite, resolveShareScene, claimInvite, type CommunityInvitePublic, type ShareResolveResult } from '@/api/skool'
 import { normalizeScene, goLoginFor } from '@/utils/share'
+import { claimBrandInvite, isValidCode, normalizeCode, type BrandInviteClaimed } from '@/api/brandMember'
 import { tr, isEnglish } from '@/locale'
 import { readCapsuleLayout } from '@/utils/capsule'
 import PageState from '@/components/PageState.vue'
@@ -97,8 +125,22 @@ const claimBusy = ref(false)
 const claimError = ref('')
 const claimed = ref(false)
 const guest = ref(!uni.getStorageSync('token'))
+/** 品牌会员邀请好友：?brandInvite=CODE，与社群邀请的 scene 分开处理。 */
+const brandCode = ref('')
+const brandVoucher = ref<BrandInviteClaimed['voucher'] | null>(null)
 
 onLoad((query) => {
+  const code = normalizeCode(query?.brandInvite ? decodeURIComponent(String(query.brandInvite)) : '')
+  if (code) {
+    loading.value = false
+    if (!isValidCode(code)) {
+      errorMessage.value = tr('邀请链接不完整，请让好友重新分享。', 'The invite link is incomplete. Ask your friend to share again.')
+      return
+    }
+    brandCode.value = code
+    guest.value = !uni.getStorageSync('token')
+    return
+  }
   scene.value = normalizeScene(query?.scene)
   if (!scene.value) {
     loading.value = false
@@ -109,6 +151,10 @@ onLoad((query) => {
 })
 
 async function open() {
+  if (brandCode.value) {
+    errorMessage.value = ''
+    return
+  }
   loading.value = true
   errorMessage.value = ''
   payload.value = null
@@ -167,6 +213,31 @@ async function onClaim() {
   } finally {
     claimBusy.value = false
   }
+}
+
+async function onClaimBrand() {
+  if (!brandCode.value || claimBusy.value) return
+  if (!uni.getStorageSync('token')) {
+    goLoginFor(`/pages/share-landing/index?brandInvite=${encodeURIComponent(brandCode.value)}`)
+    return
+  }
+  claimBusy.value = true
+  claimError.value = ''
+  try {
+    const result = await claimBrandInvite(brandCode.value)
+    if (result?.claimed !== true || !result.voucher) throw new Error(tr('领取未成功，请重试。', 'The claim did not complete. Please retry.'))
+    brandVoucher.value = result.voucher
+    uni.showToast({ title: result.replayed ? tr('你已领取过', 'Already claimed') : tr('已领取', 'Claimed'), icon: 'success' })
+  } catch (error) {
+    // 已被领取、已过期、不能领自己的邀请等文案由服务端给出，原样展示。
+    claimError.value = error instanceof Error ? error.message : tr('领取失败，请稍后重试。', 'Claim failed. Please retry later.')
+  } finally {
+    claimBusy.value = false
+  }
+}
+
+function goBook() {
+  uni.switchTab({ url: '/pages/index/index' })
 }
 
 function goCommunity() {

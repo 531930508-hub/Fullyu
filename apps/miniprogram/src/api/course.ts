@@ -79,3 +79,8 @@ export function listCourses(query: CourseListQuery = {}) {
 export function getCourseDetail(id: string) {
   return get<CourseDetail>(`/courses/${id}`, undefined, { auth: false })
 }
+
+/** 报名/候补场景的订阅消息模板 id（与后端 env 同源；为空表示模板未配置） */
+export function fetchSubscribeTemplates() {
+  return get<{ courseReminder: string; waitlistPromoted: string }>('/courses/subscribe-templates', undefined, { auth: false, silent: true })
+}

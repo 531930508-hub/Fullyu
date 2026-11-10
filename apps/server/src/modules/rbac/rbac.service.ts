@@ -263,9 +263,24 @@ export class RbacService {
   ) {
     const role = await this.prisma.role.findUnique({ where: { id } })
     if (!role) throw new BusinessException('角色不存在', 4115)
-    // 内置角色的权限与范围由 seed 统一维护，避免线上被改坏后无法回滚
-    if (role.isBuiltin && (data.permissionIds || data.dataScope)) {
-      throw new BusinessException('内置角色的权限与数据范围不可修改，请复制为自定义角色', 4116)
+    // 内置角色只是「带默认权限的预置角色」，默认值仅用于首次初始化；
+    // 之后允许管理员按实际业务调整权限与数据范围（seed 也不会再覆盖线上配置）。
+    // 区别只剩一个：内置角色不可删除，避免把系统兜底角色删没。
+    //
+    // 唯一的兜底：超级管理员必须保留「权限管理」的查看与修改，
+    // 否则保存后没人能再回到这个页面，只能直接改库救场。
+    if (role.name === 'SUPER_ADMIN' && data.permissionIds) {
+      const guards = await this.prisma.permission.findMany({
+        where: { code: { in: ['rbac:view', 'rbac:update'] } },
+        select: { id: true, code: true },
+      })
+      const missing = guards.filter((g) => !data.permissionIds!.includes(g.id))
+      if (missing.length) {
+        throw new BusinessException(
+          '超级管理员必须保留「权限管理」的查看与修改权限，否则将无人能再维护角色',
+          4120,
+        )
+      }
     }
 
     return this.prisma.$transaction(async (tx) => {

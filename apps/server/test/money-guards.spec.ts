@@ -38,6 +38,7 @@ describe('资金安全边界：课程与候补', () => {
       ctx.prisma,
       ctx.payment,
       createNotificationMock() as any,
+      redis,
     )
   })
 

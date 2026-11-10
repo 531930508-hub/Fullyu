@@ -44,12 +44,21 @@ export function requestSubscribeMessage(tmplIds: string[]): Promise<Record<strin
       resolve({})
       return
     }
-    uni.requestSubscribeMessage({
-      tmplIds,
-      success: (res) => resolve(res as unknown as Record<string, string>),
-      // 用户拒绝授权不阻断主流程
-      fail: () => resolve({}),
-    })
+    // H5 等非微信环境无此 API：静默跳过，不影响主流程
+    if (typeof uni.requestSubscribeMessage !== 'function') {
+      resolve({})
+      return
+    }
+    try {
+      uni.requestSubscribeMessage({
+        tmplIds,
+        success: (res: unknown) => resolve(res as Record<string, string>),
+        // 用户拒绝授权不阻断主流程
+        fail: () => resolve({}),
+      })
+    } catch {
+      resolve({})
+    }
   })
 }
 

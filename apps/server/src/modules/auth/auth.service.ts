@@ -7,6 +7,7 @@ import { WechatService } from '../../common/wechat/wechat.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
 import { PasswordPolicyService } from '../../common/password-policy.service'
 import { resolveVisibleOrgIds } from '../../common/utils/data-scope.util'
+import { CrmClient } from '../../common/crm/crm.client'
 
 @Injectable()
 export class AuthService {
@@ -16,6 +17,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly wechat: WechatService,
     private readonly passwordPolicy: PasswordPolicyService,
+    private readonly crm: CrmClient,
   ) {
     // 仅本地开发：开关开启时打印醒目警告。
     // 注意：本项目本地与 ECS 共用 .env.local（均 NODE_ENV=production），故不能靠 NODE_ENV 区分；
@@ -59,7 +61,10 @@ export class AuthService {
       })
     }
 
-    // 4. 生成 JWT token
+    // 4. 会员中心身份：手机号/unionId 命中同一会员，登录失败即明确报错
+    await this.syncCrmIdentity(user)
+
+    // 5. 生成 JWT token
     const token = this.jwtService.sign({
       sub: user.id,
       phone: user.phone,
@@ -103,6 +108,8 @@ export class AuthService {
         },
       })
     }
+    // 本地快捷登录与真实微信登录走同一套会员解析，避免出现「只在微信入口同步」的盲区
+    await this.syncCrmIdentity(user)
     const token = this.jwtService.sign({
       sub: user.id,
       phone: user.phone,
@@ -146,18 +153,18 @@ export class AuthService {
       throw new BusinessException('用户名或密码错误', 4001)
     }
 
-    // 提取权限列表（去重）；超管拥有通配 '*'
+    // 提取权限列表（去重）。内置角色同样以数据库中的配置为准，
+    // 这样管理员在权限页对任何角色（含超级管理员）的调整都会真实生效。
     const permissionCodes = admin.roles.flatMap((ur) =>
       ur.role.permissions.map((rp) => rp.permission.code),
     )
     const roleNames = admin.roles.map((ur) => ur.role.name)
-    const isSuper = roleNames.includes('SUPER_ADMIN')
-    const permissions = isSuper ? ['*'] : Array.from(new Set(permissionCodes))
+    const permissions = Array.from(new Set(permissionCodes))
 
-    // 多角色取最宽松的数据行级范围；超管恒为 ALL
-    const dataScope: DataScope = isSuper
-      ? 'ALL'
-      : widestDataScope(admin.roles.map((ur) => ur.role.dataScope as DataScope))
+    // 多角色取最宽松的数据行级范围
+    const dataScope: DataScope = widestDataScope(
+      admin.roles.map((ur) => ur.role.dataScope as DataScope),
+    )
 
     const token = this.jwtService.sign(
       {
@@ -216,15 +223,14 @@ export class AuthService {
     }
 
     const roleNames = admin.roles.map((ur) => ur.role.name)
-    const isSuper = roleNames.includes('SUPER_ADMIN')
-    const permissions = isSuper
-      ? ['*']
-      : Array.from(
-          new Set(admin.roles.flatMap((ur) => ur.role.permissions.map((rp) => rp.permission.code))),
-        )
-    const dataScope: DataScope = isSuper
-      ? 'ALL'
-      : widestDataScope(admin.roles.map((ur) => ur.role.dataScope as DataScope))
+    // 权限与数据范围完全以角色配置为准，不再对 SUPER_ADMIN 做硬编码放通，
+    // 否则内置角色的编辑会变成「看起来能改、实际不生效」。
+    const permissions = Array.from(
+      new Set(admin.roles.flatMap((ur) => ur.role.permissions.map((rp) => rp.permission.code))),
+    )
+    const dataScope: DataScope = widestDataScope(
+      admin.roles.map((ur) => ur.role.dataScope as DataScope),
+    )
 
     // 行级范围内可见的组织 id，前端用于预置门店筛选器
     const visibleOrgIds = await resolveVisibleOrgIds(this.prisma, {
@@ -273,5 +279,26 @@ export class AuthService {
       data: { password: hashed, mustChangePassword: false },
     })
     return { success: true }
+  }
+
+  /**
+   * 登录后把本地用户解析到 CRM。未开启时无操作；
+   * 开启后 CRM 不可用或身份冲突会直接阻断登录，避免带着错误身份产生订单。
+   */
+  private async syncCrmIdentity(user: {
+    id: string
+    phone: string | null
+    nickname: string
+    unionId?: string | null
+    openId?: string | null
+  }) {
+    if (!this.crm.enabled) return
+    await this.crm.resolve({
+      localUserId: user.id,
+      phone: user.phone,
+      name: user.nickname,
+      unionId: user.unionId ?? null,
+      openId: user.openId ?? null,
+    })
   }
 }

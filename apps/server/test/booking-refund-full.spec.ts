@@ -7,6 +7,7 @@ import {
 } from './helpers'
 import { CourseTasksService } from '../src/modules/course/course-tasks.service'
 import { WaitlistTasksService } from '../src/modules/waitlist/waitlist-tasks.service'
+import { RedisService } from '../src/common/redis.service'
 
 /**
  * 综合测试：报名 / 候补 / 退款 六大用户场景。
@@ -34,14 +35,17 @@ describe('综合：报名 / 候补 / 退款六大场景', () => {
       ctx.prisma,
       ctx.payment,
       createNotificationMock() as any,
+      ctx.moduleRef.get(RedisService),
     )
     waitlistTasks = new WaitlistTasksService(ctx.prisma, ctx.payment)
   })
 
+  // 会员权益来自 CRM，用例内按需 spyOn 模拟；用例结束后恢复，避免污染其他场景
+  afterEach(() => jest.restoreAllMocks())
+
   afterAll(async () => {
     await seeder.cleanup()
-    await ctx.app.close()
-  })
+    await ctx.app.close()  })
 
   /** 距当前 N 小时开课，并给出匹配的 HH:mm，避免 Seeder 固定 10:00 产生跨日时间漂移 */
   function timing(hoursAhead: number) {
@@ -142,7 +146,7 @@ describe('综合：报名 / 候补 / 退款六大场景', () => {
     }
   })
 
-  it('2. 候补递补：会员候补席优先，会员席满后进入普通席', async () => {
+  it('2. 候补递补：品牌会员候补席优先，会员席满后进入普通席', async () => {
     const course = await seeder.course({
       ...timing(240),
       maxCapacity: 2,
@@ -156,8 +160,14 @@ describe('综合：报名 / 候补 / 退款六大场景', () => {
     const normal = await seeder.user()
     const member = await seeder.user()
     const member2 = await seeder.user()
-    await seeder.memberCard(member.id)
-    await seeder.memberCard(member2.id)
+    // 2026-11-08 起候补优先排位随会员权益改挂品牌会员（CRM prioritySeat），
+    // 不再由本地畅练卡直接判定；这里直接给两位会员品牌权益，模拟 CRM 返回。
+    const brandMembers = new Set([member.id, member2.id])
+    jest.spyOn(ctx.pricing, 'brandStatus').mockImplementation(async (userId: string) =>
+      brandMembers.has(userId)
+        ? { perks: { prioritySeat: true, tierPrice: false, invitesPerMonth: 0 }, unknown: false }
+        : { perks: null, unknown: false },
+    )
 
     const aOrder = await ctx.enrollment.enroll(course!.id, a.id, {})
     await pay(aOrder.orderId)

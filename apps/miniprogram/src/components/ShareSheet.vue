@@ -49,13 +49,15 @@
       </template>
 
       <template #actions>
-        <!-- #ifdef MP-WEIXIN -->
-        <button class="btn-secondary" :disabled="!payload || !payload.available || posterBusy" open-type="share">{{ tr('发送给朋友', 'Send to a friend') }}</button>
-        <!-- #endif -->
-        <!-- #ifdef H5 -->
-        <button class="btn-secondary" :disabled="!payload || posterBusy" @tap="copyLink">{{ tr('复制链接', 'Copy link') }}</button>
-        <!-- #endif -->
-        <button class="btn-primary" :disabled="!payload || !payload.available || posterBusy" @tap="makePoster">{{ posterBusy ? tr('生成中…', 'Generating…') : tr('保存海报', 'Save poster') }}</button>
+        <view class="sheet-action-row">
+          <!-- #ifdef MP-WEIXIN -->
+          <button class="btn-secondary row-btn" :disabled="!payload || !payload.available || posterBusy" open-type="share">{{ tr('发送给朋友', 'Send to a friend') }}</button>
+          <!-- #endif -->
+          <!-- #ifdef H5 -->
+          <button class="btn-secondary row-btn" :disabled="!payload || posterBusy" @tap="copyLink">{{ tr('复制链接', 'Copy link') }}</button>
+          <!-- #endif -->
+          <button class="btn-primary row-btn" :disabled="!payload || !payload.available || posterBusy" @tap="makePoster">{{ posterBusy ? tr('生成中…', 'Generating…') : tr('保存海报', 'Save poster') }}</button>
+        </view>
       </template>
     </BottomSheet>
 
@@ -193,6 +195,8 @@ function labelOf(type: ShareType) {
 </script>
 
 <style scoped>
+.sheet-action-row { display: flex; align-items: center; gap: 20rpx; width: 100%; }
+.sheet-action-row .row-btn { flex: 1 1 0; min-width: 0; margin: 0; }
 .target-tabs { display: flex; gap: 12rpx; overflow-x: auto; padding-bottom: 20rpx; }
 .target-tab { flex: 0 0 auto; min-height: 60rpx; padding: 8rpx 24rpx; border-radius: 30rpx; background: var(--c-card-2); color: var(--c-muted); font-size: 24rpx; }
 .target-tab.active { background: var(--c-primary); color: var(--c-rice); }

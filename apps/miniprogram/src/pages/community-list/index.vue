@@ -57,7 +57,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { onShow, onUnload } from '@dcloudio/uni-app'
+import { onShow, onUnload, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { COMMUNITY_CATEGORIES, fetchCommunities, fetchMine, type Community, type CommunitySort } from '@/api/skool'
 import { tr, isEnglish } from '@/locale'
 import { communityTagLabel } from '@/utils/community-labels'
@@ -66,6 +66,7 @@ import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
 import PageState from '@/components/PageState.vue'
 import FloatingBack from '@/components/FloatingBack.vue'
+import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 
 const capsule = readCapsuleLayout()
 const statusBarHeight = capsule.statusBarHeight
@@ -126,7 +127,8 @@ function clearSearch() {
   return load()
 }
 function feeLabel(fee: number) {
-  return fee === 0 ? tr('免费', 'Free') : tr(`¥${Number((fee / 100).toFixed(2))}/年`, `¥${Number((fee / 100).toFixed(2))}/year`)
+  // 金额统一保留两位小数：Number() 会把 0.10 收成 0.1，和社群详情页的口径不一致
+  return fee === 0 ? tr('免费', 'Free') : tr(`¥${(fee / 100).toFixed(2)}/年`, `¥${(fee / 100).toFixed(2)}/year`)
 }
 watch([currentCat, currentSort], load)
 onShow(() => { load(); loadMemberships() })
@@ -134,6 +136,12 @@ onUnload(() => { requestId++ })
 function goBack() { uni.navigateBack({ fail: () => uni.switchTab({ url: '/pages/index/index' }) }) }
 function goDetail(id: string) { uni.navigateTo({ url: `/pages/community-detail/index?id=${encodeURIComponent(id)}` }) }
 function goMine() { uni.navigateTo({ url: '/pages/community-mine/index' }) }
+
+const shareTitle = () => tr('Full愈 · 在场社群｜与同路人相遇', 'Full愈 · Presence Communities | Meet your people')
+onShareAppMessage(() => brandShareMessage(shareTitle()))
+// #ifdef MP-WEIXIN
+onShareTimeline(() => brandShareTimeline(shareTitle()))
+// #endif
 </script>
 
 <style scoped>
@@ -153,7 +161,8 @@ button::after { border: 0; }
 .segment.active { background: var(--c-card); color: var(--c-primary); font-weight: 600; }
 .category-scroll { width: 100%; margin: 24rpx 0 28rpx; }
 .category-options { display: flex; gap: 16rpx; width: max-content; padding-bottom: 4rpx; }
-.option { position: relative; flex-shrink: 0; overflow: hidden; padding: 14rpx 36rpx; border-radius: 20rpx; border: 1rpx solid var(--line-soft); background: var(--c-card); color: var(--c-ink); font-size: 24rpx; }
+/* 2rpx 描边：1rpx 在真机上只有 0.5px，落到半个物理像素时上下边会被抗锯齿冲淡成"断线" */
+.option { position: relative; flex-shrink: 0; overflow: hidden; padding: 14rpx 36rpx; border-radius: 20rpx; border: 2rpx solid var(--line-soft); background: var(--c-card); color: var(--c-ink); font-size: 24rpx; }
 .option.selected { border-color: var(--c-primary); background: var(--c-card-2); font-weight: 600; }
 .selected-mark { position: absolute; top: 0; right: 0; width: 26rpx; height: 26rpx; display: flex; align-items: center; justify-content: center; border-bottom-left-radius: 14rpx; background: var(--c-primary); }
 .community-card { overflow: hidden; background: var(--c-card); border-radius: var(--radius-card); box-shadow: var(--shadow-card); margin-bottom: 28rpx; }

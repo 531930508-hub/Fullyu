@@ -88,7 +88,11 @@ export class WechatService {
       this.logger.error(`getPhoneNumber 失败: ${JSON.stringify(data)}`)
       throw new BusinessException('获取手机号失败，请重试', 5003)
     }
-    return data.phone_info.purePhoneNumber
+    // purePhoneNumber 不含国家码；境外会员必须拼回 +CC，否则会和 CRM 身份对不上。
+    const countryCode = String(data.phone_info.countryCode || '86').trim()
+    return countryCode === '86'
+      ? data.phone_info.purePhoneNumber
+      : `+${countryCode}${data.phone_info.purePhoneNumber}`
   }
 
   /**

@@ -16,10 +16,15 @@ export interface MemberCardProduct {
 export interface MemberCard {
   id: string
   type: string
-  expiresAt: string
+  /** 服务端当前返回 endDate；expiresAt 仅为兼容旧字段 */
+  endDate?: string
+  expiresAt?: string
+  startDate?: string
   status: string
   createdAt: string
   product?: any
+  /** 仅在 stats=1 时返回：本期用卡报课的节省（分）与报课次数 */
+  stats?: { savedCents: number; classCount: number }
 }
 
 export interface PurchaseResult {
@@ -39,9 +44,9 @@ export function listMyCards() {
   return get<MemberCard[]>('/member/cards')
 }
 
-/** 我的当前有效会员卡 */
-export function getActiveCard() {
-  return get<MemberCard | null>('/member/active', undefined, { silent: true })
+/** 我的当前有效会员卡；withStats 仅畅练卡页使用 */
+export function getActiveCard(withStats = false) {
+  return get<MemberCard | null>('/member/active', withStats ? { stats: 1 } : undefined, { silent: true })
 }
 
 /** 购买 / 续费会员卡（首次开卡需传个人照片 photo，base64） */

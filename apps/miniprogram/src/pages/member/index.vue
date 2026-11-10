@@ -2,57 +2,66 @@
   <view class="page">
     <view :style="{ height: statusBarHeight + 'px' }"></view>
     <view class="page-heading" :style="{ paddingTop: headerTop + 'px' }">
-      <text class="page-title serif">{{ t('member.title') }}</text>
-      <text class="eyebrow">Membership</text>
+      <text class="page-title serif">{{ tr('在场畅练卡', 'Presence Pass') }}</text>
+      <text class="eyebrow">Presence Pass</text>
     </view>
     <view class="content">
-      <PageState v-if="!isLoggedIn" state="guest" :title="tr('购卡享「愈」', 'Join and enjoy Full愈')" :message="tr('登录后查看在场会员卡与真实权益', 'Log in to view Presence member cards and real benefits')" :action="tr('去登录', 'Log in')" @action="goLogin" />
+      <button v-if="returnTarget" class="return-banner" @tap="returnToCourse">
+        <PresenceIcon name="back" :size="28" />
+        <text class="return-label">{{ returnTarget.title ? tr(`返回课程「${returnTarget.title}」`, `Back to ${returnTarget.title}`) : tr('返回课程', 'Back to course') }}</text>
+      </button>
+      <PageState v-if="!isLoggedIn" state="guest" :title="tr('购卡享「愈」', 'Join and enjoy Full Yu')" :message="tr('登录后查看在场畅练卡与真实权益', 'Log in to view your Presence Pass and benefits')" :action="tr('去登录', 'Log in')" @action="goLogin" />
       <PageState v-else-if="loading" state="loading" :title="tr('正在读取会员信息', 'Loading membership')" />
       <PageState v-else-if="loadError" state="error" :title="tr('会员信息加载失败', 'Failed to load membership')" :message="tr('暂时无法确认会员状态，请重试', 'Membership status is unavailable. Please retry.')" :action="tr('重新加载', 'Reload')" @action="loadMemberData" />
       <template v-else>
         <view class="member-card">
-          <text class="card-brand">{{ tr('Full愈 · 在场 MEMBERSHIP', 'Full愈 · PRESENCE MEMBERSHIP') }}</text>
+          <text class="card-brand">{{ tr('Full愈 · 在场 畅练卡', 'FULL YU · PRESENCE PASS') }}</text>
           <text class="card-user serif">{{ userName }}</text>
-          <text class="card-status">{{ activeCard ? memberName : tr('尚未开通会员', 'Membership not active') }}{{ memberExpiry ? tr(' · 有效期至 ', ' · Valid until ') + memberExpiry : '' }}</text>
+          <text class="card-status">{{ activeCard ? memberName : tr('尚未开通畅练卡', 'Presence Pass not active') }}{{ memberExpiry ? tr(' · 有效期至 ', ' · Valid until ') + memberExpiry : '' }}</text>
           <view class="card-footer">
-            <text>{{ activeCard ? tr('身心在场 · 向内生长', 'Be present · grow inward') : tr('为自己留一段在场的时间', 'Set aside time to be present') }}</text>
+            <text>{{ activeCard ? tr('有效期内不限次报课 0 元', 'Unlimited ¥0 classes during the term') : tr('为自己留一段在场的时间', 'Set aside time to be present') }}</text>
             <PresenceIcon name="leaf" :size="40" :color="iconColors.gold" />
           </view>
         </view>
-        <view class="notice"><PresenceIcon name="info" :size="30" /><text>{{ tr('在场 Presence 会员卡，具体权益以所选卡种说明为准', 'Presence membership benefits follow the description of the selected card.') }}</text></view>
+        <view v-if="renewalDue" class="renewal">
+          <text class="renewal-title serif">{{ tr(`还有 ${daysLeft} 天到期`, `${daysLeft} days left`) }}</text>
+          <text class="renewal-note">{{ renewalNote }}</text>
+        </view>
 
         <view class="section-heading"><text class="section-title serif">{{ tr('会员权益', 'Member benefits') }}</text><text class="eyebrow">Benefits</text></view>
-        <text v-if="selectedCardInfo" class="section-caption">{{ memberCardName(selectedCardInfo) }} · {{ tr('卡种权益', 'card benefits') }}</text>
         <view v-if="displayBenefits.length" class="benefit-grid">
           <view v-for="(benefit, index) in displayBenefits" :key="index" class="benefit-card">
             <PresenceIcon :name="benefitIcon(index)" :size="42" />
-            <text class="benefit-text">{{ benefit }}</text>
+            <text class="benefit-text">{{ benefitText(benefit) }}</text>
           </view>
         </view>
         <view v-else class="plain-card muted">{{ cardTypes.length ? tr('此卡种暂未提供权益说明', 'No benefit details for this card yet') : tr('暂无上架的会员卡权益', 'No member cards are available yet') }}</view>
+        <button v-if="activeCard && !showPlans" class="quiet-link" @tap="plansOpen = true">{{ tr('查看卡种', 'View plans') }}</button>
 
-        <view class="section-heading"><text class="section-title serif">{{ activeCard ? tr('续费 / 选购', 'Renew / choose a plan') : tr('选择卡种', 'Choose a plan') }}</text><text class="eyebrow">Plans</text></view>
-        <view v-if="cardTypes.length" class="plan-grid">
-          <button v-for="card in cardTypes" :key="card.id" class="plan-option" :class="{ selected: selectedCard === card.id }" :disabled="submitting || !!pendingOrderId" @tap="selectCard(card.id)">
-            <view v-if="selectedCard === card.id" class="selected-mark"><PresenceIcon name="check" :size="24" :color="iconColors.rice" /></view>
-            <text class="plan-name">{{ memberCardName(card) }}</text>
-            <text class="plan-price serif">¥{{ card.price }}</text>
-            <text class="plan-period">{{ card.period }}</text>
+        <template v-if="showPlans">
+          <view class="section-heading"><text class="section-title serif">{{ activeCard ? tr('续费', 'Renew') : tr('选择卡种', 'Choose a plan') }}</text><text class="eyebrow">Plans</text></view>
+          <view v-if="cardTypes.length" class="plan-grid">
+            <button v-for="card in cardTypes" :key="card.id" class="plan-option" :class="{ selected: selectedCard === card.id }" :disabled="submitting || !!pendingOrderId" @tap="selectCard(card.id)">
+              <view v-if="selectedCard === card.id" class="selected-mark"><PresenceIcon name="check" :size="24" :color="iconColors.rice" /></view>
+              <text class="plan-name">{{ memberCardName(card) }}</text>
+              <text class="plan-price serif">¥{{ cardPrice(card.price) }}</text>
+              <text class="plan-period">{{ card.period }}</text>
+            </button>
+          </view>
+          <PageState v-else state="empty" :title="tr('暂无可购买的会员卡', 'No member cards available')" :message="tr('卡种上架后会展示在这里', 'Plans will appear here once published')" :action="tr('重新加载', 'Reload')" @action="loadMemberData" />
+          <text v-if="selectedCardInfo?.description" class="plan-description">{{ selectedCardInfo.description }}</text>
+          <button v-if="selectedCardInfo" class="primary-button buy-button" :disabled="submitting" @tap="showBuyForm">
+            {{ pendingOrderId ? tr('继续支付', 'Continue payment') : activeCard ? tr('确认续费', 'Renew') : tr('立即开通', 'Activate now') }} · {{ memberCardName(selectedCardInfo) }} ¥{{ cardPrice(selectedCardInfo.price) }}
           </button>
-        </view>
-        <PageState v-else state="empty" :title="tr('暂无可购买的会员卡', 'No member cards available')" :message="tr('卡种上架后会展示在这里', 'Plans will appear here once published')" :action="tr('重新加载', 'Reload')" @action="loadMemberData" />
-        <text v-if="selectedCardInfo?.description" class="plan-description">{{ selectedCardInfo.description }}</text>
-        <button v-if="selectedCardInfo" class="primary-button buy-button" :disabled="submitting" @tap="showBuyForm">
-          {{ pendingOrderId ? tr('继续支付', 'Continue payment') : activeCard ? tr('续费 / 购买', 'Renew / buy') : tr('立即开通', 'Activate now') }} · {{ memberCardName(selectedCardInfo) }} ¥{{ selectedCardInfo.price }}
-        </button>
+        </template>
       </template>
     </view>
 
-    <BottomSheet :show="formVisible" :title="tr('确认会员卡购买', 'Confirm membership purchase')" :busy="submitting" @close="closeBuyForm">
+    <BottomSheet :show="formVisible" :title="activeCard ? tr('确认畅练卡续费', 'Confirm Presence Pass renewal') : tr('确认会员卡购买', 'Confirm membership purchase')" :busy="submitting" @close="closeBuyForm">
       <view v-if="selectedCardInfo" class="purchase-summary">
         <PresenceIcon name="card" :size="44" />
         <view class="purchase-copy"><text class="purchase-name">{{ memberCardName(selectedCardInfo) }}</text><text class="muted">{{ selectedCardInfo.period }}</text></view>
-        <text class="purchase-price serif">¥{{ selectedCardInfo.price }}</text>
+        <text class="purchase-price serif">¥{{ cardPrice(selectedCardInfo.price) }}</text>
       </view>
       <view class="account-row"><text>{{ tr('开卡账户', 'Account') }} · {{ userName }}</text><button class="text-button" :disabled="submitting || !!pendingOrderId" @tap="goEditProfile">{{ tr('编辑资料', 'Edit profile') }}</button></view>
       <view v-if="!pendingOrderId" class="photo-section">
@@ -61,16 +70,13 @@
           <image v-if="buyForm.photo" :src="buyForm.photo" class="photo-preview" mode="aspectFill" />
           <view v-else class="photo-placeholder"><PresenceIcon name="camera" :size="44" /><text>{{ hasVerificationPhoto ? tr('选择新照片', 'Choose a new photo') : tr('上传照片', 'Upload photo') }}</text></view>
         </button>
-        <text class="muted">{{ hasVerificationPhoto ? tr('不上传将沿用已有核验照片。', 'Leave empty to reuse your existing verification photo. ') : tr('首次开卡需上传本人照片。', 'A photo of yourself is required for your first card. ') }}{{ tr('照片仅用于线下签到核验，开卡后有效期内不可在资料页修改。', 'The photo is only used to verify on-site check-ins and cannot be changed on the profile page during the card term.') }}</text>
+        <text class="muted">{{ hasVerificationPhoto ? tr('可沿用已有照片；仅用于签到核验，卡期内不可修改。', 'Your existing photo is reused; it is only used for check-in and cannot be changed during the term.') : tr('首次开卡需上传本人照片，仅用于签到核验，卡期内不可修改。', 'A photo of yourself is required for your first card; it is only used for check-in and cannot be changed during the term.') }}</text>
       </view>
       <view v-else class="notice"><PresenceIcon name="info" :size="30" /><text>{{ tr('已创建订单，请继续完成支付，勿重复下单。放弃支付后，可等待订单失效再核实状态。', 'An order has been created. Continue to payment and do not place another order. If you abandon payment, wait for the order to expire before checking its status.') }}</text></view>
       <button v-if="pendingOrderId" class="text-button" :disabled="submitting" @tap="refreshPendingPurchase">{{ tr('重新核实订单状态', 'Recheck order status') }}</button>
       <text v-if="purchaseError" class="feedback" role="alert">{{ purchaseError }}</text>
       <template #actions>
-        <view class="sheet-actions">
-          <button class="outline-button" :disabled="submitting" @tap="closeBuyForm">{{ tr('稍后', 'Later') }}</button>
-          <button class="primary-button" :loading="submitting" :disabled="submitting" @tap="handleBuy">{{ submitting ? tr('处理中', 'Processing') : pendingOrderId ? tr('继续支付', 'Continue payment') : tr('确认支付', 'Confirm payment') }}</button>
-        </view>
+        <button class="primary-button full-button" :loading="submitting" :disabled="submitting" @tap="handleBuy">{{ submitting ? tr('处理中', 'Processing') : pendingOrderId ? tr('继续支付', 'Continue payment') : activeCard ? tr('确认续费', 'Confirm renewal') : tr('确认支付', 'Confirm payment') }}</button>
       </template>
     </BottomSheet>
     <FloatingTabBar active="member" />
@@ -79,12 +85,12 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { listMemberProducts, getActiveCard, purchaseMember, type MemberCardProduct, type MemberCard } from '@/api/member'
 import { getProfile } from '@/api/user'
 import { payOrder, isOrderPaid } from '@/utils/wechat'
 import { useUserStore } from '@/stores/user'
-import { t, tr, isEnglish } from '@/locale'
+import { tr, isEnglish } from '@/locale'
 import { readCapsuleLayout } from '@/utils/capsule'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
 import PresenceIcon from '@/components/PresenceIcon.vue'
@@ -92,6 +98,7 @@ import PageState from '@/components/PageState.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
 import { listMyOrders } from '@/api/order'
 import { compressImageToDataUrl } from '@/utils/image'
+import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 
 // SVG data-URL images require resolved DESIGN token values, not page CSS variables.
 const iconColors = { gold: '#eec76f', rice: '#f5f6ed' }
@@ -113,17 +120,106 @@ const formVisible = ref(false)
 const submitting = ref(false)
 const pendingOrderId = ref('')
 const purchaseError = ref('')
+/** 有卡且未临期时，卡种与续费入口默认隐藏；用户主动点开才展示 */
+const plansOpen = ref(false)
+const returnTarget = ref<{ type: string; id: string; title?: string; at?: number } | null>(null)
+/** 从课程页跳来了解会员权益时，保留 2 小时内的回跳入口。 */
+const RETURN_TTL_MS = 2 * 3600 * 1000
+function readReturnTarget() {
+  const saved = uni.getStorageSync('presence_member_return')
+  if (!saved?.id || (saved.at && Date.now() - Number(saved.at) > RETURN_TTL_MS)) {
+    if (saved) uni.removeStorageSync('presence_member_return')
+    returnTarget.value = null
+    return
+  }
+  returnTarget.value = saved
+}
+function returnToCourse() {
+  const target = returnTarget.value
+  if (!target) return
+  uni.removeStorageSync('presence_member_return')
+  returnTarget.value = null
+  if (target.type === 'course') {
+    uni.navigateTo({ url: `/pages/course-detail/index?id=${encodeURIComponent(target.id)}` })
+  } else {
+    uni.switchTab({ url: '/pages/index/index' })
+  }
+}
 const buyForm = ref({ photo: '', photoPath: '' })
 const userName = computed(() => userStore.userInfo?.nickname || tr('在场会员', 'Presence Member'))
 const selectedCardInfo = computed(() => cardTypes.value.find(c => c.id === selectedCard.value) || null)
-const displayBenefits = computed(() => selectedCardInfo.value?.benefits || [])
+/** 服务端权益文案固定中文；这里做展示映射，并把「赠送品牌大会员」写进权益本身。 */
+const BENEFIT_COPY: Record<string, { zh: string; en: string }> = {
+  '有效期内报课 0 元（不限次）': { zh: '有效期内报课 0 元（不限次）', en: 'Unlimited ¥0 classes during the term' },
+  '免费赠送同期 Full愈 品牌大会员': { zh: '免费赠送同等有效期的 Full愈 品牌大会员（三店通用）', en: 'Full Yu brand membership included for the same term (all three stores)' },
+  '专属活动': { zh: '专属活动', en: 'Members-only events' },
+}
+function benefitText(value: string) {
+  const copy = BENEFIT_COPY[value]
+  if (!copy) return value
+  return isEnglish() ? copy.en : copy.zh
+}
+/** 「到店签到核验」是开卡与签到流程，不是会员权益；后台历史配置里带了也不展示。 */
+const NON_BENEFIT = /签到/
+const displayBenefits = computed(() =>
+  (selectedCardInfo.value?.benefits || []).filter(b => !NON_BENEFIT.test(b))
+)
 const memberName = computed(() => {
   const card = activeCard.value
   if (!card) return ''
-  if (card.product?.name) return card.product.name
-  return ({ MONTHLY: tr('月卡会员', 'Monthly member'), QUARTERLY: tr('季卡会员', 'Quarterly member'), YEARLY: tr('年卡会员', 'Yearly member') } as Record<string, string>)[card.type || ''] || tr('会员卡', 'Membership card')
+  const plan = ({ MONTHLY: tr('月卡', 'Monthly'), QUARTERLY: tr('季卡', 'Quarterly'), YEARLY: tr('年卡', 'Yearly') } as Record<string, string>)[card.type || ''] || card.product?.name || ''
+  return plan ? tr(`在场畅练卡 · ${plan}`, `Presence Pass · ${plan}`) : tr('在场畅练卡', 'Presence Pass')
 })
 const memberExpiry = computed(() => formatDate(activeCard.value?.endDate || activeCard.value?.expiresAt))
+
+const DAY_MS = 24 * 60 * 60 * 1000
+/** 有卡时只在「最后一段」才强提醒续费：年卡约 30 天、季卡约 18 天、月卡约 7 天。 */
+function endTimeOf(card: ActiveCard | null) {
+  const raw = card?.endDate || card?.expiresAt
+  if (!raw) return 0
+  const time = new Date(raw).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+const daysLeft = computed(() => {
+  const end = endTimeOf(activeCard.value)
+  return end ? Math.max(0, Math.ceil((end - Date.now()) / DAY_MS)) : 0
+})
+const totalDays = computed(() => {
+  const card = activeCard.value
+  const end = endTimeOf(card)
+  if (!end) return 30
+  const start = card?.startDate ? new Date(card.startDate).getTime() : NaN
+  if (!Number.isFinite(start)) {
+    return ({ MONTHLY: 30, QUARTERLY: 90, YEARLY: 365 } as Record<string, number>)[card?.type || ''] || 30
+  }
+  return Math.max(1, Math.round((end - start) / DAY_MS))
+})
+const renewalWindowDays = computed(() => Math.min(30, Math.max(7, Math.round(totalDays.value * 0.2))))
+const renewalDue = computed(() => {
+  if (!activeCard.value) return false
+  const end = endTimeOf(activeCard.value)
+  return end > 0 && daysLeft.value <= renewalWindowDays.value
+})
+/** 有卡且未临期时不展示卡种与续费按钮，只留一行很轻的入口。 */
+const showPlans = computed(() => !activeCard.value || renewalDue.value || plansOpen.value)
+const activePlanPrice = computed(() => {
+  const card = activeCard.value
+  if (!card) return 0
+  const plan = cardTypes.value.find(c => c.type === card.type)
+  return Number(plan?.price ?? card.product?.price ?? 0)
+})
+const savedCents = computed(() => Math.max(0, Number(activeCard.value?.stats?.savedCents) || 0))
+/** 省得足够多才拿出来说：至少 ¥200，且接近或超过本期卡价的六成。 */
+const strongSavings = computed(() => {
+  const saved = savedCents.value / 100
+  const price = activePlanPrice.value
+  return saved >= 200 && price > 0 && saved >= price * 0.6
+})
+const renewalNote = computed(() =>
+  strongSavings.value
+    ? tr(`这期用卡已省 ¥${formatCents(savedCents.value)}，续上继续 0 元报课。`, `You saved ¥${formatCents(savedCents.value)} this term. Renew to keep ¥0 classes.`)
+    : tr('续费后从当前到期日次日起接续，继续不限次 0 元报课。', 'Renewal continues the day after your current end date, with unlimited ¥0 classes.')
+)
 
 function formatDate(value?: string) {
   if (!value) return ''
@@ -132,11 +228,21 @@ function formatDate(value?: string) {
   if (isEnglish()) return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+/** 会员卡价格以「元」存储，可能带小数，统一补两位小数，避免出现「¥0.1」这种半截价 */
+function cardPrice(value: unknown) {
+  return (Number(value) || 0).toFixed(2)
+}
+/** 节省金额按「分」返回，展示成元；整数不补小数位。 */
+function formatCents(cents: number) {
+  const value = (Number(cents) || 0) / 100
+  return Number.isInteger(value) ? String(value) : value.toFixed(2)
+}
 function memberCardName(card: { type?: string; name: string }) {
   const labels: Record<string, string> = {
-    MONTHLY: tr('月卡会员', 'Monthly member'),
-    QUARTERLY: tr('季卡会员', 'Quarterly member'),
-    YEARLY: tr('年卡会员', 'Yearly member'),
+    // 加「畅练」前缀，避免与 Full愈 品牌年卡混淆
+    MONTHLY: tr('畅练月卡', 'Monthly Pass'),
+    QUARTERLY: tr('畅练季卡', 'Quarterly Pass'),
+    YEARLY: tr('畅练年卡', 'Yearly Pass'),
   }
   return labels[card.type || ''] || card.name
 }
@@ -152,6 +258,7 @@ async function loadMemberData() {
   if (!isLoggedIn.value) {
     cardTypes.value = []; activeCard.value = null; selectedCard.value = ''
     hasVerificationPhoto.value = false; formVisible.value = false; pendingOrderId.value = ''
+    plansOpen.value = false
     buyForm.value = { photo: '', photoPath: '' }
     return
   }
@@ -159,11 +266,15 @@ async function loadMemberData() {
   loading.value = true
   loadError.value = false
   try {
-    const [products, card, profile] = await Promise.all([listMemberProducts(), getActiveCard(), getProfile()])
+    const [products, card, profile] = await Promise.all([listMemberProducts(), getActiveCard(true), getProfile()])
     if (!uni.getStorageSync('token')) { userStore.logout(); return }
     cardTypes.value = (products || []).filter(p => p.status === 'ON_SHELF').sort((a, b) => a.sort - b.sort).map(toCardType)
-    if (!cardTypes.value.some(c => c.id === selectedCard.value)) selectedCard.value = cardTypes.value[0]?.id || ''
     activeCard.value = card as ActiveCard | null
+    if (!cardTypes.value.some(c => c.id === selectedCard.value)) {
+      // 已持卡用户默认展示其当前卡种权益，避免「年卡会员」看到月卡权益
+      const activeType = activeCard.value?.type
+      selectedCard.value = cardTypes.value.find(c => c.type === activeType)?.id || cardTypes.value[0]?.id || ''
+    }
     // Keep only the existence flag; the server never returns the private photo itself.
     hasVerificationPhoto.value = profile?.hasVerificationPhoto === true
   } catch {
@@ -217,12 +328,14 @@ async function handleBuy() {
     await payOrder(pendingOrderId.value)
     pendingOrderId.value = ''
     formVisible.value = false
+    plansOpen.value = false
     uni.showToast({ title: tr('支付流程已完成，会员状态以到账为准', 'Payment completed. Membership activates once payment is confirmed.'), icon: 'none' })
   } catch (e: any) {
     // 微信回调丢失/晚到时不直接判定失败，先核对订单真实状态
     if (pendingOrderId.value && await isOrderPaid(pendingOrderId.value)) {
       pendingOrderId.value = ''
       formVisible.value = false
+      plansOpen.value = false
       uni.showToast({ title: tr('支付流程已完成，会员状态以到账为准', 'Payment completed. Membership activates once payment is confirmed.'), icon: 'none' })
     } else {
       purchaseError.value = pendingOrderId.value
@@ -257,7 +370,16 @@ async function refreshPendingPurchase() {
   } finally { submitting.value = false }
   if (!formVisible.value) await loadMemberData()
 }
-onShow(loadMemberData)
+onShow(() => {
+  readReturnTarget()
+  void loadMemberData()
+})
+
+const shareTitle = () => tr('Full愈 · 在场畅练卡｜把时间留给自己', 'Full Yu · Presence Pass | Time for yourself')
+onShareAppMessage(() => brandShareMessage(shareTitle()))
+// #ifdef MP-WEIXIN
+onShareTimeline(() => brandShareTimeline(shareTitle()))
+// #endif
 </script>
 
 <style scoped>
@@ -266,6 +388,12 @@ onShow(loadMemberData)
 .page-title { display: block; font-size: 48rpx; }
 .eyebrow { font-size: 22rpx; color: var(--c-muted); letter-spacing: 1rpx; }
 .content { padding: 0 32rpx; }
+.return-banner { display: flex; align-items: center; gap: 10rpx; width: 100%; margin-bottom: 20rpx; padding: 18rpx 24rpx; border-radius: var(--radius-button); background: var(--c-card-2); color: var(--c-primary); font-size: 26rpx; text-align: left; }
+.return-label { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.renewal { margin-top: 24rpx; padding: 28rpx 30rpx; border-radius: var(--radius-card); background: #fbf1df; border: 1rpx solid #ecd9b6; }
+.renewal-title { display: block; font-size: 34rpx; line-height: 1.4; color: var(--c-primary); }
+.renewal-note { display: block; margin-top: 8rpx; font-size: 23rpx; line-height: 1.7; color: var(--c-brown); }
+.quiet-link { display: block; width: 100%; margin-top: 18rpx; padding: 4rpx 0; background: transparent; text-align: left; font-size: 22rpx; line-height: 1.6; color: var(--c-muted); }
 .member-card { padding: 40rpx; border-radius: var(--radius-card); background: var(--c-primary); color: var(--c-rice); box-shadow: var(--shadow-card); }
 .card-brand { display: block; color: var(--c-gold); font-size: 24rpx; letter-spacing: 3rpx; }
 .card-user { display: block; font-size: 44rpx; margin-top: 32rpx; }
@@ -274,7 +402,6 @@ onShow(loadMemberData)
 .notice { display: flex; gap: 16rpx; align-items: flex-start; padding: 24rpx; margin-top: 24rpx; background: var(--c-card-2); color: var(--c-primary); border-radius: var(--radius-button); font-size: 24rpx; line-height: 1.7; }
 .section-heading { display: flex; gap: 12rpx; align-items: baseline; margin: 48rpx 0 24rpx; }
 .section-title { font-size: 36rpx; }
-.section-caption { display: block; font-size: 24rpx; color: var(--c-muted); margin-bottom: 16rpx; }
 .benefit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24rpx; }
 .benefit-card, .plain-card { padding: 32rpx; background: var(--c-card); border-radius: var(--radius-card); box-shadow: var(--shadow-card); }
 .benefit-text { display: block; margin-top: 20rpx; line-height: 1.7; overflow-wrap: anywhere; }
@@ -288,9 +415,7 @@ onShow(loadMemberData)
 .plan-period { font-size: 24rpx; color: var(--c-muted); }
 .plan-description { display: block; color: var(--c-muted); font-size: 24rpx; line-height: 1.7; margin-top: 20rpx; }
 button::after { border: none; }
-.primary-button, .outline-button { margin: 0; min-height: 88rpx; padding: 22rpx 28rpx; border-radius: var(--radius-button); font-size: 28rpx; line-height: 1.6; }
-.primary-button { background: var(--c-primary); color: var(--c-rice); }
-.outline-button { background: var(--c-card); color: var(--c-primary); border: 2rpx solid var(--c-primary); }
+.primary-button { margin: 0; min-height: 88rpx; padding: 22rpx 28rpx; border-radius: var(--radius-button); font-size: 28rpx; line-height: 1.6; background: var(--c-primary); color: var(--c-rice); }
 button[disabled] { opacity: .6; }
 .buy-button { margin-top: 32rpx; width: 100%; }
 .purchase-summary { display: flex; align-items: center; gap: 20rpx; padding: 28rpx; background: var(--c-card-2); border-radius: var(--radius-card); }
@@ -305,7 +430,5 @@ button[disabled] { opacity: .6; }
 .photo-placeholder { display: flex; flex-direction: column; align-items: center; gap: 16rpx; font-size: 24rpx; color: var(--c-brown); }
 .muted { color: var(--c-muted); font-size: 24rpx; line-height: 1.7; }
 .feedback { display: block; color: var(--c-primary); background: var(--c-card-2); border-left: 4rpx solid var(--c-apricot); padding: 20rpx; margin-top: 24rpx; font-size: 26rpx; line-height: 1.7; }
-.sheet-actions { display: flex; gap: 20rpx; width: 100%; }
-.sheet-actions .outline-button { flex: 1; }
-.sheet-actions .primary-button { flex: 2; }
+.full-button { width: 100%; }
 </style>

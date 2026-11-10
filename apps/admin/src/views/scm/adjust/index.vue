@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="page-header" style="display: flex; justify-content: space-between; align-items: center">
       <h2 class="page-title">库存调整</h2>
-      <a-button v-perm="'scm:stock:adjust'" type="primary" :disabled="!warehouses.length" @click="openCreate">
+      <a-button v-perm="'scm:stock:adjust'" type="primary" :disabled="!locations.length" @click="openCreate">
         <template #icon><PlusOutlined /></template>
         新建调整单
       </a-button>
@@ -17,9 +17,16 @@
 
     <a-card>
       <a-space style="margin-bottom: 16px" wrap>
-        <a-select v-model:value="query.warehouseId" style="width: 180px" placeholder="全部仓库" allow-clear @change="load">
-          <a-select-option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.shortName }}</a-select-option>
-        </a-select>
+        <a-select
+          v-model:value="query.warehouseId"
+          style="width: 220px"
+          placeholder="全部库存地点"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          :options="locationOptions"
+          @change="load"
+        />
         <a-select v-model:value="query.status" style="width: 140px" placeholder="全部状态" allow-clear @change="load">
           <a-select-option v-for="(v, k) in ADJUST_STATUS_META" :key="k" :value="k">{{ v.text }}</a-select-option>
         </a-select>
@@ -36,7 +43,7 @@
         :pagination="{ pageSize: 10 }"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'warehouse'">{{ orgName(record.warehouseId) }}</template>
+          <template v-if="column.key === 'warehouse'">{{ record.warehouseName }}</template>
           <template v-else-if="column.key === 'reason'">
             <a-tag :color="record.reason === 'PROFIT' ? 'green' : 'orange'">
               {{ ADJUST_REASON_NAMES[record.reason as StockAdjustReason] }}
@@ -82,10 +89,14 @@
       <a-form layout="vertical">
         <a-row :gutter="16">
           <a-col :span="8">
-            <a-form-item label="仓库" required>
-              <a-select v-model:value="form.warehouseId" @change="onWarehouseChange">
-                <a-select-option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.shortName }}</a-select-option>
-              </a-select>
+            <a-form-item label="库存地点" required>
+              <a-select
+                v-model:value="form.warehouseId"
+                show-search
+                option-filter-prop="label"
+                :options="locationOptions"
+                @change="onWarehouseChange"
+              />
             </a-form-item>
           </a-col>
           <a-col :span="8">
@@ -103,7 +114,7 @@
         </a-row>
 
         <a-form-item label="调整明细">
-          <a-empty v-if="!stockOptions.length" description="该仓库暂无库存记录，先做一次采购入库再来盘点" />
+          <a-empty v-if="!stockOptions.length" description="该地点暂无库存记录，先做一次采购入库再来盘点" />
           <template v-else>
             <div v-for="(line, i) in form.items" :key="i" class="adj-line">
               <a-select
@@ -116,7 +127,7 @@
                 @change="() => onProductChange(line)"
               />
               <span class="adj-cell">账面 {{ line.beforeQty }}</span>
-              <a-input-number v-model:value="line.afterQty" :min="0" :precision="0" placeholder="实际数" style="width: 120px" />
+              <a-input-number v-model:value="line.afterQty" :min="0" :precision="3" placeholder="实际数" style="width: 120px" />
               <span class="adj-cell" :class="{ minus: diffOf(line) < 0, plus: diffOf(line) > 0 }">
                 差额 {{ diffOf(line) > 0 ? '+' : '' }}{{ diffOf(line) }}
               </span>
@@ -134,7 +145,7 @@
       <template v-if="current">
         <a-descriptions :column="1" bordered size="small" style="margin-bottom: 16px">
           <a-descriptions-item label="单号">{{ current.id }}</a-descriptions-item>
-          <a-descriptions-item label="仓库">{{ orgName(current.warehouseId) }}</a-descriptions-item>
+          <a-descriptions-item label="库存地点">{{ current.warehouseName }}</a-descriptions-item>
           <a-descriptions-item label="原因">
             {{ ADJUST_REASON_NAMES[current.reason] }}
             <span v-if="current.remark" style="color: #999">· {{ current.remark }}</span>
@@ -173,22 +184,25 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
-import { ADJUST_REASON_NAMES, ADJUST_STATUS_META } from '@fullyu/shared'
+import { ADJUST_REASON_NAMES, ADJUST_STATUS_META, LOCATION_TYPE_NAMES } from '@fullyu/shared'
 import type { StockAdjustReason, StockAdjustStatus } from '@fullyu/shared'
-import { cancelAdjust, createAdjust, listAdjusts, listStock } from '@/api/scm'
-import type { StockAdjust } from '@/api/scm'
-import { listOrgOptions } from '@/api/org'
-import type { OrgOption } from '@/api/org'
+import { cancelAdjust, createAdjust, listAdjusts, listLocations, listStock } from '@/api/scm'
+import type { ScmLocation, StockAdjust } from '@/api/scm'
 import { getInstance } from '@/api/approval'
 import type { ApprovalInstance } from '@/api/approval'
 import ApprovalTimeline from '@/components/ApprovalTimeline.vue'
 import { dt, money } from '@/utils/format'
 
-const warehouses = ref<OrgOption[]>([])
-const orgName = (id: string) => warehouses.value.find((w) => w.id === id)?.shortName ?? id
+const locations = ref<ScmLocation[]>([])
+const locationOptions = computed(() =>
+  locations.value.map((l) => ({
+    value: l.id,
+    label: l.type === 'OWN' ? l.name : `${l.name}（${LOCATION_TYPE_NAMES[l.type]}）`,
+  })),
+)
 
 const list = ref<StockAdjust[]>([])
 const loading = ref(false)
@@ -196,7 +210,7 @@ const query = reactive<{ warehouseId?: string; status?: StockAdjustStatus }>({})
 
 const columns = [
   { title: '单号', dataIndex: 'id', width: 160 },
-  { title: '仓库', key: 'warehouse', width: 120 },
+  { title: '库存地点', key: 'warehouse', width: 150 },
   { title: '原因', key: 'reason', width: 90 },
   { title: '明细', key: 'items', width: 80 },
   { title: '影响金额', key: 'amount', width: 110 },
@@ -266,7 +280,8 @@ async function loadStockOptions(warehouseId: string) {
 
 function openCreate() {
   Object.assign(form, {
-    warehouseId: warehouses.value[0]?.id ?? '',
+    // 默认落在自有仓，盘供应商/代工厂的料时可再切地点
+    warehouseId: (locations.value.find((l) => l.type === 'OWN') ?? locations.value[0])?.id ?? '',
     reason: 'LOSS' as StockAdjustReason,
     remark: '',
     items: [],
@@ -297,7 +312,7 @@ function diffOf(line: AdjustLine) {
 }
 
 async function submit() {
-  if (!form.warehouseId) return message.warning('请选择仓库')
+  if (!form.warehouseId) return message.warning('请选择库存地点')
   const lines = form.items.filter((it) => it.productId && it.afterQty !== undefined)
   if (!lines.length) return message.warning('请至少添加一行明细')
   if (new Set(lines.map((it) => it.productId)).size !== lines.length)
@@ -367,9 +382,9 @@ async function openDetail(row: StockAdjust) {
 
 onMounted(async () => {
   try {
-    warehouses.value = await listOrgOptions({ warehouse: 1 })
+    locations.value = await listLocations()
   } catch (e: any) {
-    message.error(e?.message || '仓库列表加载失败')
+    message.error(e?.message || '库存地点加载失败')
   }
   await load()
 })

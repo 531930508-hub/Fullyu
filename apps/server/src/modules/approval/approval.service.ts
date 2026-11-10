@@ -70,6 +70,17 @@ export class ApprovalService {
    * @returns 命中流程时返回实例；返回 null 表示免审，调用方应直接让业务生效
    */
   async submit(input: SubmitApprovalInput): Promise<InstanceRow | null> {
+    // 同一订单同时只允许一个待审的强制退款申请：锁内先查重，杜绝并发重复提交
+    if (input.bizType === 'ORDER_FORCE_REFUND' && input.bizId) {
+      return this.redis.withLock(
+        `approval:submit:ORDER_FORCE_REFUND:${input.bizId}`,
+        () => this.doSubmit(input),
+      )
+    }
+    return this.doSubmit(input)
+  }
+
+  private async doSubmit(input: SubmitApprovalInput): Promise<InstanceRow | null> {
     const amount = Number(input.amount ?? 0)
     const requester = await this.resolveRequester(input.requesterId)
     const orgId = input.orgId ?? requester.orgId ?? null
@@ -79,6 +90,15 @@ export class ApprovalService {
     const rules = await this.flowService.matchable(input.bizType)
     const hit = pickFlowRule(rules, input.bizType, amount, scope)
     if (!hit) return null
+
+    if (input.bizType === 'ORDER_FORCE_REFUND' && input.bizId) {
+      const pending = await this.prisma.approvalInstance.findFirst({
+        where: { bizType: 'ORDER_FORCE_REFUND', bizId: input.bizId, status: 'PENDING' },
+      })
+      if (pending) {
+        throw new BusinessException('该订单已有待审批的强制退款申请，请先处理该审批', 4028)
+      }
+    }
 
     const id = await generateDocNo(this.redis, 'AP', async (no) => {
       const exist = await this.prisma.approvalInstance.findUnique({ where: { id: no } })
@@ -347,6 +367,8 @@ export class ApprovalService {
             payload.orderId,
             Number(payload.refundAmount) || undefined,
             payload.reason,
+            { name: instance.requesterName || instance.requester },
+            instance.id,
           )
           return `已发起强制退款 ¥${Number(r.refundAmount).toFixed(2)}`
         }

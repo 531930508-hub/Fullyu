@@ -16,7 +16,7 @@
             <view class="course-copy"><text class="course-title">{{ item.course?.title || tr('课程', 'Course') }}</text><text class="review-date">{{ formatDate(item.createdAt) }}</text></view>
             <PresenceIcon name="arrow" :size="28" />
           </button>
-          <view class="rating-row" :aria-label="tr(`${item.rating}分，满分5分`, `${item.rating} out of 5`)"><PresenceIcon v-for="n in 5" :key="n" name="star" :size="32" :color="n <= item.rating ? iconColors.brown : iconColors.line" /><text class="rating-number">{{ item.rating }} / 5</text></view>
+          <view class="rating-row" :aria-label="tr(`${item.rating}分，满分5分`, `${item.rating} out of 5`)"><PresenceIcon v-for="n in 5" :key="n" name="star" :size="32" :filled="n <= item.rating" :color="n <= item.rating ? iconColors.brown : iconColors.line" /><text class="rating-number">{{ item.rating }} / 5</text></view>
           <text v-if="item.content" class="review-content">{{ item.content }}</text>
           <text v-else class="rating-only">{{ tr('这次留下了星级评价', 'A star rating was left without a comment') }}</text>
         </view>

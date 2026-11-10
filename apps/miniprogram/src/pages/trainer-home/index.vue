@@ -22,7 +22,7 @@
       <view class="section-heading"><text class="serif">{{ tr('关于我', 'About') }}</text><text class="caption">About</text></view>
       <view class="card"><text class="bio-text">{{ trainer.bio || tr('导师还未填写简介。', 'The trainer has not added a bio yet.') }}</text><view v-if="trainer.specialties.length" class="tags expertise"><text v-for="tag in trainer.specialties" :key="tag" class="tag">{{ tag }}</text></view></view>
 
-      <view id="upcoming" class="section-heading"><text class="serif">{{ tr('近期课程', 'Upcoming classes') }}</text><text class="caption">Upcoming</text></view>
+      <view class="section-heading"><text class="serif">{{ tr('近期课程', 'Upcoming classes') }}</text><text class="caption">Upcoming</text></view>
       <view v-if="trainer.upcomingCourses.length" class="course-list">
         <button v-for="course in trainer.upcomingCourses" :key="course.id" class="card course-item" @tap="goDetail(course.id)">
           <view class="date-block"><PresenceIcon name="calendar" :size="36" /><text>{{ formatDate(course.date) }}</text></view>
@@ -40,22 +40,22 @@
         <view v-else class="review-list">
           <view v-for="review in reviews" :key="review.id" class="review-item">
             <view class="review-header"><image v-if="review.user?.avatar" class="review-avatar" :src="review.user.avatar" mode="aspectFill" /><view v-else class="review-avatar avatar-placeholder"><PresenceIcon name="user" :size="28" /></view><view class="grow"><text class="review-user">{{ review.user?.nickname || tr('匿名用户', 'Anonymous') }}</text><text v-if="review.course?.title" class="secondary">{{ review.course.title }}</text></view><text class="secondary">{{ formatDate(review.createdAt) }}</text></view>
-            <view class="review-stars" :aria-label="tr(`${review.rating}分，满分5分`, `${review.rating} out of 5`)"><view v-for="i in 5" :key="i" class="star-cell" :class="{ dim: i > review.rating }"><PresenceIcon name="star" :size="28" /></view><text class="secondary">{{ review.rating }} {{ tr('分', 'pts') }}</text></view>
+            <view class="review-stars" :aria-label="tr(`${review.rating}分，满分5分`, `${review.rating} out of 5`)"><view v-for="i in 5" :key="i" class="star-cell"><PresenceIcon name="star" :size="28" :filled="i <= review.rating" :color="i <= review.rating ? '#96581c' : '#cfc4a8'" /></view><text class="secondary">{{ review.rating }} {{ tr('分', 'pts') }}</text></view>
             <text v-if="review.content" class="review-content">{{ review.content }}</text>
           </view>
         </view>
       </view>
-      <button v-if="trainer.upcomingCourses.length" class="primary-btn" @tap="viewCourses">{{ tr('看 TA 的课程', 'View their classes') }}</button>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { getTrainer } from '@/api/trainer'
 import { getTrainerReviews, type TrainerReviewsResult } from '@/api/review'
 import { tr, isEnglish } from '@/locale'
+import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
 import PageState from '@/components/PageState.vue'
@@ -113,7 +113,16 @@ function formatDate(value: string) {
 onLoad((options) => { loadTrainer(options?.id || '') })
 function goBack() { if (getCurrentPages().length > 1) uni.navigateBack(); else uni.switchTab({ url: '/pages/index/index' }) }
 function goDetail(id: string) { if (id) uni.navigateTo({ url: `/pages/course-detail/index?id=${id}` }) }
-function viewCourses() { uni.pageScrollTo({ selector: '#upcoming', duration: 250 }) }
+
+const shareTitle = () =>
+  trainer.value?.displayName
+    ? tr(`Full愈 · ${trainer.value.displayName}｜导师主页`, `Full愈 · ${trainer.value.displayName} | Guide profile`)
+    : tr('Full愈 · 导师主页', 'Full愈 · Guide profile')
+onShareAppMessage(() => brandShareMessage(shareTitle()))
+// #ifdef MP-WEIXIN
+onShareTimeline(() => brandShareTimeline(shareTitle()))
+// #endif
+
 </script>
 
 <style scoped>
@@ -154,6 +163,5 @@ button::after { border: 0; }
 .review-stars { display: flex; align-items: center; gap: 6rpx; margin-top: 16rpx; }
 .review-stars .secondary { margin-left: 12rpx; }
 .star-cell { display: flex; }
-.star-cell.dim { opacity: .25; }
 .primary-btn { margin-top: 32rpx; padding: 24rpx; min-height: 88rpx; border-radius: var(--radius-button); background: var(--c-primary); color: var(--c-rice); font-weight: 600; }
 </style>

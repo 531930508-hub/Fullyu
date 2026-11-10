@@ -109,7 +109,8 @@ export class HuifuPayService {
     }
     const data: Record<string, any> = {
       req_date: this.today(),
-      req_seq_id: `${params.outRefundNo}_${Date.now()}`,
+      // 同一退款流水号重试时保持幂等：汇付按 req_seq_id 去重，重复请求不会二次扣款
+      req_seq_id: params.outRefundNo,
       huifu_id: this.huifuId,
       ord_amt: (params.refundFen / 100).toFixed(2),
       org_req_date: orgReqDate,
@@ -124,6 +125,56 @@ export class HuifuPayService {
       throw new BusinessException('退款申请失败', 5106)
     }
     return { refund_id: resp.hf_seq_id ?? '', status: resp.trans_stat ?? 'P' }
+  }
+
+  /**
+   * 主动查询退款结果（退款异步通知丢失时的兜底）。
+   * 按退款请求流水号 org_req_seq_id + 退款日期 org_req_date 定位，
+   * 同一笔退款可反复查询，不产生任何资金动作。
+   * - status: SUCCESS 已到账 / PROCESSING 受理中 / FAIL 失败 / NOT_FOUND 网关查无此退款
+   * - 23000001「原交易不存在」同时覆盖「未受理」和「日期不符」，调用方需结合日期判断，
+   *   不得直接据此认定退款未发生。
+   */
+  async queryRefund(params: {
+    outRefundNo: string
+    orgReqDate: string
+  }): Promise<{
+    status: 'SUCCESS' | 'PROCESSING' | 'FAIL' | 'NOT_FOUND'
+    gatewayRef?: string
+    amountFen?: number
+    respCode: string
+    respDesc: string
+  }> {
+    const resp = await this.request('/v4/trade/payment/scanpay/refundquery', {
+      huifu_id: this.huifuId,
+      org_req_date: params.orgReqDate,
+      org_req_seq_id: params.outRefundNo,
+    })
+    const respCode = String(resp.resp_code ?? '')
+    const respDesc = String(resp.resp_desc ?? '')
+    if (respCode === '23000001') {
+      return { status: 'NOT_FOUND', respCode, respDesc }
+    }
+    if (respCode !== '00000000' && respCode !== '00000100') {
+      this.logger.error(`汇付退款查询失败 ${params.outRefundNo}: ${respCode} ${respDesc}`)
+      throw new BusinessException(`退款查询失败：${respDesc || respCode}`, 5107)
+    }
+    const stat = String(resp.trans_stat ?? '').toUpperCase()
+    return {
+      status: stat === 'S' ? 'SUCCESS' : stat === 'P' ? 'PROCESSING' : 'FAIL',
+      // 退款查询对 TRANS_REFUND 只在 org_hf_seq_id 返回本次退款流水号（已实测）
+      gatewayRef: resp.hf_seq_id
+        ? String(resp.hf_seq_id)
+        : resp.trade_type === 'TRANS_REFUND' && resp.org_hf_seq_id
+          ? String(resp.org_hf_seq_id)
+          : undefined,
+      amountFen:
+        resp.actual_ref_amt != null && resp.actual_ref_amt !== ''
+          ? Math.round(Number(resp.actual_ref_amt) * 100)
+          : undefined,
+      respCode,
+      respDesc,
+    }
   }
 
   /**

@@ -66,7 +66,7 @@ export const MENU_CONFIG: MenuItem[] = [
       { key: 'membercards', title: '会员卡管理', path: '/sales/membercards', perm: ['membercard:view'] },
       { key: 'membercard-products', title: '会员卡商品', path: '/sales/membercard-products', perm: ['membercard:view'] },
       { key: 'time-discounts', title: '时段折扣', path: '/sales/time-discounts', perm: ['membercard:view'] },
-      { key: 'vouchers', title: '代金券管理', path: '/sales/vouchers', perm: ['voucher:view'] },
+      { key: 'vouchers', title: '代金券与发券', path: '/sales/vouchers', perm: ['voucher:view'] },
       { key: 'orders', title: '订单管理', path: '/sales/orders', perm: ['order:view'] },
     ],
   },
@@ -80,6 +80,8 @@ export const MENU_CONFIG: MenuItem[] = [
       { key: 'inbound', title: '验收入库', path: '/scm/inbound', perm: ['scm:inbound:view'] },
       { key: 'stock', title: '库存管理', path: '/scm/stock', perm: ['scm:stock:view'] },
       { key: 'scm-adjust', title: '库存调整', path: '/scm/adjust', perm: ['scm:stock:view'] },
+      { key: 'scm-transfer', title: '库存调拨', path: '/scm/transfer', perm: ['scm:transfer:view'] },
+      { key: 'scm-production', title: '生产工单', path: '/scm/production', perm: ['scm:production:view'] },
     ],
   },
   {

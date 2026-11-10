@@ -119,7 +119,7 @@ export class AnalyticsService {
         : [],
       blocks.stock
         ? this.prisma.stockBalance.findMany({
-            where: scope.toWhere('warehouseId'),
+            where: scope.toWhere('ownerOrgId'),
             include: { product: { select: { name: true, unit: true, safetyStock: true } } },
             orderBy: { qty: 'asc' },
           })
@@ -254,12 +254,12 @@ export class AnalyticsService {
 
     // 库存预警：按商品各自维护的安全库存判定，阈值不再写死
     const stockAlerts = stockRows
-      .filter((row) => isBelowSafety(row.qty, row.product.safetyStock))
+      .filter((row) => isBelowSafety(Number(row.qty), row.product.safetyStock))
       .map((row) => ({
         warehouseId: row.warehouseId,
         name: row.product.name,
         unit: row.product.unit,
-        stock: row.qty,
+        stock: Number(row.qty),
         safetyStock: row.product.safetyStock,
       }))
 

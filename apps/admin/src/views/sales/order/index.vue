@@ -54,6 +54,7 @@
             <div>
               <div style="font-weight: 500;">¥{{ record.actualPaid.toFixed(2) }}</div>
               <div v-if="record.discount > 0" style="color: #999; font-size: 12px; text-decoration: line-through;">¥{{ record.originalPrice.toFixed(2) }}</div>
+              <div v-if="record.refundedYuan > 0" style="color: #C0392B; font-size: 12px;">已退 ¥{{ record.refundedYuan.toFixed(2) }}</div>
             </div>
           </template>
           <template v-if="column.dataIndex === 'status'">
@@ -62,12 +63,13 @@
           <template v-if="column.dataIndex === 'action'">
             <a-button type="link" size="small" @click="showOrderDetail(record)">详情</a-button>
             <a-button v-perm="'order:refund'"
-              v-if="record.status === 'PAID' || record.status === 'COMPLETED'"
+              v-if="record.forceRefundable"
               type="link"
               size="small"
               danger
               @click="openForceRefund(record)"
             >强制退款</a-button>
+            <a-tag v-else-if="record.refundProcessing" color="orange" style="margin-left: 8px;">退款处理中</a-tag>
           </template>
         </template>
       </a-table>
@@ -95,6 +97,54 @@
           </a-descriptions-item>
         </a-descriptions>
 
+        <a-divider v-if="currentOrder.refundRecords.length || currentOrder.status === 'REFUNDING'">退款流水</a-divider>
+        <div v-if="currentOrder.status === 'REFUNDING' && !currentOrder.refundRecords.length" class="refund-record">
+          <div class="refund-record-meta">
+            该订单为旧版退款，尚无退款流水。可主动查询网关结果；确认网关未退款后会回退为已支付，可重新发起。
+          </div>
+          <div class="refund-record-actions">
+            <a-button
+              v-perm="'order:refund'"
+              type="link"
+              size="small"
+              :loading="refundQuerying === 'legacy'"
+              @click="queryLegacyRefund(currentOrder.id)"
+            >查询网关退款结果</a-button>
+            <a-popconfirm title="仅在核实网关确实未退款时确认。确认后订单回退为已支付，可重新发起退款。" @confirm="confirmLegacyRefundFailed(currentOrder.id)">
+              <a-button v-perm="'order:refund'" type="link" size="small" danger>确认未退款</a-button>
+            </a-popconfirm>
+          </div>
+        </div>
+        <div v-if="currentOrder.refundRecords.length" class="refund-records">
+          <div v-for="r in currentOrder.refundRecords" :key="r.id" class="refund-record">
+            <div class="refund-record-head">
+              <span class="refund-record-amount">¥{{ Number(r.amountYuan).toFixed(2) }}</span>
+              <a-tag :color="refundStatusColorMap[r.status] || 'default'">{{ refundStatusLabelMap[r.status] || r.status }}</a-tag>
+            </div>
+            <div class="refund-record-meta">
+              {{ r.createdAt ? String(r.createdAt).replace('T', ' ').slice(0, 16) : '' }}
+              <template v-if="r.reason"> · {{ r.reason }}</template>
+              <template v-if="r.attempts > 1"> · 第 {{ r.attempts }} 次发起</template>
+              <template v-if="r.operatorName"> · {{ r.operatorName }}</template>
+            </div>
+            <div v-if="r.gatewayRef" class="refund-record-meta">网关流水 {{ r.gatewayRef }}</div>
+            <div v-if="r.failMessage" class="refund-record-fail">{{ r.failCode ? `[${r.failCode}] ` : '' }}{{ r.failMessage }}</div>
+            <div v-if="r.status === 'UNKNOWN' || r.status === 'PROCESSING'" class="refund-record-actions">
+              <a-button
+                v-perm="'order:refund'"
+                type="link"
+                size="small"
+                :loading="refundQuerying === r.id"
+                @click="queryRefund(currentOrder.id, r)"
+              >查询网关</a-button>
+              <a-button v-perm="'order:refund'" type="link" size="small" @click="retryRefund(currentOrder.id, r)">重试退款</a-button>
+              <a-popconfirm title="确认该笔退款在网关未发生？作废后可重新发起退款。" @confirm="confirmRefundFailed(currentOrder.id, r)">
+                <a-button v-perm="'order:refund'" type="link" size="small" danger>确认未退款</a-button>
+              </a-popconfirm>
+            </div>
+          </div>
+        </div>
+
         <a-divider>操作记录</a-divider>
         <a-timeline>
           <a-timeline-item color="green">用户下单 · {{ currentOrder.createTime }}</a-timeline-item>
@@ -114,10 +164,10 @@
       />
       <a-form layout="vertical">
         <a-form-item label="订单">
-          <span>{{ refundForm.orderNo }}（实付 ¥{{ refundForm.paid.toFixed(2) }}）</span>
+          <span>{{ refundForm.orderNo }}（实付 ¥{{ refundForm.paid.toFixed(2) }}<template v-if="refundForm.refunded > 0"> · 已退 ¥{{ refundForm.refunded.toFixed(2) }} · 剩余可退 ¥{{ refundForm.remaining.toFixed(2) }}</template>）</span>
         </a-form-item>
         <a-form-item label="退款金额（元）">
-          <a-input-number v-model:value="refundForm.amount" prefix="¥" style="width: 100%" :min="0" :max="refundForm.paid" placeholder="留空则全额退" />
+          <a-input-number v-model:value="refundForm.amount" prefix="¥" style="width: 100%" :min="0" :max="refundForm.remaining" :placeholder="refundForm.refunded > 0 ? `留空则退剩余全部 ¥${refundForm.remaining.toFixed(2)}` : '留空则全额退'" />
         </a-form-item>
         <a-form-item label="退款原因" required>
           <a-input v-model:value="refundForm.reason" placeholder="如：客诉处理、重复支付" />
@@ -131,7 +181,16 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { adminListOrders, forceRefundOrder } from '@/api/order'
+import {
+  adminListOrders,
+  forceRefundOrder,
+  getRefundSummary,
+  retryOrderRefund,
+  confirmOrderRefundFailed,
+  queryOrderRefund,
+  queryLegacyOrderRefund,
+  confirmLegacyOrderRefundFailed,
+} from '@/api/order'
 
 const route = useRoute()
 
@@ -145,6 +204,8 @@ const statusColorMap: Record<string, string> = { PAID: 'green', COMPLETED: 'cyan
 const statusLabelMap: Record<string, string> = { PAID: '已支付', COMPLETED: '已完成', PENDING_PAYMENT: '待支付', REFUNDING: '退款中', REFUNDED: '已退款', CANCELLED: '已取消' }
 const typeLabelMap: Record<string, string> = { COURSE: '课程', WAITLIST: '候补', MEMBER_CARD: '会员卡', COMMUNITY: '社群' }
 const cardTypeLabelMap: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
+const refundStatusColorMap: Record<string, string> = { PROCESSING: 'orange', UNKNOWN: 'gold', SUCCESS: 'green', FAILED: 'red', CANCELLED: 'default' }
+const refundStatusLabelMap: Record<string, string> = { PROCESSING: '受理中', UNKNOWN: '结果待确认', SUCCESS: '已到账', FAILED: '已失败', CANCELLED: '已作废' }
 
 const columns = [
   { title: '订单号', dataIndex: 'orderNo', width: 200 },
@@ -166,6 +227,12 @@ function toYuan(o: any, val: any) {
 function mapOrder(o: any) {
   const originalPrice = toYuan(o, o.originalPrice)
   const actualPaid = toYuan(o, o.actualPaid)
+  // 退款流水金额统一为分；仅按已到账（SUCCESS）流水累计
+  const refunds: any[] = Array.isArray(o.refunds) ? o.refunds : []
+  const refundedYuan = refunds
+    .filter((r) => r.status === 'SUCCESS')
+    .reduce((sum, r) => sum + Number(r.amountFen || 0), 0) / 100
+  const refundProcessing = refunds.some((r) => r.status === 'PROCESSING' || r.status === 'UNKNOWN')
   return {
     id: o.id,
     orderNo: o.orderNo || o.id, // 优先使用自定义订单号
@@ -186,6 +253,11 @@ function mapOrder(o: any) {
     payTime: o.paymentTime ? String(o.paymentTime).replace('T', ' ').slice(0, 16) : '',
     refundAmount: o.refundAmount == null ? null : toYuan(o, o.refundAmount),
     refundTime: o.refundTime ? String(o.refundTime).replace('T', ' ').slice(0, 16) : '',
+    refundedYuan,
+    refundProcessing,
+    // 已支付/已完成、且没有进行中的退款流水时才允许发起强制退款（剩余可退在打开弹窗时按台账核对）
+    forceRefundable: (o.status === 'PAID' || o.status === 'COMPLETED') && !refundProcessing,
+    refundRecords: [] as any[],
   }
 }
 
@@ -226,21 +298,132 @@ const refundCount = computed(() => orders.value.filter(o => o.status === 'REFUND
 
 const detailVisible = ref(false)
 const currentOrder = ref<any>(null)
-function showOrderDetail(record: any) { currentOrder.value = record; detailVisible.value = true }
+function showOrderDetail(record: any) {
+  currentOrder.value = record
+  detailVisible.value = true
+  void loadRefundRecords(record)
+}
+
+/** 详情抽屉里的退款流水来自退款台账接口（含查询/重试/确认未退款操作） */
+async function loadRefundRecords(record: any) {
+  try {
+    const summary: any = await getRefundSummary(record.id)
+    record.refundRecords = summary?.refunds || []
+    record.refundedYuan = Number(summary?.refundedFen || 0) / 100
+    // 主动查询/确认失败后订单状态会变化，同步刷新抽屉与列表行
+    if (summary?.orderStatus) {
+      record.status = summary.orderStatus
+      record.statusLabel = statusLabelMap[summary.orderStatus] || summary.orderStatus
+    }
+  } catch {
+    record.refundRecords = []
+  }
+}
+
+const refundQuerying = ref('')
+
+/** 主动查询网关退款结果：解决回调丢失后订单长期停在「退款中」 */
+async function queryRefund(orderId: string, refund: any) {
+  refundQuerying.value = refund.id
+  try {
+    const res: any = await queryOrderRefund(orderId, refund.id)
+    message.success(res?.message || '已查询网关退款结果')
+    if (currentOrder.value) await loadRefundRecords(currentOrder.value)
+    loadOrders()
+  } catch {
+    // 错误已由拦截器统一提示
+  } finally {
+    refundQuerying.value = ''
+  }
+}
+
+/** 旧版退款（无流水）按订单查询网关结果 */
+async function queryLegacyRefund(orderId: string) {
+  refundQuerying.value = 'legacy'
+  try {
+    const res: any = await queryLegacyOrderRefund(orderId)
+    message.success(res?.message || '已查询网关退款结果')
+    if (currentOrder.value) await loadRefundRecords(currentOrder.value)
+    loadOrders()
+  } catch {
+    // 错误已由拦截器统一提示
+  } finally {
+    refundQuerying.value = ''
+  }
+}
+
+/** 旧版退款确认未发生：订单回退为已支付，可重新发起退款 */
+async function confirmLegacyRefundFailed(orderId: string) {
+  try {
+    await confirmLegacyOrderRefundFailed(orderId)
+    message.success('已确认该订单未退款，可重新发起')
+    if (currentOrder.value) await loadRefundRecords(currentOrder.value)
+    loadOrders()
+  } catch {
+    // 错误已由拦截器统一提示
+  }
+}
+
+async function retryRefund(orderId: string, refund: any) {
+  try {
+    await retryOrderRefund(orderId, refund.id)
+    message.success('已重新发起该笔退款，结果以网关回调为准')
+    if (currentOrder.value) await loadRefundRecords(currentOrder.value)
+    loadOrders()
+  } catch {
+    // 错误已由拦截器统一提示
+  }
+}
+
+async function confirmRefundFailed(orderId: string, refund: any) {
+  try {
+    await confirmOrderRefundFailed(orderId, refund.id)
+    message.success('该笔退款流水已作废，可重新发起退款')
+    if (currentOrder.value) await loadRefundRecords(currentOrder.value)
+    loadOrders()
+  } catch {
+    // 错误已由拦截器统一提示
+  }
+}
 
 // 强制退款
 const refundVisible = ref(false)
 const refunding = ref(false)
-const refundForm = ref({ id: '', orderNo: '', paid: 0, amount: null as number | null, reason: '' })
+const refundForm = ref({ id: '', orderNo: '', paid: 0, refunded: 0, remaining: 0, amount: null as number | null, reason: '' })
 
-function openForceRefund(record: any) {
-  refundForm.value = { id: record.id, orderNo: record.orderNo, paid: record.actualPaid, amount: null, reason: '' }
+async function openForceRefund(record: any) {
+  // 打开弹窗前先按退款台账核对：进行中的退款/已退完不允许再发起
+  let summary: any = null
+  try {
+    summary = await getRefundSummary(record.id)
+  } catch {
+    // 台账加载失败不拦截操作，后端提交时仍会强制校验
+  }
+  if (summary && !summary.canForceRefund) {
+    message.warning(summary.activeRefundId ? '该订单有退款正在处理，请等待结果或先处理该流水' : '该订单可退金额已退完')
+    return
+  }
+  const refunded = summary ? Number(summary.refundedFen || 0) / 100 : record.refundedYuan || 0
+  const remaining = summary ? Number(summary.remainingFen || 0) / 100 : Math.max(0, record.actualPaid - refunded)
+  refundForm.value = {
+    id: record.id,
+    orderNo: record.orderNo,
+    paid: record.actualPaid,
+    refunded,
+    remaining: remaining > 0 ? remaining : record.actualPaid,
+    amount: null,
+    reason: '',
+  }
   refundVisible.value = true
 }
 
 async function confirmForceRefund() {
   if (!refundForm.value.reason) {
     message.warning('请填写退款原因')
+    return
+  }
+  if (refundForm.value.amount != null && refundForm.value.amount > refundForm.value.remaining) {
+    message.warning(`退款金额不能超过剩余可退 ¥${refundForm.value.remaining.toFixed(2)}`)
     return
   }
   refunding.value = true
@@ -263,3 +446,13 @@ async function confirmForceRefund() {
   }
 }
 </script>
+
+<style scoped>
+.refund-records { display: flex; flex-direction: column; gap: 12px; }
+.refund-record { padding: 12px; border: 1px solid #f0e9df; border-radius: 8px; background: #fdfbf7; }
+.refund-record-head { display: flex; align-items: center; justify-content: space-between; }
+.refund-record-amount { font-weight: 600; color: #C0392B; }
+.refund-record-meta { margin-top: 4px; color: #999; font-size: 12px; }
+.refund-record-fail { margin-top: 4px; color: #C0392B; font-size: 12px; }
+.refund-record-actions { margin-top: 4px; padding-left: 0; }
+</style>

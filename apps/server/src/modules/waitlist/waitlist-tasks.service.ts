@@ -44,7 +44,9 @@ export class WaitlistTasksService {
 
       try {
         if (entry.orderId) {
-          await this.paymentService.refundFull(entry.orderId, '候补截止未轮上，自动全额退款')
+          await this.paymentService.refundFull(entry.orderId, '候补截止未轮上，自动全额退款', {
+            source: 'SYSTEM',
+          })
         }
         // 退款回调会最终置 REFUNDED；此处先标记，避免重复处理
         await this.prisma.waitlistEntry.update({

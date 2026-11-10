@@ -345,7 +345,7 @@ const MEMBER_ZH: LegalDoc = {
       p: [
         '权益按业务配置：时叙、在场、轻疗分别提供页面展示的会员价或优惠。具体适用门店、商品、课程或项目与折扣，以开卡时锁定的配置、门店公示和结算页为准。',
         '会员价不与优惠券、积分抵扣、活动价叠加，同一笔消费按对你最有利的一种结算。',
-        '在场畅练卡与 Full愈年卡是两张独立的卡：畅练卡管有效期内免费上课，年卡管三店会员价。上课计价顺序为畅练卡免费、品牌会员价、原价。畅练卡的购买、续费与有效期由在场单独管理，不并入年卡。'
+        '在场畅练卡由在场单独销售与管理：有效期内不限次报课 0 元，并在同一有效期内免费赠送 Full愈 品牌大会员资格。已有品牌会员有效期更晚的，保留原会员；更早的，有效期自动接续到畅练卡截止日。在场的候补优先排位与课程会员阶梯价属于品牌会员权益。上课计价顺序为畅练卡 0 元、品牌会员价、原价，不叠加。'
       ]
     },
     {
@@ -354,19 +354,29 @@ const MEMBER_ZH: LegalDoc = {
         '积分由 Full愈品牌会员中心统一记录，时叙、在场、轻疗共用一个积分账户。',
         '积分通过消费、活动与「愈行之旅」获得，不可购买、不可提现、不可转让，不构成预付款。',
         '积分按批次计算有效期，到期未使用自动失效；页面展示最近到期时间。',
-        '轻疗结算时 1 积分可抵 ¥1，单笔可抵扣金额与可用范围以结算页为准；在场、时叙本期仅展示积分，暂不参与抵扣。'
+        '轻疗结算时 1 积分可抵 ¥1，单笔可抵扣金额与可用范围以结算页为准；在场、时叙本期仅展示积分，暂不参与抵扣。',
+        '「愈行之旅」骰子按会员在三店的实付金额累计获得，每满一定金额（以会员页显示为准）得 1 颗，零头累计到下一颗；骰子与途中礼物不可转让、不折现；订单全额退款的，该笔消费获得的骰子会相应扣回。'
       ]
     },
     {
       h: '五、退款',
       p: [
-        '开通后 7 日内，且三店均未使用任何会员权益的，可申请全额退款。',
-        '超过 7 日或已使用权益的，按实付金额扣除已享优惠后计算，最低为 0；已享优惠包括会员价差额、积分抵扣、赠品与活动优惠。',
-        '退款原路退回，到账时间以支付渠道为准；已开具发票的，需按税务规定办理发票退回或红冲。'
+        '开通后 7 日内可申请无理由退款，退还实付金额；期间已领取的年卡礼（实物礼）按其标注价值扣除。',
+        '超过 7 日的，按实付金额扣除已享会员优惠与已领取年卡礼价值后计算；已享优惠包括会员价差额、积分抵扣、赠品与活动优惠。计算结果为 0 或以下的，不予退款。',
+        '通过会员码兑换、或随畅练卡等其他卡附赠的会员资格未单独付款，不涉及退款；附赠资格随原卡失效。',
+        '退款原路退回，到账时间以支付渠道为准；已开具发票的，需按税务规定办理发票退回或红冲。特殊情况可联系门店伙伴，由工作人员核实后协商处理。'
       ]
     },
     {
-      h: '六、收款、发票与经营主体',
+      h: '六、会员码、好友邀请、会员故事与意见反馈',
+      p: [
+        '会员码由 Full愈 通过活动或合作渠道发放，每个码有名额、兑换截止日期与对应天数，以兑换结果为准；同一账号每个码限兑一次，会员码不可转售。',
+        '品牌会员每月可在在场生成一定数量的好友邀请（以会员页显示为准）。好友登录后领取一张在场免费体验课券，每位好友限领一次，券有效期以领取结果为准，不可转让、不折现。',
+        '有效会员可在会员页提交意见反馈。你勾选同意后，我们可能在匿名化处理（只保留姓氏）后将内容整理进「会员故事」，仅向会员展示。'
+      ]
+    },
+    {
+      h: '七、收款、发票与经营主体',
       p: [
         '会员卡由开通页面注明的业务主体销售并收款，发票由实际收款方开具。',
         '三店权益由各业务主体分别提供；会员身份、卡期与积分由 Full愈品牌会员中心统一记录，用于跨店识别与结算。',
@@ -374,14 +384,14 @@ const MEMBER_ZH: LegalDoc = {
       ]
     },
     {
-      h: '七、个人信息',
+      h: '八、个人信息',
       p: [
         '为提供三店通用权益，你的手机号、会员编号、卡期与积分会在 Full愈品牌会员体系内（时叙、在场、轻疗）共享；我们不会出售你的个人信息。',
         '详细处理规则见《隐私政策》。你可以在「我的-个人资料」查看、更正资料，或联系我们注销账号。'
       ]
     },
     {
-      h: '八、其他',
+      h: '九、其他',
       p: [
         '本规则是《用户协议》的组成部分；与《用户协议》不一致时，会员权益部分以本规则为准。',
         '已购卡期按开卡时锁定的权益与规则执行；规则更新会在小程序内公布，重大变更显著提示。',
@@ -414,7 +424,7 @@ const MEMBER_EN: LegalDoc = {
       p: [
         'Benefits follow each business configuration. Teahour, Presence and Retreat each provide the member price or discount shown in the app. The participating stores, products, classes or services and discounts follow the configuration locked at purchase, in-store notices and the checkout page.',
         'Member prices do not stack with coupons, points or promotions; the single most favourable option applies to each purchase.',
-        'The Presence Pass and the Full Yu annual card are two separate cards: the Pass covers free classes during its term; the annual card covers member prices across all three stores. Class pricing applies the Pass first, then the brand member price, then the list price. The Pass is sold, renewed and managed by Presence and is not merged into the annual card.'
+        'The Presence Pass is sold and managed by Presence: classes cost ¥0 during its term, and it includes Full Yu brand membership for the same term. Priority waitlist seating and member tier prices at Presence are brand-member benefits. Class pricing applies the Pass (¥0) first, then the brand member price, then the list price; they do not stack.'
       ]
     },
     {
@@ -423,19 +433,29 @@ const MEMBER_EN: LegalDoc = {
         'Points are recorded in one ledger by the Full Yu membership centre and shared by Teahour, Presence and Retreat.',
         'Points are earned through spending, activities and the Journey game. They cannot be purchased, withdrawn or transferred, and are not prepayments.',
         'Points are held in batches with expiry dates. Unused points expire automatically; the app shows the nearest expiry date.',
-        'At Retreat checkout, 1 point offsets ¥1. The amount and scope that can be offset follow the checkout page. Presence and Teahour display points only for now and do not accept point offsets.'
+        'At Retreat checkout, 1 point offsets ¥1. The amount and scope that can be offset follow the checkout page. Presence and Teahour display points only for now and do not accept point offsets.',
+        'Journey dice are earned from the amount members actually pay across the three stores: 1 die for each threshold reached (as shown on the member page), with the remainder carried to the next die. Dice and journey gifts cannot be transferred or converted to cash; if an order is fully refunded, the dice earned from it are deducted.'
       ]
     },
     {
       h: '5. Refunds',
       p: [
-        'Within 7 days of joining, if no member benefit has been used at any of the three stores, you may request a full refund.',
-        'After 7 days or once a benefit has been used, the refund is the amount paid less benefits already enjoyed, with a minimum of 0. Benefits already enjoyed include member-price savings, point offsets, gifts and promotional discounts.',
-        'Refunds are returned to the original payment method; timing depends on the payment channel. If an invoice has been issued, it must be returned or reversed under tax rules.'
+        'Within 7 days of joining you may request a refund without giving a reason; the amount paid is refunded less the marked value of any annual gifts (physical gifts) already collected.',
+        'After 7 days, the refund is the amount paid less member savings already enjoyed and the value of annual gifts collected. Savings include member-price savings, point offsets, gifts and promotional discounts. If the result is 0 or less, no refund is due.',
+        'Membership redeemed with a member code, or included with another card such as the Presence Pass, was not paid for separately and is not refundable; included membership ends with the original card.',
+        'Refunds are returned to the original payment method; timing depends on the payment channel. If an invoice has been issued, it must be returned or reversed under tax rules. For special circumstances, talk to our store team, who will verify and work it out with you.'
       ]
     },
     {
-      h: '6. Seller, invoices and operators',
+      h: '6. Member codes, friend invites, member stories and feedback',
+      p: [
+        'Member codes are issued by Full Yu through campaigns or partner channels. Each code has a quota, a redemption deadline and a number of days; the redemption result applies. Each account may redeem a code once, and codes cannot be resold.',
+        'Brand members can create a number of friend invites at Presence each month (as shown on the member page). A friend who logs in receives one free Presence trial class voucher; each friend can claim once. The voucher validity follows the claim result, and it cannot be transferred or converted to cash.',
+        'Active members can submit feedback on the member page. If you agree, we may anonymise it (keeping only your surname) and include it in Member Stories, which are shown to members only.'
+      ]
+    },
+    {
+      h: '7. Seller, invoices and operators',
       p: [
         'The card is sold and collected by the business named on the join page, and the invoice is issued by that payee.',
         'Benefits at the three stores are provided by each business. Member identity, card terms and points are recorded centrally by the Full Yu membership centre for cross-store recognition and settlement.',
@@ -443,14 +463,14 @@ const MEMBER_EN: LegalDoc = {
       ]
     },
     {
-      h: '7. Personal information',
+      h: '8. Personal information',
       p: [
         'To provide cross-store benefits, your phone number, member number, card term and points are shared within the Full Yu membership programme (Teahour, Presence and Retreat). We do not sell your personal information.',
         'See the Privacy Policy for details. You can view and correct your profile under Me - Profile, or contact us to close your account.'
       ]
     },
     {
-      h: '8. Other',
+      h: '9. Other',
       p: [
         'These rules form part of the Terms of Service. If they conflict on member benefits, these rules apply.',
         'Purchased terms follow the benefits and rules locked at purchase. Updates are published in the app and material changes are highlighted.',

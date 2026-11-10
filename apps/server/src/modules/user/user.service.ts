@@ -2,10 +2,14 @@ import { Injectable } from '@nestjs/common'
 import { BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../common/prisma.service'
 import { isValidImageDataUrl, normalizeAvatarValue, normalizeImageDataUrl } from '../../common/image.util'
+import { CrmClient } from '../../common/crm/crm.client'
 
 @Injectable()
 export class UserService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly crm: CrmClient,
+  ) {}
 
   async findById(id: string) {
     const user = await this.prisma.user.findUnique({
@@ -89,6 +93,25 @@ export class UserService {
   }
 
   async getPointsBalance(userId: string): Promise<number> {
+    // 接入 CRM 后积分以会员中心为唯一账本；本地 pointsRecord 只作历史遗留数据。
+    if (this.crm.enabled) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, phone: true, nickname: true, unionId: true, openId: true },
+      })
+      if (!user) return 0
+      const known = await this.crm.getByLocalUser(user.id)
+      if (known) return known.balance
+      // 开启 CRM 前登录的老会话没有会员身份，读取时补一次解析。
+      const member = await this.crm.resolve({
+        localUserId: user.id,
+        phone: user.phone,
+        name: user.nickname,
+        unionId: user.unionId,
+        openId: user.openId,
+      })
+      return member.balance
+    }
     const latest = await this.prisma.pointsRecord.findFirst({
       where: { userId },
       orderBy: { createdAt: 'desc' },

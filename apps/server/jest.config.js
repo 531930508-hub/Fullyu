@@ -15,6 +15,8 @@ module.exports = {
   },
   moduleNameMapper: {
     '^@fullyu/shared$': '<rootDir>/../../packages/shared/src/index.ts',
+    // ali-oss 发布包混有未编译的 .ts，Jest 不转译 node_modules，必须替身
+    '^ali-oss$': '<rootDir>/test/mocks/ali-oss.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   testTimeout: 60000,

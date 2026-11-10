@@ -119,13 +119,13 @@ export class TodoService {
         : 0,
       can('scm:stock:view')
         ? this.prisma.stockBalance.findMany({
-            where: scope ? scope.toWhere('warehouseId') : {},
+            where: scope ? scope.toWhere('ownerOrgId') : {},
             select: { qty: true, product: { select: { safetyStock: true } } },
           })
         : [],
     ])
 
-    const stock = stockBalances.filter((b) => isBelowSafety(b.qty, b.product.safetyStock)).length
+    const stock = stockBalances.filter((b) => isBelowSafety(Number(b.qty), b.product.safetyStock)).length
     return {
       all: approval + refund + community + stock,
       approval,
@@ -277,14 +277,14 @@ export class TodoService {
   private async loadStock(admin: AdminContext): Promise<TodoItem[]> {
     const scope = await buildOrgScope(this.prisma, admin)
     const balances = await this.prisma.stockBalance.findMany({
-      where: scope.toWhere('warehouseId'),
+      where: scope.toWhere('ownerOrgId'),
       include: {
         product: { select: { name: true, unit: true, safetyStock: true } },
       },
       orderBy: { qty: 'asc' },
       take: 100,
     })
-    const alerts = balances.filter((b) => isBelowSafety(b.qty, b.product.safetyStock))
+    const alerts = balances.filter((b) => isBelowSafety(Number(b.qty), b.product.safetyStock))
     if (!alerts.length) return []
 
     const warehouses = await this.prisma.organization.findMany({
@@ -302,15 +302,15 @@ export class TodoService {
         bizType: 'STOCK_ALERT',
         bizLabel: '库存预警',
         title: `${b.product.name} 低于安全库存`,
-        summary: `${whMap.get(b.warehouseId) || '仓库'} 剩余 ${b.qty}${unit}，安全库存 ${b.product.safetyStock}${unit}`,
+        summary: `${whMap.get(b.warehouseId) || '仓库'} 剩余 ${Number(b.qty)}${unit}，安全库存 ${b.product.safetyStock}${unit}`,
         amount: null,
         requesterName: '',
         orgName: whMap.get(b.warehouseId) || '',
         createdAt: iso(b.updatedAt),
-        urgent: b.qty <= 0,
+        urgent: Number(b.qty) <= 0,
         nodeText: '',
         detailId: b.warehouseId,
-        hint: b.qty <= 0 ? '已无库存' : `还需补 ${b.product.safetyStock - b.qty}${unit}`,
+        hint: Number(b.qty) <= 0 ? '已无库存' : `还需补 ${b.product.safetyStock - Number(b.qty)}${unit}`,
         link: '/scm/stock',
       }
     })
@@ -430,9 +430,9 @@ export class TodoService {
       name: it.name,
       spec: it.spec,
       unit: it.unit,
-      qty: it.qty,
+      qty: Number(it.qty),
       price: Number(it.price),
-      amount: Number(it.price) * it.qty,
+      amount: Number(it.price) * Number(it.qty),
     }))
     return { title: `采购单 ${po.id}`, rows, items, link: '/scm/purchase-orders' }
   }
@@ -486,9 +486,9 @@ export class TodoService {
       name: it.name,
       spec: `账面 ${it.beforeQty} → 实盘 ${it.afterQty}`,
       unit: it.unit,
-      qty: it.diffQty,
+      qty: Number(it.diffQty),
       price: Number(it.price),
-      amount: Math.abs(it.diffQty) * Number(it.price),
+      amount: Math.abs(Number(it.diffQty)) * Number(it.price),
     }))
     return { title: `库存调整 ${adjust.id}`, rows, items, link: '/scm/adjust' }
   }

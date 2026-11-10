@@ -199,7 +199,7 @@ describe('订单生命周期与金额口径', () => {
       const { course, user, orderId } = await completedOrder()
 
       await expect(ctx.order.cancelOrder(orderId, user.id, '用户取消')).rejects.toThrow(
-        /已完成.*(客服|线下)/,
+        /课程已完成，不支持自助退款/,
       )
 
       const order = await getOrder(orderId)
@@ -211,7 +211,7 @@ describe('订单生命周期与金额口径', () => {
       const { orderId } = await completedOrder()
 
       await expect(ctx.payment.refundOrder(orderId, '用户退款')).rejects.toThrow(
-        /已完成.*(客服|线下)/,
+        /课程已完成，不支持自助退款/,
       )
       expect((await getOrder(orderId))!.status).toBe('COMPLETED')
     })
@@ -495,7 +495,8 @@ describe('订单生命周期与金额口径', () => {
       expect(Number((await getOrder(third.orderId))!.actualPaid)).toBe(9000)
     })
 
-    it('会员卡折扣按课程配置生效，过期卡不再打折', async () => {
+    // 2026-11-08 会议：畅练卡有效期内 0 元报课；课程会员折扣改由 Full愈品牌会员享受（见 brand-member-program.spec）。
+    it('有效畅练卡 0 元报课（原价照常记账），过期后恢复原价', async () => {
       const course = await seeder.course({
         ...timing(240),
         originalPrice: 10000,
@@ -507,8 +508,8 @@ describe('订单生命周期与金额口径', () => {
       const withCard = await ctx.enrollment.enroll(course.id, user.id, {})
       const withCardOrder = await getOrder(withCard.orderId)
       expect(Number(withCardOrder!.originalPrice)).toBe(10000)
-      expect(Number(withCardOrder!.discountAmount)).toBe(2000)
-      expect(Number(withCardOrder!.actualPaid)).toBe(8000)
+      expect(Number(withCardOrder!.discountAmount)).toBe(10000)
+      expect(Number(withCardOrder!.actualPaid)).toBe(0)
       expect(withCardOrder!.cardType).toBe('YEARLY')
 
       await ctx.prisma.memberCard.update({
@@ -640,7 +641,14 @@ describe('订单生命周期与金额口径', () => {
       const user = await seeder.user()
       const { orderId } = await enrollAndPay(course.id, user.id)
 
-      const res = await ctx.payment.forceRefund(orderId, 200, '超额尝试')
+      // 超额直接拒绝（4026），不再静默截断为实付金额，订单状态与退款流水均不受影响
+      await expect(ctx.payment.forceRefund(orderId, 200, '超额尝试')).rejects.toMatchObject({
+        bizCode: 4026,
+      })
+      expect((await getOrder(orderId))!.status).toBe('PAID')
+      expect(await ctx.prisma.orderRefund.count({ where: { orderId } })).toBe(0)
+
+      const res = await ctx.payment.forceRefund(orderId, 100, '全额退款')
       expect(res.refundAmount).toBe(100)
       expect(Number((await getOrder(orderId))!.refundAmount)).toBe(10000)
 
@@ -670,8 +678,13 @@ describe('订单生命周期与金额口径', () => {
       // 会员卡列值单位为元：100 元就是 100，不能写成 10000
       expect(Number((await getOrder(order.id))!.refundAmount)).toBe(100)
 
-      await ctx.payment.handleRefundNotify(refundNotify(order.id))
-      expect((await getOrder(order.id))!.status).toBe('REFUNDED')
+      // 按退款流水号回调（部分退款）：订单回退到退款前状态而非整单 REFUNDED
+      await ctx.payment.handleRefundNotify(refundNotify(order.id, 'TX_TEST', `RF${order.id}`))
+      const partial = await getOrder(order.id)
+      expect(partial!.status).toBe('PAID')
+      expect(Number(partial!.refundAmount)).toBe(100)
+      const attempt = await ctx.prisma.orderRefund.findFirstOrThrow({ where: { orderId: order.id } })
+      expect(attempt.status).toBe('SUCCESS')
     })
   })
 })

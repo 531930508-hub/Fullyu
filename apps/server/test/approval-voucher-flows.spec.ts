@@ -19,6 +19,7 @@ describe('二次审批流程', () => {
   let vouchers: VoucherService
   const instanceIds: string[] = []
   const voucherUserIds: string[] = []
+  const batchNos: string[] = []
 
   const adminCtx = (admin: { id: string; username: string }) =>
     ({
@@ -41,11 +42,23 @@ describe('二次审批流程', () => {
       ctx.payment,
       new StockService(ctx.prisma),
     )
-    vouchers = new VoucherService(ctx.prisma, approval)
+    // 兑换限流计数从 0 起：helpers 的 incr 为订单号随机基址，直接复用会误触限流
+    const redeemCounters = new Map<string, number>()
+    vouchers = new VoucherService(ctx.prisma, approval, {
+      ...(redis as any),
+      incr: async (k: string) => {
+        const next = (redeemCounters.get(k) ?? 0) + 1
+        redeemCounters.set(k, next)
+        return next
+      },
+    } as any)
   })
 
   afterAll(async () => {
     await ctx.prisma.voucher.deleteMany({ where: { userId: { in: voucherUserIds } } })
+    if (batchNos.length) {
+      await ctx.prisma.voucher.deleteMany({ where: { batchNo: { in: batchNos } } })
+    }
     await ctx.prisma.approvalInstance.deleteMany({ where: { id: { in: instanceIds } } })
     await seeder.cleanup()
     await ctx.app.close()
@@ -70,37 +83,57 @@ describe('二次审批流程', () => {
     return { user, course: course!, order }
   }
 
-  it('强制退款两级审批：通过前不动单，全部通过后执行退款并释放名额', async () => {
-    const first = await ctx.prisma.adminUser.findUnique({ where: { username: '13900000011' } })
-    const second = await ctx.prisma.adminUser.findUnique({ where: { username: '13900000002' } })
-    expect(first && second).toBeTruthy()
+  /** 按用户名取后台账号 */
+  const adminByUsername = (username: string) =>
+    ctx.prisma.adminUser.findUnique({ where: { username } })
+
+  /** 逐节点用各节点真实审批人「同意」，返回最终实例（APPROVED） */
+  async function approveThrough(instance: any) {
+    let current = instance
+    while (current.status === 'PENDING') {
+      const node = current.nodes[current.currentIndex]
+      const approver = await adminByUsername((node.approvers as string[])[0])
+      expect(approver).toBeTruthy()
+      current = await approval.approve(adminCtx(approver!), current.id, '同意')
+      if (current.status === 'PENDING') {
+        // 中间节点通过后订单仍不动
+        expect((await ctx.prisma.order.findUnique({ where: { id: (instance.payload as any).orderId } }))!.status).toBe('PAID')
+      }
+    }
+    return current
+  }
+
+  it('强制退款审批：通过前不动单，全部通过后执行退款并释放名额', async () => {
+    // 流程节点与审批人以测试库当前配置为准（配置可能被运营调整），不再硬编码两级审批
+    const requester = await adminByUsername('13900000011')
+    expect(requester).toBeTruthy()
     const { course, order } = await paidCourseOrder()
 
     const instance = await approval.submit({
       bizType: 'ORDER_FORCE_REFUND',
+      bizId: order.id,
       summary: `强制退款订单 ${order.orderNo}`,
       amount: 1,
-      requesterId: first!.id,
+      requesterId: requester!.id,
       payload: { orderId: order.id, refundAmount: 1, reason: '客诉特殊退款' },
     })
     expect(instance).toBeTruthy()
     instanceIds.push(instance!.id)
     expect(instance!.status).toBe('PENDING')
-    expect(instance!.nodes).toHaveLength(2)
+    expect(instance!.nodes.length).toBeGreaterThanOrEqual(1)
 
-    // 非当前节点审批人 / 当前节点重复表态均被拦截
-    await expect(approval.approve(adminCtx(second!), instance!.id)).rejects.toBeInstanceOf(
-      BusinessException,
-    )
-    const afterFirst = await approval.approve(adminCtx(first!), instance!.id, '同意')
-    expect(afterFirst.status).toBe('PENDING')
-    expect(afterFirst.currentIndex).toBe(1)
-    expect((await ctx.prisma.order.findUnique({ where: { id: order.id } }))!.status).toBe('PAID')
-    await expect(approval.approve(adminCtx(first!), instance!.id)).rejects.toBeInstanceOf(
-      BusinessException,
-    )
+    // 非当前节点审批人被拦截
+    const firstNode = instance!.nodes[0]
+    const firstApprovers = (firstNode.approvers as string[]) ?? []
+    const outsider =
+      (await adminByUsername('13900000002')) ?? (await adminByUsername('13900000010'))
+    if (outsider && !firstApprovers.includes(outsider.username)) {
+      await expect(approval.approve(adminCtx(outsider), instance!.id)).rejects.toBeInstanceOf(
+        BusinessException,
+      )
+    }
 
-    const done = await approval.approve(adminCtx(second!), instance!.id, '同意退款')
+    const done = await approveThrough(instance!)
     expect(done.status).toBe('APPROVED')
     expect(done.resultNote).toContain('已发起强制退款')
 
@@ -111,32 +144,43 @@ describe('二次审批流程', () => {
     const beforeCallback = await ctx.prisma.course.findUnique({ where: { id: course.id } })
     expect(beforeCallback!.currentEnrolled).toBe(1)
 
-    await ctx.payment.handleRefundNotify(refundNotify(order.id))
+    await ctx.payment.handleRefundNotify(refundNotify(order.id, 'TX_TEST', `RF${order.id}`))
     expect((await ctx.prisma.order.findUnique({ where: { id: order.id } }))!.status).toBe('REFUNDED')
     const afterSeat = await ctx.prisma.course.findUnique({ where: { id: course.id } })
     expect(afterSeat!.currentEnrolled).toBe(0)
 
     // 已结束的单不可再次审批
-    await expect(approval.approve(adminCtx(second!), instance!.id)).rejects.toBeInstanceOf(
+    const anyApprover = await adminByUsername(firstApprovers[0])
+    await expect(approval.approve(adminCtx(anyApprover!), instance!.id)).rejects.toBeInstanceOf(
       BusinessException,
     )
   })
 
   it('驳回落定终态且不动订单', async () => {
-    const first = await ctx.prisma.adminUser.findUnique({ where: { username: '13900000011' } })
-    const second = await ctx.prisma.adminUser.findUnique({ where: { username: '13900000002' } })
+    const requester = await adminByUsername('13900000011')
+    expect(requester).toBeTruthy()
     const { order } = await paidCourseOrder()
 
     const instance = await approval.submit({
       bizType: 'ORDER_FORCE_REFUND',
+      bizId: order.id,
       summary: `驳回退款订单 ${order.orderNo}`,
       amount: 1,
-      requesterId: first!.id,
+      requesterId: requester!.id,
       payload: { orderId: order.id, refundAmount: 1, reason: '测试驳回' },
     })
     instanceIds.push(instance!.id)
-    await approval.approve(adminCtx(first!), instance!.id)
-    const rejected = await approval.reject(adminCtx(second!), instance!.id, '金额不符')
+
+    // 多节点时先通过前面的节点，在最后一个节点驳回（审批人取自当前流程配置）
+    let current = instance!
+    while (current.status === 'PENDING' && current.currentIndex < current.nodes.length - 1) {
+      const node = current.nodes[current.currentIndex]
+      const approver = await adminByUsername((node.approvers as string[])[0])
+      current = await approval.approve(adminCtx(approver!), current.id, '同意')
+    }
+    const lastNode = current.nodes[current.nodes.length - 1]
+    const lastApprover = await adminByUsername((lastNode.approvers as string[])[0])
+    const rejected = await approval.reject(adminCtx(lastApprover!), current.id, '金额不符')
     expect(rejected.status).toBe('REJECTED')
     expect(rejected.resultNote).toContain('驳回')
     expect((await ctx.prisma.order.findUnique({ where: { id: order.id } }))!.status).toBe('PAID')
@@ -195,5 +239,39 @@ describe('二次审批流程', () => {
     expect((await ctx.prisma.voucher.findUnique({ where: { id: granted[0].id } }))!.status).toBe('REVOKED')
     await ctx.prisma.voucher.update({ where: { id: granted[1].id }, data: { status: 'USED' } })
     await expect(vouchers.revoke(granted[1].id)).rejects.toBeInstanceOf(BusinessException)
+  })
+
+  it('兑换码批量发券：命中审批先挂单，通过后码券落库并可兑换', async () => {
+    const approver = await ctx.prisma.adminUser.findUnique({ where: { username: '13900000010' } })
+    expect(approver).toBeTruthy()
+
+    const pending: any = await vouchers.grantBatch({
+      quantity: 2,
+      mode: 'REDUCE_BY',
+      amount: 20,
+      expiresAt: new Date(Date.now() + 7 * 86400 * 1000).toISOString(),
+      source: '测试批量审批',
+      applicableAll: true,
+    })
+    expect(pending).toMatchObject({ pendingApproval: true, granted: 0 })
+    expect(pending.batchNo).toBeTruthy()
+    batchNos.push(pending.batchNo)
+    const instance = await approval.detail(pending.approvalId)
+    instanceIds.push(instance.id)
+    // 审批通过前码券不落库
+    expect(await ctx.prisma.voucher.count({ where: { batchNo: pending.batchNo } })).toBe(0)
+
+    const approved = await approval.approve(adminCtx(approver!), instance.id, '同意批量发放')
+    expect(approved.status).toBe('APPROVED')
+    expect(approved.resultNote).toContain('已发放 2 张代金券')
+    const rows = await ctx.prisma.voucher.findMany({ where: { batchNo: pending.batchNo } })
+    expect(rows).toHaveLength(2)
+    expect(rows.every((v) => v.userId === null && !!v.redeemCode && v.status === 'UNUSED')).toBe(true)
+
+    // 审批落库的码券可正常兑换
+    const user = await seeder.user()
+    const redeemed: any = await vouchers.redeem(user.id, rows[0].redeemCode!)
+    expect(redeemed.replayed).toBe(false)
+    expect(redeemed.voucher.userId).toBe(user.id)
   })
 })

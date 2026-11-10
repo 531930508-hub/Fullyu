@@ -7,7 +7,7 @@
       <text class="nav-title serif">{{ tr('社群', 'Community') }}</text>
       <view class="nav-actions">
         <button v-if="community" class="icon-button" :aria-label="tr('分享社群', 'Share community')" @tap="shareVisible = true">
-          <PresenceIcon name="arrow" :size="30" />
+          <PresenceIcon name="share" :size="34" />
         </button>
         <button v-if="managed" class="text-button" @tap="goWorkspace">{{ tr('工作台', 'Studio') }}</button>
       </view>
@@ -38,7 +38,7 @@
             <view class="stat"><text class="stat-value latin">{{ community.activeToday }}</text><text class="muted">{{ tr('今日活跃', 'Active today') }}</text></view>
             <view class="stat"><text class="stat-value latin fee">{{ feeLabel }}</text><text class="muted">{{ community.yearlyFee ? tr('年费', 'Yearly') : tr('加入', 'Join') }}</text></view>
           </view>
-          <view class="owner-row">
+          <button class="owner-row" @tap="openHostCard">
             <image v-if="community.owner.avatar && !failedImages[community.owner.avatar]" class="avatar" :src="community.owner.avatar" mode="aspectFill" @error="failedImages[community.owner.avatar] = true" />
             <view v-else class="avatar avatar-fallback"><PresenceIcon name="user" :size="30" /></view>
             <view class="grow">
@@ -46,7 +46,8 @@
               <text v-if="community.owner.title" class="muted block">{{ community.owner.title }}</text>
             </view>
             <text v-if="joined" class="badge">{{ tr('已加入', 'Joined') }}</text>
-          </view>
+            <PresenceIcon name="arrow" :size="26" />
+          </button>
         </view>
 
         <view v-if="community.restricted" class="notice restricted">
@@ -87,7 +88,7 @@
               <text>{{ tr('分享此刻的感受…', 'Share how you feel right now…') }}</text>
               <PresenceIcon name="arrow" :size="26" />
             </button>
-            <text class="compose-hint muted">{{ tr('发布后立即对社群成员可见；不适内容由主理人或平台后续处理。', 'Posts are visible to members right away. The host or platform can moderate later.') }}</text>
+            <text class="compose-hint muted">{{ tr('写给同频的人，三两句也可以。', 'A line or two for your people is enough.') }}</text>
           </view>
 
           <PageState v-if="!joined && !managed" state="guest" :title="tr('加入后可查看社群动态', 'Join to see community posts')" :message="tr('动态仅对成员开放；公开活动仍可在「活动」中浏览。', 'Posts are members-only. Public events are still listed under Events.')" />
@@ -119,8 +120,14 @@
 
                 <view v-if="commentsOf(post).length" class="comments">
                   <view v-for="comment in visibleComments(post)" :key="comment.id" class="comment-row">
-                    <text class="comment-name">{{ comment.author.name }}</text>
-                    <text class="comment-text">{{ comment.content }}</text>
+                    <button class="comment-avatar-button" :aria-label="tr('查看名片', 'View card')" @tap="openMemberCard(comment.author.id)">
+                      <image v-if="comment.author.avatar && !failedImages[comment.author.avatar]" class="avatar avatar-sm" :src="comment.author.avatar" mode="aspectFill" @error="failedImages[comment.author.avatar] = true" />
+                      <view v-else class="avatar avatar-sm avatar-fallback"><PresenceIcon name="user" :size="22" /></view>
+                    </button>
+                    <view class="grow">
+                      <text class="comment-name">{{ comment.author.name }}</text>
+                      <text class="comment-text">{{ comment.content }}</text>
+                    </view>
                     <button v-if="managed" class="moderate-inline" @tap="openModeration('COMMENT', comment.id, comment.content)">{{ tr('处理', 'Moderate') }}</button>
                   </view>
                   <button v-if="commentsOf(post).length > 3 && !expandedPosts[post.id]" class="expand-comments" @tap="expandedPosts[post.id] = true">
@@ -129,7 +136,10 @@
                 </view>
 
                 <view class="post-actions">
-                  <text class="muted">{{ tr(`点赞 ${post.likes}`, `Likes ${post.likes}`) }}</text>
+                  <button class="like-trigger" :class="{ liked: post.liked }" :disabled="likeBusy[post.id]" :aria-pressed="post.liked" @tap="onToggleLike(post)">
+                    <PresenceIcon name="heart" :size="28" :filled="post.liked" :color="post.liked ? '#96581c' : '#8b8371'" />
+                    <text>{{ post.likes > 0 ? post.likes : tr('点赞', 'Like') }}</text>
+                  </button>
                   <button class="comment-trigger" @tap="openComment(post)"><PresenceIcon name="edit" :size="26" /><text>{{ tr('留言', 'Comment') }}</text></button>
                 </view>
               </view>
@@ -178,12 +188,20 @@
         <view v-else class="tab-content">
           <PageState v-if="!joined && !managed" state="guest" :title="tr('加入后可查看成员', 'Join to see members')" :message="tr('成员名单仅对社群成员开放。', 'The member list is available to members only.')" />
           <template v-else>
-            <view v-if="membership?.interests?.length" class="member-filter">
+            <view v-if="joined" class="member-filter">
               <button class="filter-chip" :class="{ active: memberFilter === 'all' }" @tap="memberFilter = 'all'">{{ tr('全部成员', 'All members') }}</button>
               <button class="filter-chip" :class="{ active: memberFilter === 'shared' }" @tap="memberFilter = 'shared'">{{ tr('共同兴趣', 'Shared interests') }}</button>
             </view>
             <PageState v-if="sectionLoading.members" state="loading" :title="tr('正在加载成员', 'Loading members')" />
             <PageState v-else-if="sectionErrors.members" state="error" :title="tr('成员加载失败', 'Failed to load members')" :message="sectionErrors.members" :action="tr('重试', 'Retry')" @action="loadMembers" />
+            <PageState
+              v-else-if="memberFilter === 'shared' && joined && !myInterests.length"
+              state="empty"
+              :title="tr('先选择你的兴趣标签', 'Choose your interests first')"
+              :message="tr('选好兴趣后，这里会展示和你标签重合的成员。', 'Once you pick interests, members who share them will appear here.')"
+              :action="tr('去设置兴趣', 'Set interests')"
+              @action="openPrivacy"
+            />
             <PageState v-else-if="!filteredMembers.length" state="empty" :title="tr('暂无匹配成员', 'No members match')" :message="memberFilter === 'shared' ? tr('还没有与你兴趣相同的成员。', 'No members share your interests yet.') : tr('成员加入后会展示在这里。', 'Members will appear here after joining.')" />
             <view v-else class="card members-card">
               <button v-for="member in filteredMembers" :key="member.id" class="member-row" @tap="openMemberCard(member.id)">
@@ -193,13 +211,13 @@
                   <text class="post-name">{{ member.name }}</text>
                   <text class="muted block">{{ member.joinedAt ? tr(`${member.joinedAt.slice(0, 10)} 加入`, `Joined ${formatMemberDate(member.joinedAt)}`) : tr('社群成员', 'Community member') }}</text>
                   <view v-if="member.interests?.length" class="mini-tags">
-                    <text v-for="item in member.interests" :key="item" class="mini-tag">{{ item }}</text>
+                    <text v-for="item in member.interests" :key="item" class="mini-tag" :class="{ shared: myInterests.includes(item) }">{{ item }}</text>
                   </view>
                 </view>
                 <PresenceIcon name="arrow" :size="26" />
               </button>
             </view>
-            <text v-if="!sectionLoading.members && !sectionErrors.members" class="member-total muted">{{ tr(`共 ${community.memberCount} 位成员`, `${community.memberCount} members in total`) }}</text>
+            <text v-if="!sectionLoading.members && !sectionErrors.members" class="member-total muted">{{ memberTotalLabel }}</text>
           </template>
         </view>
       </view>
@@ -231,7 +249,7 @@
 
     <!-- 入群申请 -->
     <BottomSheet :show="applyVisible" :title="tr('申请加入', 'Request to join')" :busy="applyBusy" @close="applyVisible = false">
-      <text class="muted block">{{ tr('主理人审核通过后即可加入。可以简单说明你的练习背景或期待。', 'The host reviews requests. You can briefly share your practice background or what you hope to find.') }}</text>
+      <text class="muted block">{{ tr('主理人审核通过后即可加入。', 'You can join once the host approves.') }}</text>
       <textarea v-model="applyNote" class="sheet-textarea" :maxlength="200" :disabled="applyBusy" :placeholder="tr('选填，最多 200 字', 'Optional, up to 200 characters')" />
       <text v-if="applyError" class="error-text">{{ applyError }}</text>
       <template #actions>
@@ -268,7 +286,7 @@
 
     <!-- 发布动态 -->
     <BottomSheet :show="composeVisible" :title="tr('发布动态', 'Create post')" :busy="postBusy" @close="composeVisible = false">
-      <text class="muted block">{{ tr('发布后立即对成员可见，请分享真实的练习感受。', 'Visible to members immediately. Share your genuine practice experience.') }}</text>
+      <text class="muted block">{{ tr('分享真实的练习感受，社群成员都会看到。', 'Share how your practice really felt — members will see it.') }}</text>
       <textarea v-model="composeText" class="sheet-textarea" :placeholder="tr('分享此刻的感受…', 'Share how you feel right now…')" :maxlength="1000" :disabled="postBusy" />
       <text class="counter muted">{{ composeText.length }} / 1000</text>
       <text v-if="postError" class="error-text">{{ postError }}</text>
@@ -279,7 +297,6 @@
 
     <!-- 留言 -->
     <BottomSheet :show="commentVisible" :title="tr('留言', 'Comment')" :busy="commentBusy" @close="commentVisible = false">
-      <text class="muted block">{{ tr('即时可见；主理人可后续隐藏或删除。', 'Visible immediately. The host can hide or delete later.') }}</text>
       <text v-if="commentPost" class="quote">{{ commentPost.content }}</text>
       <textarea v-model="commentText" class="sheet-textarea" :maxlength="300" :disabled="commentBusy" :placeholder="tr('写下你的回应…', 'Write a response…')" />
       <text v-if="commentError" class="error-text">{{ commentError }}</text>
@@ -337,18 +354,49 @@
       </template>
     </BottomSheet>
 
-    <ShareSheet :show="shareVisible" :targets="shareTargets" @close="shareVisible = false" @payload="sharePayload = $event" />
-  </view>
+    <!-- 主理人资料 -->
+    <BottomSheet :show="hostVisible" :title="tr('主理人资料', 'Host profile')" @close="hostVisible = false">
+      <PageState v-if="hostBusy" state="loading" :title="tr('正在加载资料', 'Loading profile')" />
+      <PageState v-else-if="hostError" state="error" :title="tr('资料暂不可用', 'Profile unavailable')" :message="hostError" :action="tr('重试', 'Retry')" @action="loadHostCard" />
+      <template v-else-if="host">
+        <view class="card-head">
+          <image v-if="host.avatar" class="avatar avatar-lg" :src="host.avatar" mode="aspectFill" />
+          <view v-else class="avatar avatar-lg avatar-fallback"><PresenceIcon name="user" :size="42" /></view>
+          <view class="grow">
+            <text class="section-title">{{ host.name }}</text>
+            <text v-if="host.title" class="muted block">{{ host.title }}</text>
+            <text v-if="host.hostSince" class="muted block">{{ tr(`自 ${host.hostSince.slice(0, 10)} 起在 Full愈 主理社群`, `Hosting on Full愈 since ${formatMemberDate(host.hostSince)}`) }}</text>
+          </view>
+        </view>
+        <view class="host-stats">
+          <view class="host-stat"><text class="stat-value latin">{{ host.communityCount }}</text><text class="muted">{{ tr('在营社群', 'Communities') }}</text></view>
+          <view class="host-stat"><text class="stat-value latin">{{ host.eventCount }}</text><text class="muted">{{ tr('发起活动', 'Events') }}</text></view>
+        </view>
+        <text class="sheet-label spacing">{{ tr('主理的社群', 'Communities hosted') }}</text>
+        <view class="host-community-list">
+          <button v-for="item in host.communities" :key="item.id" class="host-community-row" :disabled="item.current" @tap="goCommunity(item.id)">
+            <view class="grow">
+              <text class="post-name">{{ item.name }}<text v-if="item.current" class="muted"> · {{ tr('当前', 'Current') }}</text></text>
+              <text v-if="item.slogan" class="muted block">{{ item.slogan }}</text>
+              <text class="muted block">{{ communityTagLabel(item.category) }} · {{ tr(`${item.memberCount} 位成员`, `${item.memberCount} members`) }}</text>
+            </view>
+            <PresenceIcon v-if="!item.current" name="arrow" :size="26" />
+          </button>
+        </view>
+      </template>
+    </BottomSheet>
+
+    <ShareSheet :show="shareVisible" :targets="shareTargets" @close="shareVisible = false" @payload="sharePayload = $event" />  </view>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad, onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import {
-  fetchCommunity, fetchMembership, fetchEvents, fetchPosts, fetchMembers, fetchMemberCard,
-  joinCommunity, submitPost, postComment, moderateContent, applyJoin, updatePrivacy,
+  fetchCommunity, fetchMembership, fetchEvents, fetchPosts, fetchMembers, fetchMemberCard, fetchHostCard,
+  joinCommunity, submitPost, postComment, togglePostLike, moderateContent, applyJoin, updatePrivacy,
   type Community, type CommunityEvent, type CommunityPost, type CommunityMember, type CommunityMembership,
-  type MemberCard,
+  type MemberCard, type HostCard,
 } from '@/api/skool'
 import { payOrder } from '@/utils/wechat'
 import { tr, isEnglish } from '@/locale'
@@ -387,7 +435,7 @@ const tabs = computed<{ key: 'feed' | 'events' | 'members'; label: string }[]>((
 type Tab = 'feed' | 'events' | 'members'
 const currentTab = ref<Tab>('feed')
 
-const posts = ref<(CommunityPost & { commentsList?: { id: string; author: { name: string; avatar: string }; content: string; time: string }[] })[]>([])
+const posts = ref<(CommunityPost & { commentsList?: { id: string; author: { id?: string; name: string; avatar: string }; content: string; time: string }[] })[]>([])
 const events = ref<CommunityEvent[]>([])
 const members = ref<CommunityMember[]>([])
 const sectionLoading = ref<Record<Tab, boolean>>({ feed: false, events: false, members: false })
@@ -395,6 +443,7 @@ const sectionErrors = ref<Record<Tab, string>>({ feed: '', events: '', members: 
 const eventScope = ref<'upcoming' | 'past'>('upcoming')
 const memberFilter = ref<'all' | 'shared'>('all')
 const expandedPosts = ref<Record<string, boolean>>({})
+const likeBusy = ref<Record<string, boolean>>({})
 
 let refreshBusy = false
 
@@ -570,7 +619,7 @@ const joinCopy = computed(() => {
   if (!community.value) return ''
   const m = membership.value
   if (m?.claimedInvite) {
-    return tr('本次将使用已领取的邀请权益，实际抵扣以确认后的订单为准。领取邀请不替代入群审核。', 'Your claimed invitation applies here. The final amount follows the created order. An invitation does not replace approval.')
+    return tr('本次将使用已领取的邀请权益抵扣年费。', 'Your claimed invitation will be applied to the annual fee.')
   }
   if (m?.expired) {
     return tr('你的成员有效期已过，续费后重新获得成员权益与成员内容访问。', 'Your membership has expired. Renew to regain access to member content.')
@@ -862,6 +911,62 @@ function visibleComments(post: CommunityPost & { commentsList?: { id: string }[]
   return expandedPosts.value[post.id] ? list : list.slice(0, 3)
 }
 
+/** 点赞：乐观更新 + 以服务端返回的计数为准 */
+async function onToggleLike(post: CommunityPost) {
+  if (likeBusy.value[post.id]) return
+  if (!uni.getStorageSync('token')) {
+    goLoginFor(`/pages/community-detail/index?id=${encodeURIComponent(communityId.value)}`)
+    return
+  }
+  likeBusy.value[post.id] = true
+  const before = { liked: post.liked, likes: post.likes }
+  post.liked = !before.liked
+  post.likes = Math.max(0, before.likes + (post.liked ? 1 : -1))
+  try {
+    const result = await togglePostLike(communityId.value, post.id)
+    post.liked = result.liked
+    post.likes = result.likes
+  } catch (error) {
+    post.liked = before.liked
+    post.likes = before.likes
+    uni.showToast({ title: errorMessage(error), icon: 'none' })
+  } finally {
+    likeBusy.value[post.id] = false
+  }
+}
+
+// ==================== 主理人资料 ====================
+const hostVisible = ref(false)
+const hostBusy = ref(false)
+const hostError = ref('')
+const host = ref<HostCard | null>(null)
+
+async function openHostCard() {
+  hostVisible.value = true
+  if (!host.value) await loadHostCard()
+}
+
+async function loadHostCard() {
+  if (!communityId.value) return
+  hostBusy.value = true
+  hostError.value = ''
+  try {
+    const result = await fetchHostCard(communityId.value)
+    if (!result?.name) throw new Error(tr('主理人资料暂不可用。', 'Host profile is unavailable.'))
+    host.value = result
+  } catch (error) {
+    hostError.value = errorMessage(error)
+  } finally {
+    hostBusy.value = false
+  }
+}
+
+function goCommunity(id: string) {
+  if (!id || id === communityId.value) return
+  hostVisible.value = false
+  uni.navigateTo({ url: `/pages/community-detail/index?id=${encodeURIComponent(id)}` })
+}
+
 // ==================== 成员名片 ====================
 const cardVisible = ref(false)
 const cardBusy = ref(false)
@@ -871,6 +976,12 @@ const cardUserId = ref('')
 
 async function openMemberCard(userId?: string) {
   if (!userId) return
+  // 主理人通常不在成员表里（他是社群所有者而非加入者），走成员名片会报
+  // 「该成员不在社群内」。点主理人的头像应当看到主理人资料。
+  if (community.value?.ownerUserId && userId === community.value.ownerUserId) {
+    await openHostCard()
+    return
+  }
   cardUserId.value = userId
   cardVisible.value = true
   card.value = null
@@ -897,11 +1008,26 @@ const visibleEvents = computed(() => {
   return eventScope.value === 'upcoming' ? upcoming : past
 })
 
+const myInterests = computed(() => membership.value?.interests || [])
+
 const filteredMembers = computed(() => {
-  if (memberFilter.value !== 'shared') return members.value
-  const mine = membership.value?.interests || []
-  if (!mine.length) return members.value
+  // 「共同兴趣」要拿观看者自己的兴趣标签去比，而兴趣存在加入关系上。
+  // 主理人只是社群所有者、没有加入关系，筛选对他没有可比的标签，
+  // 因此这个筛选只对已加入成员开放，其余情况一律按全部成员展示。
+  if (memberFilter.value !== 'shared' || !joined.value) return members.value
+  const mine = myInterests.value
+  // 没选兴趣时不静默回落到全部，页面另有引导去设置兴趣
+  if (!mine.length) return []
   return members.value.filter(member => (member.interests || []).some(item => mine.includes(item)))
+})
+
+const memberTotalLabel = computed(() => {
+  const total = members.value.length
+  if (memberFilter.value === 'shared' && joined.value) {
+    const matched = filteredMembers.value.length
+    return tr(`${matched} 位成员与你有共同兴趣 · 共 ${total} 位成员`, `${matched} share your interests · ${total} members in total`)
+  }
+  return tr(`共 ${total} 位成员`, `${total} members in total`)
 })
 
 function eventTypeName(type: string) {
@@ -968,8 +1094,8 @@ const shareTargets = computed<ShareTargetOption[]>(() => {
 .nav-bar { display: flex; align-items: center; justify-content: space-between; padding: 12rpx 32rpx 16rpx; gap: 12rpx; }
 .back-spacer { width: 120rpx; }
 .nav-title { font-size: 34rpx; color: var(--c-ink); }
-.nav-actions { display: flex; align-items: center; gap: 12rpx; }
-.icon-button { width: 68rpx; height: 68rpx; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--c-card-2); border-radius: 50%; transform: rotate(45deg); }
+.nav-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12rpx; min-width: 120rpx; }
+.icon-button { width: 80rpx; height: 80rpx; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--c-card-2); border-radius: 50%; }
 .text-button { background: transparent; color: var(--c-brown); font-size: 26rpx; padding: 8rpx 4rpx; }
 .hero { width: 100%; }
 .hero-image { width: 100%; height: 360rpx; display: block; }
@@ -990,10 +1116,11 @@ const shareTargets = computed<ShareTargetOption[]>(() => {
 .stat-value.fee { color: var(--c-brown); }
 .muted { color: var(--c-muted); }
 .block { display: block; }
-.owner-row { display: flex; align-items: center; gap: 16rpx; padding-top: 16rpx; border-top: 1rpx solid var(--line-soft); margin-top: 8rpx; }
+.owner-row { width: 100%; display: flex; align-items: center; gap: 16rpx; padding: 16rpx 0 0; border-top: 1rpx solid var(--line-soft); margin-top: 8rpx; background: transparent; text-align: left; font-size: 27rpx; color: var(--c-ink); }
 .avatar { width: 76rpx; height: 76rpx; border-radius: 50%; flex-shrink: 0; }
 .avatar-fallback { display: flex; align-items: center; justify-content: center; background: var(--c-card-2); }
 .avatar-lg { width: 112rpx; height: 112rpx; }
+.avatar-sm { width: 48rpx; height: 48rpx; }
 .grow { flex: 1; min-width: 0; }
 .notice { display: flex; gap: 12rpx; align-items: flex-start; background: var(--c-card-2); border-radius: 24rpx; padding: 22rpx 26rpx; margin-bottom: 20rpx; font-size: 24rpx; line-height: 1.7; color: var(--c-muted); }
 .notice.restricted { background: #fbf1df; color: #7a4c12; }
@@ -1021,13 +1148,17 @@ const shareTargets = computed<ShareTargetOption[]>(() => {
 .post-image-tile { width: calc(33.33% - 7rpx); border-radius: 16rpx; overflow: hidden; }
 .post-image { width: 100%; height: 184rpx; display: block; }
 .comments { margin-top: 14rpx; background: var(--c-card-2); border-radius: 18rpx; padding: 14rpx 18rpx; display: flex; flex-direction: column; gap: 8rpx; }
-.comment-row { display: flex; align-items: baseline; gap: 8rpx; flex-wrap: wrap; font-size: 24rpx; line-height: 1.7; }
-.comment-name { color: var(--c-brown); font-weight: 500; }
-.comment-text { color: var(--c-ink); flex: 1; min-width: 0; }
+.comment-row { display: flex; align-items: flex-start; gap: 12rpx; font-size: 24rpx; line-height: 1.7; }
+.comment-avatar-button { padding: 0; background: transparent; width: 48rpx; height: 48rpx; border-radius: 50%; flex-shrink: 0; margin-top: 4rpx; }
+.comment-row .avatar-fallback { background: var(--c-card); }
+.comment-name { display: block; color: var(--c-brown); font-weight: 500; }
+.comment-text { display: block; color: var(--c-ink); }
 .moderate-inline { background: transparent; font-size: 22rpx; color: var(--c-error); padding: 0 4rpx; }
 .expand-comments { background: transparent; color: var(--c-brown); font-size: 23rpx; padding: 6rpx 0; text-align: left; }
-.post-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 12rpx; font-size: 23rpx; }
+.post-actions { display: flex; align-items: center; gap: 24rpx; margin-top: 12rpx; font-size: 23rpx; }
 .comment-trigger { display: flex; align-items: center; gap: 6rpx; background: transparent; color: var(--c-brown); font-size: 23rpx; padding: 4rpx 8rpx; }
+.like-trigger { display: flex; align-items: center; gap: 6rpx; background: transparent; color: var(--c-muted); font-size: 23rpx; padding: 4rpx 8rpx; }
+.like-trigger.liked { color: var(--c-brown); }
 .moderate-button { background: transparent; color: var(--c-muted); font-size: 22rpx; padding: 4rpx 8rpx; }
 .event-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12rpx; }
 .event-list { display: flex; flex-direction: column; gap: 16rpx; }
@@ -1045,6 +1176,7 @@ const shareTargets = computed<ShareTargetOption[]>(() => {
 .member-row:last-child { border-bottom: none; }
 .mini-tags { display: flex; flex-wrap: wrap; gap: 8rpx; margin-top: 6rpx; }
 .mini-tag { font-size: 21rpx; padding: 2rpx 12rpx; border-radius: 12rpx; background: var(--c-card-2); color: var(--c-brown); }
+.mini-tag.shared { background: #f0e4cf; color: #7a4c12; }
 .member-total { display: block; text-align: center; font-size: 23rpx; margin-top: 8rpx; }
 .bottom-action { position: fixed; left: 0; right: 0; bottom: 0; padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom)); background: var(--c-card); border-top: 1rpx solid var(--line-soft); display: flex; align-items: center; gap: 20rpx; z-index: 50; }
 .fee { font-size: 34rpx; color: var(--c-brown); }
@@ -1067,6 +1199,10 @@ const shareTargets = computed<ShareTargetOption[]>(() => {
 .error-text { display: block; margin-top: 12rpx; font-size: 24rpx; color: var(--c-error); }
 .quote { display: block; margin-top: 12rpx; padding: 16rpx 20rpx; border-left: 4rpx solid var(--line-soft); background: var(--c-card-2); border-radius: 12rpx; font-size: 24rpx; color: var(--c-muted); }
 .card-head { display: flex; align-items: center; gap: 20rpx; }
+.host-stats { display: flex; gap: 16rpx; margin-top: 20rpx; }
+.host-stat { flex: 1; background: var(--c-card-2); border-radius: 20rpx; padding: 16rpx; display: flex; flex-direction: column; gap: 2rpx; font-size: 23rpx; }
+.host-community-list { display: flex; flex-direction: column; gap: 12rpx; }
+.host-community-row { width: 100%; display: flex; align-items: center; gap: 16rpx; text-align: left; background: var(--c-card-2); border-radius: 20rpx; padding: 18rpx 22rpx; font-size: 24rpx; color: var(--c-ink); }
 .interested { margin-top: 20rpx; }
 .activity-list { display: flex; flex-direction: column; gap: 14rpx; margin-top: 10rpx; }
 .activity-row { display: flex; flex-direction: column; gap: 2rpx; padding: 14rpx 18rpx; background: var(--c-card-2); border-radius: 16rpx; font-size: 25rpx; }

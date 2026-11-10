@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Request } from '@nestjs/common'
+import { Controller, Get, Post, Body, UseGuards, Request, Query } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { MemberService } from './member.service'
@@ -24,8 +24,9 @@ export class MemberController {
 
   @Get('active')
   @ApiOperation({ summary: '我的当前有效会员卡' })
-  async active(@Request() req: any) {
-    return this.memberService.activeCard(req.user.userId)
+  async active(@Request() req: any, @Query('stats') stats?: string) {
+    // stats=1 时返回本期用卡节省（分）与报课次数，仅供畅练卡页做临期复购提示
+    return this.memberService.activeCard(req.user.userId, { withStats: stats === '1' })
   }
 
   @Post('purchase')

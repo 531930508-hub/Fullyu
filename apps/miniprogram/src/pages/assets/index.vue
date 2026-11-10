@@ -32,10 +32,17 @@
           <text v-if="historyTotal > pointsHistory.length" class="list-note">{{ tr(`显示最近 ${pointsHistory.length} 条记录，共 ${historyTotal} 条`, `Showing the latest ${pointsHistory.length} of ${historyTotal} records`) }}</text>
         </template>
         <template v-else>
+          <view class="redeem-card">
+            <view class="redeem-copy">
+              <text class="redeem-title">{{ tr('有兑换码？', 'Have a code?') }}</text>
+              <text class="secondary">{{ tr('输入 8 位券码，兑换后立即到账', 'Enter the 8-character code to claim it instantly') }}</text>
+            </view>
+            <button class="redeem-button" @tap="goRedeem"><PresenceIcon name="ticket" :size="28" />{{ tr('去兑换', 'Redeem') }}</button>
+          </view>
           <view v-for="group in voucherGroups" :key="group.title" class="voucher-group">
             <text class="group-title">{{ group.title }} · {{ group.items.length }}</text>
             <view v-for="voucher in group.items" :key="voucher.id" class="voucher-card" :class="{ inactive: voucher.statusClass !== 'active' }">
-              <view class="voucher-value"><text class="voucher-mode">{{ voucher.modeLabel }}</text><text v-if="voucher.displayAmount !== null" class="voucher-amount">¥{{ voucher.displayAmount }}</text><text v-else class="voucher-mode">{{ tr('金额待确认', 'Amount pending') }}</text></view>
+              <view class="voucher-value"><text class="voucher-mode">{{ voucher.modeLabel }}</text><text v-if="voucher.displayAmount !== null" class="voucher-amount">¥{{ voucher.displayAmount.toFixed(2) }}</text><text v-else class="voucher-mode">{{ tr('金额待确认', 'Amount pending') }}</text></view>
               <view class="voucher-copy">
                 <text class="voucher-name">{{ voucher.name }}</text>
                 <text class="secondary">{{ voucher.condition }}</text>
@@ -136,6 +143,7 @@ function useVoucher(voucher: VoucherView) {
   else goCourses()
 }
 function goCourses() { uni.switchTab({ url: '/pages/index/index' }) }
+function goRedeem() { uni.navigateTo({ url: '/pages/voucher-redeem/index' }) }
 function goLogin() { uni.switchTab({ url: '/pages/profile/index' }) }
 function goBack() { if (getCurrentPages().length > 1) uni.navigateBack(); else goLogin() }
 onLoad((query) => { if (query?.tab === 'vouchers') currentTab.value = 'vouchers' })
@@ -167,6 +175,10 @@ button::after { border: none; }
 .ledger-amount { font-size: 30rpx; font-weight: 600; }
 .ledger-amount.positive { color: var(--c-brown); }
 .list-note { display: block; font-size: 24rpx; color: var(--c-muted); text-align: center; margin: 24rpx 0; }
+.redeem-card { display: flex; align-items: center; gap: 24rpx; margin-top: 4rpx; padding: 28rpx 32rpx; background: var(--c-card); border-radius: var(--radius-card); box-shadow: var(--shadow-card); }
+.redeem-copy { flex: 1; min-width: 0; }
+.redeem-title { display: block; font-size: 28rpx; font-weight: 600; line-height: 1.7; }
+.redeem-button { display: inline-flex; align-items: center; gap: 8rpx; margin: 0; padding: 0 28rpx; min-height: 72rpx; box-sizing: border-box; background: var(--c-primary); color: var(--c-rice); border-radius: var(--radius-button); font-size: 26rpx; line-height: 1.6; flex-shrink: 0; }
 .group-title { display: block; font-size: 28rpx; margin: 28rpx 0 20rpx; font-weight: 600; }
 .voucher-card { display: flex; background: var(--c-card); border-radius: var(--radius-card); overflow: hidden; margin-bottom: 24rpx; box-shadow: var(--shadow-card); }
 .voucher-value { width: 192rpx; flex-shrink: 0; padding: 32rpx 16rpx; box-sizing: border-box; background: var(--c-card-2); color: var(--c-primary); display: flex; flex-direction: column; justify-content: center; align-items: center; border-right: 2rpx dashed var(--line-soft); }

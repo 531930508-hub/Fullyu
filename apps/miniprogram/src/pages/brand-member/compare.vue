@@ -12,9 +12,9 @@
 
     <view class="content">
       <view class="lead">
-        <text class="lead-title serif">{{ tr('不是二选一的替代关系', 'They are not substitutes') }}</text>
+        <text class="lead-title serif">{{ tr('畅练卡已含品牌会员', 'The Pass includes brand membership') }}</text>
         <text class="lead-desc">
-          {{ tr('在场畅练卡解决「有效期内免费上课」，Full愈年卡解决「三个品牌通用的会员价、积分和游戏」。两张卡可以同时持有，各算各的权益。', 'The Presence Pass covers free classes during its term. The Full Yu Annual card adds cross-brand member prices, shared points and the Journey game. You can hold both; each keeps its own benefits.') }}
+          {{ tr('在场畅练卡有效期内报课 0 元，并同期附赠 Full愈 品牌会员；没有畅练卡，也可以单独开通 Full愈年卡，享三店会员价、通用积分和愈行之旅。', 'Classes cost ¥0 with the Presence Pass, and it includes Full Yu brand membership for the same term. Without a Pass you can join Full Yu Annual on its own for member prices, shared points and the Journey game.') }}
         </text>
       </view>
 
@@ -29,7 +29,7 @@
           <text class="mini-eyebrow latin">PRESENCE PASS</text>
           <text class="mini-name serif">{{ tr('在场畅练卡', 'Presence Pass') }}</text>
           <text class="mini-price">{{ tr('以在场卡种页为准', 'See Presence plans') }}</text>
-          <text class="mini-role">{{ tr('在场本店 · 有效期内免费上课', 'Presence only · free classes') }}</text>
+          <text class="mini-role">{{ tr('在场本店 · 有效期内报课 0 元', 'Presence only · ¥0 classes') }}</text>
         </view>
       </view>
 
@@ -53,7 +53,7 @@
             <text class="flow-num">1</text>
             <view class="flow-copy">
               <text class="flow-name">{{ tr('畅练卡有效', 'Pass active') }}</text>
-              <text class="flow-desc">{{ tr('课程免费，不再扣品牌权益', 'Class free; no brand benefit used') }}</text>
+              <text class="flow-desc">{{ tr('报课 0 元，品牌会员价不再叠加', 'Class ¥0; brand price not applied on top') }}</text>
             </view>
           </view>
           <view class="flow-step">
@@ -109,18 +109,23 @@ const rows = computed(() => [
   },
   {
     label: tr('核心权益', 'Core benefit'),
-    brand: tr('三店会员价、通用积分、愈行之旅', 'Member prices, points, Journey game'),
-    pass: tr('有效期内课程免费、优先预约', 'Free classes, priority booking')
+    brand: tr('在场候补优先排位与阶梯价、三店会员价、通用积分、愈行之旅', 'Priority waitlist and tier prices at Presence, member prices, points, Journey game'),
+    pass: tr('有效期内报课 0 元', '¥0 classes during the term')
   },
   {
-    label: tr('是否含免费课', 'Free classes'),
+    label: tr('报课 0 元', '¥0 classes'),
     brand: tr('不含', 'No'),
     pass: tr('含，按卡种与有效期', 'Yes, per plan and term')
   },
   {
+    label: tr('品牌会员', 'Brand membership'),
+    brand: tr('本身即是', 'It is the membership'),
+    pass: tr('同期附赠，随畅练卡失效', 'Included for the same term')
+  },
+  {
     label: tr('积分怎么用', 'Points use'),
     brand: tr('通用积分；在场本期只展示，暂不抵扣', 'Shared points; display only at Presence for now'),
-    pass: tr('不产生品牌积分规则', 'No brand points rule')
+    pass: tr('随附赠的品牌会员计入通用积分', 'Earned via the included brand membership')
   },
   {
     label: tr('购买与续费', 'Buy / renew'),

@@ -45,12 +45,18 @@
           </view>
           <view v-if="form.feeMode === 'paid'" class="card fee-card">
             <view class="input-row"><text class="label">{{ tr('年费', 'Yearly') }}</text><text>¥</text><input v-model="form.feeYuan" class="input fee-input" type="digit" placeholder="0.00" :maxlength="12" /><text class="muted">{{ tr('元 / 年', 'CNY / year') }}</text></view>
-            <text class="muted">{{ tr('最多两位小数。此处只提交定价申请，不代表收款已开通；支付与结算须以平台实际支持为准。', 'Up to two decimal places. This only submits a pricing request; collection is not yet enabled. Payment and settlement depend on platform support.') }}</text>
+            <text class="muted">{{ tr('最多两位小数。成员年费由平台统一代收，扣除 10% 服务费后，剩余 90% 按月结算给你。', 'Up to two decimal places. Member fees are collected by Full愈; after a 10% service fee the remaining 90% is settled to you monthly.') }}</text>
+          </view>
+          <view v-if="form.feeMode === 'paid'" class="card agreement-card">
+            <button class="agreement-row" :aria-pressed="form.settlementAgreed" @tap="form.settlementAgreed = !form.settlementAgreed">
+              <view class="checkbox" :class="{ checked: form.settlementAgreed }"><PresenceIcon v-if="form.settlementAgreed" name="check" :size="20" color="#f5f6ed" /></view>
+              <text class="agreement-text">{{ tr('我已阅读并同意《Full愈 社群代结算服务协议》：成员年费由平台统一代收，扣除 10% 服务费后，剩余 90% 按月结算给我。', 'I have read and agree to the Full愈 Community Settlement Service Agreement: member fees are collected by the platform, and after a 10% service fee the remaining 90% is settled to me monthly.') }}</text>
+            </button>
+            <button class="link-button" @tap="agreementVisible = true">{{ tr('查看协议全文', 'Read the full agreement') }}</button>
           </view>
           <text class="field-title">{{ tr('社群介绍', 'Community description') }} <text class="muted">{{ tr('选填', 'Optional') }}</text></text>
           <textarea v-model="form.description" class="description-input" :placeholder="tr('适合谁、一起做什么、多久活动一次？也可以在这里说明成员可获得的内容。', 'Who is it for, what will you do together, and how often? You can also describe what members receive.')" :maxlength="300" />
           <text class="counter muted">{{ form.description.length }} / 300</text>
-          <view class="notice"><PresenceIcon name="info" :size="32" /><text>{{ tr('请如实描述内容与收费。社群和动态均需平台审核后展示。', 'Describe your content and pricing accurately. Communities and posts are reviewed by the platform before appearing.') }}</text></view>
         </view>
         <view v-else class="step-content">
           <text class="field-title first-title">{{ tr('预览', 'Preview') }}</text>
@@ -58,13 +64,6 @@
             <BrandCover :label="form.name" height="224rpx" icon="leaf" />
             <view class="preview-body"><text class="preview-name serif">{{ form.name.trim() }}</text><text class="muted block">{{ form.slogan.trim() }}</text><view class="preview-footer"><view class="tags"><text class="tag">{{ categoryLabel(form.category) }}</text><text v-for="tag in form.tags" :key="tag" class="tag">{{ communityTagLabel(tag) }}</text></view><text class="preview-fee">{{ previewFee }}</text></view><text v-if="form.description.trim()" class="long-text">{{ form.description.trim() }}</text></view>
           </view>
-          <text class="field-title">{{ tr('审核流程', 'Review process') }}</text>
-          <view class="card timeline">
-            <view class="timeline-row"><view class="timeline-dot active"></view><view><text>{{ tr('提交申请', 'Submit application') }}</text><text class="muted block">{{ tr('确认信息后提交给平台', 'Send to the platform after confirming details') }}</text></view></view>
-            <view class="timeline-row"><view class="timeline-dot"></view><view><text>{{ tr('平台审核', 'Platform review') }}</text><text class="muted block">{{ tr('审核结果以平台实际处理为准', 'The result follows the platform review') }}</text></view></view>
-            <view class="timeline-row"><view class="timeline-dot"></view><view><text>{{ tr('社群展示', 'Publish community') }}</text><text class="muted block">{{ tr('审核通过并上架后，在社群广场展示', 'Once approved and published, it appears in the community hub') }}</text></view></view>
-          </view>
-          <text class="muted review-note">{{ tr('提交后请勿重复申请。定价申请不代表支付、收款或结算功能已开通。', 'Do not submit twice. A pricing request does not mean payment, collection or settlement is enabled.') }}</text>
         </view>
         <text v-if="validationError" class="error-text">{{ validationError }}</text>
         <text v-if="submitError" class="error-text">{{ submitError }}</text>
@@ -75,13 +74,22 @@
       <button v-if="step < 3" class="primary-button" @tap="nextStep">{{ tr('下一步', 'Next') }}</button>
       <button v-else class="primary-button" :disabled="submitting" @tap="onSubmit">{{ submitting ? tr('提交中…', 'Submitting…') : tr('提交审核', 'Submit for review') }}</button>
     </view>
+
+    <!-- 代结算服务协议全文 -->
+    <BottomSheet :show="agreementVisible" :title="tr('社群代结算服务协议', 'Settlement service agreement')" @close="agreementVisible = false">
+      <text class="agreement-version muted">{{ tr(`版本 ${SETTLEMENT_AGREEMENT_VERSION}`, `Version ${SETTLEMENT_AGREEMENT_VERSION}`) }}</text>
+      <text class="agreement-body">{{ agreementText }}</text>
+      <template #actions>
+        <button class="primary-button full-width" @tap="acceptAgreement">{{ tr('我已阅读并同意', 'I have read and agree') }}</button>
+      </template>
+    </BottomSheet>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { COMMUNITY_CATEGORIES, submitCommunity } from '@/api/skool'
+import { COMMUNITY_CATEGORIES, submitCommunity, SETTLEMENT_AGREEMENT_VERSION } from '@/api/skool'
 import { tr, isEnglish } from '@/locale'
 import { communityTagLabel } from '@/utils/community-labels'
 import { readCapsuleLayout } from '@/utils/capsule'
@@ -89,6 +97,7 @@ import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
 import PageState from '@/components/PageState.vue'
 import FloatingBack from '@/components/FloatingBack.vue'
+import BottomSheet from '@/components/BottomSheet.vue'
 
 const capsule = readCapsuleLayout()
 const statusBarHeight = capsule.statusBarHeight
@@ -103,11 +112,64 @@ const CATEGORY_EN: Record<string, string> = {
 function categoryLabel(value: string) { return isEnglish() ? (CATEGORY_EN[value] || value) : value }
 const stepLabels = computed(() => [tr('基本信息', 'Basics'), tr('收费与介绍', 'Pricing & intro'), tr('预览提交', 'Review & submit')])
 const step = ref(1)
-const form = ref({ name: '', slogan: '', category: '疗愈', tags: [] as string[], feeMode: 'free' as 'free' | 'paid', feeYuan: '', description: '' })
+const form = ref({ name: '', slogan: '', category: '疗愈', tags: [] as string[], feeMode: 'free' as 'free' | 'paid', feeYuan: '', description: '', settlementAgreed: false })
 const validationError = ref('')
 const submitError = ref('')
 const submitting = ref(false)
 const submitted = ref(false)
+const agreementVisible = ref(false)
+/** 协议全文：条款变更时同步升版 SETTLEMENT_AGREEMENT_VERSION，并与后端常量保持一致 */
+const agreementText = computed(() => tr(
+  [
+    '一、代收代付',
+    '1. 订阅制社群的成员年费由 Full愈 平台统一代收。成员在小程序内向平台支付，平台据实记录每笔年费归属的社群与成员。',
+    '',
+    '二、服务费与分成',
+    '2. 平台按年费实收金额扣除 10% 作为平台服务费，用于支付通道费、系统运行与运营支持；剩余 90% 为主理人应得结算款。',
+    '',
+    '三、结算周期',
+    '3. 平台按自然月结算。每月初核算上一自然月已完成支付且已过退款期的年费，核算完成后向主理人提供的收款账户支付应得结算款，实际到账时间以支付通道处理为准。',
+    '',
+    '四、退款与冲抵',
+    '4. 成员按平台规则申请退款时，退款从平台代收资金中原路退回；若该笔年费已结算给主理人，则在下一结算周期冲抵。',
+    '',
+    '五、结算资料',
+    '5. 主理人须提供真实、有效的收款账户与结算所需资料。资料缺失或不符导致无法结算的，结算顺延至资料齐备后的下一周期。',
+    '',
+    '六、内容与权益责任',
+    '6. 主理人对社群内容、活动安排及对成员的权益承诺负责。违反平台规则或法律法规的，平台可暂停社群展示、暂缓结算，直至终止合作。',
+    '',
+    '七、协议变更',
+    '7. 条款变更时平台将升级协议版本并重新征得同意；本次勾选仅对当前版本生效。',
+  ].join('\n'),
+  [
+    '1. Collection',
+    '1.1 Member fees for subscription communities are collected by the Full愈 platform. Members pay the platform in the mini program, and the platform records the community and member behind every fee.',
+    '',
+    '2. Service fee and split',
+    '2.1 The platform deducts 10% of the fee actually received as a service fee covering payment channel costs, systems and operational support. The remaining 90% is payable to the host.',
+    '',
+    '3. Settlement cycle',
+    '3.1 Settlement runs monthly. Early each month the platform reconciles fees paid in the previous calendar month that are past their refund window, then pays the amount due to the account provided by the host. Actual arrival time depends on the payment channel.',
+    '',
+    '4. Refunds and offsets',
+    '4.1 When a member requests a refund under platform rules, the refund is returned through the original channel from the funds held by the platform. If the fee was already settled to the host, it is offset in the next settlement cycle.',
+    '',
+    '5. Settlement details',
+    '5.1 The host must provide a valid payout account and the information required for settlement. If settlement cannot be completed because details are missing or incorrect, it is deferred to the next cycle after the details are complete.',
+    '',
+    '6. Responsibility for content and benefits',
+    '6.1 The host is responsible for community content, events and the benefits promised to members. If platform rules or laws are breached, the platform may unlist the community, hold settlement, or end the collaboration.',
+    '',
+    '7. Changes',
+    '7.1 If the terms change, the platform will issue a new version and ask for consent again. This consent applies only to the current version.',
+  ].join('\n'),
+))
+function acceptAgreement() {
+  form.value.settlementAgreed = true
+  agreementVisible.value = false
+  if (validationError.value) validationError.value = ''
+}
 const yearlyFee = computed(() => {
   if (form.value.feeMode === 'free') return 0
   const raw = form.value.feeYuan.trim()
@@ -115,7 +177,7 @@ const yearlyFee = computed(() => {
   const cents = Math.round(Number(raw) * 100)
   return Number.isSafeInteger(cents) && cents > 0 ? cents : null
 })
-const previewFee = computed(() => form.value.feeMode === 'free' ? tr('免费', 'Free') : `¥${Number(((yearlyFee.value || 0) / 100).toFixed(2))}${isEnglish() ? '/year' : '/年'}`)
+const previewFee = computed(() => form.value.feeMode === 'free' ? tr('免费', 'Free') : `¥${((yearlyFee.value || 0) / 100).toFixed(2)}${isEnglish() ? '/year' : '/年'}`)
 function onTag(tag: string) {
   const index = form.value.tags.indexOf(tag)
   if (index >= 0) form.value.tags.splice(index, 1)
@@ -127,7 +189,13 @@ function validateBasic() {
   if (!categories.includes(form.value.category)) return tr('请选择社群分类。', 'Please choose a community category.')
   return ''
 }
-function validateFee() { return yearlyFee.value === null ? tr('请填写大于 0 的年费，最多两位小数。', 'Enter an annual fee greater than 0 with up to 2 decimal places.') : '' }
+function validateFee() {
+  if (yearlyFee.value === null) return tr('请填写大于 0 的年费，最多两位小数。', 'Enter an annual fee greater than 0 with up to 2 decimal places.')
+  if (form.value.feeMode === 'paid' && !form.value.settlementAgreed) {
+    return tr('订阅制社群需先阅读并勾选同意《Full愈 社群代结算服务协议》。', 'Please read and agree to the Full愈 Community Settlement Service Agreement first.')
+  }
+  return ''
+}
 function nextStep() {
   validationError.value = step.value === 1 ? validateBasic() : validateFee()
   if (validationError.value || step.value >= 3) return
@@ -152,6 +220,7 @@ async function onSubmit() {
     const result = await submitCommunity({
       name: form.value.name.trim(), slogan: form.value.slogan.trim(), category: form.value.category,
       tags: [...form.value.tags], yearlyFee: yearlyFee.value, description: form.value.description.trim() || undefined,
+      settlementAgreed: form.value.feeMode === 'paid' ? true : undefined,
     })
     if (!result?.id || typeof result.status !== 'string') throw new Error(tr('未收到有效提交回执，请核对后重试。', 'No valid submission receipt was received. Please check and try again.'))
     submitted.value = true
@@ -199,7 +268,8 @@ button[disabled] { opacity: .5; }
 .first-title { margin-top: 8rpx; }
 .field-heading { display: flex; align-items: baseline; gap: 12rpx; }
 .options { display: flex; flex-wrap: wrap; gap: 16rpx; }
-.option { position: relative; overflow: hidden; padding: 14rpx 32rpx; border: 1rpx solid var(--line-soft); background: var(--c-card); color: var(--c-ink); border-radius: 20rpx; font-size: 24rpx; }
+/* 2rpx 描边：1rpx 在真机上只有 0.5px，落到半个物理像素时上下边会被抗锯齿冲淡成"断线" */
+.option { position: relative; overflow: hidden; padding: 14rpx 32rpx; border: 2rpx solid var(--line-soft); background: var(--c-card); color: var(--c-ink); border-radius: 20rpx; font-size: 24rpx; }
 .option.selected { border-color: var(--c-primary); background: var(--c-card-2); color: var(--c-primary); }
 .selected-mark { position: absolute; top: 0; right: 0; display: flex; align-items: center; justify-content: center; width: 26rpx; height: 26rpx; border-bottom-left-radius: 14rpx; background: var(--c-primary); }
 .fee-options { display: flex; gap: 20rpx; }
@@ -208,7 +278,16 @@ button[disabled] { opacity: .5; }
 .fee-card { margin-top: 24rpx; }
 .fee-card .input-row { padding-top: 0; }
 .fee-input { text-align: left; }
-.description-input { width: 100%; height: 300rpx; padding: 28rpx; box-sizing: border-box; background: var(--c-card); border: 1rpx solid var(--line-soft); border-radius: 20rpx; font-size: 28rpx; line-height: 1.7; color: var(--c-ink); }
+.agreement-card { margin-top: 20rpx; padding: 24rpx 28rpx; }
+.agreement-row { display: flex; align-items: flex-start; gap: 16rpx; width: 100%; text-align: left; background: transparent; padding: 0; }
+.checkbox { width: 34rpx; height: 34rpx; flex-shrink: 0; margin-top: 4rpx; display: flex; align-items: center; justify-content: center; border: 2rpx solid var(--line-soft); border-radius: 8rpx; background: var(--c-card); }
+.checkbox.checked { border-color: var(--c-primary); background: var(--c-primary); }
+.agreement-text { flex: 1; min-width: 0; font-size: 24rpx; line-height: 1.7; color: var(--c-ink); }
+.link-button { margin-top: 16rpx; padding: 8rpx 0 0 50rpx; background: transparent; color: var(--c-primary); font-size: 24rpx; text-align: left; width: 100%; }
+.agreement-version { display: block; margin-bottom: 16rpx; }
+.agreement-body { display: block; font-size: 25rpx; line-height: 1.9; color: var(--c-ink); white-space: pre-wrap; }
+.full-width { width: 100%; }
+.description-input { width: 100%; height: 300rpx; padding: 28rpx; box-sizing: border-box; background: var(--c-card); border: 2rpx solid var(--line-soft); border-radius: 20rpx; font-size: 28rpx; line-height: 1.7; color: var(--c-ink); }
 .counter { display: block; margin-top: 10rpx; text-align: right; }
 .notice { display: flex; gap: 16rpx; margin-top: 28rpx; padding: 24rpx; background: var(--c-card-2); border-radius: 20rpx; font-size: 24rpx; color: var(--c-muted); line-height: 1.7; }
 .notice text { flex: 1; min-width: 0; }

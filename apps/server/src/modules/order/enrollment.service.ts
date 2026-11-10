@@ -67,6 +67,10 @@ export class EnrollmentService {
       timeDiscount: member.timeDiscount,
       discountAmount: member.discountAmount,
       priceAfterDiscount,
+      /** PASS = 畅练卡 0 元报课；BRAND = Full愈品牌会员价；null = 无会员优惠 */
+      memberSource: member.memberSource ?? null,
+      /** 品牌会员资格暂时无法确认：此价格为非会员价，下单时会再次确认 */
+      memberPriceUnconfirmed: Boolean(member.brandUnknown),
       allowDeduction: course.allowDeduction,
       pointsBalance: course.allowDeduction ? pointsBalance : 0,
       maxPointsDeduction: course.allowDeduction
@@ -82,6 +86,8 @@ export class EnrollmentService {
    * 报名下单：锁价 + 校验抵扣 + 生成限时待支付订单（分布式锁 + 事务）
    */
   async enroll(courseId: string, userId: string, dto: EnrollDto) {
+    // 品牌会员资格要走 CRM HTTP：在加锁与事务之外先查好，事务里只用结果。
+    const brand = await this.pricing.brandStatus(userId)
     return this.redis.withLock(`enroll:${courseId}`, async () => {
       return this.prisma.$transaction(async (tx) => {
         const course = await tx.course.findUnique({
@@ -137,11 +143,13 @@ export class EnrollmentService {
         // 锁价
         const position = occupied + 1
         const basePrice = this.pricing.getTierPrice(course.priceTiers, position, course.originalPrice)
+        // strict：品牌会员资格确认不了时拒绝下单，不按非会员价向会员多收钱
         const member = await this.pricing.getMemberDiscount(
           userId,
           courseId,
           basePrice,
           this.pricing.courseStartAt(course),
+          { brand, strict: true },
         )
         const priceAfterDiscount = Math.max(0, basePrice - member.discountAmount)
 
@@ -172,6 +180,8 @@ export class EnrollmentService {
             voucherDeduction = Math.min(voucherYuanToFen(Number(voucher.amount)), priceAfterDiscount - pointsDeduction)
           }
           voucherDeduction = Math.max(0, voucherDeduction)
+          // 已经 0 元（畅练卡 / 积分抵满）时不再占用代金券，避免券被白白核销
+          if (voucherDeduction === 0) voucherId = undefined
         }
 
         const actualPaid = Math.max(0, priceAfterDiscount - pointsDeduction - voucherDeduction)

@@ -146,8 +146,11 @@ describe('会员卡资金链路与权益回收', () => {
     expect(refunding!.status).toBe('REFUNDING')
     expect(Number(refunding!.refundAmount)).toBe(100)
 
-    await ctx.payment.handleRefundNotify(refundNotify(orderId))
-    expect((await getOrder(orderId))!.status).toBe('REFUNDED')
+    // 部分退款到账：订单回退到退款前状态（PAID），会员卡保持有效
+    await ctx.payment.handleRefundNotify(refundNotify(orderId, 'TX_TEST', `RF${orderId}`))
+    const partial = await getOrder(orderId)
+    expect(partial!.status).toBe('PAID')
+    expect(Number(partial!.refundAmount)).toBe(100)
     const card = await ctx.prisma.memberCard.findUnique({ where: { id: cardId } })
     expect(card!.status).toBe('ACTIVE')
   })

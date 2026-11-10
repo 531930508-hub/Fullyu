@@ -9,6 +9,35 @@ import type { ShareType } from '@/api/skool'
 
 const PENDING_KEY = 'pendingShareJump'
 
+/** 小程序卡片与海报共用的 5:4 品牌视觉 */
+export const BRAND_SHARE_IMAGE = '/static/brand/share-card.png'
+
+/** 右上角「发送给朋友」卡片：默认分享整个小程序首页 */
+export function brandShareMessage(
+  title?: string,
+  path = '/pages/index/index',
+  imageUrl = BRAND_SHARE_IMAGE,
+) {
+  return {
+    title: title || 'Full愈 · 在场',
+    path,
+    imageUrl,
+  }
+}
+
+/** 右上角「分享到朋友圈」卡片 */
+export function brandShareTimeline(
+  title?: string,
+  query = '',
+  imageUrl = BRAND_SHARE_IMAGE,
+) {
+  return {
+    title: title || 'Full愈 · 在场',
+    query,
+    imageUrl,
+  }
+}
+
 export interface ShareTarget {
   type: ShareType
   id: string

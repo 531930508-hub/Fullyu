@@ -269,6 +269,14 @@ export class CommunityController {
     return this.communityService.claimInvite(inviteId, req.user.userId)
   }
 
+  @Get(':id/managed')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '主理人视角的社群详情（待审核社群也可查看）' })
+  async managedDetail(@Param('id') id: string, @Request() req: any) {
+    return this.communityService.getManaged(id, req.user.userId)
+  }
+
   @Get(':id')
   @ApiOperation({ summary: '社群详情（公开；邀请制仅返回身份信息）' })
   async detail(@Param('id') id: string) {
@@ -342,6 +350,12 @@ export class CommunityController {
     return this.communityService.getMemberCard(id, userId, req.user.userId)
   }
 
+  @Get(':id/host')
+  @ApiOperation({ summary: '主理人资料（公开，不含联系方式）' })
+  async hostCard(@Param('id') id: string) {
+    return this.communityService.getHostCard(id)
+  }
+
   // ==================== 用户操作（需登录） ====================
 
   @Post()
@@ -376,6 +390,18 @@ export class CommunityController {
     @Body('content') content: string,
   ) {
     return this.communityService.createComment(id, postId, req.user.userId, content)
+  }
+
+  @Post(':id/posts/:postId/like')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '点赞/取消点赞动态（一人一赞）' })
+  async toggleLike(
+    @Param('id') id: string,
+    @Param('postId') postId: string,
+    @Request() req: any,
+  ) {
+    return this.communityService.toggleLike(id, postId, req.user.userId)
   }
 
   @Post(':id/moderation')

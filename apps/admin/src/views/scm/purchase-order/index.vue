@@ -168,8 +168,8 @@
               v-model:value="line.price"
               :min="0"
               :precision="2"
-              placeholder="单价"
-              style="width: 120px"
+              placeholder="单价（默认近期成交价）"
+              style="width: 160px"
               :disabled="!canEditFormPrice"
             />
             <span v-if="showFormPrice" class="po-cell">小计 ¥{{ money((line.qty || 0) * (line.price || 0)) }}</span>
@@ -382,9 +382,11 @@ const allowedSupplierTypes = computed<Partial<Record<PurchaseSupplierType, strin
   isHqBuyer.value ? SUPPLIER_TYPE_NAMES : { HQ: SUPPLIER_TYPE_NAMES.HQ },
 )
 
+/** 对外采购默认带出该供应商最近一次成交价，没有历史时退回商品档案采购价 */
 function basePriceOf(product: ScmProduct) {
   if (form.supplierType === 'HQ') return product.supplyPrice
-  return canEditFormPrice.value ? (product.purchasePrice ?? 0) : 0
+  if (!canEditFormPrice.value) return 0
+  return product.latestPurchasePrice ?? product.purchasePrice ?? 0
 }
 
 /** 切换采购方/供货方后，把明细价格重算成当前口径 */

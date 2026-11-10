@@ -320,4 +320,22 @@ describe('社群非资金流程', () => {
     const updated = await service.updatePrivacy(community.id, member.id, 'COMPLETED', ['瑜伽'])
     expect(updated).toMatchObject({ privacy: 'COMPLETED', interests: ['瑜伽'] })
   })
+
+  it('名片：主理人没有加入关系也能看到他的名片，非成员仍被拦截', async () => {
+    const host = await seeder.user()
+    const community = await newCommunity({ ownerUserId: host.id })
+    const member = await seeder.user()
+    await service.join(community.id, member.id)
+
+    // 主理人是社群所有者而非加入者，点他的动态头像不应报「该成员不在社群内」
+    const hostCard = await service.getMemberCard(community.id, host.id, member.id)
+    expect(hostCard).toMatchObject({ id: host.id, isHost: true, privacy: 'NONE' })
+    expect(hostCard.activities).toEqual([])
+
+    // 既不是成员也不是主理人的人，名片仍然不可见
+    const outsider = await seeder.user()
+    await expect(
+      service.getMemberCard(community.id, outsider.id, member.id),
+    ).rejects.toBeInstanceOf(BusinessException)
+  })
 })

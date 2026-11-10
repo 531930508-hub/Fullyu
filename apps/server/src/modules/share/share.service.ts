@@ -4,14 +4,15 @@ import * as QRCode from 'qrcode'
 import { PrismaService } from '../../common/prisma.service'
 import { WechatService } from '../../common/wechat/wechat.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
+import { normalizeVoucherCode, isValidVoucherCode } from '@fullyu/shared'
 
 /**
  * 分享与扫码落地：
  * - 小程序卡片 / 海报共用同一套目标描述
  * - 二维码优先调用微信 getwxacodeunlimit（服务端专用），未配置微信凭据时回退为 H5 链接二维码
- * - scene 长度必须 ≤ 32，格式：<类型前缀><cuid>
+ * - scene 长度必须 ≤ 32，格式：<类型前缀><cuid>；兑换码券为 v+8 位兑换码
  */
-export type ShareType = 'course' | 'community' | 'event' | 'host' | 'invite'
+export type ShareType = 'course' | 'community' | 'event' | 'host' | 'invite' | 'voucher'
 
 const SCENE_PREFIX: Record<ShareType, string> = {
   course: 'k',
@@ -19,6 +20,7 @@ const SCENE_PREFIX: Record<ShareType, string> = {
   event: 'e',
   host: 'h',
   invite: 'i',
+  voucher: 'v',
 }
 
 const PREFIX_TYPE = Object.fromEntries(
@@ -268,6 +270,24 @@ export class ShareService {
           : `${c.name} · 社群邀请`
       p.description = '领取后仍需满足入群审核条件；邀请不替代审核。'
       p.path = `/pages/share-landing/index?scene=${scene}`
+      return p
+    }
+
+    if (type === 'voucher') {
+      const code = normalizeVoucherCode(id)
+      const v = isValidVoucherCode(code)
+        ? await this.prisma.voucher.findUnique({ where: { redeemCode: code } })
+        : null
+      if (!v) return this.unavailable(type, id, '兑换码不存在或已失效')
+      if (v.status === 'REVOKED') return this.unavailable(type, id, '该兑换码已作废')
+      if (v.userId) return this.unavailable(type, id, '该兑换码已被兑换')
+      if (v.expiresAt.getTime() <= Date.now()) return this.unavailable(type, id, '该兑换码已过期')
+      p.title = v.mode === 'REDUCE_TO'
+        ? `Full愈 代金券 · 减至 ¥${Number(v.targetPrice)}`
+        : `Full愈 代金券 · 立减 ¥${Number(v.amount)}`
+      p.subtitle = `有效期至 ${this.fmtDate(v.expiresAt)} · 报名课程时抵扣`
+      p.description = '扫码领取或在个人中心输入兑换码，兑换后可在「我的资产」查看。'
+      p.path = `/pages/voucher-redeem/index?code=${code}`
       return p
     }
 

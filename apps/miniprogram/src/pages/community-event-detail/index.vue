@@ -6,7 +6,7 @@
       <view class="back-spacer"></view>
       <text class="nav-title serif">{{ tr('社群活动', 'Community event') }}</text>
       <button v-if="event" class="share-button" :aria-label="tr('分享活动', 'Share event')" @tap="shareVisible = true">
-        <PresenceIcon name="arrow" :size="30" />
+        <PresenceIcon name="share" :size="34" />
       </button>
       <view v-else class="nav-space"></view>
     </view>
@@ -44,18 +44,21 @@
 
           <view class="notice">
             <PresenceIcon name="info" :size="30" />
-            <text>{{ event.scope === 'INTERNAL' ? tr('该活动仅社群成员可见与报名。', 'This event is only visible to community members.') : tr('活动报名在社群内直接完成；如关联正式课程，请以课程页规则为准。', 'Sign-up happens inside the community. If a formal course is linked, the course page rules apply.') }}</text>
+            <text>{{ event.scope === 'INTERNAL' ? tr('该活动仅社群成员可见与报名。', 'This event is only visible to community members.') : tr('活动报名在社群内直接完成。', 'Sign-up happens inside the community.') }}</text>
           </view>
 
           <text v-if="actionError" class="error-text">{{ actionError }}</text>
 
           <view class="actions">
             <button v-if="event.ended" class="btn-disabled full-width" disabled>{{ tr('活动已结束', 'Event ended') }}</button>
+            <button v-else-if="event.courseId" class="btn-primary full-width" @tap="goCourse">
+              {{ event.signed ? tr('已报名 · 查看课程', 'Registered · View course') : tr('前往课程页报名', 'Register on course page') }}
+            </button>
             <button v-else-if="event.signed" class="btn-secondary full-width" :disabled="busy" @tap="onCancel">{{ busy ? tr('处理中…', 'Processing…') : tr('取消报名', 'Cancel registration') }}</button>
             <button v-else class="btn-primary full-width" :disabled="busy || full" @tap="onSignup">
               {{ busy ? tr('处理中…', 'Processing…') : full ? tr('名额已满', 'Full') : guest ? tr('登录后报名', 'Log in to register') : tr('报名参加', 'Register') }}
             </button>
-            <button v-if="event.courseId" class="btn-secondary full-width spaced" @tap="goCourse">{{ tr('查看关联课程', 'View linked course') }}</button>
+            <text v-if="event.courseId && !event.ended" class="course-hint">{{ tr('该活动与正式课程联动，报名与退课以课程页为准。', 'This event is linked to a formal course; registration and cancellation follow the course page.') }}</text>
           </view>
         </view>
 
@@ -222,9 +225,9 @@ const timeLabel = computed(() => {
 <style scoped>
 .nav-bar { display: flex; align-items: center; justify-content: space-between; padding: 12rpx 32rpx 16rpx; }
 .back-spacer { width: 120rpx; }
-.nav-space { width: 80rpx; }
+.nav-space { width: 120rpx; }
 .nav-title { font-size: 34rpx; color: var(--c-ink); }
-.share-button { width: 72rpx; height: 72rpx; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--c-card-2); border-radius: 50%; transform: rotate(45deg); }
+.share-button { width: 80rpx; height: 80rpx; margin-left: 40rpx; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--c-card-2); border-radius: 50%; }
 .hero { width: 100%; }
 .hero-image { width: 100%; height: 320rpx; display: block; }
 .content { padding: 24rpx 32rpx calc(48rpx + env(safe-area-inset-bottom)); }
@@ -241,6 +244,7 @@ const timeLabel = computed(() => {
 .notice { display: flex; gap: 12rpx; align-items: flex-start; background: var(--c-card-2); border-radius: 20rpx; padding: 20rpx 24rpx; margin-top: 20rpx; font-size: 24rpx; line-height: 1.7; color: var(--c-muted); }
 .error-text { display: block; margin-top: 16rpx; font-size: 24rpx; color: var(--c-error); }
 .actions { margin-top: 24rpx; display: flex; flex-direction: column; gap: 16rpx; }
+.course-hint { font-size: 24rpx; line-height: 1.7; color: var(--c-muted); }
 .full-width { width: 100%; }
 .community-row { display: flex; align-items: center; gap: 18rpx; width: 100%; text-align: left; }
 .community-cover { width: 88rpx; height: 88rpx; border-radius: 20rpx; object-fit: cover; }

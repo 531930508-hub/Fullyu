@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
+import { StorageService } from '../../common/storage/storage.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
 import { generateOrderNo } from '../../common/order-no.helper'
 
@@ -28,6 +29,8 @@ export interface CommunityInput {
   visibility?: string
   joinMode?: string
   interestPool?: string[]
+  /** 订阅制社群发布时主理人勾选《社群代结算服务协议》 */
+  settlementAgreed?: boolean
 }
 
 /** 活动入参 */
@@ -60,6 +63,10 @@ export type ModerationAction = 'HIDE' | 'RESTORE' | 'DELETE'
 const PRIVACY_VALUES = ['NONE', 'COMPLETED', 'ALL']
 const INTEREST_LIMIT = 3
 const POOL_LIMIT = 12
+/** 《Full愈社群代结算服务协议》版本号；条款变更时同步升版并保留历史留痕 */
+export const SETTLEMENT_AGREEMENT_VERSION = 'v1.0-2026-10-29'
+/** 平台服务费比例（订阅制社群年费），与协议文本保持一致 */
+export const SETTLEMENT_SERVICE_FEE_RATE = 0.1
 
 function parseTags(raw: string | null | undefined): string[] {
   try {
@@ -84,6 +91,7 @@ export class CommunityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly storage: StorageService,
   ) {}
 
   /** 加入关系是否仍在有效期内：免费社群只看是否加入，付费社群看年费有效期 */
@@ -199,6 +207,19 @@ export class CommunityService {
     }
   }
 
+  /**
+   * 主理人视角的社群详情：不要求已上架/审核通过（新社群 PENDING 时工作台也要能打开），
+   * 仅返回社群基础信息与审核状态，供工作台头部展示。
+   */
+  async getManaged(id: string, userId: string) {
+    const c = await this.prisma.community.findUnique({ where: { id } })
+    if (!c) throw new BusinessException('社群不存在或已下架', 4040)
+    if (c.ownerUserId !== userId) {
+      throw new BusinessException('仅社群主理人可查看该信息', 4030)
+    }
+    return { ...this.toPublicDTO(c), status: c.status, isActive: c.isActive }
+  }
+
   async getPublic(id: string) {
     const c = await this.prisma.community.findFirst({
       where: { id, status: 'APPROVED', isActive: true },
@@ -307,7 +328,28 @@ export class CommunityService {
         })
       : []
     const signed = new Set(signups.map((s) => s.eventId))
-    return events.map((e) => this.toEventDTO(e, signed.has(e.id)))
+    const enrolled = await this.courseEnrolledEventIds(events, userId)
+    return events.map((e) => this.toEventDTO(e, signed.has(e.id) || enrolled.has(e.id)))
+  }
+
+  /**
+   * 关联正式课程的活动：报名状态以课程订单为准，避免社群活动与课程名额两套口径不一致
+   */
+  private async courseEnrolledEventIds(events: Array<{ id: string; courseId?: string | null }>, userId?: string) {
+    const empty = new Set<string>()
+    if (!userId) return empty
+    const courseIds = Array.from(new Set(events.map((e) => e.courseId).filter(Boolean))) as string[]
+    if (!courseIds.length) return empty
+    const orders = await this.prisma.order.findMany({
+      where: { userId, courseId: { in: courseIds }, orderType: 'COURSE', status: { in: ['PAID', 'COMPLETED'] } },
+      select: { courseId: true },
+    })
+    const enrolledCourses = new Set(orders.map((o) => o.courseId))
+    const result = new Set<string>()
+    for (const e of events) {
+      if (e.courseId && enrolledCourses.has(e.courseId)) result.add(e.id)
+    }
+    return result
   }
 
   private toEventDTO(e: any, signed = false) {
@@ -351,8 +393,9 @@ export class CommunityService {
           where: { eventId_userId: { eventId, userId } },
         })
       : null
+    const enrolled = await this.courseEnrolledEventIds([e], userId)
     return {
-      ...this.toEventDTO({ ...e, community: c }, signup?.status === 'SIGNED'),
+      ...this.toEventDTO({ ...e, community: c }, signup?.status === 'SIGNED' || enrolled.has(e.id)),
       community: { id: c.id, name: c.name, cover: c.coverUrl || '', ownerName: c.ownerName },
     }
   }
@@ -383,19 +426,26 @@ export class CommunityService {
       const list = byPost.get(cm.postId) || []
       list.push({
         id: cm.id,
-        author: { name: cm.authorName, avatar: cm.authorAvatar || '' },
+        author: { id: cm.authorId, name: cm.authorName, avatar: cm.authorAvatar || '' },
         content: cm.content,
         time: cm.createdAt,
       })
       byPost.set(cm.postId, list)
     }
+    const myLikes = posts.length
+      ? await this.prisma.communityPostLike.findMany({
+          where: { userId, postId: { in: posts.map((p) => p.id) } },
+          select: { postId: true },
+        })
+      : []
+    const likedSet = new Set(myLikes.map((l) => l.postId))
     return posts.map((p) => ({
-      ...this.toPostDTO(p),
+      ...this.toPostDTO(p, likedSet.has(p.id)),
       commentsList: byPost.get(p.id) || [],
     }))
   }
 
-  private toPostDTO(p: any) {
+  private toPostDTO(p: any, liked = false) {
     let images: string[] = []
     try {
       images = p.images ? JSON.parse(p.images) : []
@@ -410,7 +460,7 @@ export class CommunityService {
       images,
       likes: p.likes,
       comments: p.comments,
-      liked: false,
+      liked,
     }
   }
 
@@ -442,6 +492,21 @@ export class CommunityService {
   async getMemberCard(communityId: string, targetUserId: string, requesterId: string) {
     const c = await this.assertMember(communityId, requesterId)
     const join = await this.getJoin(communityId, targetUserId)
+    // 主理人是社群所有者而非加入者，成员表里没有他的行。点他的动态头像时
+    // 不该报「该成员不在社群内」，直接按公开主理人资料返回。
+    if ((!join || !this.isActiveJoin(c, join)) && c.ownerUserId && targetUserId === c.ownerUserId) {
+      const hostCard = await this.getHostCard(communityId)
+      return {
+        id: hostCard.userId,
+        name: hostCard.name,
+        avatar: hostCard.avatar,
+        joinedAt: c.createdAt,
+        privacy: 'NONE',
+        interests: [] as string[],
+        activities: [] as { id: string; title: string; date: string; time: string; ended: boolean }[],
+        isHost: true,
+      }
+    }
     if (!join || !this.isActiveJoin(c, join)) {
       throw new BusinessException('该成员不在社群内', 4042)
     }
@@ -470,6 +535,51 @@ export class CommunityService {
         date: this.fmtDate(e.eventDate),
         time: e.time,
         ended: this.eventEnded(e),
+      })),
+    }
+  }
+
+  /** 主理人资料（公开；仅展示主理人自愿公开的介绍与在营社群，不含联系方式） */
+  async getHostCard(communityId: string) {
+    const c = await this.prisma.community.findFirst({
+      where: { id: communityId, status: 'APPROVED', isActive: true },
+    })
+    if (!c) throw new BusinessException('社群不存在或已下架', 4040)
+    const user = c.ownerUserId
+      ? await this.prisma.user.findUnique({
+          where: { id: c.ownerUserId },
+          select: { id: true, nickname: true, avatar: true, communityHostRole: true },
+        })
+      : null
+    const communities = c.ownerUserId
+      ? await this.prisma.community.findMany({
+          where: { ownerUserId: c.ownerUserId, status: 'APPROVED', isActive: true },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, name: true, slogan: true, category: true, memberCount: true, coverUrl: true },
+        })
+      : []
+    const eventCount = c.ownerUserId
+      ? await this.prisma.communityEvent.count({
+          where: { communityId: { in: communities.map((item) => item.id) }, isActive: true },
+        })
+      : 0
+    return {
+      userId: user?.id || '',
+      name: c.ownerName || user?.nickname || '主理人',
+      title: c.ownerTitle || '',
+      avatar: c.ownerAvatar || user?.avatar || '',
+      hostRole: user?.communityHostRole || 'BASIC',
+      hostSince: c.createdAt,
+      communityCount: communities.length,
+      eventCount,
+      communities: communities.map((item) => ({
+        id: item.id,
+        name: item.name,
+        slogan: item.slogan || '',
+        category: item.category,
+        memberCount: item.memberCount,
+        cover: item.coverUrl || '',
+        current: item.id === communityId,
       })),
     }
   }
@@ -797,10 +907,39 @@ export class CommunityService {
     })
     return {
       id: comment.id,
-      author: { name: comment.authorName, avatar: comment.authorAvatar || '' },
+      author: { id: comment.authorId, name: comment.authorName, avatar: comment.authorAvatar || '' },
       content: comment.content,
       time: comment.createdAt,
     }
+  }
+
+  /** 点赞/取消点赞：一人一赞，likes 作为冗余计数同步维护 */
+  async toggleLike(communityId: string, postId: string, userId: string) {
+    await this.assertMember(communityId, userId)
+    const post = await this.prisma.communityPost.findUnique({ where: { id: postId } })
+    if (!post || post.communityId !== communityId || post.isDeleted || post.isHidden) {
+      throw new BusinessException('动态不存在', 4043)
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.communityPostLike.findUnique({
+        where: { postId_userId: { postId, userId } },
+      })
+      if (existing) {
+        await tx.communityPostLike.delete({ where: { id: existing.id } })
+        const updated = await tx.communityPost.update({
+          where: { id: postId },
+          // 计数兜底：历史数据可能为 0，避免减成负数
+          data: { likes: post.likes > 0 ? { decrement: 1 } : { set: 0 } },
+        })
+        return { liked: false, likes: Math.max(0, updated.likes) }
+      }
+      await tx.communityPostLike.create({ data: { postId, communityId, userId } })
+      const updated = await tx.communityPost.update({
+        where: { id: postId },
+        data: { likes: { increment: 1 } },
+      })
+      return { liked: true, likes: updated.likes }
+    })
   }
 
   /** 内容治理：隐藏/恢复/删除；必须填写原因并留痕 */
@@ -883,6 +1022,7 @@ export class CommunityService {
     const e = await this.prisma.communityEvent.findUnique({ where: { id: eventId }, include: { community: true } })
     if (!e || e.communityId !== communityId || !e.isActive) throw new BusinessException('活动不存在或已停用', 4041)
     if (this.eventEnded(e)) throw new BusinessException('活动已结束，不能报名', 4045)
+    if (e.courseId) throw new BusinessException('该活动关联正式课程，请在课程页完成报名', 4047)
     if (e.scope === 'INTERNAL') await this.assertMember(communityId, userId)
     const existing = await this.prisma.communityEventSignup.findUnique({
       where: { eventId_userId: { eventId, userId } },
@@ -901,6 +1041,8 @@ export class CommunityService {
   }
 
   async cancelSignup(communityId: string, eventId: string, userId: string) {
+    const event = await this.prisma.communityEvent.findUnique({ where: { id: eventId }, select: { courseId: true } })
+    if (event?.courseId) throw new BusinessException('该活动关联正式课程，请前往课程页处理退课', 4047)
     const existing = await this.prisma.communityEventSignup.findUnique({
       where: { eventId_userId: { eventId, userId } },
     })
@@ -1002,23 +1144,29 @@ export class CommunityService {
       await this.prisma.user.update({ where: { id: userId }, data: { communityHostRole: 'BASIC' } })
     }
     const interestPool = this.sanitizePool(input.interestPool || input.tags || [])
+    const yearlyFee = Number(input.yearlyFee) || 0
+    if (yearlyFee > 0 && !input.settlementAgreed) {
+      throw new BusinessException('订阅制社群需先阅读并同意《社群代结算服务协议》', 4000)
+    }
     const created = await this.prisma.community.create({
       data: {
         name: input.name.trim(),
         slogan: input.slogan.trim(),
         category: input.category || '疗愈',
-        coverUrl: input.coverUrl || null,
+        coverUrl: (this.storage.normalizeStoredRef(input.coverUrl || '') as string) || null,
         coverFallback: input.coverFallback || null,
         ownerName: user?.nickname || '主理人',
-        ownerAvatar: user?.avatar || null,
+        ownerAvatar: this.storage.normalizeStoredRef(user?.avatar || null) as string | null,
         ownerUserId: userId,
-        yearlyFee: Number(input.yearlyFee) || 0,
+        yearlyFee,
         tags: JSON.stringify(input.tags || []),
         interestPool: JSON.stringify(interestPool),
         description: input.description || null,
         status: 'PENDING',
         visibility: 'PUBLIC',
         joinMode: 'OPEN',
+        settlementAgreementVersion: yearlyFee > 0 ? SETTLEMENT_AGREEMENT_VERSION : null,
+        settlementAgreedAt: yearlyFee > 0 ? new Date() : null,
       },
     })
     return { id: created.id, status: created.status, hostRole: role }
@@ -1062,12 +1210,16 @@ export class CommunityService {
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.slogan !== undefined ? { slogan: input.slogan } : {}),
       ...(input.category !== undefined ? { category: input.category } : {}),
-      ...(input.coverUrl !== undefined ? { coverUrl: input.coverUrl || null } : {}),
+      ...(input.coverUrl !== undefined
+        ? { coverUrl: (this.storage.normalizeStoredRef(input.coverUrl || '') as string) || null }
+        : {}),
       ...(input.coverFallback !== undefined ? { coverFallback: input.coverFallback || null } : {}),
       ...(input.ownerUserId !== undefined ? { ownerUserId: input.ownerUserId || null } : {}),
       ...(input.ownerName !== undefined ? { ownerName: input.ownerName } : {}),
       ...(input.ownerTitle !== undefined ? { ownerTitle: input.ownerTitle || null } : {}),
-      ...(input.ownerAvatar !== undefined ? { ownerAvatar: input.ownerAvatar || null } : {}),
+      ...(input.ownerAvatar !== undefined
+        ? { ownerAvatar: (this.storage.normalizeStoredRef(input.ownerAvatar || '') as string) || null }
+        : {}),
       ...(input.memberCount !== undefined ? { memberCount: Number(input.memberCount) || 0 } : {}),
       ...(input.yearlyFee !== undefined ? { yearlyFee: Number(input.yearlyFee) || 0 } : {}),
       ...(input.isOfficial !== undefined ? { isOfficial: Boolean(input.isOfficial) } : {}),

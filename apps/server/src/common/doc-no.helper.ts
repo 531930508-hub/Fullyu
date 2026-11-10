@@ -3,10 +3,10 @@ import { RedisService } from './redis.service'
 /**
  * 后台单据号：前缀 + YYYYMMDD + 3 位流水，如 PO20260810001。
  *
- * AP=审批实例 PO=采购订单 GR=验收入库 SA=库存调整
+ * AP=审批实例 PO=采购订单 GR=验收入库 SA=库存调整 TR=调拨 MO=生产工单
  * 单据号即主键，直接给人看，所以不用 cuid。
  */
-export type DocNoPrefix = 'AP' | 'PO' | 'GR' | 'SA'
+export type DocNoPrefix = 'AP' | 'PO' | 'GR' | 'SA' | 'TR' | 'MO'
 
 /**
  * @param exists 主键占用检查。Redis 被清过之后流水会从 1 重来，

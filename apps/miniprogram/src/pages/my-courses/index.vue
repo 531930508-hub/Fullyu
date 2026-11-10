@@ -14,29 +14,30 @@
           <view class="pending-info"><text class="muted">{{ tr('应付金额', 'Amount due') }}</text><text class="pending-amount latin">¥{{ fenToYuan(o.actualPaid) }}</text></view>
           <text class="pending-no">{{ tr('订单', 'Order') }} {{ o.orderNo }}</text>
           <view class="pending-actions"><button class="btn-secondary" :disabled="!!busyOrder" @tap="cancelTarget = o">{{ tr('取消订单', 'Cancel order') }}</button><button class="btn-primary" :disabled="!!busyOrder || remainingSeconds(o) <= 0" :loading="busyOrder === o.id" @tap="handleContinuePay(o)">{{ remainingSeconds(o) <= 0 ? tr('正在自动取消', 'Cancelling') : tr('继续支付', 'Continue payment') }}</button></view>
-          <text class="pending-tip">{{ remainingSeconds(o) <= 0 ? tr('已超过支付期限，正在同步服务端取消结果。', 'The payment window has passed. Syncing the cancellation result.') : tr('请在倒计时内完成支付，超时未支付将自动取消。', 'Please pay before the countdown ends; unpaid orders are cancelled automatically.') }}</text>
+          <text class="pending-tip">{{ remainingSeconds(o) <= 0 ? tr('订单已超时，正在取消。', 'Order expired. Cancelling.') : tr('请在倒计时内完成支付。', 'Please pay before the countdown ends.') }}</text>
         </view>
       </view>
       <view class="tab-bar" role="tablist" :aria-label="tr('预约状态', 'Booking status')"><button v-for="tab in tabs" :key="tab.value" role="tab" :aria-selected="currentTab === tab.value" class="tab-item" :class="{ active: currentTab === tab.value }" @tap="currentTab = tab.value">{{ tab.label }}<text v-if="tab.count" class="tab-count">{{ tab.count }}</text></button></view>
       <view class="course-list">
         <view v-for="item in currentList" :key="item.id" class="booking-card">
           <view class="booking-main" role="link" tabindex="0" @tap="goDetail(item.courseId)" @keydown.enter="goDetail(item.courseId)"><view class="date-block"><text class="date-month">{{ item.month }}</text><text class="date-day latin">{{ item.day }}</text><text class="date-week">{{ item.weekday }}</text></view><view class="booking-body"><view class="booking-top"><text class="order-type">{{ item.type }}</text><text class="status-label">{{ item.statusLabel }}</text></view><text class="booking-title serif">{{ item.name }}</text><text class="booking-meta">{{ item.time || tr('时间待确认', 'Time TBC') }}</text><text class="booking-meta">{{ item.venue || tr('场地待确认', 'Venue TBC') }}{{ item.trainer ? ' · ' + item.trainer : '' }}</text></view></view>
-          <view class="booking-footer"><text class="muted">{{ footerHint(item) }}</text><view class="footer-actions"><button v-if="canCancelPaid(item)" class="cancel-link" :disabled="!!busyOrder" @tap="openCancelPaid(item)">{{ tr('取消预约', 'Cancel booking') }}</button><text v-if="selfRefundClosed(item)" class="refund-hint">{{ tr('如需退款请联系客服', 'Contact support for refunds') }}</text><button v-if="canReviewOrder(item)" class="small-button" @tap="openReview(item)">{{ tr('写评价', 'Write a review') }}</button><text v-else-if="item.reviewed && reviewsLoaded && item.status === 'COMPLETED'" class="muted">{{ tr('已评价', 'Reviewed') }}</text><button v-else-if="item.courseId" class="detail-button" @tap="goDetail(item.courseId)">{{ tr('查看课程 ›', 'View course ›') }}</button></view></view>
+          <view class="booking-footer"><text class="muted">{{ footerHint(item) }}</text><view class="footer-actions"><button v-if="canCancelPaid(item)" class="cancel-link" :disabled="!!busyOrder" @tap="openCancelPaid(item)">{{ tr('取消预约', 'Cancel booking') }}</button><button v-if="canReviewOrder(item)" class="small-button" @tap="openReview(item)">{{ tr('写评价', 'Write a review') }}</button><text v-else-if="item.reviewed && reviewsLoaded && item.status === 'COMPLETED'" class="muted">{{ tr('已评价', 'Reviewed') }}</text><button v-else-if="item.courseId" class="detail-button" @tap="goDetail(item.courseId)">{{ tr('查看课程 ›', 'View course ›') }}</button></view></view>
         </view>
         <PageState v-if="!loading && !loadError && !currentList.length" state="empty" :title="emptyText" :message="tr('想来在场的时候，随时去看看新课程。', 'Whenever you feel like being present, explore a new course.')" :action="currentTab === 'upcoming' ? tr('发现好课', 'Explore courses') : undefined" @action="goHome" />
       </view>
     </template>
-    <BottomSheet :show="!!cancelTarget" :title="tr('取消待支付订单', 'Cancel unpaid order')" :busy="!!busyOrder" @close="cancelTarget = null"><view class="sheet-copy"><text class="sheet-course serif">{{ cancelTarget?.name }}</text><text>{{ tr('取消后将释放锁定名额。如需参加，请重新报名。', 'Cancelling releases your held seat. Book again if you would still like to attend.') }}</text></view><template #actions><button class="btn-secondary" :disabled="!!busyOrder" @tap="cancelTarget = null">{{ tr('再想想', 'Not now') }}</button><button class="btn-primary" :disabled="!!busyOrder" :loading="!!busyOrder" @tap="confirmCancel">{{ tr('确认取消', 'Confirm cancellation') }}</button></template></BottomSheet>
-    <BottomSheet :show="!!cancelPaidTarget" :title="tr('取消预约并申请退款', 'Cancel booking and request refund')" :busy="!!busyOrder" @close="cancelPaidTarget = null"><view class="sheet-copy"><text class="sheet-course serif">{{ cancelPaidTarget?.name }}</text><text v-if="cancelPaidTarget?.orderType === 'WAITLIST'">{{ tr('候补预付款将全额原路退回，名额立即释放。', 'Your waitlist prepayment is refunded in full and the seat is released immediately.') }}</text><text v-else>{{ tr('取消后名额立即释放；退款金额按课程退款规则核算，到账时间以支付渠道为准。课程开始后及课程完成后无法自助退款，如需协助请联系客服。', 'The seat is released immediately. The refund follows the course refund policy; arrival time depends on the payment channel. Self-service refunds close once the course starts or after it is completed. Contact support if you need help.') }}</text></view><template #actions><button class="btn-secondary" :disabled="!!busyOrder" @tap="cancelPaidTarget = null">{{ tr('再想想', 'Not now') }}</button><button class="btn-primary" :disabled="!!busyOrder" :loading="!!busyOrder" @tap="confirmCancelPaid">{{ tr('确认取消', 'Confirm cancellation') }}</button></template></BottomSheet>
-    <BottomSheet :show="!!reviewTarget" :title="tr('分享这次在场体验', 'Share your Presence experience')" :busy="reviewBusy" @close="reviewTarget = null"><text class="sheet-course serif">{{ reviewTarget?.name }}</text><view class="rating-row"><button v-for="n in 5" :key="n" class="rating-button" :aria-label="tr(`${n}分`, `${n} points`)" :aria-pressed="rating === n" @tap="rating = n"><PresenceIcon name="star" :size="56" :color="n <= rating ? '#96581c' : '#b6aa91'" /></button></view><text class="rating-label">{{ rating }} / 5 {{ tr('分', 'points') }}</text><textarea v-model="reviewContent" class="review-input" :placeholder="tr('这一节课，带给你怎样的感受？', 'How did this session feel to you?')" :maxlength="1000" :disabled="reviewBusy" /><text class="review-count">{{ reviewContent.length }} / 1000</text><template #actions><button class="btn-primary" :disabled="reviewBusy || !reviewContent.trim()" :loading="reviewBusy" @tap="confirmReview">{{ tr('提交评价', 'Submit review') }}</button></template></BottomSheet>
+    <BottomSheet :show="!!cancelTarget" :title="tr('取消待支付订单', 'Cancel unpaid order')" :busy="!!busyOrder" @close="cancelTarget = null"><view class="sheet-copy"><text class="sheet-course serif">{{ cancelTarget?.name }}</text><text>{{ tr('取消后将释放名额。', 'Cancelling releases the seat.') }}</text></view><template #actions><view class="sheet-action-row"><button class="btn-secondary row-btn" :disabled="!!busyOrder" @tap="cancelTarget = null">{{ tr('再想想', 'Not now') }}</button><button class="btn-primary row-btn" :disabled="!!busyOrder" :loading="!!busyOrder" @tap="confirmCancel">{{ tr('确认取消', 'Confirm cancellation') }}</button></view></template></BottomSheet>
+    <BottomSheet :show="!!cancelPaidTarget" :title="tr('取消预约并申请退款', 'Cancel booking and request refund')" :busy="!!busyOrder" @close="cancelPaidTarget = null"><view class="sheet-copy"><text class="sheet-course serif">{{ cancelPaidTarget?.name }}</text><text v-if="cancelPaidTarget?.orderType === 'WAITLIST'">{{ tr('预付款将全额退回。', 'Your prepayment is refunded in full.') }}</text><text v-else-if="cancelRefundPreview && !cancelRefundPreview.fullRefund">{{ tr(`由于课程退款政策，本次可退金额为 ¥${fenToYuan(cancelRefundPreview.refundFen)}（实付 ¥${fenToYuan(cancelRefundPreview.totalFen)}），其余部分不予退还。`, `Due to the course refund policy, only ¥${fenToYuan(cancelRefundPreview.refundFen)} of ¥${fenToYuan(cancelRefundPreview.totalFen)} paid is refundable.`) }}</text><text v-else-if="cancelRefundPreview">{{ tr('取消后名额立即释放，实付金额将全额退回。', 'The seat is released immediately and your payment is refunded in full.') }}</text><text v-else>{{ tr('取消后名额立即释放，退款按课程退款规则核算。', 'The seat is released immediately and the refund follows the course refund policy.') }}</text></view><template #actions><view class="sheet-action-row"><button class="btn-secondary row-btn" :disabled="!!busyOrder" @tap="cancelPaidTarget = null">{{ tr('再想想', 'Not now') }}</button><button class="btn-primary row-btn" :disabled="!!busyOrder" :loading="!!busyOrder" @tap="confirmCancelPaid">{{ tr('确认取消', 'Confirm cancellation') }}</button></view></template></BottomSheet>
+    <BottomSheet :show="!!reviewTarget" :title="tr('分享这次在场体验', 'Share your Presence experience')" :busy="reviewBusy" @close="reviewTarget = null"><text class="sheet-course serif">{{ reviewTarget?.name }}</text><view class="rating-row"><button v-for="n in 5" :key="n" class="rating-button" :aria-label="tr(`${n}分`, `${n} points`)" :aria-pressed="rating === n" @tap="rating = n"><PresenceIcon name="star" :size="56" :filled="n <= rating" :color="n <= rating ? '#96581c' : '#cfc4a8'" /></button></view><text class="rating-label">{{ rating }} / 5 {{ tr('分', 'points') }}</text><textarea v-model="reviewContent" class="review-input" :placeholder="tr('这一节课，带给你怎样的感受？', 'How did this session feel to you?')" :maxlength="1000" :disabled="reviewBusy" /><text class="review-count">{{ reviewContent.length }} / 1000</text><template #actions><view class="sheet-action-row"><button class="btn-primary row-btn" :disabled="reviewBusy || !reviewContent.trim()" :loading="reviewBusy" @tap="confirmReview">{{ tr('提交评价', 'Submit review') }}</button></view></template></BottomSheet>
     <view class="tabbar-space"></view><FloatingTabBar active="courses" />
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onShow, onHide, onUnload } from '@dcloudio/uni-app'
-import { listMyOrders, cancelOrder, type OrderItem } from '@/api/order'
+import { onShow, onHide, onUnload, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { listMyOrders, cancelOrder, previewOrderRefund, type OrderItem } from '@/api/order'
+import { listMyWaitlist } from '@/api/waitlist'
 import { listMyReviews, submitReview } from '@/api/review'
 import { payOrder, isOrderPaid } from '@/utils/wechat'
 import { paymentSeconds, attendanceLabel, canReviewOrder } from '@/utils/presence-view'
@@ -47,6 +48,7 @@ import FloatingTabBar from '@/components/FloatingTabBar.vue'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import PageState from '@/components/PageState.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
+import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 
 const userStore = useUserStore()
 const capsule = readCapsuleLayout()
@@ -56,12 +58,16 @@ const currentTab = ref('upcoming')
 const loading = ref(false)
 const loadError = ref(false)
 const allOrders = ref<OrderItem[]>([])
+/** courseId → 当前真实候补位次（仅排队中的条目） */
+const waitlistQueues = ref<Map<string, { position: number; ahead: number; size: number }>>(new Map())
 const reviewedIds = ref<Set<string>>(new Set())
 const reviewsLoaded = ref(false)
 const nowTs = ref(Date.now())
 const busyOrder = ref('')
 const cancelTarget = ref<any>(null)
 const cancelPaidTarget = ref<any>(null)
+/** 取消弹窗的退款预览（打开时拉取；null=加载中/失败，弹窗回退到通用文案） */
+const cancelRefundPreview = ref<{ fullRefund: boolean; refundFen: number; totalFen: number; percent: number } | null>(null)
 const reviewTarget = ref<any>(null)
 const rating = ref(5)
 const reviewContent = ref('')
@@ -92,7 +98,11 @@ function mapOrder(o: OrderItem) {
   const date = new Date(course.startDate)
   const validDate = Number.isFinite(date.getTime())
   const raw = o as OrderItem & { checkedIn?: boolean }
-  const statusLabel = statusText(o.status, o.orderType)
+  // 候补中的已支付订单展示真实位次，避免误以为已经报名成功
+  const queue = o.orderType === 'WAITLIST' && o.status === 'PAID' ? waitlistQueues.value.get(o.courseId || '') : null
+  const statusLabel = queue
+    ? tr(`候补中 · 第 ${queue.position} 位`, `Waitlisted · #${queue.position}`)
+    : statusText(o.status, o.orderType)
   // 开课时刻 = startDate + startTime，用于判断是否仍可自助取消/退款
   const startAt = validDate ? new Date(date.getTime()) : null
   const startClock = /^(\d{1,2}):(\d{2})/.exec(String(course.startTime || ''))
@@ -117,6 +127,7 @@ function mapOrder(o: OrderItem) {
     startAtMs,
     status: o.status,
     statusLabel,
+    waitlistAhead: queue ? queue.ahead : null,
     checkedIn: typeof raw.checkedIn === 'boolean' ? raw.checkedIn : undefined,
     reviewed: !reviewsLoaded.value || reviewedIds.value.has(o.courseId || ''),
   }
@@ -139,14 +150,17 @@ function remainingText(o: { expireAt: string }) {
   const seconds = remainingSeconds(o)
   return seconds <= 0 ? tr('已超时', 'Expired') : tr(`剩 ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`, `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} left`)
 }
-/** 仅未开课的已支付订单允许自助取消/退款；开始后与完成后均由客服线下处理 */
+/** 仅未开课的已支付订单允许自助取消/退款；开始后由后台强制退款通道处理 */
 function canCancelPaid(item: { status: string; startAtMs?: number }) {
   return item.status === 'PAID' && (!item.startAtMs || Date.now() < item.startAtMs)
 }
-function selfRefundClosed(item: { status: string; startAtMs?: number }) {
-  return item.status === 'COMPLETED' || (item.status === 'PAID' && !canCancelPaid(item))
-}
-function footerHint(item: { status: string; startAtMs?: number; checkedIn?: boolean }) {
+function footerHint(item: { status: string; startAtMs?: number; checkedIn?: boolean; orderType?: string; waitlistAhead?: number | null }) {
+  if (item.orderType === 'WAITLIST' && item.status === 'PAID') {
+    if (item.waitlistAhead == null) return tr('候补排队中', 'On the waitlist')
+    return (item.waitlistAhead as number) > 0
+      ? tr(`前面还有 ${item.waitlistAhead} 人`, `${item.waitlistAhead} ahead of you`)
+      : tr('已排在最前', 'First in line')
+  }
   if (item.status === 'COMPLETED') return attendanceLabel(item as any, isEnglish() ? 'en' : 'zh')
   if (item.status === 'PAID') return canCancelPaid(item) ? tr('详细安排请查看课程', 'See the course for full details') : tr('课程已开始', 'Course started')
   if (item.status === 'REFUNDING') return tr('退款处理中，到账时间以支付渠道为准', 'Refund processing; arrival time depends on the payment channel')
@@ -166,14 +180,31 @@ function startTicker() {
     }
   }, 1000)
 }
+/** 候补位次由候补接口计算（转正/退出后实时变化），与订单列表分开加载。 */
+async function loadWaitlistQueues(currentRequest: number) {
+  try {
+    const entries = await listMyWaitlist()
+    if (currentRequest !== requestId) return
+    const map = new Map<string, { position: number; ahead: number; size: number }>()
+    for (const entry of entries || []) {
+      if (entry.status === 'WAITING' && entry.queuePosition) {
+        map.set(entry.courseId, { position: entry.queuePosition, ahead: entry.aheadCount ?? 0, size: entry.queueSize ?? 0 })
+      }
+    }
+    waitlistQueues.value = map
+  } catch {
+    if (currentRequest === requestId) waitlistQueues.value = new Map()
+  }
+}
 async function loadOrders(quiet = false) {
   const currentRequest = ++requestId
-  if (!userStore.isLoggedIn) { allOrders.value = []; reviewedIds.value = new Set(); reviewsLoaded.value = false; loading.value = false; loadError.value = false; stopTicker(); return }
+  if (!userStore.isLoggedIn) { allOrders.value = []; waitlistQueues.value = new Map(); reviewedIds.value = new Set(); reviewsLoaded.value = false; loading.value = false; loadError.value = false; stopTicker(); return }
   if (!quiet) loading.value = true
   try {
     const orders = await listMyOrders()
     if (currentRequest !== requestId) return
     allOrders.value = orders || []; loadError.value = false; nowTs.value = Date.now()
+    void loadWaitlistQueues(currentRequest)
     if (!pendingOrders.value.some(o => remainingSeconds(o) <= 0)) expiredHandled = false
     try { const reviews = await listMyReviews(); if (currentRequest === requestId) { reviewedIds.value = new Set(reviews.map(r => r.courseId)); reviewsLoaded.value = true } } catch { reviewsLoaded.value = false }
   } catch { if (currentRequest === requestId) { loadError.value = true; if (!uni.getStorageSync('token')) { userStore.logout(); allOrders.value = [] } } }
@@ -207,7 +238,13 @@ async function confirmCancel() {
   try { await cancelOrder(cancelTarget.value.id, '用户取消待支付订单'); cancelTarget.value = null; uni.showToast({ title: tr('订单已取消', 'Order cancelled'), icon: 'none' }); await loadOrders(true) } catch { /* 请求层展示真实失败原因 */ } finally { busyOrder.value = '' }
 }
 function openReview(item: any) { if (!item.courseId || !canReviewOrder(item)) return; reviewTarget.value = item; rating.value = 5; reviewContent.value = '' }
-function openCancelPaid(item: any) { if (busyOrder.value || !canCancelPaid(item)) return; cancelPaidTarget.value = item }
+function openCancelPaid(item: any) {
+  if (busyOrder.value || !canCancelPaid(item)) return
+  cancelPaidTarget.value = item
+  // 拉取退款预览：非全额时在弹窗里明示可退金额，用户确认后才真正发起
+  cancelRefundPreview.value = null
+  previewOrderRefund(item.id).then((p) => { if (cancelPaidTarget.value?.id === item.id) cancelRefundPreview.value = p }).catch(() => { if (cancelPaidTarget.value?.id === item.id) cancelRefundPreview.value = null })
+}
 async function confirmCancelPaid() {
   const target = cancelPaidTarget.value
   if (!target || busyOrder.value) return
@@ -237,6 +274,12 @@ onUnload(() => { leavePage(); requestId++ })
 function goDetail(id?: string) { if (id) uni.navigateTo({ url: `/pages/course-detail/index?id=${id}` }) }
 function goLogin() { uni.switchTab({ url: '/pages/profile/index' }) }
 function goHome() { uni.switchTab({ url: '/pages/index/index' }) }
+
+const shareTitle = () => tr('Full愈 · 在场｜一起留一点时间给自己', 'Full愈 · Presence | Make a little time for yourself')
+onShareAppMessage(() => brandShareMessage(shareTitle()))
+// #ifdef MP-WEIXIN
+onShareTimeline(() => brandShareTimeline(shareTitle()))
+// #endif
 </script>
 
 <style scoped>
@@ -277,11 +320,12 @@ function goHome() { uni.switchTab({ url: '/pages/index/index' }) }
 .muted { font-size: 24rpx; color: var(--c-muted); }
 .footer-actions { display: flex; align-items: center; gap: 16rpx; flex-wrap: wrap; }
 .cancel-link { margin: 0; padding: 10rpx 0; background: transparent; color: var(--c-error); font-size: 24rpx; line-height: 1.5; }
-.refund-hint { font-size: 22rpx; color: var(--c-muted); line-height: 1.5; }
 .detail-button { margin: 0; padding: 8rpx 0; background: transparent; color: var(--c-primary); font-size: 24rpx; }
 .small-button { margin: 0; padding: 12rpx 24rpx; background: var(--c-primary); color: white; border-radius: 20rpx; font-size: 24rpx; line-height: 1.5; }
 .error-wrap { padding: 0 32rpx; }
 .sheet-copy { display: flex; flex-direction: column; gap: 24rpx; color: var(--c-muted); font-size: 28rpx; line-height: 1.8; padding: 16rpx 0 36rpx; }
+.sheet-action-row { display: flex; align-items: center; gap: 20rpx; width: 100%; }
+.sheet-action-row .row-btn { flex: 1 1 0; min-width: 0; margin: 0; }
 .sheet-course { display: block; font-size: 34rpx; color: var(--c-deep); }
 .rating-row { display: flex; justify-content: center; gap: 12rpx; margin-top: 28rpx; }
 .rating-button { margin: 0; padding: 12rpx; background: transparent; line-height: 1; }

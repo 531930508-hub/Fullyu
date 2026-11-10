@@ -65,7 +65,17 @@ export function listMyOrders(status?: string) {
   return get<OrderItem[]>('/orders', status ? { status } : undefined)
 }
 
+/** 首页下一场已支付课程（轻量查询，不拉取全部订单） */
+export function fetchNextCourse() {
+  return get<OrderItem | null>('/orders/next-course')
+}
+
 /** 取消订单 */
 export function cancelOrder(id: string, reason: string) {
   return post(`/orders/${id}/cancel`, { reason })
+}
+
+/** 自助取消前的退款金额预览：fullRefund=false 时前端需明确提示可退金额 */
+export function previewOrderRefund(id: string) {
+  return get<{ fullRefund: boolean; refundFen: number; totalFen: number; percent: number }>(`/orders/${id}/refund-preview`, undefined, { silent: true })
 }

@@ -17,11 +17,6 @@
       "es6": true,
       "minified": true
     },
-    "usingComponents": true,
-    "permission": {
-      "scope.userLocation": {
-        "desc": "用于获取您的位置信息以展示附近场地"
-      }
-    }
+    "usingComponents": true
   }
 }

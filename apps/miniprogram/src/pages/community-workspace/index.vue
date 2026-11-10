@@ -13,9 +13,10 @@
       <PageState v-else-if="loadError" state="error" :title="tr('工作台加载失败', 'Could not load the workspace')" :message="loadError" :action="tr('重新加载', 'Retry')" @action="load" />
       <PageState v-else-if="forbidden" state="empty" :title="tr('暂无管理权限', 'No management access')" :message="tr('你不是该社群的主理人，可以返回我的社群。', 'You are not the host of this community. You can return to My communities.')" :action="tr('我的社群', 'My communities')" @action="goMine" />
       <template v-else-if="community">
+        <view v-if="community.status && community.status !== 'APPROVED'" class="card identity-card review-banner"><PresenceIcon name="info" :size="32" /><text>{{ community.status === 'REJECTED' ? tr('申请未通过，请按驳回意见调整后重新提交。', 'Your application was declined. Revise it and submit again.') : tr('社群在平台审核中，审核通过后将在社群广场展示。', 'Under platform review. It appears in the hub once approved.') }}</text></view>
         <view class="card identity-card">
           <view class="cover"><image v-if="community.cover && !failedImages[community.cover]" class="cover-image" :src="community.cover" mode="aspectFill" @error="failedImages[community.cover] = true" /><BrandCover v-else label="" height="112rpx" icon="leaf" /></view>
-          <view class="grow"><text class="community-name">{{ community.name }}</text><text class="muted block">{{ isEnglish() ? 'Host ' + (community.owner.name || 'Not provided') : '主理人 ' + (community.owner.name || '未填写') }} · {{ community.yearlyFee ? (isEnglish() ? `Annual fee ¥${Number((community.yearlyFee / 100).toFixed(2))}` : '年费 ¥' + Number((community.yearlyFee / 100).toFixed(2))) : tr('免费社群', 'Free community') }}</text></view>
+          <view class="grow"><text class="community-name">{{ community.name }}</text><text class="muted block">{{ isEnglish() ? 'Host ' + (community.owner.name || 'Not provided') : '主理人 ' + (community.owner.name || '未填写') }} · {{ community.yearlyFee ? (isEnglish() ? `Annual fee ¥${(community.yearlyFee / 100).toFixed(2)}` : '年费 ¥' + (community.yearlyFee / 100).toFixed(2)) : tr('免费社群', 'Free community') }}</text></view>
         </view>
         <view class="section-heading"><text class="section-title serif">{{ tr('近期安排', 'Upcoming') }}</text><button class="text-button" @tap="goDetail('events')">{{ tr('全部活动', 'All events') }}</button></view>
         <PageState v-if="dataErrors.events" state="error" :title="tr('活动加载失败', 'Could not load events')" :message="dataErrors.events" :action="tr('重试', 'Retry')" @action="load" />
@@ -46,7 +47,7 @@
         <view v-else class="card members-card">
           <view v-for="member in recentMembers" :key="member.id" class="member-row"><image v-if="member.avatar && !failedImages[member.avatar]" class="avatar" :src="member.avatar" mode="aspectFill" @error="failedImages[member.avatar] = true" /><view v-else class="avatar avatar-fallback"><PresenceIcon name="user" :size="32" /></view><view class="grow"><text class="member-name">{{ member.name }}</text><text class="muted block">{{ member.joinedAt ? joinedLabel(member.joinedAt) : tr('社群成员', 'Community member') }}</text></view></view>
         </view>
-        <view class="notice"><PresenceIcon name="info" :size="32" /><text>{{ tr('动态发布后立即对成员可见，主理人可随时隐藏或删除。入群审核、邀请与活动管理请前往 PC 后台「社群工作台」。', 'Posts are visible to members immediately; you can hide or delete them at any time. Manage join requests, invites and events in the PC Community workspace.') }}</text></view>
+        <view class="notice"><PresenceIcon name="info" :size="32" /><text>{{ tr('入群审核、邀请与活动管理请前往 PC 后台「社群工作台」。', 'Manage join requests, invites and events in the PC Community workspace.') }}</text></view>
       </template>
     </view>
     <BottomSheet :show="composeVisible" :title="tr('发布社群动态', 'Post a community update')" :busy="postBusy" @close="closeCompose">
@@ -62,7 +63,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { fetchCommunity, fetchMembership, fetchEvents, fetchPosts, fetchMembers, submitPost, type Community, type CommunityEvent, type CommunityPost, type CommunityMember } from '@/api/skool'
+import { fetchManagedCommunity, fetchMembership, fetchEvents, fetchPosts, fetchMembers, submitPost, type Community, type CommunityEvent, type CommunityPost, type CommunityMember } from '@/api/skool'
 import { tr, isEnglish } from '@/locale'
 import { readCapsuleLayout } from '@/utils/capsule'
 import PresenceIcon from '@/components/PresenceIcon.vue'
@@ -119,7 +120,8 @@ async function load() {
     if (typeof membership?.managed !== 'boolean') throw new Error(tr('暂时无法确认管理权限，请重试。', 'Management access could not be confirmed. Please try again.'))
     if (!membership.managed) { forbidden.value = true; community.value = null; return }
     canManage.value = true
-    const result = await fetchCommunity(communityId.value)
+    // 主理人视角详情：待审核（PENDING）社群的工作台也能正常打开
+    const result = await fetchManagedCommunity(communityId.value)
     if (!result?.id) throw new Error(tr('社群不存在或暂不可见。', 'This community does not exist or is not visible.'))
     community.value = result
     const results = await Promise.allSettled([fetchEvents(communityId.value), fetchPosts(communityId.value), fetchMembers(communityId.value)])
@@ -198,6 +200,7 @@ button[disabled] { opacity: .5; }
 .text-button { padding: 16rpx 0; font-size: 24rpx; color: var(--c-brown); background: transparent; }
 .content { padding: 0 32rpx; }
 .card { padding: 32rpx; background: var(--c-card); border-radius: var(--radius-card); box-shadow: var(--shadow-card); }
+.review-banner { display: flex; align-items: flex-start; gap: 16rpx; font-size: 24rpx; color: var(--c-muted); line-height: 1.6; }
 .identity-card { display: flex; align-items: center; gap: 24rpx; }
 .cover { width: 112rpx; height: 112rpx; overflow: hidden; border-radius: 24rpx; flex-shrink: 0; }
 .cover-image { display: block; width: 100%; height: 100%; }

@@ -34,13 +34,40 @@ export class MemberService {
     })
   }
 
-  /** 当前有效会员卡（未过期且 ACTIVE） */
-  async activeCard(userId: string) {
+  /**
+   * 当前有效会员卡（未过期且 ACTIVE）。
+   * withStats 仅供畅练卡页使用：按当前卡期统计「用卡报课省下的金额」，
+   * 用于临期复购提示。其他页面不传，避免首页/个人页为了一张卡多跑聚合查询。
+   */
+  async activeCard(userId: string, options: { withStats?: boolean } = {}) {
     const now = new Date()
-    return this.prisma.memberCard.findFirst({
+    const card = await this.prisma.memberCard.findFirst({
       where: { userId, status: 'ACTIVE', endDate: { gt: now } },
       orderBy: { endDate: 'desc' },
     })
+    if (!card || !options.withStats) return card
+
+    // 畅练卡订单的 discountAmount 为「分」，且 cardType 有值；
+    // 品牌会员价订单 cardType 为空，不会混进畅练卡的节省里。
+    const stats = await this.prisma.order.aggregate({
+      where: {
+        userId,
+        orderType: 'COURSE',
+        status: { in: ['PAID', 'COMPLETED'] },
+        cardType: { not: null },
+        paymentTime: { gte: card.startDate, lte: now },
+      },
+      _sum: { discountAmount: true },
+      _count: { _all: true },
+    })
+
+    return {
+      ...card,
+      stats: {
+        savedCents: Math.max(0, Math.round(Number(stats._sum.discountAmount) || 0)),
+        classCount: stats._count._all,
+      },
+    }
   }
 
   /**

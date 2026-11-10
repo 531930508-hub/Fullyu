@@ -21,6 +21,10 @@
       "style": { "navigationStyle": "custom" }
     },
     {
+      "path": "pages/brand-member/stories/index",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "会员故事" }
+    },
+    {
       "path": "pages/brand-member/compare",
       "style": { "navigationStyle": "custom" }
     },
@@ -30,6 +34,10 @@
     },
     {
       "path": "pages/assets/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/voucher-redeem/index",
       "style": { "navigationStyle": "custom" }
     },
     {

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../../common/prisma.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
 import { CourseService } from '../course/course.service'
+import { StorageService } from '../../common/storage/storage.service'
 
 export interface OperatorContext {
   operatorId?: string
@@ -16,7 +17,14 @@ export class VenueService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly courseService: CourseService,
+    private readonly storage: StorageService,
   ) {}
+
+  /** 图片统一存对象键，签名 URL 在出参时统一生成 */
+  private normalizeImages(value: unknown): any[] {
+    if (!Array.isArray(value)) return []
+    return value.map((item) => this.storage.normalizeStoredRef(item))
+  }
 
   async list() {
     return this.prisma.venue.findMany({ orderBy: { createdAt: 'desc' } })
@@ -39,7 +47,7 @@ export class VenueService {
         address: data.address ?? '',
         capacity: Number(data.capacity) || 0,
         description: data.description ?? null,
-        images: data.images ?? [],
+        images: this.normalizeImages(data.images),
         businessHours:
           data.businessHours ??
           JSON.stringify({ mon_fri: '09:00-21:00', sat_sun: '09:00-18:00' }),
@@ -55,7 +63,7 @@ export class VenueService {
     if (data.address !== undefined) patch.address = data.address ?? ''
     if (data.capacity !== undefined) patch.capacity = Number(data.capacity) || 0
     if (data.description !== undefined) patch.description = data.description ?? null
-    if (data.images !== undefined) patch.images = data.images ?? []
+    if (data.images !== undefined) patch.images = this.normalizeImages(data.images)
     if (data.businessHours !== undefined) patch.businessHours = data.businessHours
     if (data.isAvailable !== undefined) patch.isAvailable = data.isAvailable
     return this.prisma.venue.update({ where: { id }, data: patch })
@@ -234,7 +242,7 @@ export class VenueService {
     if (!body?.contractUrl) throw new BusinessException('合同文件 URL 不能为空', 4058)
 
     const patch: any = {
-      contractUrl: body.contractUrl,
+      contractUrl: this.storage.normalizeStoredRef(body.contractUrl),
       contractName: body.contractName ?? null,
     }
     if (body.markSigned) {

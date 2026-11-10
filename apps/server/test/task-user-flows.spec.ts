@@ -29,7 +29,7 @@ describe('任务与用户资料非资金流程', () => {
     ctx = await buildTestContext()
     seeder = new Seeder(ctx.prisma)
     tasks = new TaskService(ctx.prisma)
-    users = new UserService(ctx.prisma)
+    users = new UserService(ctx.prisma, { enabled: false } as any)
   })
 
   afterAll(async () => {

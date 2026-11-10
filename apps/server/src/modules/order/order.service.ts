@@ -86,10 +86,10 @@ export class OrderService {
       where,
       orderBy: { createdAt: 'desc' },
       include: {
+        // 订单列表只为“下一场课/我的预约”提供时间与场地信息，不返回封面等大字段
         course: {
           select: {
             title: true,
-            coverImage: true,
             startDate: true,
             startTime: true,
             endTime: true,
@@ -110,6 +110,53 @@ export class OrderService {
           ? new Date(order.createdAt.getTime() + lockMs)
           : null,
     }))
+  }
+
+  /** 首页“下一场在场”：只查最近一小批已支付课程订单，避免拉取全部订单。 */
+  async findNextCourse(userId: string) {
+    // 业务时区固定东八区：课程日期按 +08:00 的当天零点起算。
+    const shanghaiToday = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+    const today = new Date(`${shanghaiToday}T00:00:00+08:00`)
+    const orders = await this.prisma.order.findMany({
+      where: {
+        userId,
+        orderType: 'COURSE',
+        status: 'PAID',
+        course: { startDate: { gte: today } },
+      },
+      take: 50,
+      select: {
+        id: true,
+        course: {
+          select: {
+            title: true,
+            startDate: true,
+            startTime: true,
+            endTime: true,
+            venue: { select: { name: true } },
+            trainer: { select: { displayName: true } },
+          },
+        },
+      },
+    })
+    const now = Date.now()
+    // 课程日期以 +08:00 的自然日为准。
+    const dateKey = (value: Date | string) => {
+      const date = value instanceof Date ? value : new Date(value)
+      return new Date(date.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+    }
+    const upcoming = orders
+      .filter((order) => {
+        const course = order.course
+        if (!course?.startDate) return false
+        const start = new Date(`${dateKey(course.startDate)}T${course.startTime || '00:00'}:00+08:00`).getTime()
+        return Number.isFinite(start) && start > now
+      })
+      .sort((a, b) =>
+        dateKey(a.course!.startDate).localeCompare(dateKey(b.course!.startDate)) ||
+        String(a.course!.startTime || '').localeCompare(String(b.course!.startTime || '')),
+      )
+    return upcoming[0] || null
   }
 
   /**
@@ -133,6 +180,10 @@ export class OrderService {
         user: { select: { phone: true, nickname: true } },
         course: { select: { title: true, startDate: true } },
         community: { select: { name: true, yearlyFee: true } },
+        refunds: {
+          select: { id: true, status: true, amountFen: true, outRefundNo: true },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     })
   }
@@ -146,6 +197,19 @@ export class OrderService {
    *   · 候补订单：全额退回微信
    * - 已完成（COMPLETED）：课程已结束，关闭用户自助退款；客诉退款由后台强制退款处理
    */
+  /**
+   * 自助取消前的退款预览：校验订单归属后委托支付服务按统一口径计算，
+   * 不动单、不发起退款；开课后的课程订单会直接报「不支持自助退款」。
+   */
+  async refundPreview(orderId: string, userId: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, userId },
+      select: { id: true },
+    })
+    if (!order) throw new BusinessException('订单不存在', 4004)
+    return this.payment.previewRefund(orderId)
+  }
+
   async cancelOrder(orderId: string, userId: string, reason: string) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, userId },
@@ -154,10 +218,7 @@ export class OrderService {
     if (!order) throw new BusinessException('订单不存在', 4004)
 
     if (order.status === 'COMPLETED') {
-      throw new BusinessException(
-        '课程已完成，不支持自助退款；如有问题请联系客服或线下工作人员',
-        4007,
-      )
+      throw new BusinessException('课程已完成，不支持自助退款', 4007)
     }
 
     if (order.status === 'PAID') {
