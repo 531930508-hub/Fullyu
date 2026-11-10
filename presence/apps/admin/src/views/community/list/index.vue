@@ -35,6 +35,10 @@
           <template v-if="column.dataIndex === 'status'">
             <a-tag :color="statusColor(record.status)">{{ statusText(record.status) }}</a-tag>
             <a-tag v-if="!record.isActive" color="default">已下架</a-tag>
+            <a-tag v-if="record.visibility === 'INVITE_ONLY'" color="purple">邀请制</a-tag>
+            <a-tag v-else-if="record.visibility === 'HIDDEN'" color="default">隐藏</a-tag>
+            <a-tag v-if="record.joinMode === 'APPROVAL'" color="orange">需审核</a-tag>
+            <a-tag v-else-if="record.joinMode === 'INVITE'" color="purple">仅邀请</a-tag>
           </template>
           <template v-if="column.dataIndex === 'action'">
             <a-space wrap>
@@ -125,6 +129,41 @@
           />
         </a-form-item>
 
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="可见性">
+              <a-select v-model:value="form.visibility">
+                <a-select-option value="PUBLIC">公开</a-select-option>
+                <a-select-option value="HIDDEN">隐藏（不出现在广场）</a-select-option>
+                <a-select-option value="INVITE_ONLY">邀请制（不公开详情）</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="入群方式">
+              <a-select v-model:value="form.joinMode">
+                <a-select-option value="OPEN">公开加入</a-select-option>
+                <a-select-option value="APPROVAL">需审核</a-select-option>
+                <a-select-option value="INVITE">仅邀请</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-form-item label="主理人用户 ID（可选；用于主理人工作台与分享）">
+          <a-input v-model:value="form.ownerUserId" placeholder="小程序用户 ID（CUID）" />
+          <div class="field-hint">基础主理人仅可拥有 1 个社群；第 2 个需先在「主理人角色」升级为扩展主理人。</div>
+        </a-form-item>
+
+        <a-form-item label="兴趣标签池（最多 12 个；成员加入时最多选 3 个）">
+          <a-select
+            v-model:value="form.interestPool"
+            mode="tags"
+            :options="INTEREST_OPTIONS.map((t) => ({ label: t, value: t }))"
+            placeholder="选择或输入后回车"
+          />
+        </a-form-item>
+
         <a-form-item label="社群介绍">
           <a-textarea v-model:value="form.description" :rows="3" placeholder="成员能得到什么：内容形式、更新频率、专属权益…" />
         </a-form-item>
@@ -160,6 +199,7 @@ import { uploadFile } from '@/api/upload'
 
 const CATEGORIES = ['疗愈', '瑜伽', '身心成长', '手作', '健身']
 const TAG_OPTIONS = ['良好健康', '优质教育', '责任消费', '身心疗愈', '身体疗愈', '复愈特色', '职业成长', '轻户外', '正念', '共修', '打卡']
+const INTEREST_OPTIONS = ['正念', '瑜伽', '冥想', '呼吸练习', '颂钵', '手作', '阅读', '轻户外', '睡眠', '饮食', '情绪', '体态']
 
 const loading = ref(false)
 const saving = ref(false)
@@ -210,9 +250,13 @@ function emptyForm() {
     feeYuan: 0,
     coverUrl: '',
     coverFallback: 'linear-gradient(135deg, #6D5934 0%, #A78E70 100%)',
+    ownerUserId: '',
     ownerName: '',
     ownerTitle: '',
     ownerAvatar: '',
+    visibility: 'PUBLIC',
+    joinMode: 'OPEN',
+    interestPool: [] as string[],
     tags: [] as string[],
     description: '',
     isOfficial: false,
@@ -238,9 +282,13 @@ function openEdit(record: any) {
     feeYuan: (record.yearlyFee ?? 0) / 100,
     coverUrl: record.coverUrl || '',
     coverFallback: record.coverFallback || '',
+    ownerUserId: record.ownerUserId || '',
     ownerName: record.ownerName || '',
     ownerTitle: record.ownerTitle || '',
     ownerAvatar: record.ownerAvatar || '',
+    visibility: record.visibility || 'PUBLIC',
+    joinMode: record.joinMode || 'OPEN',
+    interestPool: safeTags(record.interestPool),
     tags: safeTags(record.tags),
     description: record.description || '',
     isOfficial: Boolean(record.isOfficial),
@@ -293,10 +341,14 @@ function buildBody() {
     category: f.category,
     coverUrl: f.coverUrl || null,
     coverFallback: f.coverFallback || null,
+    ownerUserId: f.ownerUserId?.trim() || null,
     ownerName: f.ownerName,
     ownerTitle: f.ownerTitle || null,
     ownerAvatar: f.ownerAvatar || null,
     yearlyFee: Math.round((f.feeYuan || 0) * 100),
+    visibility: f.visibility,
+    joinMode: f.joinMode,
+    interestPool: f.interestPool.slice(0, 12),
     tags: f.tags.slice(0, 4),
     description: f.description || null,
     isOfficial: f.isOfficial,
@@ -389,5 +441,11 @@ onMounted(loadList)
   height: 100%;
   object-fit: cover;
   display: block;
+}
+.field-hint {
+  margin-top: 6px;
+  color: #999;
+  font-size: 12px;
+  line-height: 1.6;
 }
 </style>

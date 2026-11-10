@@ -8,12 +8,14 @@ export interface MenuLeaf {
   key: string
   title: string
   path: string
+  /** 图标名，对应 MainLayout 的 iconMap；不写用默认图标 */
+  icon?: string
   /** 任一命中即可见 */
   perm?: string[]
   /** 是否 Demo（mock 数据）阶段 */
   demo?: boolean
   /** 徽标类型，目前仅审批待办用 */
-  badge?: 'approvalPending'
+  badge?: 'approvalPending' | 'todoPending'
 }
 
 export interface MenuGroup {
@@ -32,7 +34,15 @@ export function isGroup(item: MenuItem): item is MenuGroup {
 }
 
 export const MENU_CONFIG: MenuItem[] = [
-  { key: 'dashboard', title: '工作台', path: '/dashboard' } as MenuLeaf & { icon?: string },
+  { key: 'dashboard', title: '工作台', path: '/dashboard', icon: 'DashboardOutlined' },
+  {
+    key: 'todos',
+    title: '待办中心',
+    path: '/todos',
+    icon: 'CheckSquareOutlined',
+    perm: ['flow:todo:view', 'order:view', 'community:view', 'scm:stock:view'],
+    badge: 'todoPending',
+  },
   {
     key: 'education',
     title: '教务管理',
@@ -56,7 +66,7 @@ export const MENU_CONFIG: MenuItem[] = [
       { key: 'membercards', title: '会员卡管理', path: '/sales/membercards', perm: ['membercard:view'] },
       { key: 'membercard-products', title: '会员卡商品', path: '/sales/membercard-products', perm: ['membercard:view'] },
       { key: 'time-discounts', title: '时段折扣', path: '/sales/time-discounts', perm: ['membercard:view'] },
-      { key: 'vouchers', title: '代金券管理', path: '/sales/vouchers', perm: ['voucher:view'] },
+      { key: 'vouchers', title: '代金券与发券', path: '/sales/vouchers', perm: ['voucher:view'] },
       { key: 'orders', title: '订单管理', path: '/sales/orders', perm: ['order:view'] },
     ],
   },
@@ -70,6 +80,8 @@ export const MENU_CONFIG: MenuItem[] = [
       { key: 'inbound', title: '验收入库', path: '/scm/inbound', perm: ['scm:inbound:view'] },
       { key: 'stock', title: '库存管理', path: '/scm/stock', perm: ['scm:stock:view'] },
       { key: 'scm-adjust', title: '库存调整', path: '/scm/adjust', perm: ['scm:stock:view'] },
+      { key: 'scm-transfer', title: '库存调拨', path: '/scm/transfer', perm: ['scm:transfer:view'] },
+      { key: 'scm-production', title: '生产工单', path: '/scm/production', perm: ['scm:production:view'] },
     ],
   },
   {
@@ -77,7 +89,8 @@ export const MENU_CONFIG: MenuItem[] = [
     title: '财务管理',
     icon: 'FundOutlined',
     children: [
-      { key: 'finance-dashboard', title: '财务看板', path: '/finance/dashboard', perm: ['finance:dashboard:view'] },
+      { key: 'finance-dashboard', title: '全业务财务看板', path: '/finance/dashboard', perm: ['finance:dashboard:view'] },
+      { key: 'finance-presence', title: '在场业务看板', path: '/finance/presence', perm: ['finance:presence:view'] },
       { key: 'finance-revenue', title: '收入数据源', path: '/finance/revenue', perm: ['finance:revenue:view'] },
       { key: 'finance-expenses', title: '月度支出录入', path: '/finance/expenses', perm: ['finance:expense:view'] },
     ],
@@ -96,9 +109,11 @@ export const MENU_CONFIG: MenuItem[] = [
     icon: 'TeamOutlined',
     perm: ['community:view'],
     children: [
+      { key: 'community-workspace', title: '社群工作台', path: '/community/workspace', perm: ['community:view'] },
       { key: 'community-list', title: '社群管理', path: '/community/list', perm: ['community:view'] },
+      { key: 'community-hosts', title: '主理人角色', path: '/community/hosts', perm: ['community:view'] },
       { key: 'community-events', title: '活动管理', path: '/community/events', perm: ['community:view'] },
-      { key: 'community-posts', title: '动态审核', path: '/community/posts', perm: ['community:view'] },
+      { key: 'community-posts', title: '内容治理', path: '/community/posts', perm: ['community:view'] },
     ],
   },
   {

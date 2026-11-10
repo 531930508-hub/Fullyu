@@ -55,7 +55,7 @@ export class TaskController {
 
   @Post('claims/:claimId/complete')
   @AdminAuth('task:update')
-  @ApiOperation({ summary: '审核完成任务（发放 Seeds）' })
+  @ApiOperation({ summary: '审核完成任务（发放积分）' })
   async complete(@Param('claimId') claimId: string) {
     return this.taskService.complete(claimId)
   }

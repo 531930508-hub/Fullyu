@@ -38,10 +38,10 @@
           </template>
           <template v-else-if="column.dataIndex === 'photo'">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <a-image v-if="record.user?.photo" :src="record.user.photo" :width="40" :height="40" style="object-fit: cover; border-radius: 4px;" />
+              <a-image v-if="record.user?.photo && record.user?.photoValid" :src="record.user.photo" :width="40" :height="40" style="object-fit: cover; border-radius: 4px;" />
               <a-tag v-else color="warning">缺照片</a-tag>
               <a-upload :show-upload-list="false" accept="image/*" :before-upload="(file: any) => beforePhotoUpload(file, record)">
-                <a-button v-perm="'membercard:update'" type="link" size="small" :loading="uploadingId === record.id">{{ record.user?.photo ? '更换' : '上传' }}</a-button>
+                <a-button v-perm="'membercard:update'" type="link" size="small" :loading="uploadingId === record.id">{{ record.user?.photoValid ? '更换' : '上传' }}</a-button>
               </a-upload>
             </div>
           </template>

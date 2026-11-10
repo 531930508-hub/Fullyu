@@ -49,8 +49,11 @@ export class NotificationService {
     }
   }
 
-  /** 开课提醒 */
-  async courseReminder(userId: string, params: { courseName: string; startTime: string; venue: string; courseId: string }) {
+  /**
+   * 开课提醒（模板字段：课程名称 thing1 / 开课时间 time2 / 上课地点 thing3 / 温馨提示 thing4）
+   * 温馨提示为 thing 类型，微信限制 20 字以内，文案需预留长度。
+   */
+  async courseReminder(userId: string, params: { courseName: string; startTime: string; venue: string; courseId: string; tip?: string }) {
     await this.send(
       userId,
       'WECHAT_TMPL_COURSE_REMINDER',
@@ -58,22 +61,30 @@ export class NotificationService {
         thing1: { value: params.courseName },
         time2: { value: params.startTime },
         thing3: { value: params.venue },
+        thing4: { value: params.tip ?? '您预约的课程还有1小时开始，请提前到达哦' },
       },
-      `/pages/course/detail?id=${params.courseId}`,
+      `/pages/course-detail/index?id=${params.courseId}`,
     )
   }
 
-  /** 候补递补成功提醒 */
-  async waitlistPromoted(userId: string, params: { courseName: string; orderId: string; deadline: string }) {
+  /**
+   * 候补递补成功提醒（模板字段：活动名称 thing1 / 活动时间 time2 / 活动地址 thing3 / 温馨提示 thing4）
+   * deadline 为确认截止日期（YYYY-MM-DD）；温馨提示固定 20 字内以贴合 thing 字数上限。
+   */
+  async waitlistPromoted(userId: string, params: { courseName: string; startTime: string; venue: string; deadline?: string; orderId: string }) {
+    const tip = params.deadline
+      ? `递补成功，请在${params.deadline}前确认`
+      : '候补递补成功，请尽快确认'
     await this.send(
       userId,
       'WECHAT_TMPL_WAITLIST_PROMOTED',
       {
         thing1: { value: params.courseName },
-        thing2: { value: '候补递补成功，请及时确认' },
-        time3: { value: params.deadline },
+        time2: { value: params.startTime },
+        thing3: { value: params.venue },
+        thing4: { value: tip },
       },
-      `/pages/order/detail?id=${params.orderId}`,
+      `/pages/my-courses/index`,
     )
   }
 
@@ -87,7 +98,7 @@ export class NotificationService {
         thing2: { value: params.courseName },
         amount3: { value: params.amount },
       },
-      `/pages/order/detail?id=${params.orderId}`,
+      `/pages/my-courses/index`,
     )
   }
 
@@ -101,7 +112,7 @@ export class NotificationService {
         amount2: { value: params.amount },
         phrase3: { value: '退款成功' },
       },
-      `/pages/order/detail?id=${params.orderId}`,
+      `/pages/my-courses/index`,
     )
   }
 }

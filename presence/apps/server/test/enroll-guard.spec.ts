@@ -39,10 +39,10 @@ describe('报名/候补二次校验兜底', () => {
     await expect(ctx.enrollment.enroll(course!.id, user.id, {})).rejects.toThrow(/已截止/)
   })
 
-  it('C. 课程已开课（startDate 已过去，模拟改期到过去）应被拦截', async () => {
+  it('C. 课程已开课或已结束（startDate 已过去，模拟改期到过去）应被拦截', async () => {
     const course = await seeder.course({ startInHours: -2 })
     const user = await seeder.user()
-    await expect(ctx.enrollment.enroll(course!.id, user.id, {})).rejects.toThrow(/已开课/)
+    await expect(ctx.enrollment.enroll(course!.id, user.id, {})).rejects.toThrow(/已开课|已结束/)
   })
 
   it('D. 场地被停用（改场后 isAvailable=false）应拦截报名', async () => {
@@ -55,7 +55,7 @@ describe('报名/候补二次校验兜底', () => {
     await expect(ctx.enrollment.enroll(course!.id, user.id, {})).rejects.toThrow(/场地/)
   })
 
-  it('E. 候补加入同样兜底：课程已开课时禁止候补', async () => {
+  it('E. 候补加入同样兜底：课程已开课或已结束时禁止候补', async () => {
     const course = await seeder.course({
       maxCapacity: 1,
       currentEnrolled: 1,
@@ -63,7 +63,7 @@ describe('报名/候补二次校验兜底', () => {
       startInHours: -2,
     })
     const user = await seeder.user()
-    await expect(ctx.waitlist.join(course!.id, user.id)).rejects.toThrow(/已开课/)
+    await expect(ctx.waitlist.join(course!.id, user.id)).rejects.toThrow(/已开课|已结束/)
   })
 
   it('F. 正常课程（时间窗有效、场地可用）不被误伤，报名成功', async () => {

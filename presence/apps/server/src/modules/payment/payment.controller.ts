@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Param, Req, UseGuards } from '@nestjs/common'
+import { Controller, Get, Post, Body, Param, Req, UseGuards } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { PaymentService } from './payment.service'
@@ -16,6 +16,14 @@ export class PaymentController {
   @ApiOperation({ summary: '创建汇付聚合支付（返回小程序调起参数）' })
   async createPayment(@Req() req: any, @Param('orderId') orderId: string) {
     return this.paymentService.createPayment(orderId, req.user.userId)
+  }
+
+  @Get('status/:orderId')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '查询本人订单支付状态（小程序支付结果确认）' })
+  async status(@Req() req: any, @Param('orderId') orderId: string) {
+    return this.paymentService.queryStatus(orderId, req.user.userId)
   }
 
   @Post('notify')

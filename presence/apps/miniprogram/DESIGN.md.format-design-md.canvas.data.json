@@ -1,0 +1,743 @@
+{
+  "aicoding.formatViewer.designMd": {
+    "schemaVersion": 1,
+    "parserVersion": 5,
+    "sourcePath": "/Users/th/Desktop/Full愈/apps/miniprogram/DESIGN.md",
+    "updatedAt": "2026-10-22T14:20:28.354Z",
+    "title": "Full愈 约课小程序设计系统 v1",
+    "tokens": [
+      {
+        "group": "colors",
+        "count": 21,
+        "source": "frontmatter",
+        "entries": [
+          {
+            "name": "bg-page",
+            "value": "#f5f6ed"
+          },
+          {
+            "name": "bg-card",
+            "value": "#ffffff"
+          },
+          {
+            "name": "bg-selected",
+            "value": "#f3efe0"
+          },
+          {
+            "name": "bg-muted",
+            "value": "#e9e4d2"
+          },
+          {
+            "name": "primary",
+            "value": "#683611"
+          },
+          {
+            "name": "on-primary",
+            "value": "#f5f6ed"
+          },
+          {
+            "name": "text-title",
+            "value": "#3a2a1a"
+          },
+          {
+            "name": "text-emphasis",
+            "value": "#96581c"
+          },
+          {
+            "name": "text-body-2",
+            "value": "#756a55"
+          },
+          {
+            "name": "text-secondary",
+            "value": "#9a8f7a"
+          },
+          {
+            "name": "cream",
+            "value": "#f6e8b8"
+          },
+          {
+            "name": "accent-gold",
+            "value": "#eec76f"
+          },
+          {
+            "name": "accent-caramel",
+            "value": "#d2973e"
+          },
+          {
+            "name": "brand-senseguide",
+            "value": "#B02A5C"
+          },
+          {
+            "name": "func-success",
+            "value": "#8fa35a"
+          },
+          {
+            "name": "func-error",
+            "value": "#a03d2a"
+          },
+          {
+            "name": "line",
+            "value": "#e6dcc4"
+          },
+          {
+            "name": "disabled-bg",
+            "value": "#e9e4d4"
+          },
+          {
+            "name": "disabled-text",
+            "value": "#b3a98f"
+          },
+          {
+            "name": "chip-off-bg",
+            "value": "#f4f2e9"
+          },
+          {
+            "name": "chip-off-text",
+            "value": "#c4bda8"
+          }
+        ]
+      },
+      {
+        "group": "typography",
+        "count": 4,
+        "source": "frontmatter",
+        "entries": [
+          {
+            "name": "display",
+            "value": "{ family: \"Noto Serif SC / Songti SC\", weight: 700, size: \"22–28px\" }"
+          },
+          {
+            "name": "title",
+            "value": "{ family: \"PingFang SC\", weight: 600, size: \"15–17px\" }"
+          },
+          {
+            "name": "body",
+            "value": "{ family: \"PingFang SC\", weight: 400, size: \"14px\", lineHeight: 1.7 }"
+          },
+          {
+            "name": "caption-en",
+            "value": "{ size: \"10.5–12px\", letterSpacing: \"0.03em\" }"
+          }
+        ]
+      }
+    ],
+    "sections": [
+      {
+        "level": 2,
+        "title": "设计语言",
+        "rawTitle": "1. 设计语言",
+        "excerpt": "| 特征 | 规则 |\n|---|---|\n| 氛围 | 米白暖底 `#f5f6ed` + 纯白大圆角卡片（16px）+ 极轻暖调投影；页面大面积底色禁止用纯白 |\n| 字体 | 标题思源宋体 Bold；功能/正文苹方；英文标注为小号无衬线，字距 +3% |\n| 主行动色 | 深咖 `#683611`，每屏最多一个主按钮 |\n| 选择器 | 白底描边，选中为深咖描边 + `#f3efe0` 底 + 右上角 ✓ 角标 |\n| 双语 | 固定语法「中文功能词 (English)」，英文 10.5–12px，`#9a8f7a` |\n| 文案 | 延续「愈」字造词：预约即「愈」、购卡享「愈」；短句、直接 |\n| 图标 | 1.5px 线性 SVG，圆角端点，`stroke=currentColor`；禁用面性彩色图标和 emoji |",
+        "wordCount": 59,
+        "completeness": "ready"
+      },
+      {
+        "level": 2,
+        "title": "色彩令牌",
+        "rawTitle": "2. 色彩令牌",
+        "excerpt": "| 令牌 | 色值 | 用途 |\n|---|---|---|\n| bg/page | `#f5f6ed` | 页面底色 |\n| bg/card | `#ffffff` | 卡片、输入区、TabBar |\n| bg/selected | `#f3efe0` | 选择器选中底 |\n| bg/muted | `#e9e4d2` | 未选中服务 Tab、次级块 |\n| primary | `#683611` | 主按钮、选中态、问候条、会员卡底 |\n| text/title | `#3a2a1a` | 标题与正文 |\n| text/emphasis | `#96581c` | 强调文字、链接、线性图标 |\n| text/body-2 | `#756a55` | **补充**：中文次要信息（时间、场地、说明）、未选中 TabBar 文字、输入占位、字数计数、步骤条未到达项 |\n| text/secondary | `#9a8f7a` | 仅英文标注与装饰（对比度 2.93:1，不得承载中文信息） |\n| cream | `#f6e8b8` | 深底上的文字、头像底 |\n| accent/gold | `#eec76f` | 会员、积分、金麦点缀 |\n| accent/caramel | `#d2973e` | 提醒态、进度条、早鸟/候补点缀（不作文字色） |\n| brand/senseguide | `#B02A5C` | 仅精油商城专区 |\n| func/success | `#8fa35a` | 成功/完成；SEEDIFY 成长体系 |\n| func/error | `#a03d2a` | 错误/警示 |\n| line/border | `#e6dcc4` | 描边与分隔线 |",
+        "wordCount": 103,
+        "completeness": "ready"
+      },
+      {
+        "level": 3,
+        "title": "对比度约束（wcag 2.1，实测）",
+        "rawTitle": "对比度约束（WCAG 2.1，实测）",
+        "excerpt": "| 前景 / 背景 | 对比度 | 结论 |\n|---|---|---|\n| `#3a2a1a` / `#f5f6ed` | 12.64 | 正文 AAA |\n| `#683611` / `#f5f6ed`（双向） | 9.08 | 主按钮 AAA |\n| `#96581c` / `#ffffff` | 5.66 | 强调与链接 AA |\n| `#eec76f` / `#683611` | 6.14 | 问候条金数字 AA |\n| `#756a55` / `#f5f6ed` | 4.88 | 补充令牌，次要中文 AA |\n| `#9a8f7a` / `#f5f6ed` | 2.93 | **不达标**：只用于英文标注、装饰、占位，禁止承载必要信息 |\n| `#d2973e`、`#8fa35a` / `#ffffff` | 2.55 / 2.78 | **不能作文字色**，只作色块、进度、描边；色块上的文字用 `#3a2a1a` |\n| `#c2527e` / `#fbe3ea` | 3.6 | pilltag 仅限 ≥12px 粗体短标签 |\n\n禁用态（`#b3a98f`/`#e9e4d4`、`#c4bda8`/`#f4f2e9`）按 WCAG 豁免，但必须同时给出文字说明（如「已约满」）。",
+        "wordCount": 80,
+        "completeness": "ready"
+      },
+      {
+        "level": 2,
+        "title": "字体、圆角、间距、投影",
+        "rawTitle": "3. 字体、圆角、间距、投影",
+        "excerpt": "| 令牌 | 值 | 用途 |\n|---|---|---|\n| font/display | 思源宋体 Bold 22–28px | 页标题、卡名、价格大字 |\n| font/title | 苹方 Semibold 15–17px | 卡片标题、模块标题 |\n| font/body | 苹方 14px / 1.7 | 正文 |\n| font/caption-en | 10.5–12px / +3% | 英文标注 |\n| radius/card | 16px | 卡片 |\n| radius/button | 12px（sm 9px） | 按钮 |\n| radius/chip | 10px | 选择器 |\n| radius/tabbar | 18px | 悬浮标签栏 |\n| radius/sheet | 20px 顶部 | Bottom Sheet（补充） |\n| spacing | 4 的倍数：8/12/16/24 | 页边距 16，卡内边距 18 |\n| shadow/card | `0 2px 10px rgba(104,54,17,.05)` | 不用灰黑投影 |\n\n标题字体与功能字体不混排于同一行；页面标题、卡片名用宋体，标签/按钮/说明用苹方。",
+        "wordCount": 90,
+        "completeness": "ready"
+      },
+      {
+        "level": 2,
+        "title": "组件",
+        "rawTitle": "4. 组件",
+        "excerpt": "| 组件 | 规格 |\n|---|---|\n| Button | 圆角 12、15px、`12px 26px`；primary 深咖底米白字；outline 白底 1.5px `#3a2a1a` 描边；gold 金底墨字（积分/会员兑换）；disabled 米灰；sm `7px 16px` 13px 圆角 9 |\n| Chip Selector | 白底 1px 线色，圆角 10，`11px 26px`；选中深咖描边 + `#f3efe0` + 600 + ✓ 角标（18px，`0 10px 0 10px`）；约满 `#f4f2e9` / `#c4bda8` |\n| Card | 白底、圆角 16、内边距 18；标题 15/600；副标题 12.5 `#756a55`；分隔线 1px 线色 |\n| Service Tab | 顶部圆角 14 的分段卡；未选 `#e9e4d2`，选中白底 + 宋体中文 + 英文副标（选中为 `#96581c`） |\n| Stepper | 30px 圆形 ± + 52×32 数字框，1.5px 墨色描边；标签「人数 (Number of Guests)」 |\n| Greeting Bar | 深咖底、cream 字、金色数字、顶部圆角 16；下接白色入口卡（预约即「愈」/ 购卡享「愈」） |\n| Booking Card | 「您的上次预约」+ 课程名；头像为 cream 圆底宋体首字；右侧 outline sm 按钮 |\n| Bottom Action Bar | 固定于安全区上方；次按钮在左、主按钮在右 |\n| Tab Bar | 白底、圆角 18、`10px 6px`、tabbar 投影；11px；选中深咖 600，未选 `#756a55`（原稿 `#9a8f7a` 在白底仅 3.19:1，已修正） |\n| AI Float | 62px 白色圆形 + float 投影，线性机器人图标 + 「AI预约」 |\n| Bottom Sheet（补充） | 白底、顶部圆角 20、抓手 36×4 线色；替代核心交易链路的原生弹窗 |\n| Status Pill（补充） | 圆角 20、10.5–12px；待上课 `#f3efe0`/`#683611`；已完成 `#eef1e3`/`#5c6b34`；已取消 `#f4f2e9`/`#756a55`；候补 `#fbf1df`/`#8a5a17` |",
+        "wordCount": 183,
+        "completeness": "ready"
+      },
+      {
+        "level": 2,
+        "title": "子品牌皮肤",
+        "rawTitle": "5. 子品牌皮肤",
+        "excerpt": "| 专区 | 主色 | 点缀 |\n|---|---|---|\n| 在场约课小程序（本小程序全部页面） | 深咖 `#683611` | 金麦 `#eec76f` |\n| SEEDIFICATION 证书 / 成长体系 | 青绿 `#8fa35a`（只作色块） | 咖啡 `#96581c` |\n\n轻疗、时叙、香复吾言精油、深疗 The One 的皮肤归各自独立小程序，不在本文件内定义。",
+        "wordCount": 28,
+        "completeness": "thin"
+      },
+      {
+        "level": 2,
+        "title": "约课业务映射",
+        "rawTitle": "6. 约课业务映射",
+        "excerpt": "v1 组件库的示例来自门店按摩预约场景，约课小程序按下表映射，不照搬门店字段。\n\n| v1 组件 | 约课小程序落点 |\n|---|---|\n| Service Tab（全感舒筋/头部水疗/全感悦耳） | 首页筛选面板的课程类型分段：全部 / 单次体验 / 系列课程（不做业态切换） |\n| Chip Selector（时长/日期） | 首页类别（声音/呼吸/冥想/具身动作）与日期筛选、课程详情场次选择、会员卡种选择 |\n| Stepper（预约人数） | 课程报名人数（默认 1，单人课隐藏） |\n| Greeting Bar | 首页会员问候与本月可用次数；游客态改为登录引导 |\n| Booking Card（上次预约） | 首页「您的下一节课 / 上次课程」，按钮为评价课程 / 再约TA |\n| Bottom Action Bar | 课程详情报名栏、会员购买栏、创建社群提交栏 |\n| Tab Bar 5 项 | 约课保持 4 项：首页 / 预约 / 会员 / 我的（「预约」= 原「我的课程」，与「预约记录」统一命名） |\n| AI Float | 首页 AI 约课入口（二期能力，原型中保留位置） |",
+        "wordCount": 79,
+        "completeness": "ready"
+      },
+      {
+        "level": 3,
+        "title": "在场业务字段落点（对应 prisma schema）",
+        "rawTitle": "在场业务字段落点（对应 Prisma schema）",
+        "excerpt": "| 业务能力 | 页面落点 |\n|---|---|\n| 系列课（多节 + 课表） | 课程卡「系列课 · N 节」，详情页课表与结业条件，我的预约系列进度条 |\n| 早鸟阶梯价 tiers | 详情页阶梯价梯（已过 / 当前 / 未到），与卡种折扣叠加时取低 |\n| 会员卡种折扣 | 价格卡按月 / 季 / 年卡列出折后价 |\n| 会员优先报名 | 详情页提醒条 + 「开售提醒」+「开通会员 · 立即报名」 |\n| 双队列候补 | 候补弹层：会员候补席 + 普通候补，预付与未递补退回规则 |\n| 时段会员价 slot | 价格卡单独一行，报名弹层按时段价计 |\n| 成团人数 minCapacity / groupDeadline | 详情与报名弹层的成团说明，未成团全额退回 |\n| refundRules | 单次课按开课前时长、系列课按剩余节数退款 |\n| PHASE 导师阶段 | 导师主页身份标签，导师工作台成长路径卡（不出现收入类措辞） |\n| SEEDIFICATION / UNITAR 证书 | 系列课结业证书、「我的」证书入口 |",
+        "wordCount": 57,
+        "completeness": "ready"
+      },
+      {
+        "level": 2,
+        "title": "规则与禁忌",
+        "rawTitle": "7. 规则与禁忌",
+        "excerpt": "- 每屏主按钮不超过 1 个；禁止深蓝、纯黑、荧光色。\n- 大面积底只用 `#f5f6ed`。\n- `#9a8f7a`、焦糖、青绿不承载必要的中文信息。\n- 核心交易链路（报名确认、会员购买、评价）使用品牌化 Bottom Sheet，不用原生弹窗。\n- 未登录、空数据、加载失败三种状态必须在视觉与文案上区分。\n- 图片缺失使用米色兜底图 + 线性图标，不用纯色块。",
+        "wordCount": 31,
+        "completeness": "ready"
+      },
+      {
+        "level": 2,
+        "title": "代码落地映射（待原型通过后执行）",
+        "rawTitle": "8. 代码落地映射（待原型通过后执行）",
+        "excerpt": "| App.vue 现变量 | 现值 | v1 令牌 | 新值 |\n|---|---|---|---|\n| `--c-primary` | `#584219` | primary | `#683611` |\n| `--c-brown` | `#6D5934` | text/emphasis | `#96581c` |\n| `--c-deep` / `--c-ink` | `#3F2F10` | text/title | `#3a2a1a` |\n| `--c-cream`（页面底） | `#EAE0D7` | bg/page | `#f5f6ed` |\n| `--c-card` | `#FBF8F3` | bg/card | `#ffffff` |\n| `--c-card-2` | `#F4EEE6` | bg/selected | `#f3efe0` |\n| `--c-apricot` | `#D3956E` | accent/caramel | `#d2973e` |\n| `--c-gold` | `#C9A35C` | accent/gold | `#eec76f` |\n| `--c-muted` | `#A78E70` | text/body-2 / text/secondary | `#756a55` / `#9a8f7a` |\n| `--c-rice` | `#F7F2E9` | on-primary | `#f5f6ed` |\n| `--line-soft` | `rgba(88,66,25,.14)` | line | `#e6dcc4` |\n| `.card` 圆角 | 44rpx | radius/card | 32rpx |\n| `.btn*` 圆角 | 999rpx | radius/button | 24rpx |\n| `pages.json` 导航/背景色 | `#EAE0D7` | bg/page | `#f5f6ed` |\n\n落地顺序：先替换 App.vue 变量与公共类，再逐页清理硬编码色值（当前多数页面直接写死 `#584219` 等），最后替换 FloatingTabBar。`packages/design-tokens` 同时服务 PC 后台，小程序令牌以新增 `miniprogram` 主题导出，不覆盖后台取值。",
+        "wordCount": 112,
+        "completeness": "ready"
+      }
+    ],
+    "components": [],
+    "states": [],
+    "rules": [],
+    "openDecisions": [],
+    "designSystem": {
+      "schemaVersion": 1,
+      "schemaKeys": [
+        "version",
+        "name",
+        "description",
+        "colors",
+        "typography",
+        "rounded",
+        "spacing",
+        "components"
+      ],
+      "presentSchemaKeys": [
+        "name",
+        "version",
+        "colors",
+        "typography",
+        "spacing"
+      ],
+      "extensionKeys": [],
+      "unknownKeys": [
+        "updated",
+        "source",
+        "scope",
+        "supersedes",
+        "status",
+        "radius",
+        "shadow"
+      ],
+      "name": "Full愈 约课小程序设计系统",
+      "description": "| 特征 | 规则 |",
+      "version": "v1",
+      "colors": [
+        {
+          "name": "bg-page",
+          "value": "#f5f6ed",
+          "role": "surface",
+          "family": "other",
+          "luminance": 0.9144,
+          "contrastOnWhite": 1.09,
+          "contrastOnBlack": 19.29,
+          "isDisplayable": true
+        },
+        {
+          "name": "bg-card",
+          "value": "#ffffff",
+          "role": "surface",
+          "family": "other",
+          "luminance": 1,
+          "contrastOnWhite": 1,
+          "contrastOnBlack": 21,
+          "isDisplayable": true
+        },
+        {
+          "name": "bg-selected",
+          "value": "#f3efe0",
+          "role": "surface",
+          "family": "other",
+          "luminance": 0.8617,
+          "contrastOnWhite": 1.15,
+          "contrastOnBlack": 18.23,
+          "isDisplayable": true
+        },
+        {
+          "name": "bg-muted",
+          "value": "#e9e4d2",
+          "role": "surface",
+          "family": "neutral",
+          "luminance": 0.7746,
+          "contrastOnWhite": 1.27,
+          "contrastOnBlack": 16.49,
+          "isDisplayable": true
+        },
+        {
+          "name": "primary",
+          "value": "#683611",
+          "role": "primary",
+          "family": "other",
+          "luminance": 0.0562,
+          "contrastOnWhite": 9.89,
+          "contrastOnBlack": 2.12,
+          "isDisplayable": true
+        },
+        {
+          "name": "on-primary",
+          "value": "#f5f6ed",
+          "role": "primary",
+          "family": "other",
+          "luminance": 0.9144,
+          "contrastOnWhite": 1.09,
+          "contrastOnBlack": 19.29,
+          "isDisplayable": true
+        },
+        {
+          "name": "text-title",
+          "value": "#3a2a1a",
+          "role": "text",
+          "family": "other",
+          "luminance": 0.0263,
+          "contrastOnWhite": 13.76,
+          "contrastOnBlack": 1.53,
+          "isDisplayable": true
+        },
+        {
+          "name": "text-emphasis",
+          "value": "#96581c",
+          "role": "text",
+          "family": "other",
+          "luminance": 0.1355,
+          "contrastOnWhite": 5.66,
+          "contrastOnBlack": 3.71,
+          "isDisplayable": true
+        },
+        {
+          "name": "text-body-2",
+          "value": "#756a55",
+          "role": "text",
+          "family": "other",
+          "luminance": 0.1475,
+          "contrastOnWhite": 5.32,
+          "contrastOnBlack": 3.95,
+          "isDisplayable": true
+        },
+        {
+          "name": "text-secondary",
+          "value": "#9a8f7a",
+          "role": "text",
+          "family": "other",
+          "luminance": 0.2792,
+          "contrastOnWhite": 3.19,
+          "contrastOnBlack": 6.58,
+          "isDisplayable": true
+        },
+        {
+          "name": "cream",
+          "value": "#f6e8b8",
+          "role": "accent",
+          "family": "light",
+          "luminance": 0.8077,
+          "contrastOnWhite": 1.22,
+          "contrastOnBlack": 17.15,
+          "isDisplayable": true
+        },
+        {
+          "name": "accent-gold",
+          "value": "#eec76f",
+          "role": "primary",
+          "family": "warm",
+          "luminance": 0.6017,
+          "contrastOnWhite": 1.61,
+          "contrastOnBlack": 13.03,
+          "isDisplayable": true
+        },
+        {
+          "name": "accent-caramel",
+          "value": "#d2973e",
+          "role": "primary",
+          "family": "other",
+          "luminance": 0.3618,
+          "contrastOnWhite": 2.55,
+          "contrastOnBlack": 8.24,
+          "isDisplayable": true
+        },
+        {
+          "name": "brand-senseguide",
+          "value": "#B02A5C",
+          "role": "primary",
+          "family": "other",
+          "luminance": 0.1166,
+          "contrastOnWhite": 6.3,
+          "contrastOnBlack": 3.33,
+          "isDisplayable": true
+        },
+        {
+          "name": "func-success",
+          "value": "#8fa35a",
+          "role": "semantic",
+          "family": "other",
+          "luminance": 0.3277,
+          "contrastOnWhite": 2.78,
+          "contrastOnBlack": 7.55,
+          "isDisplayable": true
+        },
+        {
+          "name": "func-error",
+          "value": "#a03d2a",
+          "role": "semantic",
+          "family": "other",
+          "luminance": 0.1098,
+          "contrastOnWhite": 6.57,
+          "contrastOnBlack": 3.2,
+          "isDisplayable": true
+        },
+        {
+          "name": "line",
+          "value": "#e6dcc4",
+          "role": "accent",
+          "family": "other",
+          "luminance": 0.7199,
+          "contrastOnWhite": 1.36,
+          "contrastOnBlack": 15.4,
+          "isDisplayable": true
+        },
+        {
+          "name": "disabled-bg",
+          "value": "#e9e4d4",
+          "role": "surface",
+          "family": "other",
+          "luminance": 0.7756,
+          "contrastOnWhite": 1.27,
+          "contrastOnBlack": 16.51,
+          "isDisplayable": true
+        },
+        {
+          "name": "disabled-text",
+          "value": "#b3a98f",
+          "role": "text",
+          "family": "other",
+          "luminance": 0.3994,
+          "contrastOnWhite": 2.34,
+          "contrastOnBlack": 8.99,
+          "isDisplayable": true
+        },
+        {
+          "name": "chip-off-bg",
+          "value": "#f4f2e9",
+          "role": "surface",
+          "family": "other",
+          "luminance": 0.8862,
+          "contrastOnWhite": 1.12,
+          "contrastOnBlack": 18.72,
+          "isDisplayable": true
+        },
+        {
+          "name": "chip-off-text",
+          "value": "#c4bda8",
+          "role": "text",
+          "family": "other",
+          "luminance": 0.5096,
+          "contrastOnWhite": 1.88,
+          "contrastOnBlack": 11.19,
+          "isDisplayable": true
+        }
+      ],
+      "typography": [
+        {
+          "name": "display",
+          "fontFamily": "",
+          "fontSize": "",
+          "fontWeight": "",
+          "lineHeight": "",
+          "letterSpacing": "",
+          "properties": [
+            {
+              "property": "value",
+              "value": "{ family: \"Noto Serif SC / Songti SC\", weight: 700, size: \"22–28px\" }"
+            }
+          ]
+        },
+        {
+          "name": "title",
+          "fontFamily": "",
+          "fontSize": "",
+          "fontWeight": "",
+          "lineHeight": "",
+          "letterSpacing": "",
+          "properties": [
+            {
+              "property": "value",
+              "value": "{ family: \"PingFang SC\", weight: 600, size: \"15–17px\" }"
+            }
+          ]
+        },
+        {
+          "name": "body",
+          "fontFamily": "",
+          "fontSize": "",
+          "fontWeight": "",
+          "lineHeight": "",
+          "letterSpacing": "",
+          "properties": [
+            {
+              "property": "value",
+              "value": "{ family: \"PingFang SC\", weight: 400, size: \"14px\", lineHeight: 1.7 }"
+            }
+          ]
+        },
+        {
+          "name": "caption-en",
+          "fontFamily": "",
+          "fontSize": "",
+          "fontWeight": "",
+          "lineHeight": "",
+          "letterSpacing": "",
+          "properties": [
+            {
+              "property": "value",
+              "value": "{ size: \"10.5–12px\", letterSpacing: \"0.03em\" }"
+            }
+          ]
+        }
+      ],
+      "rounded": [],
+      "spacing": [],
+      "layout": [],
+      "options": [],
+      "components": [],
+      "references": [
+        {
+          "path": "tokens.c-apricot",
+          "group": "tokens",
+          "count": 1
+        },
+        {
+          "path": "tokens.c-brown",
+          "group": "tokens",
+          "count": 1
+        },
+        {
+          "path": "tokens.c-card",
+          "group": "tokens",
+          "count": 1
+        },
+        {
+          "path": "tokens.c-card-2",
+          "group": "tokens",
+          "count": 1
+        },
+        {
+          "path": "tokens.c-cream",
+          "group": "tokens",
+          "count": 1
+        },
+        {
+          "path": "tokens.c-deep",
+          "group": "tokens",
+          "count": 1
+        },
+        {
+          "path": "tokens.c-gold",
+          "group": "tokens",
+          "count": 1
+        },
+        {
+          "path": "tokens.c-ink",
+          "group": "tokens",
+          "count": 1
+        },
+        {
+          "path": "tokens.c-muted",
+          "group": "tokens",
+          "count": 1
+        },
+        {
+          "path": "tokens.c-primary",
+          "group": "tokens",
+          "count": 1
+        },
+        {
+          "path": "tokens.c-rice",
+          "group": "tokens",
+          "count": 1
+        },
+        {
+          "path": "tokens.line-soft",
+          "group": "tokens",
+          "count": 1
+        }
+      ],
+      "contrastPairs": [
+        {
+          "background": "bg-card",
+          "foreground": "text-title",
+          "backgroundValue": "#ffffff",
+          "foregroundValue": "#3a2a1a",
+          "ratio": 13.76,
+          "grade": "AAA"
+        },
+        {
+          "background": "bg-page",
+          "foreground": "text-title",
+          "backgroundValue": "#f5f6ed",
+          "foregroundValue": "#3a2a1a",
+          "ratio": 12.64,
+          "grade": "AAA"
+        },
+        {
+          "background": "chip-off-bg",
+          "foreground": "text-title",
+          "backgroundValue": "#f4f2e9",
+          "foregroundValue": "#3a2a1a",
+          "ratio": 12.27,
+          "grade": "AAA"
+        },
+        {
+          "background": "bg-selected",
+          "foreground": "text-title",
+          "backgroundValue": "#f3efe0",
+          "foregroundValue": "#3a2a1a",
+          "ratio": 11.95,
+          "grade": "AAA"
+        },
+        {
+          "background": "disabled-bg",
+          "foreground": "text-title",
+          "backgroundValue": "#e9e4d4",
+          "foregroundValue": "#3a2a1a",
+          "ratio": 10.82,
+          "grade": "AAA"
+        },
+        {
+          "background": "bg-muted",
+          "foreground": "text-title",
+          "backgroundValue": "#e9e4d2",
+          "foregroundValue": "#3a2a1a",
+          "ratio": 10.81,
+          "grade": "AAA"
+        },
+        {
+          "background": "bg-card",
+          "foreground": "primary",
+          "backgroundValue": "#ffffff",
+          "foregroundValue": "#683611",
+          "ratio": 9.89,
+          "grade": "AAA"
+        },
+        {
+          "background": "bg-page",
+          "foreground": "primary",
+          "backgroundValue": "#f5f6ed",
+          "foregroundValue": "#683611",
+          "ratio": 9.08,
+          "grade": "AAA"
+        },
+        {
+          "background": "chip-off-bg",
+          "foreground": "primary",
+          "backgroundValue": "#f4f2e9",
+          "foregroundValue": "#683611",
+          "ratio": 8.81,
+          "grade": "AAA"
+        },
+        {
+          "background": "bg-selected",
+          "foreground": "primary",
+          "backgroundValue": "#f3efe0",
+          "foregroundValue": "#683611",
+          "ratio": 8.58,
+          "grade": "AAA"
+        },
+        {
+          "background": "disabled-bg",
+          "foreground": "primary",
+          "backgroundValue": "#e9e4d4",
+          "foregroundValue": "#683611",
+          "ratio": 7.77,
+          "grade": "AAA"
+        },
+        {
+          "background": "bg-muted",
+          "foreground": "primary",
+          "backgroundValue": "#e9e4d2",
+          "foregroundValue": "#683611",
+          "ratio": 7.76,
+          "grade": "AAA"
+        },
+        {
+          "background": "bg-card",
+          "foreground": "text-emphasis",
+          "backgroundValue": "#ffffff",
+          "foregroundValue": "#96581c",
+          "ratio": 5.66,
+          "grade": "AA"
+        },
+        {
+          "background": "bg-card",
+          "foreground": "text-body-2",
+          "backgroundValue": "#ffffff",
+          "foregroundValue": "#756a55",
+          "ratio": 5.32,
+          "grade": "AA"
+        },
+        {
+          "background": "bg-page",
+          "foreground": "text-emphasis",
+          "backgroundValue": "#f5f6ed",
+          "foregroundValue": "#96581c",
+          "ratio": 5.2,
+          "grade": "AA"
+        },
+        {
+          "background": "chip-off-bg",
+          "foreground": "text-emphasis",
+          "backgroundValue": "#f4f2e9",
+          "foregroundValue": "#96581c",
+          "ratio": 5.05,
+          "grade": "AA"
+        }
+      ],
+      "componentPropertyCounts": []
+    },
+    "warnings": [
+      {
+        "severity": "info",
+        "message": "Custom frontmatter keys detected: updated, source, scope, supersedes, status, radius, shadow."
+      },
+      {
+        "severity": "warning",
+        "message": "Missing ## Overview section."
+      },
+      {
+        "severity": "warning",
+        "message": "Missing ## Layout section."
+      },
+      {
+        "severity": "warning",
+        "message": "Missing ## Components section."
+      },
+      {
+        "severity": "warning",
+        "message": "No component rules were detected."
+      },
+      {
+        "severity": "warning",
+        "message": "No component or interaction states were detected."
+      },
+      {
+        "severity": "warning",
+        "message": "No Do/Don't or implementation rules were detected."
+      }
+    ],
+    "error": null
+  }
+}

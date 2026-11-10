@@ -4,7 +4,7 @@
       <h2 class="page-title">场地管理</h2>
       <a-space>
         <a-select v-model:value="selectedVenue" style="width: 180px" @change="loadReservations">
-          <a-select-option v-for="v in venues" :key="v.id" :value="v.id">{{ v.name }}（{{ v.capacity }}人）</a-select-option>
+          <a-select-option v-for="v in venues" :key="v.id" :value="v.id">{{ v.city || '上海' }} · {{ v.name }}（{{ v.capacity }}人）</a-select-option>
         </a-select>
         <a-date-picker v-model:value="selectedDate" @change="loadReservations" />
         <a-button v-perm="'venue:create'" type="primary" @click="openBooking">+ 手动预约</a-button>
@@ -140,7 +140,7 @@
 
     <!-- 场地设置弹窗 -->
     <a-modal v-model:open="showVenueSettingsModal" title="场地设置" width="720px" :footer="null">
-      <a-table :columns="venueSettingCols" :data-source="venues" :pagination="false" size="small" row-key="id">
+      <a-table :columns="venueSettingCols" :data-source="filteredVenueSettings" :pagination="false" size="small" row-key="id">
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'action'">
             <a-button v-perm="'venue:update'" type="link" size="small" @click="editVenue(record)">编辑</a-button>
@@ -150,7 +150,12 @@
           </template>
         </template>
       </a-table>
-      <a-button v-perm="'venue:create'" type="dashed" block style="margin-top: 12px" @click="addVenue">+ 添加场地</a-button>
+      <div style="display: flex; gap: 12px; margin-top: 12px;">
+        <a-select v-model:value="venueCityFilter" style="width: 180px" allow-clear placeholder="按城市筛选">
+          <a-select-option v-for="city in cityOptions" :key="city" :value="city">{{ city }}</a-select-option>
+        </a-select>
+        <a-button v-perm="'venue:create'" type="dashed" style="flex: 1" @click="addVenue">+ 添加场地</a-button>
+      </div>
     </a-modal>
 
     <!-- 编辑场地弹窗 -->
@@ -158,8 +163,19 @@
       <a-form layout="vertical">
         <a-form-item label="场地名称" required><a-input v-model:value="venueForm.name" placeholder="如：冥想室 A" /></a-form-item>
         <a-row :gutter="16">
-          <a-col :span="12"><a-form-item label="容量"><a-input-number v-model:value="venueForm.capacity" :min="1" style="width: 100%" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="地址"><a-input v-model:value="venueForm.address" placeholder="场地地址" /></a-form-item></a-col>
+          <a-col :span="8">
+            <a-form-item label="城市" required>
+              <a-auto-complete
+                v-model:value="venueForm.city"
+                :options="citySelectOptions"
+                :filter-option="filterCityOption"
+                placeholder="选择或输入城市"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8"><a-form-item label="容量"><a-input-number v-model:value="venueForm.capacity" :min="1" style="width: 100%" /></a-form-item></a-col>
+          <a-col :span="8"><a-form-item label="地址"><a-input v-model:value="venueForm.address" placeholder="场地地址" /></a-form-item></a-col>
         </a-row>
         <a-form-item label="描述"><a-textarea v-model:value="venueForm.description" :rows="2" placeholder="场地设备/特点等" /></a-form-item>
       </a-form>
@@ -392,6 +408,21 @@ const venues = ref<any[]>([])
 const reservations = ref<any[]>([])
 const adminOptions = ref<{ label: string; value: string; name: string }[]>([])
 
+// 城市是场地的管理维度：常见城市可直接选择，也允许输入新的城市。
+const CITY_PRESETS = ['上海', '北京', '杭州', '苏州', '南京', '成都', '广州', '深圳', '武汉', '西安', '重庆', '厦门', '长沙', '青岛', '昆明', '大理', '三亚']
+const venueCityFilter = ref<string | undefined>(undefined)
+const cityOptions = computed(() => {
+  const existing = venues.value.map(v => String(v.city || '上海').trim()).filter(Boolean)
+  return Array.from(new Set([...CITY_PRESETS, ...existing]))
+})
+const citySelectOptions = computed(() => cityOptions.value.map(city => ({ value: city })))
+const filteredVenueSettings = computed(() => venueCityFilter.value
+  ? venues.value.filter(v => String(v.city || '上海').trim() === venueCityFilter.value)
+  : venues.value)
+function filterCityOption(input: string, option: any) {
+  return String(option?.value || '').includes(input)
+}
+
 const currentVenue = computed(() => venues.value.find(v => v.id === selectedVenue.value))
 
 // 半小时时段 08:00 - 22:00
@@ -455,6 +486,7 @@ function slotRowClass(slot: any) {
 
 const venueSettingCols = [
   { title: '名称', dataIndex: 'name' },
+  { title: '城市', dataIndex: 'city', width: 100 },
   { title: '容量', dataIndex: 'capacity', width: 80 },
   { title: '地址', dataIndex: 'address' },
   { title: '描述', dataIndex: 'description' },
@@ -469,7 +501,7 @@ const bookingForm = ref<any>({
   totalAmountYuan: null as number | null,
   bookedBy: '', notes: '',
 })
-const venueForm = ref({ name: '', capacity: 8, address: '', description: '' })
+const venueForm = ref({ name: '', city: '上海', capacity: 8, address: '', description: '' })
 
 async function loadVenues() {
   try {
@@ -662,25 +694,27 @@ function confirmDeleteReservation(slot: any) {
 
 function editVenue(record: any) {
   editingVenue.value = record
-  venueForm.value = { name: record.name, capacity: record.capacity, address: record.address || '', description: record.description || '' }
+  venueForm.value = { name: record.name, city: record.city || '上海', capacity: record.capacity, address: record.address || '', description: record.description || '' }
   showEditVenueModal.value = true
 }
 
 function addVenue() {
   editingVenue.value = null
-  venueForm.value = { name: '', capacity: 8, address: '', description: '' }
+  venueForm.value = { name: '', city: '上海', capacity: 8, address: '', description: '' }
   showEditVenueModal.value = true
 }
 
 async function saveVenue() {
   if (!venueForm.value.name) { message.warning('请填写场地名称'); return }
+  if (!String(venueForm.value.city || '').trim()) { message.warning('请选择或填写城市'); return }
+  const payload = { ...venueForm.value, name: venueForm.value.name.trim(), city: String(venueForm.value.city).trim() }
   savingVenue.value = true
   try {
     if (editingVenue.value) {
-      await updateVenue(editingVenue.value.id, { ...venueForm.value })
+      await updateVenue(editingVenue.value.id, payload)
       message.success('场地信息已更新')
     } else {
-      await createVenue({ ...venueForm.value })
+      await createVenue(payload)
       message.success('场地添加成功')
     }
     showEditVenueModal.value = false

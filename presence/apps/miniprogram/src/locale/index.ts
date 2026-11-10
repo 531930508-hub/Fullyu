@@ -9,7 +9,7 @@ import { useUserStore } from '@/stores/user'
 const zh: Record<string, string> = {
   // TabBar
   'tab.home': '首页',
-  'tab.courses': '课程',
+  'tab.courses': '预约',
   'tab.member': '会员',
   'tab.profile': '我的',
 
@@ -23,8 +23,8 @@ const zh: Record<string, string> = {
   'home.seats.full': '已满',
 
   // 我的课程
-  'myCourses.title': '我的课程',
-  'myCourses.upcoming': '即将开始',
+  'myCourses.title': '我的预约',
+  'myCourses.upcoming': '待上课',
   'myCourses.completed': '已完成',
   'myCourses.cancelled': '已取消',
   'myCourses.emptyUpcoming': '暂无即将开始的课程',
@@ -37,7 +37,7 @@ const zh: Record<string, string> = {
   'myCourses.reviewed': '已评价',
 
   // 会员中心
-  'member.title': '会员中心',
+  'member.title': '在场畅练卡',
   'member.benefits': '会员权益',
   'member.upgrade': '升级 / 续费',
   'member.buyNow': '立即购买',
@@ -55,9 +55,9 @@ const zh: Record<string, string> = {
   'profile.upcoming': '待上课',
   'profile.memberStatus': '会员',
   'profile.myAssets': '我的资产',
-  'profile.bookings': '预约记录',
+  'profile.bookings': '我的预约',
   'profile.myReviews': '我的评价',
-  'profile.memberCard': '会员卡',
+  'profile.memberCard': '在场畅练卡',
   'profile.trainerWorkspace': '导师工作台',
   'profile.trainerRole': '导师身份',
   'profile.language': '语言切换',
@@ -77,7 +77,7 @@ const zh: Record<string, string> = {
 const en: Record<string, string> = {
   // TabBar
   'tab.home': 'Home',
-  'tab.courses': 'Courses',
+  'tab.courses': 'Bookings',
   'tab.member': 'Member',
   'tab.profile': 'Me',
 
@@ -91,7 +91,7 @@ const en: Record<string, string> = {
   'home.seats.full': 'Full',
 
   // 我的课程
-  'myCourses.title': 'My Courses',
+  'myCourses.title': 'My Bookings',
   'myCourses.upcoming': 'Upcoming',
   'myCourses.completed': 'Completed',
   'myCourses.cancelled': 'Cancelled',
@@ -105,7 +105,7 @@ const en: Record<string, string> = {
   'myCourses.reviewed': 'Reviewed',
 
   // 会员中心
-  'member.title': 'Membership',
+  'member.title': 'Presence Pass',
   'member.benefits': 'Benefits',
   'member.upgrade': 'Upgrade / Renew',
   'member.buyNow': 'Buy Now',
@@ -125,7 +125,7 @@ const en: Record<string, string> = {
   'profile.myAssets': 'My Assets',
   'profile.bookings': 'Bookings',
   'profile.myReviews': 'My Reviews',
-  'profile.memberCard': 'Member Card',
+  'profile.memberCard': 'Presence Pass',
   'profile.trainerWorkspace': 'Trainer Studio',
   'profile.trainerRole': 'Trainer',
   'profile.language': 'Language',
@@ -159,6 +159,21 @@ export function t(key: string, params?: Record<string, string | number>): string
     })
   }
   return text
+}
+
+/**
+ * 内联双语：系统文案随语言即时切换，用户生成内容保持原文。
+ * 例：tr('报名中', 'Enrolling')
+ */
+export function tr(zh: string, en: string): string {
+  const userStore = useUserStore()
+  return (userStore.language || 'zh') === 'en' ? en : zh
+}
+
+/** 当前是否英文界面 */
+export function isEnglish(): boolean {
+  const userStore = useUserStore()
+  return (userStore.language || 'zh') === 'en'
 }
 
 /**

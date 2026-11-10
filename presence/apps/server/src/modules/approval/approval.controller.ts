@@ -113,7 +113,9 @@ export class ApprovalController {
   }
 
   @Post('instances/:id/cancel')
-  @AdminAuth('flow:instance:view')
+  // 撤销只允许发起人本人（service 内校验），不额外要求审批记录权限，
+  // 否则只有待办权限的申请人无法在待办中心撤回自己提交的单。
+  @AdminAuth()
   @ApiOperation({ summary: '撤销（仅发起人）' })
   async cancel(@Request() req: any, @Param('id') id: string) {
     return this.approvalService.cancel(req.user, id)

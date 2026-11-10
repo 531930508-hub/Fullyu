@@ -1,6 +1,6 @@
 {
   "name": "Full愈",
-  "appid": "",
+  "appid": "wxa7572dea26f5f4e4",
   "description": "Full愈 品牌培训课程预约小程序",
   "versionName": "1.0.0",
   "versionCode": "100",
@@ -11,17 +11,12 @@
     }
   },
   "mp-weixin": {
-    "appid": "",
+    "appid": "wxa7572dea26f5f4e4",
     "setting": {
-      "urlCheck": false,
+      "urlCheck": true,
       "es6": true,
       "minified": true
     },
-    "usingComponents": true,
-    "permission": {
-      "scope.userLocation": {
-        "desc": "用于获取您的位置信息以展示附近场地"
-      }
-    }
+    "usingComponents": true
   }
 }

@@ -45,7 +45,7 @@ export class TrainerController {
 
   @Post(':id/seeds')
   @AdminAuth('trainer:update')
-  @ApiOperation({ summary: '调整导师 Seeds' })
+  @ApiOperation({ summary: '调整导师积分' })
   async adjustSeeds(
     @Param('id') id: string,
     @Body() body: { amount: number; reason: string },

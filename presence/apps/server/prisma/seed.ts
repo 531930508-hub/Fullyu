@@ -147,9 +147,34 @@ const MEMBER_PRODUCTS: {
   benefits: string[]
   sort: number
 }[] = [
-  { type: 'MONTHLY', name: '月卡', price: 699, durationDays: 30, benefits: ['会员折扣', '优先候补席位'], sort: 1 },
-  { type: 'QUARTERLY', name: '季卡', price: 1980, durationDays: 90, benefits: ['会员折扣', '优先候补席位', '专属活动'], sort: 2 },
-  { type: 'YEARLY', name: '年卡', price: 5980, durationDays: 365, benefits: ['会员折扣', '优先候补席位', '专属活动', '生日礼遇'], sort: 3 },
+  {
+    type: 'MONTHLY',
+    name: '月卡',
+    price: 699,
+    durationDays: 30,
+    benefits: ['有效期内报课 0 元（不限次）', '免费赠送同期 Full愈 品牌大会员'],
+    sort: 1,
+  },
+  {
+    type: 'QUARTERLY',
+    name: '季卡',
+    price: 1980,
+    durationDays: 90,
+    benefits: ['有效期内报课 0 元（不限次）', '免费赠送同期 Full愈 品牌大会员'],
+    sort: 2,
+  },
+  {
+    type: 'YEARLY',
+    name: '年卡',
+    price: 5980,
+    durationDays: 365,
+    benefits: [
+      '有效期内报课 0 元（不限次）',
+      '免费赠送同期 Full愈 品牌大会员',
+      '专属活动',
+    ],
+    sort: 3,
+  },
 ]
 
 async function main() {
@@ -167,6 +192,11 @@ async function main() {
   console.log(`✅ 组织节点: ${ORGANIZATIONS.length}`)
 
   // 1. 权限点（含粒度 level 与分组，源于 @fullyu/shared 单一定义）
+  // 先记住本次 seed 前已存在的权限码，后面用它识别「这次新增的权限点」，
+  // 只给内置角色补新增项，不碰管理员手工调整过的旧项。
+  const permissionCodesBeforeSeed = new Set(
+    (await prisma.permission.findMany({ select: { code: true } })).map((p) => p.code),
+  )
   for (let i = 0; i < PERMISSIONS.length; i++) {
     const p = PERMISSIONS[i]
     const data = {
@@ -192,16 +222,25 @@ async function main() {
   }
   const allPermissions = await prisma.permission.findMany()
   const permIdByCode = new Map(allPermissions.map((p) => [p.code, p.id]))
+  const newlyAddedCodes = validCodes.filter((c) => !permissionCodesBeforeSeed.has(c))
   console.log(`✅ 权限点: ${allPermissions.length}`)
 
   // 2. 内置角色（含数据行级范围）
+  // 内置角色只负责首次初始化时的「默认权限」；管理员在权限页改过之后，
+  // 再次执行 seed 不能把线上配置冲回默认值，否则权限调整等于白做。
+  // 确需按定义强制重置时，显式带上 SEED_RESET_BUILTIN_ROLES=1。
+  const resetBuiltinRoles = process.env.SEED_RESET_BUILTIN_ROLES === '1'
   const roleIdByName = new Map<string, string>()
   for (const def of BUILTIN_ROLES) {
+    const existing = await prisma.role.findUnique({
+      where: { name: def.name },
+      select: { id: true, _count: { select: { permissions: true } } },
+    })
     const role = await prisma.role.upsert({
       where: { name: def.name },
+      // 只维护「是否内置」与描述；dataScope 与权限留给管理员自行调整
       update: {
         description: `${def.label} · ${def.description}`,
-        dataScope: def.dataScope as DataScope,
         isBuiltin: true,
       },
       create: {
@@ -213,7 +252,33 @@ async function main() {
     })
     roleIdByName.set(def.name, role.id)
 
-    // 内置角色的权限以定义为准全量重置（'*' 表示全部）
+    // 已存在且已有权限的内置角色，默认保留管理员改过的配置。
+    // 唯一例外：本次 seed 新增的权限点按角色定义补进去，
+    // 这样新模块上线后预置角色不会缺菜单，同时不会把旧的手工调整冲掉。
+    const keepExisting = Boolean(existing) && existing!._count.permissions > 0
+    if (keepExisting && !resetBuiltinRoles) {
+      const newCodes =
+        def.permissions.includes('*')
+          ? newlyAddedCodes
+          : def.permissions.filter((c) => newlyAddedCodes.includes(c))
+      const newIds = newCodes
+        .map((c) => permIdByCode.get(c))
+        .filter((v): v is string => Boolean(v))
+      if (newIds.length) {
+        await prisma.rolePermission.createMany({
+          data: newIds.map((permissionId) => ({ roleId: role.id, permissionId })),
+          skipDuplicates: true,
+        })
+      }
+      console.log(
+        newIds.length
+          ? `➕ 角色: ${def.name}（保留已有配置，补齐 ${newIds.length} 个新增权限）`
+          : `⏭️  角色: ${def.name}（已存在，保留已有权限与数据范围）`,
+      )
+      continue
+    }
+
+    // 首次创建 / 空权限 / 显式重置时，按定义写入默认值（'*' 表示全部）
     const codes = def.permissions.includes('*') ? validCodes : def.permissions
     const permissionIds = codes
       .map((c) => permIdByCode.get(c))
@@ -221,6 +286,12 @@ async function main() {
     const missing = codes.filter((c) => !permIdByCode.has(c))
     if (missing.length) console.warn(`⚠️  角色 ${def.name} 存在未定义的权限码: ${missing.join(', ')}`)
 
+    if (resetBuiltinRoles) {
+      await prisma.role.update({
+        where: { id: role.id },
+        data: { dataScope: def.dataScope as DataScope },
+      })
+    }
     await prisma.rolePermission.deleteMany({ where: { roleId: role.id } })
     await prisma.rolePermission.createMany({
       data: permissionIds.map((permissionId) => ({ roleId: role.id, permissionId })),

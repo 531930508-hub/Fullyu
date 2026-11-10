@@ -11,6 +11,7 @@ import { OrderService } from '../src/modules/order/order.service'
 import { OrderController } from '../src/modules/order/order.controller'
 import { PaymentService } from '../src/modules/payment/payment.service'
 import { WaitlistService } from '../src/modules/waitlist/waitlist.service'
+import { BrandPresenceSync } from '../src/modules/member/brand-presence.sync'
 
 /**
  * Redis mock：
@@ -78,6 +79,25 @@ export function createNotificationMock() {
   }
 }
 
+/**
+ * 品牌会员同步 mock：
+ * PaymentService 构造时需要 BrandPresenceSync，真实实例负责定时任务与 CRM 上报，
+ * 单测里不启动定时器、不发请求，支付成功后立即同步直接返回空结果。
+ */
+export function createBrandSyncMock() {
+  return {
+    syncUser: async () => ({
+      bundled: 0,
+      revoked: 0,
+      reported: 0,
+      refunded: 0,
+      skipped: 0,
+      missing: 0,
+      failed: 0,
+    }),
+  }
+}
+
 /** HTTP 冒烟用：可变的当前登录用户，测试前赋值，Guard 从中读取 */
 export const currentUser: { userId: string } = { userId: '' }
 
@@ -110,6 +130,7 @@ export async function buildTestContext(): Promise<TestContext> {
       { provide: RedisService, useValue: createRedisMock() },
       { provide: HuifuPayService, useValue: createHuifuPayMock() },
       { provide: NotificationService, useValue: createNotificationMock() },
+      { provide: BrandPresenceSync, useValue: createBrandSyncMock() },
     ],
   })
     .overrideGuard(AuthGuard('jwt'))
@@ -169,7 +190,7 @@ export class Seeder {
   async trainer() {
     const user = await this.user()
     const tp = await this.prisma.trainerProfile.create({
-      data: { userId: user.id, displayName: `测试导师${this.uniq().slice(-5)}`, specialties: ['yoga'] },
+      data: { userId: user.id, displayName: `测试导师${this.uniq()}`, specialties: ['yoga'] },
     })
     this.trainerIds.push(tp.id)
     return tp
@@ -206,6 +227,11 @@ export class Seeder {
     memberWaitlistSeats?: number
     allowDeduction?: boolean
     startInHours?: number
+    minCapacity?: number
+    groupDeadline?: Date | null
+    waitlistDeadlineHours?: number
+    startDate?: Date
+    endDate?: Date
     enrollStartAt?: Date
     enrollEndAt?: Date
     venueId?: string
@@ -217,8 +243,16 @@ export class Seeder {
   } = {}) {
     const trainer = await this.trainer()
     const venueId = opts.venueId ?? (await this.venue()).id
-    const startDate = new Date(Date.now() + (opts.startInHours ?? 240) * 3600 * 1000)
-    const endDate = new Date(startDate.getTime() + 3600 * 1000)
+    const startDate = opts.startDate ?? new Date(Date.now() + (opts.startInHours ?? 240) * 3600 * 1000)
+    const endDate = opts.endDate ?? new Date(startDate.getTime() + 3600 * 1000)
+    // 生产口径：startDate 存日期、startTime 存 HH:mm，真实开课时刻由两者拼出。
+    // 用 startInHours 造“已开课/已结束”时，若仍固定 10:00，凌晨 0–2 点会落到未来而误判未开课；
+    // 因此未显式给 startTime/endTime 时，从 startDate/endDate 取上海时区的时刻。
+    const clock = (at: Date) => {
+      const local = new Date(at.getTime() + 8 * 3600 * 1000)
+      const pad = (v: number) => String(v).padStart(2, '0')
+      return `${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}`
+    }
     const course = await this.prisma.course.create({
       data: {
         title: `测试课程${this.uniq().slice(-5)}`,
@@ -229,15 +263,17 @@ export class Seeder {
         targetAudience: ['all'],
         startDate,
         endDate,
-        startTime: opts.startTime ?? '10:00',
-        endTime: opts.endTime ?? '11:00',
+        startTime: opts.startTime ?? clock(startDate),
+        endTime: opts.endTime ?? clock(endDate),
         trainerId: trainer.id,
-        minCapacity: 1,
+        minCapacity: opts.minCapacity ?? 1,
         maxCapacity: opts.maxCapacity ?? 5,
         currentEnrolled: opts.currentEnrolled ?? 0,
         originalPrice: opts.originalPrice ?? 100,
         venueId,
         status: opts.status ?? 'PUBLISHED',
+        groupDeadline: opts.groupDeadline ?? undefined,
+        waitlistDeadlineHours: opts.waitlistDeadlineHours ?? undefined,
         enrollStartAt: opts.enrollStartAt ?? undefined,
         enrollEndAt: opts.enrollEndAt ?? undefined,
         allowDeduction: opts.allowDeduction ?? true,
@@ -313,6 +349,7 @@ export class Seeder {
   async cleanup() {
     await this.prisma.venueReservation.deleteMany({ where: { venueId: { in: this.venueIds } } })
     await this.prisma.waitlistEntry.deleteMany({ where: { courseId: { in: this.courseIds } } })
+    await this.prisma.orderRefund.deleteMany({ where: { order: { userId: { in: this.userIds } } } })
     await this.prisma.order.deleteMany({ where: { courseId: { in: this.courseIds } } })
     await this.prisma.order.deleteMany({ where: { userId: { in: this.userIds } } })
     await this.prisma.pointsRecord.deleteMany({ where: { userId: { in: this.userIds } } })
@@ -327,9 +364,16 @@ export class Seeder {
   }
 }
 
-/** 构造退款回调报文（decryptNotify mock 会 JSON.parse） */
-export function refundNotify(orderId: string) {
-  return JSON.stringify({ out_trade_no: orderId, refund_status: 'SUCCESS' })
+/** 构造退款回调报文（decryptNotify mock 会 JSON.parse）。
+ * reqSeqId 对应退款流水 out_refund_no：新退款流水按此结算（部分/整单），
+ * 不传则走旧版整单结算路径（兼容存量退款）。 */
+export function refundNotify(orderId: string, txId = 'TX_TEST', reqSeqId?: string) {
+  return JSON.stringify({
+    out_trade_no: orderId,
+    transaction_id: txId,
+    refund_status: 'SUCCESS',
+    ...(reqSeqId ? { req_seq_id: reqSeqId } : {}),
+  })
 }
 
 /** 构造支付回调报文 */

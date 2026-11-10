@@ -1,12 +1,26 @@
 import { Controller, Get, Post, Put, Delete, Body, Query, Param, Request } from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
+import { ConfigService } from '@nestjs/config'
 import { CourseService } from './course.service'
 import { AdminAuth } from '../../common/decorators/admin-auth.decorator'
 
 @ApiTags('课程')
 @Controller('courses')
 export class CourseController {
-  constructor(private readonly courseService: CourseService) {}
+  constructor(
+    private readonly courseService: CourseService,
+    private readonly config: ConfigService,
+  ) {}
+
+  @Get('subscribe-templates')
+  @ApiOperation({ summary: '报名/候补场景需申请授权的订阅消息模板 id（公开）' })
+  async subscribeTemplates() {
+    // 模板 id 非敏感信息，与后端下发用的 env 同源，避免小程序端二次配置
+    return {
+      courseReminder: this.config.get<string>('WECHAT_TMPL_COURSE_REMINDER') || '',
+      waitlistPromoted: this.config.get<string>('WECHAT_TMPL_WAITLIST_PROMOTED') || '',
+    }
+  }
 
   @Get('admin/list')
   @AdminAuth('course:view')
@@ -15,6 +29,7 @@ export class CourseController {
     @Query('page') page?: number,
     @Query('pageSize') pageSize?: number,
     @Query('status') status?: string,
+    @Query('phase') phase?: string,
     @Query('keyword') keyword?: string,
     @Query('startDateFrom') startDateFrom?: string,
     @Query('startDateTo') startDateTo?: string,
@@ -23,6 +38,7 @@ export class CourseController {
       page: page ? Number(page) : 1,
       pageSize: pageSize ? Number(pageSize) : 10,
       status,
+      phase,
       keyword,
       startDateFrom,
       startDateTo,
@@ -77,6 +93,20 @@ export class CourseController {
       operatorId: req.user?.adminId,
       operatorName: req.user?.username,
       source: 'COURSE_PAGE',
+    })
+  }
+
+  @Put(':id/enrollment-window')
+  @AdminAuth('course:update')
+  @ApiOperation({ summary: '调整报名窗口（开放补报名 / 恢复默认截止）' })
+  async setEnrollmentWindow(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: { enrollEndAt?: string | null },
+  ) {
+    return this.courseService.setEnrollmentWindow(id, body?.enrollEndAt ?? null, {
+      operatorId: req.user?.adminId,
+      operatorName: req.user?.username,
     })
   }
 

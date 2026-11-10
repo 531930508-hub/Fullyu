@@ -2,7 +2,7 @@
   "pages": [
     {
       "path": "pages/index/index",
-      "style": { "navigationStyle": "custom" }
+      "style": { "navigationStyle": "custom", "enablePullDownRefresh": true, "backgroundTextStyle": "dark" }
     },
     {
       "path": "pages/course-detail/index",
@@ -17,7 +17,27 @@
       "style": { "navigationStyle": "custom" }
     },
     {
+      "path": "pages/brand-member/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/brand-member/stories/index",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "会员故事" }
+    },
+    {
+      "path": "pages/brand-member/compare",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/brand-member/game",
+      "style": { "navigationBarTitleText": "愈行之旅" }
+    },
+    {
       "path": "pages/assets/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/voucher-redeem/index",
       "style": { "navigationStyle": "custom" }
     },
     {
@@ -49,6 +69,14 @@
       "style": { "navigationStyle": "custom" }
     },
     {
+      "path": "pages/community-event-detail/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/share-landing/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
       "path": "pages/community-mine/index",
       "style": { "navigationStyle": "custom" }
     },
@@ -59,21 +87,25 @@
     {
       "path": "pages/community-workspace/index",
       "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/legal/index",
+      "style": { "navigationStyle": "custom" }
     }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "Full愈",
-    "navigationBarBackgroundColor": "#EAE0D7",
-    "backgroundColor": "#EAE0D7",
-    "backgroundColorTop": "#EAE0D7",
-    "backgroundColorBottom": "#EAE0D7"
+    "navigationBarBackgroundColor": "#f5f6ed",
+    "backgroundColor": "#f5f6ed",
+    "backgroundColorTop": "#f5f6ed",
+    "backgroundColorBottom": "#f5f6ed"
   },
   "tabBar": {
     "custom": true,
-    "color": "#A78E70",
-    "selectedColor": "#584219",
-    "backgroundColor": "#FBF8F3",
+    "color": "#756a55",
+    "selectedColor": "#683611",
+    "backgroundColor": "#ffffff",
     "borderStyle": "white",
     "list": [
       {
@@ -82,7 +114,7 @@
       },
       {
         "pagePath": "pages/my-courses/index",
-        "text": "课程"
+        "text": "预约"
       },
       {
         "pagePath": "pages/member/index",

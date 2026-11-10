@@ -3,7 +3,12 @@ import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
 import { PricingService } from '../pricing/pricing.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
-import { SEAT_LOCK_DURATION_MINUTES, POINTS_TO_FEN_RATIO, voucherYuanToFen } from '@fullyu/shared'
+import {
+  SEAT_LOCK_DURATION_MINUTES,
+  POINTS_TO_FEN_RATIO,
+  voucherYuanToFen,
+  resolveCourseLifecycle,
+} from '@fullyu/shared'
 import { generateOrderNo } from '../../common/order-no.helper'
 
 export interface EnrollDto {
@@ -48,9 +53,13 @@ export class EnrollmentService {
 
     const isFull = course.currentEnrolled + (position - course.currentEnrolled - 1) >= course.maxCapacity
     const remaining = Math.max(0, course.maxCapacity - (position - 1))
+    const lifecycle = resolveCourseLifecycle(course)
 
     return {
       courseId,
+      phase: lifecycle.phase,
+      bookable: lifecycle.bookable,
+      enrollDeadline: lifecycle.enrollDeadline,
       position,
       basePrice,
       memberCardType: member.cardType,
@@ -58,6 +67,10 @@ export class EnrollmentService {
       timeDiscount: member.timeDiscount,
       discountAmount: member.discountAmount,
       priceAfterDiscount,
+      /** PASS = 畅练卡 0 元报课；BRAND = Full愈品牌会员价；null = 无会员优惠 */
+      memberSource: member.memberSource ?? null,
+      /** 品牌会员资格暂时无法确认：此价格为非会员价，下单时会再次确认 */
+      memberPriceUnconfirmed: Boolean(member.brandUnknown),
       allowDeduction: course.allowDeduction,
       pointsBalance: course.allowDeduction ? pointsBalance : 0,
       maxPointsDeduction: course.allowDeduction
@@ -73,6 +86,8 @@ export class EnrollmentService {
    * 报名下单：锁价 + 校验抵扣 + 生成限时待支付订单（分布式锁 + 事务）
    */
   async enroll(courseId: string, userId: string, dto: EnrollDto) {
+    // 品牌会员资格要走 CRM HTTP：在加锁与事务之外先查好，事务里只用结果。
+    const brand = await this.pricing.brandStatus(userId)
     return this.redis.withLock(`enroll:${courseId}`, async () => {
       return this.prisma.$transaction(async (tx) => {
         const course = await tx.course.findUnique({
@@ -82,16 +97,21 @@ export class EnrollmentService {
         if (!course) throw new BusinessException('课程不存在', 4004)
         if (course.status !== 'PUBLISHED') throw new BusinessException('课程未开放报名', 4008)
 
-        // 报名二次校验：以事务内最新数据为准，兜底“报名页停留期间课程被改期/改场”的并发场景
+        // 报名二次校验：以事务内最新数据为准，兜底“报名页停留期间课程被改期/改场”的并发场景。
+        // 截止时刻按 startDate + startTime 推导，支持后台通过 enrollEndAt 开放补报名。
         const now = new Date()
-        if (course.enrollStartAt && now < course.enrollStartAt) {
+        const lifecycle = resolveCourseLifecycle(course, now)
+        if (lifecycle.phase === 'ENROLL_UPCOMING') {
           throw new BusinessException('报名尚未开始', 4018)
         }
-        if (course.enrollEndAt && now > course.enrollEndAt) {
-          throw new BusinessException('报名已截止', 4009)
+        if (lifecycle.phase === 'ENDED') {
+          throw new BusinessException('课程已结束，无法报名', 4019)
         }
-        if (course.startDate && now >= course.startDate) {
-          throw new BusinessException('课程已开课，无法报名', 4019)
+        if (!lifecycle.bookable) {
+          throw new BusinessException(
+            lifecycle.phase === 'ONGOING' ? '课程已开课，无法报名' : '报名已截止',
+            4009,
+          )
         }
         // 场地兜底：课程被改期/改场后场地被停用则拦截报名
         const venue = await tx.venue.findUnique({ where: { id: course.venueId } })
@@ -123,11 +143,13 @@ export class EnrollmentService {
         // 锁价
         const position = occupied + 1
         const basePrice = this.pricing.getTierPrice(course.priceTiers, position, course.originalPrice)
+        // strict：品牌会员资格确认不了时拒绝下单，不按非会员价向会员多收钱
         const member = await this.pricing.getMemberDiscount(
           userId,
           courseId,
           basePrice,
           this.pricing.courseStartAt(course),
+          { brand, strict: true },
         )
         const priceAfterDiscount = Math.max(0, basePrice - member.discountAmount)
 
@@ -158,12 +180,14 @@ export class EnrollmentService {
             voucherDeduction = Math.min(voucherYuanToFen(Number(voucher.amount)), priceAfterDiscount - pointsDeduction)
           }
           voucherDeduction = Math.max(0, voucherDeduction)
+          // 已经 0 元（畅练卡 / 积分抵满）时不再占用代金券，避免券被白白核销
+          if (voucherDeduction === 0) voucherId = undefined
         }
 
         const actualPaid = Math.max(0, priceAfterDiscount - pointsDeduction - voucherDeduction)
 
         // 创建待支付订单
-        const orderNo = await generateOrderNo(this.redis, 'COURSE')
+        const orderNo = await generateOrderNo(this.redis, 'COURSE', this.prisma)
         const order = await tx.order.create({
           data: {
             orderNo,

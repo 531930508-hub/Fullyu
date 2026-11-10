@@ -19,8 +19,17 @@
           <template v-if="column.dataIndex === 'type'">
             <a-tag :color="typeColor(record.type)">{{ typeText(record.type) }}</a-tag>
           </template>
+          <template v-if="column.dataIndex === 'time'">
+            <span>{{ record.time || '—' }}{{ record.endTime ? `–${record.endTime}` : '' }}</span>
+          </template>
           <template v-if="column.dataIndex === 'joined'">
             <span>{{ record.joined }}/{{ record.capacity || '不限' }}</span>
+          </template>
+          <template v-if="column.dataIndex === 'scope'">
+            <a-tag :color="record.scope === 'INTERNAL' ? 'purple' : 'blue'">{{ record.scope === 'INTERNAL' ? '仅成员' : '公开' }}</a-tag>
+          </template>
+          <template v-if="column.dataIndex === 'isActive'">
+            <a-tag :color="record.isActive !== false ? 'green' : 'default'">{{ record.isActive !== false ? '上架' : '停用' }}</a-tag>
           </template>
           <template v-if="column.dataIndex === 'courseId'">
             <a-tag v-if="record.courseId" color="gold">官方课程</a-tag>
@@ -62,6 +71,11 @@
         </a-row>
         <a-row :gutter="16">
           <a-col :span="12">
+            <a-form-item label="结束时间（结束后不再展示为待开始）">
+              <a-time-picker v-model:value="form.endTime" value-format="HH:mm" format="HH:mm" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
             <a-form-item label="形式">
               <a-select v-model:value="form.type">
                 <a-select-option value="OFFLINE">线下课程/活动</a-select-option>
@@ -70,12 +84,35 @@
               </a-select>
             </a-form-item>
           </a-col>
+        </a-row>
+        <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="场地（线下）">
               <a-input v-model:value="form.venue" placeholder="如：总店·瑜伽馆" />
             </a-form-item>
           </a-col>
+          <a-col :span="12">
+            <a-form-item label="可见范围">
+              <a-select v-model:value="form.scope">
+                <a-select-option value="PUBLIC">公开（分享可落地）</a-select-option>
+                <a-select-option value="INTERNAL">仅社群成员</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
         </a-row>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="状态">
+              <a-select v-model:value="form.isActive">
+                <a-select-option :value="true">上架</a-select-option>
+                <a-select-option :value="false">停用</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="活动说明（分享与详情页展示）">
+          <a-textarea v-model:value="form.description" :rows="3" placeholder="活动内容、适合人群或准备事项" :maxlength="500" />
+        </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="容量（0 = 不限）">
@@ -121,11 +158,13 @@ const filterCommunity = ref<string | undefined>(undefined)
 const columns = [
   { title: '社群', dataIndex: ['community', 'name'], width: 140 },
   { title: '日期', dataIndex: 'eventDate', width: 110 },
-  { title: '时间', dataIndex: 'time', width: 70 },
+  { title: '时间', dataIndex: 'time', width: 110 },
   { title: '活动', dataIndex: 'title' },
   { title: '形式', dataIndex: 'type', width: 90 },
+  { title: '范围', dataIndex: 'scope', width: 90 },
   { title: '场地', dataIndex: 'venue', width: 120 },
   { title: '报名', dataIndex: 'joined', width: 90 },
+  { title: '状态', dataIndex: 'isActive', width: 80 },
   { title: '官方课程', dataIndex: 'courseId', width: 100 },
   { title: '操作', dataIndex: 'action', width: 120 },
 ]
@@ -182,10 +221,14 @@ function emptyForm() {
     title: '',
     eventDate: '',
     time: '',
+    endTime: '',
     type: 'OFFLINE',
     venue: '',
     capacity: 0,
     joined: 0,
+    scope: 'PUBLIC',
+    isActive: true,
+    description: '',
     courseId: undefined as string | undefined,
   }
 }
@@ -205,10 +248,14 @@ function openEdit(record: any) {
     title: record.title,
     eventDate: fmtDate(record.eventDate),
     time: record.time || '',
+    endTime: record.endTime || '',
     type: record.type || 'OFFLINE',
     venue: record.venue || '',
     capacity: record.capacity ?? 0,
     joined: record.joined ?? 0,
+    scope: record.scope || 'PUBLIC',
+    isActive: record.isActive !== false,
+    description: record.description || '',
     courseId: record.courseId || undefined,
   }
   drawerVisible.value = true
@@ -221,7 +268,12 @@ async function onSave() {
   }
   saving.value = true
   try {
-    const body = { ...form.value, courseId: form.value.courseId || null }
+    const body = {
+      ...form.value,
+      endTime: form.value.endTime || null,
+      description: form.value.description || null,
+      courseId: form.value.courseId || null,
+    }
     if (isEdit.value) {
       await updateEvent(editingId.value, body)
       message.success('活动已更新')

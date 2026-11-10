@@ -28,8 +28,14 @@ export interface CourseListResult {
 export interface CourseDetail extends CourseListItem {
   gallery?: string[]
   description?: string
+  detailDesc?: string
   targetAudience?: string[]
   learningGoals?: string
+  materials?: string[]
+  notice?: string
+  tags?: string[]
+  difficulty?: string
+  duration?: number
   endDate?: string
   minCapacity?: number
   waitlistEnabled?: boolean
@@ -38,6 +44,18 @@ export interface CourseDetail extends CourseListItem {
   allowDeduction?: boolean
   priceTiers?: { seatFrom: number; seatTo: number; price: number }[]
   refundRules?: { hoursFrom: number; hoursTo: number | null; refundPercent: number }[]
+  seedsReward?: number
+  reviewSeeds?: number
+  /** 生命周期展示字段（后端按日期推导） */
+  phase?: string
+  phaseLabel?: string
+  bookable?: boolean
+  discoverable?: boolean
+  startAt?: string
+  endAt?: string
+  enrollDeadline?: string | null
+  enrollStartAt?: string | null
+  enrollEndAt?: string | null
   trainer?: any
   venue?: any
 }
@@ -60,4 +78,9 @@ export function listCourses(query: CourseListQuery = {}) {
 /** 课程详情（公开） */
 export function getCourseDetail(id: string) {
   return get<CourseDetail>(`/courses/${id}`, undefined, { auth: false })
+}
+
+/** 报名/候补场景的订阅消息模板 id（与后端 env 同源；为空表示模板未配置） */
+export function fetchSubscribeTemplates() {
+  return get<{ courseReminder: string; waitlistPromoted: string }>('/courses/subscribe-templates', undefined, { auth: false, silent: true })
 }

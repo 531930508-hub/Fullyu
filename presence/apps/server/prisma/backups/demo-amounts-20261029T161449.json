@@ -1,0 +1,138 @@
+{
+  "courses": [
+    {
+      "id": "cmvt741dn000f57243s3i2ipj",
+      "title": "秋分后·静心音疗会",
+      "originalPrice": "38000"
+    },
+    {
+      "id": "cmvt741ri000n5724eh7kh5la",
+      "title": "晨间哈他瑜伽",
+      "originalPrice": "18000"
+    },
+    {
+      "id": "cmvt7422h000v5724e09vs55g",
+      "title": "万圣夜·铜锣浴与呼吸冥想",
+      "originalPrice": "38000"
+    },
+    {
+      "id": "cmvt742e5001357240j0fxhqs",
+      "title": "晨间流瑜伽",
+      "originalPrice": "18000"
+    },
+    {
+      "id": "cmvt742p1001b5724pz7vw70f",
+      "title": "芳香减压工作坊",
+      "originalPrice": "48000"
+    },
+    {
+      "id": "cmvt7430j001j5724dr8ehxmn",
+      "title": "手作香薰蜡烛",
+      "originalPrice": "52000"
+    },
+    {
+      "id": "cmvt743bc001r5724js6qxpid",
+      "title": "空中瑜伽入门",
+      "originalPrice": "28000"
+    },
+    {
+      "id": "cmvt743mr001z572450ikeu8v",
+      "title": "阴瑜伽与深度放松",
+      "originalPrice": "22000"
+    },
+    {
+      "id": "cmvt743xp00275724oqi9zqzw",
+      "title": "深秋正念茶会",
+      "originalPrice": "26000"
+    },
+    {
+      "id": "cmvt7448t002f5724h5jqv3gn",
+      "title": "哈他瑜伽体式精讲",
+      "originalPrice": "24000"
+    },
+    {
+      "id": "cmvt744k1002n5724yvyj2am6",
+      "title": "满月·颂钵疗愈夜",
+      "originalPrice": "38000"
+    }
+  ],
+  "tiers": [],
+  "cardProducts": [
+    {
+      "id": "cmrkbbt61002q144nmgk63gcq",
+      "name": "月卡",
+      "type": "MONTHLY",
+      "durationDays": 30,
+      "price": "699"
+    },
+    {
+      "id": "cmrkbbt66002r144n72xegtqu",
+      "name": "季卡",
+      "type": "QUARTERLY",
+      "durationDays": 90,
+      "price": "1980"
+    },
+    {
+      "id": "cmrkbbt6b002s144nivjat699",
+      "name": "年卡",
+      "type": "YEARLY",
+      "durationDays": 365,
+      "price": "5980"
+    }
+  ],
+  "communities": [
+    {
+      "id": "cm-1",
+      "name": "正念疗愈空间",
+      "yearlyFee": 36500
+    },
+    {
+      "id": "cm-2",
+      "name": "瑜伽精进营",
+      "yearlyFee": 0
+    },
+    {
+      "id": "cm-3",
+      "name": "芳疗师成长圈",
+      "yearlyFee": 128000
+    },
+    {
+      "id": "cm-4",
+      "name": "手作香薰实验室",
+      "yearlyFee": 39900
+    }
+  ],
+  "waitlists": [
+    {
+      "id": "cmvt74wfq003nhhkt8k57f33n",
+      "courseId": "cmvt743bc001r5724js6qxpid",
+      "status": "WAITING",
+      "lockedPrice": "28000"
+    },
+    {
+      "id": "cmvt74wl4003rhhkt2bgaas5r",
+      "courseId": "cmvt743bc001r5724js6qxpid",
+      "status": "WAITING",
+      "lockedPrice": "28000"
+    }
+  ],
+  "vouchers": [
+    {
+      "id": "cmvt74zgx005vhhkts362k542",
+      "source": "会员月度礼遇",
+      "mode": "REDUCE_BY",
+      "amount": "50",
+      "targetPrice": null,
+      "status": "UNUSED"
+    },
+    {
+      "id": "cmvt74zkh005xhhktsqt26inq",
+      "source": "芳香工作坊专享",
+      "mode": "REDUCE_BY",
+      "amount": "100",
+      "targetPrice": null,
+      "status": "UNUSED"
+    }
+  ],
+  "pendingOrders": []
+}

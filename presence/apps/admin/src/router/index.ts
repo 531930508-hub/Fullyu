@@ -28,6 +28,17 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/dashboard/index.vue'),
         meta: { title: '工作台', icon: 'DashboardOutlined' },
       },
+      // 待办中心（审批 / 退款跟进 / 入群审核 / 库存预警）
+      {
+        path: 'todos',
+        name: 'TodoCenter',
+        component: () => import('@/views/todo/index.vue'),
+        meta: {
+          title: '待办中心',
+          icon: 'CheckSquareOutlined',
+          perm: ['flow:todo:view', 'order:view', 'community:view', 'scm:stock:view'],
+        },
+      },
       // 教务模块
       {
         path: 'education/trainers',
@@ -100,7 +111,7 @@ const routes: RouteRecordRaw[] = [
         path: 'sales/vouchers',
         name: 'Vouchers',
         component: () => import('@/views/sales/voucher/index.vue'),
-        meta: { title: '代金券管理', icon: 'GiftOutlined', module: 'sales', perm: ['voucher:view'] },
+        meta: { title: '代金券与发券', icon: 'GiftOutlined', module: 'sales', perm: ['voucher:view'] },
       },
       {
         path: 'sales/orders',
@@ -117,10 +128,22 @@ const routes: RouteRecordRaw[] = [
       },
       // 社群模块（国内版 Skool）
       {
+        path: 'community/workspace',
+        name: 'CommunityWorkspace',
+        component: () => import('@/views/community/workspace/index.vue'),
+        meta: { title: '社群工作台', icon: 'DashboardOutlined', module: 'community', perm: ['community:view'] },
+      },
+      {
         path: 'community/list',
         name: 'CommunityList',
         component: () => import('@/views/community/list/index.vue'),
         meta: { title: '社群管理', icon: 'TeamOutlined', module: 'community', perm: ['community:view'] },
+      },
+      {
+        path: 'community/hosts',
+        name: 'CommunityHosts',
+        component: () => import('@/views/community/hosts/index.vue'),
+        meta: { title: '主理人角色', icon: 'CrownOutlined', module: 'community', perm: ['community:view'] },
       },
       {
         path: 'community/events',
@@ -132,7 +155,7 @@ const routes: RouteRecordRaw[] = [
         path: 'community/posts',
         name: 'CommunityPosts',
         component: () => import('@/views/community/posts/index.vue'),
-        meta: { title: '动态审核', icon: 'AuditOutlined', module: 'community', perm: ['community:view'] },
+        meta: { title: '内容治理', icon: 'AuditOutlined', module: 'community', perm: ['community:view'] },
       },
       // 进销存模块
       {
@@ -165,12 +188,30 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/scm/adjust/index.vue'),
         meta: { title: '库存调整', icon: 'DiffOutlined', module: 'scm', perm: ['scm:stock:view'] },
       },
+      {
+        path: 'scm/transfer',
+        name: 'StockTransfer',
+        component: () => import('@/views/scm/transfer/index.vue'),
+        meta: { title: '库存调拨', icon: 'SwapOutlined', module: 'scm', perm: ['scm:transfer:view'] },
+      },
+      {
+        path: 'scm/production',
+        name: 'ProductionOrders',
+        component: () => import('@/views/scm/production/index.vue'),
+        meta: { title: '生产工单', icon: 'BuildOutlined', module: 'scm', perm: ['scm:production:view'] },
+      },
       // 财务模块
       {
         path: 'finance/dashboard',
         name: 'FinanceDashboard',
         component: () => import('@/views/finance/dashboard/index.vue'),
-        meta: { title: '财务看板', icon: 'FundOutlined', module: 'finance', perm: ['finance:dashboard:view'] },
+        meta: { title: '全业务财务看板', icon: 'FundOutlined', module: 'finance', perm: ['finance:dashboard:view'] },
+      },
+      {
+        path: 'finance/presence',
+        name: 'FinancePresence',
+        component: () => import('@/views/finance/presence/index.vue'),
+        meta: { title: '在场业务看板', icon: 'LineChartOutlined', module: 'finance', perm: ['finance:presence:view'] },
       },
       {
         path: 'finance/revenue',

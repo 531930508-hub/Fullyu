@@ -32,15 +32,28 @@ function row(over: Record<string, any> = {}) {
   }
 }
 
-/** Prisma 桩：默认年卡会员 + S1 门店 + 60 分钟课程 + 无固定折扣 */
-function svc(over: Record<string, any> = {}, rules: any[] = []) {
-  return new PricingService({
-    memberCard: { findFirst: async () => ({ id: 'card1', type: 'YEARLY' }) },
-    course: { findUnique: async () => ({ duration: 60, venue: { orgId: 'S1' } }) },
-    memberTimeDiscountRule: { findMany: async () => rules },
-    courseMemberDiscount: { findUnique: async () => null },
-    ...over,
-  } as any)
+const BRAND_MEMBER = {
+  perks: { tierPrice: true, prioritySeat: true, invitesPerMonth: 4 },
+  unknown: false,
+}
+const NOT_MEMBER = { perks: null, unknown: false }
+const UNKNOWN = { perks: null, unknown: true }
+
+/**
+ * Prisma 桩：默认「无畅练卡、有品牌会员」+ S1 门店 + 60 分钟课程 + 无固定折扣。
+ * 2026-11-08 起会员价归品牌会员（按年卡口径取规则），畅练卡改为 0 元报课。
+ */
+function svc(over: Record<string, any> = {}, rules: any[] = [], brand: any = BRAND_MEMBER) {
+  return new PricingService(
+    {
+      memberCard: { findFirst: async () => null },
+      course: { findUnique: async () => ({ duration: 60, venue: { orgId: 'S1' } }) },
+      memberTimeDiscountRule: { findMany: async () => rules },
+      courseMemberDiscount: { findUnique: async () => null },
+      ...over,
+    } as any,
+    { resolve: async () => brand } as any,
+  )
 }
 
 describe('PricingService.getMemberDiscount：时段折扣', () => {
@@ -121,31 +134,85 @@ describe('PricingService.getMemberDiscount：时段折扣', () => {
     expect(res.discountAmount).toBe(10800) // 36000 * 0.3
   })
 
-  it('无时段规则时保持原有固定折扣行为；无有效会员卡则无折扣', async () => {
+  it('无时段规则时保持原有固定折扣行为；非品牌会员则无折扣', async () => {
     const fallback = await svc({
       courseMemberDiscount: { findUnique: async () => ({ discountPercent: 85 }) },
     }).getMemberDiscount('u1', 'c1', BASE_PRICE_FEN, SAT_1530)
-    expect(fallback).toEqual({
-      cardType: 'YEARLY',
+    expect(fallback).toMatchObject({
+      cardType: null,
       discountPercent: 85,
       discountAmount: 5400, // 36000 * 0.15
       hitTimeRuleId: null,
       timeDiscount: null,
+      memberSource: 'BRAND',
     })
 
-    const noCard = await svc({ memberCard: { findFirst: async () => null } }).getMemberDiscount(
-      'u1',
-      'c1',
-      BASE_PRICE_FEN,
-      SAT_1530,
-    )
+    const noCard = await svc(
+      { courseMemberDiscount: { findUnique: async () => ({ discountPercent: 85 }) } },
+      [],
+      NOT_MEMBER,
+    ).getMemberDiscount('u1', 'c1', BASE_PRICE_FEN, SAT_1530)
     expect(noCard).toEqual({
       cardType: null,
       discountPercent: null,
       discountAmount: 0,
       hitTimeRuleId: null,
       timeDiscount: null,
+      memberSource: null,
     })
+  })
+
+  it('品牌会员价按年卡口径取规则：只对年卡生效的规则也能命中', async () => {
+    const res = await svc({}, [
+      row({ id: 'r-yearly', cardTypes: ['YEARLY'], discountPercent: 80 }),
+    ]).getMemberDiscount('u1', 'c1', BASE_PRICE_FEN, SAT_1530)
+    expect(res).toMatchObject({ hitTimeRuleId: 'r-yearly', discountAmount: 7200, memberSource: 'BRAND' })
+  })
+
+  it('有效畅练卡：0 元报课，基础价全额记为抵扣，不查品牌会员', async () => {
+    const resolve = jest.fn()
+    const pricing = new PricingService(
+      {
+        memberCard: { findFirst: async () => ({ id: 'card1', type: 'QUARTERLY' }) },
+        memberTimeDiscountRule: { findMany: async () => [row({ discountPercent: 115 })] },
+      } as any,
+      { resolve } as any,
+    )
+    const res = await pricing.getMemberDiscount('u1', 'c1', BASE_PRICE_FEN, SAT_1530)
+    expect(res).toMatchObject({
+      cardType: 'QUARTERLY',
+      discountPercent: 0,
+      discountAmount: BASE_PRICE_FEN,
+      memberSource: 'PASS',
+    })
+    // 峰时加价规则不作用于畅练卡
+    expect(res.hitTimeRuleId).toBeNull()
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it('品牌会员资格查不到：下单严格拒绝，询价降级并标记待确认', async () => {
+    const lenient = await svc({}, [row()], UNKNOWN).getMemberDiscount(
+      'u1',
+      'c1',
+      BASE_PRICE_FEN,
+      SAT_1530,
+    )
+    expect(lenient).toMatchObject({ discountAmount: 0, memberSource: null, brandUnknown: true })
+
+    const strict = await svc({}, [row()], UNKNOWN)
+      .getMemberDiscount('u1', 'c1', BASE_PRICE_FEN, SAT_1530, { strict: true })
+      .catch((error) => error)
+    expect(strict).toMatchObject({ bizCode: 5035 })
+
+    // 调用方已预取的品牌状态优先于服务内查询（锁外预取，锁内不打 CRM）
+    const prefetched = await svc({}, [row({ discountPercent: 90 })], UNKNOWN).getMemberDiscount(
+      'u1',
+      'c1',
+      BASE_PRICE_FEN,
+      SAT_1530,
+      { brand: BRAND_MEMBER, strict: true },
+    )
+    expect(prefetched).toMatchObject({ discountAmount: 3600, memberSource: 'BRAND' })
   })
 
   it('courseStartAt：startDate + startTime 拼出判定用的开课时刻', () => {

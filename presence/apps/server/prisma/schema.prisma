@@ -23,6 +23,8 @@ model User {
   unionId   String?  @map("union_id")
   language  String   @default("zh") // zh | en
   isTrainer Boolean  @default(false) @map("is_trainer")
+  /// 社群主理人角色：BASIC=基础（首个社群免费，最多 1 个）；EXTENDED=扩展（平台人工开通，可多个）
+  communityHostRole CommunityHostRole? @map("community_host_role")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -354,6 +356,7 @@ enum OrderType {
   COURSE
   WAITLIST
   MEMBER_CARD
+  COMMUNITY
 }
 
 // ========== 场地 ==========
@@ -361,6 +364,8 @@ enum OrderType {
 model Venue {
   id      String  @id @default(cuid())
   name    String
+  /// city：小程序首页按城市筛选场地
+  city    String  @default("上海")
   address String
   /// 归属门店/组织：本系统（小程序）订单的收入按 订单→课程→场馆→组织 归集到门店
   orgId   String? @map("org_id")
@@ -474,6 +479,7 @@ model Order {
   orderNo             String          @unique @default(cuid()) @map("order_no") // 自定义订单号 C/M/W+YYMMDD+5位流水（默认 cuid 兼容旧逻辑）
   userId              String          @map("user_id")
   courseId            String?         @map("course_id")
+  communityId         String?         @map("community_id")
   orderType           OrderType       @default(COURSE) @map("order_type")
   memberCardProductId String?         @map("member_card_product_id")
   memberCardId        String?         @map("member_card_id") // 支付成功后生成的会员卡ID
@@ -491,14 +497,21 @@ model Order {
   refundAmount        Decimal?        @map("refund_amount")
   refundTime          DateTime?       @map("refund_time")
   voucherId           String?         @map("voucher_id")
+  /// 社群年费订单使用的邀请/礼遇（对账用）
+  communityInviteId      String?      @map("community_invite_id")
+  communityInviteClaimId String?      @map("community_invite_claim_id")
+  /// 平台服务费（分）：按实付金额 10% 计提，免年费为 0
+  platformFee         Decimal         @default(0) @map("platform_fee")
   hitTimeRuleId       String?         @map("hit_time_rule_id") // 命中的时段折扣规则（对账/排查用）
   createdAt           DateTime        @default(now()) @map("created_at")
   updatedAt           DateTime        @updatedAt @map("updated_at")
 
   user              User               @relation(fields: [userId], references: [id])
   course            Course?            @relation(fields: [courseId], references: [id])
+  community         Community?         @relation(fields: [communityId], references: [id])
   voucher           Voucher?           @relation(fields: [voucherId], references: [id])
   memberCardProduct MemberCardProduct? @relation(fields: [memberCardProductId], references: [id])
+  refunds          OrderRefund[]
   waitlistEntry     WaitlistEntry?
 
   @@map("orders")
@@ -511,6 +524,37 @@ enum OrderStatus {
   CANCELLED
   REFUNDING
   REFUNDED
+}
+
+/// 订单退款流水（强制退款按次留痕）。
+/// status: PROCESSING 受理中 / SUCCESS 已到账 / FAILED 网关明确拒绝（可重发）
+///        / UNKNOWN 结果待确认（人工核对后可重试或确认失败）/ CANCELLED 人工确认未发生退款后作废
+/// source: ADMIN_FORCE 后台强制退款 / SELF_SERVICE 用户自助退款 / SYSTEM 系统自动退款
+/// amountFen 统一以「分」存储（会员卡订单按分换算），与 Order 金额列口径解耦。
+model OrderRefund {
+  id              String    @id @default(cuid())
+  orderId         String    @map("order_id")
+  outRefundNo     String    @unique @map("out_refund_no") // RF+订单id，同一次退款重试保持不变，网关幂等
+  amountFen       Int       @map("amount_fen")
+  status          String    @default("PROCESSING")
+  source          String    @default("ADMIN_FORCE")
+  prevOrderStatus String?   @map("prev_order_status") // 本次退款前订单状态，部分退款到账后回退
+  reason          String?   @db.Text
+  operatorId      String?   @map("operator_id")
+  operatorName    String?   @map("operator_name")
+  approvalId      String?   @map("approval_id")
+  gatewayRef      String?   @map("gateway_ref") // 网关退款流水号
+  failCode        String?   @map("fail_code")
+  failMessage     String?   @map("fail_message") @db.Text
+  attempts        Int       @default(1) // 同一流水号向网关发起的次数
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  settledAt       DateTime? @map("settled_at") // SUCCESS/FAILED 终态时间
+  order           Order     @relation(fields: [orderId], references: [id])
+
+  @@index([orderId, status])
+  @@index([status])
+  @@map("order_refunds")
 }
 
 // ========== 签到 ==========
@@ -554,7 +598,8 @@ model Review {
 
 model Voucher {
   id                  String        @id @default(cuid())
-  userId              String        @map("user_id")
+  /// 兑换码批次券在被领取前为空
+  userId              String?       @map("user_id")
   mode                VoucherMode   @default(REDUCE_BY) // REDUCE_BY 减额 / REDUCE_TO 减至
   amount              Decimal // 减额模式：抵扣面额；减至模式：忽略
   targetPrice         Decimal?      @map("target_price") // 减至模式：将实付减至该价格
@@ -564,11 +609,18 @@ model Voucher {
   status              VoucherStatus @default(UNUSED)
   source              String // 来源描述
   usedAt              DateTime?     @map("used_at")
+  /// 兑换码（批量发券，每张唯一；用户输入后归属该用户）
+  redeemCode          String?       @unique @map("redeem_code") @db.VarChar(16)
+  /// 发券批次号（同一次批量发放共享）
+  batchNo             String?       @map("batch_no") @db.VarChar(32)
+  /// 兑换时间
+  redeemedAt          DateTime?     @map("redeemed_at")
   createdAt           DateTime      @default(now()) @map("created_at")
 
-  user   User    @relation(fields: [userId], references: [id])
+  user   User?   @relation(fields: [userId], references: [id])
   orders Order[]
 
+  @@index([batchNo])
   @@map("vouchers")
 }
 
@@ -1065,45 +1117,322 @@ model ApprovalDecision {
 
 // ========== 进销存 ==========
 
-/// 外部供应商（总部向其采购）
+/// 合作方：物料/包材供应商，或承接组装加工的代工厂
 model ScmSupplier {
   id        String   @id @default(cuid())
   name      String
   contact   String   @default("")
   phone     String   @default("")
+  /// 代工厂：承接委外组装，不供料，按工单收加工费
+  isProcessor Boolean @default(false) @map("is_processor")
   enabled   Boolean  @default(true)
   remark    String   @default("") @db.VarChar(500)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  orders PurchaseOrder[]
+  orders    PurchaseOrder[]
+  locations ScmLocation[]
+  prices    ScmPurchasePrice[]
 
   @@map("scm_suppliers")
 }
 
+/// 物料分层：原料/包材进入 BOM，成品由生产或采购产生，耗材只自用不进配方
+enum ScmProductType {
+  RAW // 原料（料体、精油）
+  PACK // 包材（瓶、泵头、包装盒）
+  SEMI // 半成品
+  FINISHED // 成品（含第三方采购的可供货商品）
+  CONSUMABLE // 自用耗材
+}
+
 /// 进销存商品/耗材主数据（与小程序侧 Material 无关：后者是课程用料，带积分消耗）
 model ScmProduct {
-  id            String  @id @default(cuid())
+  id            String         @id @default(cuid())
   /// 可读编码，如 P001
-  code          String  @unique
+  code          String         @unique
   name          String
-  spec          String  @default("")
-  unit          String  @default("")
+  spec          String         @default("")
+  unit          String         @default("")
+  /// 物料分层；历史数据默认按成品处理，可在档案里改
+  type          ScmProductType @default(FINISHED)
   /// 总部向供应商的采购参考价
   purchasePrice Decimal @default(0) @map("purchase_price") @db.Decimal(10, 2)
   /// 总部供给门店的供货价
   supplyPrice   Decimal @default(0) @map("supply_price") @db.Decimal(10, 2)
   /// 低于此数在库存页告警
   safetyStock   Int     @default(0) @map("safety_stock")
+  /// 保质期天数；0 表示不管理效期
+  shelfLifeDays Int     @default(0) @map("shelf_life_days")
   enabled       Boolean @default(true)
   remark        String  @default("") @db.VarChar(500)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  balances StockBalance[]
+  balances      StockBalance[]
+  boms          ScmBom[]             @relation("BomProduct")
+  bomComponents ScmBomItem[]         @relation("BomComponent")
+  transfers     ScmTransferItem[]
+  productions   ScmProductionOrder[]
+  productionComponents ScmProductionItem[]
+  prices        ScmPurchasePrice[]
+  batches       ScmStockBatch[]
 
+  @@index([type, enabled])
   @@map("scm_products")
+}
+
+/// 库存地点：自有仓直接复用组织 id，供应商/代工厂/在途是独立地点
+enum ScmLocationType {
+  OWN // 自有仓
+  SUPPLIER // 供应商处（货权可能仍属我们）
+  FACTORY // 代工厂处（已发料待加工）
+  TRANSIT // 在途
+}
+
+model ScmLocation {
+  id         String          @id
+  name       String
+  type       ScmLocationType @default(OWN)
+  /// 物权归属组织：自有仓即仓库组织；供应商/代工厂地点挂在总部名下
+  orgId      String?         @map("org_id")
+  supplierId String?         @map("supplier_id")
+  enabled    Boolean         @default(true)
+  remark     String          @default("") @db.VarChar(500)
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+
+  supplier ScmSupplier? @relation(fields: [supplierId], references: [id])
+
+  @@index([type, enabled])
+  @@index([orgId])
+  @@map("scm_locations")
+}
+
+/// 单层 BOM：成品 ← 原料/包材，按版本管理，工单下单时快照
+enum ScmBomStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model ScmBom {
+  id        String       @id @default(cuid())
+  productId String       @map("product_id")
+  version   Int          @default(1)
+  status    ScmBomStatus @default(ACTIVE)
+  remark    String       @default("") @db.VarChar(500)
+  createdBy String       @default("") @map("created_by")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  product ScmProduct   @relation("BomProduct", fields: [productId], references: [id], onDelete: Cascade)
+  items   ScmBomItem[]
+
+  @@unique([productId, version])
+  @@index([productId, status])
+  @@map("scm_boms")
+}
+
+model ScmBomItem {
+  id          String   @id @default(cuid())
+  bomId       String   @map("bom_id")
+  componentId String   @map("component_id")
+  /// 下单时快照，主数据改名不影响历史工单
+  name        String
+  spec        String   @default("")
+  unit        String   @default("")
+  /// 每 1 个成品的耗用量，支持小数（如 0.12 kg）
+  qtyPerUnit  Decimal  @default(0) @map("qty_per_unit") @db.Decimal(14, 6)
+  /// 损耗率，0.02 表示 2%
+  lossRate    Decimal  @default(0) @map("loss_rate") @db.Decimal(6, 4)
+  remark      String   @default("") @db.VarChar(500)
+
+  bom       ScmBom      @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  component ScmProduct  @relation("BomComponent", fields: [componentId], references: [id])
+
+  @@index([bomId])
+  @@index([componentId])
+  @@map("scm_bom_items")
+}
+
+enum ScmTransferStatus {
+  COMPLETED
+  CANCELLED
+}
+
+/// 库存调拨：同事务内源地点出库、目标地点入库。总部供货门店也走这里
+model ScmTransfer {
+  id             String            @id
+  fromLocationId String            @map("from_location_id")
+  toLocationId   String            @map("to_location_id")
+  fromOwnerOrgId String            @map("from_owner_org_id")
+  toOwnerOrgId   String            @map("to_owner_org_id")
+  status         ScmTransferStatus @default(COMPLETED)
+  remark         String            @default("") @db.VarChar(500)
+  createdBy      String            @default("") @map("created_by")
+  createdByName  String            @default("") @map("created_by_name")
+  createdAt      DateTime          @default(now()) @map("created_at")
+
+  items ScmTransferItem[]
+
+  @@index([fromLocationId, createdAt])
+  @@index([toLocationId, createdAt])
+  @@index([createdAt])
+  @@map("scm_transfers")
+}
+
+model ScmTransferItem {
+  id         String  @id @default(cuid())
+  transferId String  @map("transfer_id")
+  productId  String  @map("product_id")
+  name       String
+  spec       String  @default("")
+  unit       String  @default("")
+  qty        Decimal @default(0) @db.Decimal(14, 3)
+
+  transfer ScmTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product  ScmProduct  @relation(fields: [productId], references: [id])
+
+  @@index([transferId])
+  @@index([productId])
+  @@map("scm_transfer_items")
+}
+
+enum ScmProductionStatus {
+  APPROVED // 待领料
+  ISSUED // 已发料/加工中
+  COMPLETED // 已完工入库
+  CANCELLED
+}
+
+/// 生产/委外工单：成品 × 计划量，按 BOM 领料，完工后成品入库
+model ScmProductionOrder {
+  id          String              @id
+  /// 物权组织（生产方）
+  orgId       String              @map("org_id")
+  productId   String              @map("product_id")
+  productName String              @default("") @map("product_name")
+  productSpec String              @default("") @map("product_spec")
+  productUnit String              @default("") @map("product_unit")
+  /// BOM 版本快照
+  bomVersion  Int                 @default(1) @map("bom_version")
+  plannedQty  Decimal             @default(0) @map("planned_qty") @db.Decimal(14, 3)
+  /// 完工实际入库量
+  outputQty   Decimal             @default(0) @map("output_qty") @db.Decimal(14, 3)
+  /// 领料来源地点
+  sourceLocationId  String        @map("source_location_id")
+  /// 成品入库地点（必须是自有仓）
+  outputLocationId  String        @map("output_location_id")
+  /// 委外时填代工厂地点；为空表示自产
+  factoryLocationId String?       @map("factory_location_id")
+  status      ScmProductionStatus @default(APPROVED)
+  /// 成品批号与效期
+  batchNo        String    @default("") @map("batch_no")
+  productionDate DateTime? @map("production_date")
+  expiryDate     DateTime? @map("expiry_date")
+  /// 代工厂加工费（元）
+  processingFee  Decimal   @default(0) @map("processing_fee") @db.Decimal(12, 2)
+  /// 参考材料成本（按组件采购价估算）
+  materialCost   Decimal   @default(0) @map("material_cost") @db.Decimal(12, 2)
+  totalCost      Decimal   @default(0) @map("total_cost") @db.Decimal(12, 2)
+  unitCost       Decimal   @default(0) @map("unit_cost") @db.Decimal(14, 6)
+  remark         String    @default("") @db.VarChar(500)
+  createdBy      String    @default("") @map("created_by")
+  createdByName  String    @default("") @map("created_by_name")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  product ScmProduct          @relation(fields: [productId], references: [id])
+  items   ScmProductionItem[]
+
+  @@index([orgId, status])
+  @@index([productId])
+  @@index([createdAt])
+  @@map("scm_production_orders")
+}
+
+model ScmProductionItem {
+  id          String  @id @default(cuid())
+  orderId     String  @map("order_id")
+  componentId String  @map("component_id")
+  name        String
+  spec        String  @default("")
+  unit        String  @default("")
+  qtyPerUnit  Decimal @default(0) @map("qty_per_unit") @db.Decimal(14, 6)
+  lossRate    Decimal @default(0) @map("loss_rate") @db.Decimal(6, 4)
+  /// 按计划产量算出的应领量
+  requiredQty Decimal @default(0) @map("required_qty") @db.Decimal(14, 3)
+  /// 实际领用/发料量
+  issuedQty   Decimal @default(0) @map("issued_qty") @db.Decimal(14, 3)
+  /// 参考单价（组件采购价快照）
+  unitPrice   Decimal @default(0) @map("unit_price") @db.Decimal(14, 6)
+  amount      Decimal @default(0) @db.Decimal(12, 2)
+
+  order     ScmProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  component ScmProduct         @relation(fields: [componentId], references: [id])
+
+  @@index([orderId])
+  @@index([componentId])
+  @@map("scm_production_items")
+}
+
+/// 采购价来源：手工维护或验收入库自动记录
+enum ScmPriceSource {
+  MANUAL
+  RECEIPT
+}
+
+/// 采购价历史。同一商品不同供应商、不同时期可以有多个价格，
+/// 成本核算取「生效日期不晚于业务日期」的最新一条。
+model ScmPurchasePrice {
+  id            String          @id @default(cuid())
+  productId     String          @map("product_id")
+  /// 为空表示未指定供应商的通用价
+  supplierId    String?         @map("supplier_id")
+  price         Decimal         @db.Decimal(12, 2)
+  effectiveFrom DateTime        @default(now()) @map("effective_from") @db.Date
+  source        ScmPriceSource  @default(MANUAL)
+  /// 来源单号（验收单号等）
+  ref           String          @default("")
+  remark        String          @default("") @db.VarChar(500)
+  createdBy     String          @default("") @map("created_by")
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  product  ScmProduct   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier ScmSupplier? @relation(fields: [supplierId], references: [id])
+
+  @@index([productId, effectiveFrom])
+  @@index([supplierId])
+  @@map("scm_purchase_prices")
+}
+
+/// 批次库存：同一地点同一商品按批号分开记账，出库按先到期先出。
+/// 期初结存由迁移脚本补一批「期初」批次，保证批次数量与结存一致。
+model ScmStockBatch {
+  id             String    @id @default(cuid())
+  warehouseId    String    @map("warehouse_id")
+  ownerOrgId     String    @default("") @map("owner_org_id")
+  productId      String    @map("product_id")
+  batchNo        String    @default("") @map("batch_no")
+  productionDate DateTime? @map("production_date") @db.Date
+  expiryDate     DateTime? @map("expiry_date") @db.Date
+  /// 剩余数量
+  qty            Decimal   @default(0) @db.Decimal(14, 3)
+  /// 该批实际单位成本：采购价 / 生产完工单位成本 / 调拨带来的原批成本
+  unitCost       Decimal   @default(0) @map("unit_cost") @db.Decimal(14, 6)
+  /// 来源类型：RECEIPT / TRANSFER / PRODUCTION / ADJUST / OPENING
+  sourceType     String    @default("") @map("source_type")
+  sourceNo       String    @default("") @map("source_no")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  product ScmProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([warehouseId, productId, expiryDate])
+  @@index([expiryDate])
+  @@index([productId])
+  @@map("scm_stock_batches")
 }
 
 /// 供货方类型
@@ -1163,9 +1492,9 @@ model PurchaseOrderItem {
   spec        String  @default("")
   unit        String  @default("")
   price       Decimal @default(0) @db.Decimal(10, 2)
-  qty         Int     @default(0)
+  qty         Decimal @default(0) @db.Decimal(14, 3)
   /// 已验收入库数量，支持分批入库累加
-  receivedQty Int     @default(0) @map("received_qty")
+  receivedQty Decimal @default(0) @map("received_qty") @db.Decimal(14, 3)
 
   order PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -1178,8 +1507,10 @@ model PurchaseOrderItem {
 model GoodsReceipt {
   id          String  @id // 可读单号 GR+日期+序号
   poId        String  @map("po_id")
-  /// 收货仓库（有独立仓库的组织）
+  /// 收货地点（自有仓或供应商处）
   warehouseId String  @map("warehouse_id")
+  /// 物权归属组织
+  ownerOrgId  String  @default("") @map("owner_org_id")
   /// 本次验收是否存在差异（少收/拒收）
   hasDiff     Boolean @default(false) @map("has_diff")
 
@@ -1201,12 +1532,16 @@ model GoodsReceiptItem {
   productId  String @map("product_id")
   name       String
   unit       String @default("")
-  orderedQty Int    @default(0) @map("ordered_qty")
+  orderedQty Decimal @default(0) @map("ordered_qty") @db.Decimal(14, 3)
   /// 本次实收
-  acceptQty  Int    @default(0) @map("accept_qty")
+  acceptQty  Decimal @default(0) @map("accept_qty") @db.Decimal(14, 3)
   /// 本次拒收/差异
-  rejectQty  Int    @default(0) @map("reject_qty")
+  rejectQty  Decimal @default(0) @map("reject_qty") @db.Decimal(14, 3)
   reason     String @default("") @db.VarChar(500)
+  /// 批次与效期（可选）
+  batchNo        String    @default("") @map("batch_no")
+  productionDate DateTime? @map("production_date") @db.Date
+  expiryDate     DateTime? @map("expiry_date") @db.Date
 
   receipt GoodsReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 
@@ -1214,12 +1549,15 @@ model GoodsReceiptItem {
   @@map("goods_receipt_items")
 }
 
-/// 库存结存：仓库 × 商品 唯一
+/// 库存结存：地点 × 商品 唯一
 model StockBalance {
-  id          String @id @default(cuid())
-  warehouseId String @map("warehouse_id")
-  productId   String @map("product_id")
-  qty         Int    @default(0)
+  id          String  @id @default(cuid())
+  /// 库存地点 id（自有仓即仓库组织 id）
+  warehouseId String  @map("warehouse_id")
+  /// 物权归属组织，行级数据范围按此字段过滤
+  ownerOrgId  String  @default("") @map("owner_org_id")
+  productId   String  @map("product_id")
+  qty         Decimal @default(0) @db.Decimal(14, 3)
 
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -1239,11 +1577,16 @@ enum StockLedgerType {
 /// 库存变动流水（只进不改，与结存同事务写入）
 model StockLedger {
   id          String          @id @default(cuid())
+  /// 库存地点 id（自有仓即仓库组织 id）
   warehouseId String          @map("warehouse_id")
+  /// 物权归属组织
+  ownerOrgId  String          @default("") @map("owner_org_id")
   productId   String          @map("product_id")
   type        StockLedgerType
   /// 正数为增、负数为减
-  qty         Int
+  qty         Decimal         @db.Decimal(14, 3)
+  /// 批次号，出库按批次拆分时每批一条流水
+  batchNo     String          @default("") @map("batch_no")
   /// 来源单据号或说明
   ref         String          @default("")
   createdAt   DateTime        @default(now()) @map("created_at")
@@ -1270,7 +1613,10 @@ enum StockAdjustStatus {
 /// 库存调整单：盘盈盘亏/报损，走审批，通过后才写入库存
 model StockAdjust {
   id          String            @id // 可读单号 SA+日期+序号
+  /// 盘点地点 id
   warehouseId String            @map("warehouse_id")
+  /// 物权归属组织
+  ownerOrgId  String            @default("") @map("owner_org_id")
   reason      StockAdjustReason @default(OTHER)
   remark      String            @default("") @db.VarChar(500)
   /// 影响金额（按供货价估算的绝对值），用于命中金额分级
@@ -1299,11 +1645,11 @@ model StockAdjustItem {
   name      String
   unit      String  @default("")
   /// 调整前账面数（录入时快照）
-  beforeQty Int     @default(0) @map("before_qty")
+  beforeQty Decimal @default(0) @map("before_qty") @db.Decimal(14, 3)
   /// 调整后实际数
-  afterQty  Int     @default(0) @map("after_qty")
+  afterQty  Decimal @default(0) @map("after_qty") @db.Decimal(14, 3)
   /// 差额 = 后 - 前，正为盘盈
-  diffQty   Int     @default(0) @map("diff_qty")
+  diffQty   Decimal @default(0) @map("diff_qty") @db.Decimal(14, 3)
   price     Decimal @default(0) @db.Decimal(10, 2)
 
   adjust StockAdjust @relation(fields: [adjustId], references: [id], onDelete: Cascade)
@@ -1432,6 +1778,53 @@ enum CommunityStatus {
   REJECTED // 已驳回
 }
 
+/// 主理人角色：基础=首个社群免费，最多 1 个；扩展=平台人工开通，可多个
+enum CommunityHostRole {
+  BASIC
+  EXTENDED
+}
+
+/// 广场可见性
+enum CommunityVisibility {
+  PUBLIC // 广场 + 链接
+  HIDDEN // 仅链接，不进广场
+  INVITE_ONLY // 仅邀请访问
+}
+
+/// 入群方式
+enum CommunityJoinMode {
+  OPEN // 直接加入
+  APPROVAL // 申请审核
+  INVITE // 仅限邀请
+}
+
+/// 成员活动展示隐私（每个社群独立设置）
+enum CommunityPrivacy {
+  NONE // 不展示活动
+  COMPLETED // 只展示已完成的活动
+  ALL // 展示全部活动（含未开始）
+}
+
+/// 活动可见范围
+enum CommunityEventScope {
+  PUBLIC // 公开（社群外可见）
+  INTERNAL // 成员专属
+}
+
+/// 邀请类型
+enum CommunityInviteKind {
+  NORMAL // 普通邀请
+  WAIVER // 免年费
+  REDUCE // 固定金额减免
+}
+
+/// 入群申请状态
+enum CommunityRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 /// 社群活动形式：线下课程 / 直播 / 线上（会议等）
 enum CommunityEventType {
   OFFLINE // 线下课程/活动
@@ -1475,13 +1868,33 @@ model Community {
   growth30d   Int      @default(0) @map("growth_30d")
   /// 今日活跃成员数（广场展示用）
   activeToday Int      @default(0) @map("active_today")
+  /// 广场可见性
+  visibility CommunityVisibility @default(PUBLIC)
+  /// 入群方式
+  joinMode   CommunityJoinMode   @default(OPEN) @map("join_mode")
+  /// 兴趣池 JSON 数组，最多 12 项
+  interestPool String? @db.Text @map("interest_pool")
+  /// 分享视觉配置 JSON：{source,palette,layout,imageUrl,updatedAt}
+  shareArtwork String? @db.Text @map("share_artwork")
+  /// 订阅制代结算协议：主理人勾选的协议版本号（免费社群为空）
+  settlementAgreementVersion String?   @map("settlement_agreement_version") @db.VarChar(32)
+  /// 订阅制代结算协议勾选时间
+  settlementAgreedAt         DateTime? @map("settlement_agreed_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  events CommunityEvent[]
-  posts  CommunityPost[]
-  joins  CommunityJoin[]
+  events         CommunityEvent[]
+  posts          CommunityPost[]
+  joins          CommunityJoin[]
+  orders         Order[]
+  joinRequests   CommunityJoinRequest[]
+  invites        CommunityInvite[]
+  inviteClaims   CommunityInviteClaim[]
+  comments       CommunityComment[]
+  moderationLogs CommunityModerationLog[]
+  eventSignups   CommunityEventSignup[]
+  postLikes      CommunityPostLike[]
 
   @@index([status, isActive])
   @@map("communities")
@@ -1494,6 +1907,8 @@ model CommunityEvent {
   eventDate   DateTime           @db.Date @map("event_date")
   /// 开始时间，如 "20:00"
   time        String             @default("")
+  /// 结束时间，如 "21:00"；用于识别当日已结束活动
+  endTime     String?            @map("end_time") @db.VarChar(10)
   title       String
   type        CommunityEventType @default(OFFLINE)
   venue       String? // 线下场地
@@ -1501,11 +1916,18 @@ model CommunityEvent {
   joined      Int                @default(0)
   /// 关联官方课程 id（存在时 C 端点击跳转课程页报名）
   courseId    String?            @map("course_id")
+  /// 可见范围：公开 / 成员专属
+  scope       CommunityEventScope @default(PUBLIC)
+  isActive    Boolean            @default(true) @map("is_active")
+  description String?            @db.Text
+  /// 分享视觉配置 JSON：{source,palette,layout,imageUrl,updatedAt}
+  shareArtwork String?           @db.Text @map("share_artwork")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  signups   CommunityEventSignup[]
 
   @@index([communityId, eventDate])
   @@map("community_events")
@@ -1527,26 +1949,284 @@ model CommunityPost {
   likes        Int                 @default(0)
   comments     Int                 @default(0)
   status       CommunityPostStatus @default(PENDING)
+  /// 后期治理：隐藏后 C 端不可见，后台可恢复
+  isHidden     Boolean             @default(false) @map("is_hidden")
+  /// 删除为软删除，保留治理留痕
+  isDeleted    Boolean             @default(false) @map("is_deleted")
+  hiddenReason String?             @map("hidden_reason") @db.Text
+  moderatedAt  DateTime?           @map("moderated_at")
+  moderatedBy  String?             @map("moderated_by")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  community    Community            @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  commentsList CommunityComment[]
+  likesList    CommunityPostLike[]
 
   @@index([communityId, status])
   @@map("community_posts")
 }
 
-/// 社群加入关系（我加入的/成员列表数据源）
-model CommunityJoin {
+/// 社群动态点赞（一人一赞，取消即删除；posts.likes 作为冗余计数同步维护）
+model CommunityPostLike {
   id          String   @id @default(cuid())
+  postId      String   @map("post_id")
   communityId String   @map("community_id")
   userId      String   @map("user_id")
-  joinedAt    DateTime @default(now()) @map("joined_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  community Community     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([communityId, userId])
+  @@map("community_post_likes")
+}
+
+/// 社群加入关系（我加入的/成员列表数据源）
+model CommunityJoin {
+  id          String    @id @default(cuid())
+  communityId String    @map("community_id")
+  userId      String    @map("user_id")
+  joinedAt    DateTime  @default(now()) @map("joined_at")
+  /// 付费社群有效期；null 表示免费社群或历史免费加入
+  paidUntil   DateTime? @map("paid_until")
+  /// 活动展示隐私（每个社群独立设置）
+  privacy     CommunityPrivacy @default(NONE)
+  /// 成员选择的兴趣标签 JSON 数组，最多 3 项
+  interests   String?   @db.Text
+  /// 权益来源：PAID/FREE/WAIVER/COUPON/INVITE/PLATFORM
+  source      String    @default("PAID") @db.VarChar(20)
+  /// 0 元入群/邀请入群时关联的订单，作为权益凭证
+  orderId     String?   @map("order_id")
 
   community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
 
   @@unique([communityId, userId])
   @@index([userId])
   @@map("community_joins")
+}
+
+/// 入群申请（仅入群审核；动态与评论不做发布前审核）
+model CommunityJoinRequest {
+  id             String                 @id @default(cuid())
+  communityId    String                 @map("community_id")
+  userId         String                 @map("user_id")
+  note           String?                @db.Text
+  status         CommunityRequestStatus @default(PENDING)
+  reviewedBy     String?                @map("reviewed_by")
+  reviewedByName String?                @map("reviewed_by_name")
+  reviewNote     String?                @map("review_note") @db.Text
+  reviewedAt     DateTime?              @map("reviewed_at")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
+  @@index([communityId, status])
+  @@map("community_join_requests")
+}
+
+/// 邀请/礼遇：普通邀请不附赠权益；WAIVER=免年费；REDUCE=固定金额减免
+model CommunityInvite {
+  id          String              @id @default(cuid())
+  communityId String              @map("community_id")
+  name        String              @db.VarChar(120)
+  kind        CommunityInviteKind @default(NORMAL)
+  /// REDUCE 时的减免金额（分）；WAIVER 忽略
+  amount      Int                 @default(0)
+  /// null = 长期有效
+  expiresAt   DateTime?           @map("expires_at")
+  /// 0 = 不限名额
+  quota       Int                 @default(0)
+  usedCount   Int                 @default(0) @map("used_count")
+  isActive    Boolean             @default(true) @map("is_active")
+  note        String?             @db.Text
+  createdBy   String?             @map("created_by")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  community Community             @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  claims    CommunityInviteClaim[]
+
+  @@index([communityId, isActive])
+  @@map("community_invites")
+}
+
+/// 邀请领取记录：每人每张邀请仅可领取一次；仅可用于发行社群
+model CommunityInviteClaim {
+  id          String    @id @default(cuid())
+  inviteId    String    @map("invite_id")
+  communityId String    @map("community_id")
+  userId      String    @map("user_id")
+  claimedAt   DateTime  @default(now()) @map("claimed_at")
+  usedAt      DateTime? @map("used_at")
+  orderId     String?   @map("order_id")
+
+  invite    CommunityInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+  community Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([inviteId, userId])
+  @@index([userId, communityId])
+  @@map("community_invite_claims")
+}
+
+/// 社群动态评论（即时可见，后期治理）
+model CommunityComment {
+  id           String   @id @default(cuid())
+  postId       String   @map("post_id")
+  communityId  String   @map("community_id")
+  authorId     String?  @map("author_id")
+  authorName   String   @default("") @map("author_name")
+  authorAvatar String?  @map("author_avatar") @db.LongText
+  content      String   @db.Text
+  isHidden     Boolean  @default(false) @map("is_hidden")
+  isDeleted    Boolean  @default(false) @map("is_deleted")
+  hiddenReason String?  @map("hidden_reason") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  community Community     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@map("community_comments")
+}
+
+/// 内容治理日志（隐藏/恢复/删除均留痕）
+model CommunityModerationLog {
+  id          String   @id @default(cuid())
+  communityId String   @map("community_id")
+  /// POST | COMMENT
+  targetType  String   @map("target_type") @db.VarChar(20)
+  targetId    String   @map("target_id")
+  /// HIDE | RESTORE | DELETE
+  action      String   @db.VarChar(20)
+  reason      String   @db.Text
+  /// HOST | PLATFORM
+  actorType   String   @map("actor_type") @db.VarChar(20)
+  actorId     String?  @map("actor_id")
+  actorName   String   @default("") @map("actor_name")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, createdAt])
+  @@map("community_moderation_logs")
+}
+
+/// 社群活动报名（未关联官方课程的活动使用）
+model CommunityEventSignup {
+  id          String   @id @default(cuid())
+  eventId     String   @map("event_id")
+  communityId String   @map("community_id")
+  userId      String   @map("user_id")
+  status      String   @default("SIGNED") @db.VarChar(20)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  event     CommunityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  community Community      @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([communityId, userId])
+  @@map("community_event_signups")
+}
+
+// ========== 在场财务台账 ==========
+// 财务流水与业务交易流水分离：本表不建业务外键，只保存业务快照。
+// 业务表仅作为生成输入，所有在场财务报表只读本台账。
+
+/// 在场财务流水（独立实体，幂等重建，已关账月份不可变）
+model PresenceFinanceEntry {
+  id        String              @id @default(cuid())
+  /// 幂等键：同一业务财务事件只入账一次
+  dedupeKey String              @unique @map("dedupe_key") @db.VarChar(180)
+  /// 归属会计月份 yyyy-MM
+  month     String              @db.VarChar(7)
+  /// 财务事件发生日（按日归集）
+  entryDate DateTime            @map("entry_date") @db.Date
+  /// CASH 现金 / REVENUE 收入 / TRAINER_COST 导师成本
+  account   PresenceAccount
+  /// CASH_IN 收款 / CASH_REFUND 退款 / RECOGNIZE 确认收入 / REVERSAL 冲减 / SETTLEMENT 导师结算
+  eventType PresenceEventType   @map("event_type")
+  /// COURSE 课程 / MEMBER_CARD 会员卡 / WAITLIST 候补 / COMMUNITY_FEE 社群手续费 / TRAINER 导师
+  category  PresenceCategory
+  /// 带符号金额（分）
+  amountFen Int                 @map("amount_fen")
+
+  // ---- 业务快照（无外键） ----
+  orderId       String? @map("order_id")
+  orderNo       String? @map("order_no")
+  orderType     String? @map("order_type") @db.VarChar(20)
+  courseId      String? @map("course_id")
+  courseName    String? @map("course_name")
+  memberCardId  String? @map("member_card_id")
+  cardName      String? @map("card_name")
+  communityId   String? @map("community_id")
+  communityName String? @map("community_name")
+  hostUserId    String? @map("host_user_id")
+  hostName      String? @map("host_name") @db.VarChar(100)
+  settlementId  String? @map("settlement_id")
+  trainerId     String? @map("trainer_id")
+  trainerName   String? @map("trainer_name") @db.VarChar(100)
+  orgId         String? @map("org_id")
+  orgName       String? @map("org_name") @db.VarChar(100)
+
+  // ---- 服务期快照（确认类流水用） ----
+  serviceStart DateTime? @map("service_start") @db.Date
+  serviceEnd   DateTime? @map("service_end") @db.Date
+  hours        Decimal?  @db.Decimal(10, 2)
+  rate         Decimal?  @db.Decimal(10, 2)
+
+  remark    String?  @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([month, account])
+  @@index([month, category])
+  @@index([month, entryDate])
+  @@index([orderId])
+  @@index([communityId])
+  @@index([settlementId])
+  @@index([orgId])
+  @@map("presence_finance_entries")
+}
+
+enum PresenceAccount {
+  CASH
+  REVENUE
+  TRAINER_COST
+}
+
+enum PresenceEventType {
+  CASH_IN
+  CASH_REFUND
+  RECOGNIZE
+  REVERSAL
+  SETTLEMENT
+}
+
+enum PresenceCategory {
+  COURSE
+  MEMBER_CARD
+  WAITLIST
+  COMMUNITY_FEE
+  TRAINER
+}
+
+/// 在场财务关账期间（自然月，自动关账后不可变）
+model PresenceFinancePeriod {
+  month     String               @id @db.VarChar(7)
+  status    PresencePeriodStatus @default(OPEN)
+  closedAt  DateTime?            @map("closed_at")
+  closedBy  String?              @map("closed_by")
+  remark    String?              @db.VarChar(255)
+  updatedAt DateTime             @updatedAt @map("updated_at")
+
+  @@map("presence_finance_periods")
+}
+
+enum PresencePeriodStatus {
+  OPEN
+  CLOSED
 }

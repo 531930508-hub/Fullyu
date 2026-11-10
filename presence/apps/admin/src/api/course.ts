@@ -4,6 +4,7 @@ export interface CourseListParams {
   page?: number
   pageSize?: number
   status?: string
+  phase?: string
   keyword?: string
   startDateFrom?: string
   startDateTo?: string
@@ -32,6 +33,11 @@ export function updateCourse(id: string, body: any) {
 /** 发布/下架/取消课程 */
 export function setCourseStatus(id: string, status: string) {
   return post(`/courses/${id}/status`, { status })
+}
+
+/** 调整报名窗口：传未来时间开放补报名，传 null 恢复默认截止 */
+export function setEnrollmentWindow(id: string, enrollEndAt: string | null) {
+  return put(`/courses/${id}/enrollment-window`, { enrollEndAt })
 }
 
 /** 删除课程（仅草稿且无报名/候补） */

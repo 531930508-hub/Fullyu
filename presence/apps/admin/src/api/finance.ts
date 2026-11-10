@@ -180,3 +180,148 @@ export interface TrendPoint {
 export function getDashboardTrend(params?: { count?: number; orgId?: string }) {
   return get<TrendPoint[]>('/finance/dashboard/trend', params)
 }
+
+// ===== 在场业务（独立财务台账） =====
+
+export type PresencePeriodStatus = 'OPEN' | 'CLOSED'
+
+export interface PresencePeriod {
+  month: string
+  status: PresencePeriodStatus
+  closedAt: string | null
+  closedBy: string | null
+}
+
+export interface PresenceDashboard {
+  month: string
+  orgId: string | null
+  period: PresencePeriod
+  cash: {
+    totalFen: number
+    courseFen: number
+    memberCardFen: number
+    waitlistFen: number
+    communityFen: number
+  }
+  revenue: {
+    totalFen: number
+    courseFen: number
+    memberCardFen: number
+    communityFeeFen: number
+    reversalFen: number
+  }
+  deferred: {
+    totalFen: number
+    courseFen: number
+    memberCardFen: number
+    waitlistFen: number
+  }
+  community: {
+    cashFen: number
+    feeFen: number
+    feeReversalFen: number
+    payableFen: number
+  }
+  trainer: { costFen: number; settlementCount: number }
+  grossProfitFen: number
+  orders: { course: number; memberCard: number; waitlist: number; community: number }
+  trend: { month: string; cashFen: number; revenueFen: number; trainerFen: number }[]
+}
+
+export interface PresenceCourseRow {
+  orderId: string
+  orderNo: string
+  orderType: string
+  category: 'COURSE' | 'MEMBER_CARD'
+  name: string
+  orgId: string | null
+  orgName: string | null
+  serviceStart: string | null
+  serviceEnd: string | null
+  monthCashFen: number
+  monthRevenueFen: number
+  monthReversalFen: number
+  cumulativeCashFen: number
+  cumulativeRevenueFen: number
+  deferredFen: number
+}
+
+export interface PresenceCommunityRow {
+  communityId: string
+  communityName: string
+  hostUserId: string | null
+  hostName: string
+  monthCashFen: number
+  monthFeeFen: number
+  monthReversalFen: number
+  cumulativeCashFen: number
+  cumulativeFeeFen: number
+  payableFen: number
+}
+
+export interface PresenceTrainerRow {
+  settlementId: string
+  trainerId: string | null
+  trainerName: string
+  courseName: string
+  orgName: string | null
+  hours: number | null
+  rate: number | null
+  amountFen: number
+  entryDate: string
+  adjusted: boolean
+}
+
+export interface PresencePageResult<T> {
+  list: T[]
+  total: number
+  summary: Record<string, number>
+}
+
+export function getPresenceDashboard(params?: { month?: string; orgId?: string }) {
+  return get<PresenceDashboard>('/finance/presence/dashboard', params)
+}
+
+export function listPresenceCourses(params?: {
+  month?: string
+  orgId?: string
+  keyword?: string
+  page?: number
+  pageSize?: number
+}) {
+  return get<PresencePageResult<PresenceCourseRow>>('/finance/presence/courses', params)
+}
+
+export function listPresenceCommunity(params?: {
+  month?: string
+  keyword?: string
+  page?: number
+  pageSize?: number
+}) {
+  return get<PresencePageResult<PresenceCommunityRow>>('/finance/presence/community', params)
+}
+
+export function listPresenceTrainers(params?: {
+  month?: string
+  orgId?: string
+  keyword?: string
+  page?: number
+  pageSize?: number
+}) {
+  return get<PresencePageResult<PresenceTrainerRow>>('/finance/presence/trainers', params)
+}
+
+export function listPresencePeriods() {
+  return get<{
+    startMonth: string
+    currentMonth: string
+    timezone: string
+    periods: PresencePeriod[]
+  }>('/finance/presence/periods')
+}
+
+export function closePresencePeriod(month: string) {
+  return post<{ month: string; status: PresencePeriodStatus }>(
+    `/finance/presence/periods/${month}/close`,
+  )
+}

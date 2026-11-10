@@ -3,6 +3,8 @@ import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
 import { generateOrderNo } from '../../common/order-no.helper'
+import { isValidImageDataUrl, normalizeImageDataUrl } from '../../common/image.util'
+import { SEAT_LOCK_DURATION_MINUTES } from '@fullyu/shared'
 
 /** 连续/累计缺席达到该阈值则冻结会员卡 */
 const MEMBER_FREEZE_THRESHOLD = 3
@@ -32,13 +34,40 @@ export class MemberService {
     })
   }
 
-  /** 当前有效会员卡（未过期且 ACTIVE） */
-  async activeCard(userId: string) {
+  /**
+   * 当前有效会员卡（未过期且 ACTIVE）。
+   * withStats 仅供畅练卡页使用：按当前卡期统计「用卡报课省下的金额」，
+   * 用于临期复购提示。其他页面不传，避免首页/个人页为了一张卡多跑聚合查询。
+   */
+  async activeCard(userId: string, options: { withStats?: boolean } = {}) {
     const now = new Date()
-    return this.prisma.memberCard.findFirst({
+    const card = await this.prisma.memberCard.findFirst({
       where: { userId, status: 'ACTIVE', endDate: { gt: now } },
       orderBy: { endDate: 'desc' },
     })
+    if (!card || !options.withStats) return card
+
+    // 畅练卡订单的 discountAmount 为「分」，且 cardType 有值；
+    // 品牌会员价订单 cardType 为空，不会混进畅练卡的节省里。
+    const stats = await this.prisma.order.aggregate({
+      where: {
+        userId,
+        orderType: 'COURSE',
+        status: { in: ['PAID', 'COMPLETED'] },
+        cardType: { not: null },
+        paymentTime: { gte: card.startDate, lte: now },
+      },
+      _sum: { discountAmount: true },
+      _count: { _all: true },
+    })
+
+    return {
+      ...card,
+      stats: {
+        savedCents: Math.max(0, Math.round(Number(stats._sum.discountAmount) || 0)),
+        classCount: stats._count._all,
+      },
+    }
   }
 
   /**
@@ -58,16 +87,36 @@ export class MemberService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } })
     if (!user) throw new BusinessException('用户不存在', 4033)
     const trimmedPhoto = typeof photo === 'string' ? photo.trim() : ''
-    if (!user.photo && !trimmedPhoto) {
+    const normalizedPhoto = trimmedPhoto ? normalizeImageDataUrl(trimmedPhoto) : null
+    if (trimmedPhoto && !normalizedPhoto) {
+      throw new BusinessException('照片格式不正确，请上传 JPG / PNG / WEBP 图片（不超过 5MB）', 4035)
+    }
+    // 历史脏数据（任意字符串）不能当作已核验照片，否则后台会显示裂图且签到无法核对
+    if (!isValidImageDataUrl(user.photo) && !normalizedPhoto) {
       throw new BusinessException('开卡需上传个人照片用于线下签到核验', 4034)
     }
-    if (trimmedPhoto) {
-      await this.prisma.user.update({ where: { id: userId }, data: { photo: trimmedPhoto } })
+    if (normalizedPhoto) {
+      await this.prisma.user.update({ where: { id: userId }, data: { photo: normalizedPhoto } })
+    }
+
+    // 防重：同一商品短时间重复点击/重复进入只保留一笔待支付订单
+    const pending = await this.prisma.order.findFirst({
+      where: {
+        userId,
+        orderType: 'MEMBER_CARD',
+        memberCardProductId: product.id,
+        status: 'PENDING_PAYMENT',
+        createdAt: { gt: new Date(Date.now() - SEAT_LOCK_DURATION_MINUTES * 60 * 1000) },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (pending) {
+      return { orderId: pending.id, actualPaid: Number(pending.actualPaid), reused: true }
     }
 
     const order = await this.prisma.order.create({
       data: {
-        orderNo: await generateOrderNo(this.redis, 'MEMBER_CARD'),
+        orderNo: await generateOrderNo(this.redis, 'MEMBER_CARD', this.prisma),
         userId,
         orderType: 'MEMBER_CARD',
         memberCardProductId: product.id,
@@ -177,10 +226,17 @@ export class MemberService {
     const where: any = {}
     if (query.userId) where.userId = query.userId
     if (query.status) where.status = query.status
-    return this.prisma.memberCard.findMany({
+    const cards = await this.prisma.memberCard.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       include: { user: { select: { id: true, phone: true, nickname: true, photo: true } } },
     })
+    // 照片有效性由服务端判定，后台不再尝试渲染历史脏数据
+    return cards.map((card) => ({
+      ...card,
+      user: card.user
+        ? { ...card.user, photoValid: isValidImageDataUrl(card.user.photo) }
+        : null,
+    }))
   }
 }

@@ -1,0 +1,1814 @@
+{
+  "permissions": [
+    {
+      "id": "cmrkbbsvd0000144n6dmkltpe",
+      "code": "course:view",
+      "name": "课程查看",
+      "module": "education",
+      "level": "MENU",
+      "groupName": "课程",
+      "sortOrder": 0
+    },
+    {
+      "id": "cmrkbbsvj0001144nrz356n6o",
+      "code": "course:create",
+      "name": "课程创建",
+      "module": "education",
+      "level": "ACTION",
+      "groupName": "课程",
+      "sortOrder": 1
+    },
+    {
+      "id": "cmrkbbsvo0002144n5q5oenlv",
+      "code": "course:update",
+      "name": "课程编辑",
+      "module": "education",
+      "level": "ACTION",
+      "groupName": "课程",
+      "sortOrder": 2
+    },
+    {
+      "id": "cmrkbbsvs0003144n6pdx8vaf",
+      "code": "course:delete",
+      "name": "课程删除",
+      "module": "education",
+      "level": "ACTION",
+      "groupName": "课程",
+      "sortOrder": 3
+    },
+    {
+      "id": "cmrkbbsvw0004144nu4rtb5cs",
+      "code": "waitlist:manage",
+      "name": "候补队列管理",
+      "module": "education",
+      "level": "ACTION",
+      "groupName": "课程",
+      "sortOrder": 4
+    },
+    {
+      "id": "cmrkbbsvz0005144n0wxb671u",
+      "code": "trainer:view",
+      "name": "导师查看",
+      "module": "education",
+      "level": "MENU",
+      "groupName": "导师",
+      "sortOrder": 5
+    },
+    {
+      "id": "cmrkbbsw30006144nk4x9zlvn",
+      "code": "trainer:create",
+      "name": "导师创建",
+      "module": "education",
+      "level": "ACTION",
+      "groupName": "导师",
+      "sortOrder": 6
+    },
+    {
+      "id": "cmrkbbsw70007144nxrp0atfj",
+      "code": "trainer:update",
+      "name": "导师编辑",
+      "module": "education",
+      "level": "ACTION",
+      "groupName": "导师",
+      "sortOrder": 7
+    },
+    {
+      "id": "cmrkbbswa0008144nhlg7al1m",
+      "code": "venue:view",
+      "name": "场地查看",
+      "module": "education",
+      "level": "MENU",
+      "groupName": "场地",
+      "sortOrder": 8
+    },
+    {
+      "id": "cmrkbbswe0009144ndhtwmub3",
+      "code": "venue:create",
+      "name": "场地创建",
+      "module": "education",
+      "level": "ACTION",
+      "groupName": "场地",
+      "sortOrder": 9
+    },
+    {
+      "id": "cmrkbbswi000a144n8iviqlmf",
+      "code": "venue:update",
+      "name": "场地编辑",
+      "module": "education",
+      "level": "ACTION",
+      "groupName": "场地",
+      "sortOrder": 10
+    },
+    {
+      "id": "cmrkbbswl000b144nqckgycxx",
+      "code": "venue:delete",
+      "name": "场地删除",
+      "module": "education",
+      "level": "ACTION",
+      "groupName": "场地",
+      "sortOrder": 11
+    },
+    {
+      "id": "cmrkbbswp000c144nqkuk9nsc",
+      "code": "checkin:view",
+      "name": "签到查看",
+      "module": "education",
+      "level": "MENU",
+      "groupName": "签到与评价",
+      "sortOrder": 12
+    },
+    {
+      "id": "cmrkbbswt000d144nzqtvn2vi",
+      "code": "checkin:create",
+      "name": "手工签到",
+      "module": "education",
+      "level": "ACTION",
+      "groupName": "签到与评价",
+      "sortOrder": 13
+    },
+    {
+      "id": "cmrkbbswx000e144n0eonuyfn",
+      "code": "review:view",
+      "name": "评价查看",
+      "module": "education",
+      "level": "MENU",
+      "groupName": "签到与评价",
+      "sortOrder": 14
+    },
+    {
+      "id": "cmrkbbsx1000f144n72r43udv",
+      "code": "review:delete",
+      "name": "评价删除",
+      "module": "education",
+      "level": "ACTION",
+      "groupName": "签到与评价",
+      "sortOrder": 15
+    },
+    {
+      "id": "cmrkbbsx4000g144n2auqniqm",
+      "code": "voucher:view",
+      "name": "代金券查看",
+      "module": "sales",
+      "level": "MENU",
+      "groupName": "代金券",
+      "sortOrder": 16
+    },
+    {
+      "id": "cmrkbbsx8000h144nz58y25cs",
+      "code": "voucher:create",
+      "name": "代金券发放",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "代金券",
+      "sortOrder": 17
+    },
+    {
+      "id": "cmrkbbsxc000i144nknehzw88",
+      "code": "voucher:update",
+      "name": "代金券管理",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "代金券",
+      "sortOrder": 18
+    },
+    {
+      "id": "cmrkbbsxf000j144nh5q062db",
+      "code": "task:view",
+      "name": "任务查看",
+      "module": "sales",
+      "level": "MENU",
+      "groupName": "任务与物料",
+      "sortOrder": 19
+    },
+    {
+      "id": "cmrkbbsxj000k144ndat3mvoq",
+      "code": "task:create",
+      "name": "任务发布",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "任务与物料",
+      "sortOrder": 20
+    },
+    {
+      "id": "cmrkbbsxm000l144nb0k6zos4",
+      "code": "task:update",
+      "name": "任务编辑",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "任务与物料",
+      "sortOrder": 21
+    },
+    {
+      "id": "cmrkbbsxp000m144nk7ex7dvi",
+      "code": "material:view",
+      "name": "物料查看",
+      "module": "sales",
+      "level": "MENU",
+      "groupName": "任务与物料",
+      "sortOrder": 22
+    },
+    {
+      "id": "cmrkbbsxt000n144nqjfq0fjc",
+      "code": "material:create",
+      "name": "物料创建",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "任务与物料",
+      "sortOrder": 23
+    },
+    {
+      "id": "cmrkbbsxx000o144nc2xysv7o",
+      "code": "material:update",
+      "name": "物料编辑",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "任务与物料",
+      "sortOrder": 24
+    },
+    {
+      "id": "cmrkbbsy0000p144n2pmgfmgf",
+      "code": "material:delete",
+      "name": "物料删除",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "任务与物料",
+      "sortOrder": 25
+    },
+    {
+      "id": "cmrkbbsy3000q144n9a0idjud",
+      "code": "settlement:view",
+      "name": "结算查看",
+      "module": "sales",
+      "level": "MENU",
+      "groupName": "结算",
+      "sortOrder": 26
+    },
+    {
+      "id": "cmrkbbsy6000r144ndxtiye8h",
+      "code": "settlement:create",
+      "name": "结算生成",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "结算",
+      "sortOrder": 27
+    },
+    {
+      "id": "cmrkbbsya000s144ngp64s5dq",
+      "code": "analytics:view",
+      "name": "数据分析",
+      "module": "sales",
+      "level": "MENU",
+      "groupName": "数据",
+      "sortOrder": 28
+    },
+    {
+      "id": "cmrkbbsyd000t144nwoe5exjf",
+      "code": "upload:create",
+      "name": "文件上传",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "数据",
+      "sortOrder": 29
+    },
+    {
+      "id": "cmrkbbsyh000u144nck4b3toz",
+      "code": "membercard:view",
+      "name": "会员卡查看",
+      "module": "sales",
+      "level": "MENU",
+      "groupName": "会员卡",
+      "sortOrder": 30
+    },
+    {
+      "id": "cmrkbbsyk000v144nd7fbsyjm",
+      "code": "membercard:create",
+      "name": "会员卡商品创建",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "会员卡",
+      "sortOrder": 31
+    },
+    {
+      "id": "cmrkbbsyn000w144ng0p9ke5r",
+      "code": "membercard:update",
+      "name": "会员卡管理",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "会员卡",
+      "sortOrder": 32
+    },
+    {
+      "id": "cmrkbbsyr000x144nepi8qyut",
+      "code": "order:view",
+      "name": "订单查看",
+      "module": "sales",
+      "level": "MENU",
+      "groupName": "订单与用户",
+      "sortOrder": 34
+    },
+    {
+      "id": "cmrkbbsyv000y144n5s3vab1w",
+      "code": "order:update",
+      "name": "订单管理",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "订单与用户",
+      "sortOrder": 35
+    },
+    {
+      "id": "cmrkbbsyy000z144njm2cd523",
+      "code": "order:refund",
+      "name": "订单强制退款",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "订单与用户",
+      "sortOrder": 36
+    },
+    {
+      "id": "cmrkbbsz20010144nlr5jrlb4",
+      "code": "user:view",
+      "name": "用户查看",
+      "module": "sales",
+      "level": "MENU",
+      "groupName": "订单与用户",
+      "sortOrder": 37
+    },
+    {
+      "id": "cmrkbbsz50011144nt4ncnlyu",
+      "code": "user:update",
+      "name": "用户管理",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "订单与用户",
+      "sortOrder": 38
+    },
+    {
+      "id": "cmrkbbsz90012144n9rldkxqy",
+      "code": "rbac:view",
+      "name": "权限查看",
+      "module": "system",
+      "level": "MENU",
+      "groupName": "权限管理",
+      "sortOrder": 71
+    },
+    {
+      "id": "cmrkbbszc0013144nmlbgp8y9",
+      "code": "rbac:create",
+      "name": "权限创建",
+      "module": "system",
+      "level": "ACTION",
+      "groupName": "权限管理",
+      "sortOrder": 72
+    },
+    {
+      "id": "cmrkbbszf0014144ng30rr75i",
+      "code": "rbac:update",
+      "name": "权限编辑",
+      "module": "system",
+      "level": "ACTION",
+      "groupName": "权限管理",
+      "sortOrder": 73
+    },
+    {
+      "id": "cmrkbbszj0015144nvkwui3fc",
+      "code": "rbac:delete",
+      "name": "权限删除",
+      "module": "system",
+      "level": "ACTION",
+      "groupName": "权限管理",
+      "sortOrder": 74
+    },
+    {
+      "id": "cmrkbbszn0016144nmp642ygy",
+      "code": "dict:view",
+      "name": "值集查看",
+      "module": "system",
+      "level": "MENU",
+      "groupName": "值集",
+      "sortOrder": 76
+    },
+    {
+      "id": "cmrkbbszq0017144n9jd7jnuv",
+      "code": "dict:create",
+      "name": "值集创建",
+      "module": "system",
+      "level": "ACTION",
+      "groupName": "值集",
+      "sortOrder": 77
+    },
+    {
+      "id": "cmrkbbszt0018144n1j4flny4",
+      "code": "dict:update",
+      "name": "值集编辑",
+      "module": "system",
+      "level": "ACTION",
+      "groupName": "值集",
+      "sortOrder": 78
+    },
+    {
+      "id": "cmrkbbszx0019144nwyncwwor",
+      "code": "dict:delete",
+      "name": "值集删除",
+      "module": "system",
+      "level": "ACTION",
+      "groupName": "值集",
+      "sortOrder": 79
+    },
+    {
+      "id": "cmrkbbt0b001d144nfpswc0h9",
+      "code": "banner:view",
+      "name": "首页Banner查看",
+      "module": "system",
+      "level": "MENU",
+      "groupName": "Banner",
+      "sortOrder": 80
+    },
+    {
+      "id": "cmrkbbt0f001e144ns7vo644e",
+      "code": "banner:manage",
+      "name": "首页Banner管理",
+      "module": "system",
+      "level": "ACTION",
+      "groupName": "Banner",
+      "sortOrder": 81
+    },
+    {
+      "id": "cmsn51slh0012g4bwwcckoiik",
+      "code": "org:view",
+      "name": "组织架构查看",
+      "module": "org",
+      "level": "MENU",
+      "groupName": "组织架构",
+      "sortOrder": 39
+    },
+    {
+      "id": "cmsn51sn80013g4bwl9rcr5pa",
+      "code": "org:create",
+      "name": "新增组织节点",
+      "module": "org",
+      "level": "ACTION",
+      "groupName": "组织架构",
+      "sortOrder": 40
+    },
+    {
+      "id": "cmsn51soo0014g4bwbq8rgwxh",
+      "code": "org:update",
+      "name": "编辑组织节点",
+      "module": "org",
+      "level": "ACTION",
+      "groupName": "组织架构",
+      "sortOrder": 41
+    },
+    {
+      "id": "cmsn51sq40015g4bw43u41f7g",
+      "code": "org:delete",
+      "name": "删除组织节点",
+      "module": "org",
+      "level": "ACTION",
+      "groupName": "组织架构",
+      "sortOrder": 42
+    },
+    {
+      "id": "cmsn51srl0016g4bw6e138130",
+      "code": "org:rate",
+      "name": "管理费/培训费比例（敏感）",
+      "module": "org",
+      "level": "FIELD",
+      "groupName": "组织架构",
+      "sortOrder": 43
+    },
+    {
+      "id": "cmsn51st20017g4bw9za554mu",
+      "code": "scm:po:view",
+      "name": "采购订单查看",
+      "module": "scm",
+      "level": "MENU",
+      "groupName": "采购订单",
+      "sortOrder": 44
+    },
+    {
+      "id": "cmsn51suk0018g4bw6nlln834",
+      "code": "scm:po:create",
+      "name": "发起采购申请",
+      "module": "scm",
+      "level": "ACTION",
+      "groupName": "采购订单",
+      "sortOrder": 45
+    },
+    {
+      "id": "cmsn51sw10019g4bwa0uudqop",
+      "code": "scm:po:update",
+      "name": "编辑采购订单",
+      "module": "scm",
+      "level": "ACTION",
+      "groupName": "采购订单",
+      "sortOrder": 46
+    },
+    {
+      "id": "cmsn51sxj001ag4bwr5vzemea",
+      "code": "scm:po:cancel",
+      "name": "作废采购订单",
+      "module": "scm",
+      "level": "ACTION",
+      "groupName": "采购订单",
+      "sortOrder": 47
+    },
+    {
+      "id": "cmsn51sz0001bg4bwp7kb2s4f",
+      "code": "scm:po:price",
+      "name": "采购单价与金额（敏感）",
+      "module": "scm",
+      "level": "FIELD",
+      "groupName": "采购订单",
+      "sortOrder": 48
+    },
+    {
+      "id": "cmsn51t0g001cg4bwlmsf2pf2",
+      "code": "scm:inbound:view",
+      "name": "验收入库查看",
+      "module": "scm",
+      "level": "MENU",
+      "groupName": "验收入库",
+      "sortOrder": 49
+    },
+    {
+      "id": "cmsn51t1x001dg4bwi6c98zxy",
+      "code": "scm:inbound:create",
+      "name": "执行验收入库",
+      "module": "scm",
+      "level": "ACTION",
+      "groupName": "验收入库",
+      "sortOrder": 50
+    },
+    {
+      "id": "cmsn51t3h001eg4bwyqplmuig",
+      "code": "scm:stock:view",
+      "name": "库存查看",
+      "module": "scm",
+      "level": "MENU",
+      "groupName": "库存",
+      "sortOrder": 51
+    },
+    {
+      "id": "cmsn51t4x001fg4bwc2bb6l4b",
+      "code": "scm:stock:adjust",
+      "name": "库存调整",
+      "module": "scm",
+      "level": "ACTION",
+      "groupName": "库存",
+      "sortOrder": 52
+    },
+    {
+      "id": "cmsn51t6f001gg4bwy8z31pbe",
+      "code": "scm:stock:cost",
+      "name": "库存成本金额（敏感）",
+      "module": "scm",
+      "level": "FIELD",
+      "groupName": "库存",
+      "sortOrder": 53
+    },
+    {
+      "id": "cmsn51t7w001hg4bwotolknn7",
+      "code": "finance:dashboard:view",
+      "name": "财务看板访问",
+      "module": "finance",
+      "level": "MENU",
+      "groupName": "财务看板",
+      "sortOrder": 54
+    },
+    {
+      "id": "cmsn51t9b001ig4bwcikuuk95",
+      "code": "finance:dashboard:profit",
+      "name": "利润与成本明细（敏感）",
+      "module": "finance",
+      "level": "FIELD",
+      "groupName": "财务看板",
+      "sortOrder": 55
+    },
+    {
+      "id": "cmsn51tau001jg4bw4ncctvf2",
+      "code": "finance:dashboard:export",
+      "name": "看板导出",
+      "module": "finance",
+      "level": "ACTION",
+      "groupName": "财务看板",
+      "sortOrder": 56
+    },
+    {
+      "id": "cmsn51tcb001kg4bwd6bpq182",
+      "code": "finance:revenue:view",
+      "name": "收入数据源访问",
+      "module": "finance",
+      "level": "MENU",
+      "groupName": "收入",
+      "sortOrder": 57
+    },
+    {
+      "id": "cmsn51tdr001lg4bw9ure07ck",
+      "code": "finance:revenue:sync",
+      "name": "手动触发抽取",
+      "module": "finance",
+      "level": "ACTION",
+      "groupName": "收入",
+      "sortOrder": 58
+    },
+    {
+      "id": "cmsn51tf9001mg4bwxyhyq4cx",
+      "code": "finance:revenue:import",
+      "name": "手工导入收入",
+      "module": "finance",
+      "level": "ACTION",
+      "groupName": "收入",
+      "sortOrder": 59
+    },
+    {
+      "id": "cmsn51tgp001ng4bw0ukd2utu",
+      "code": "finance:expense:view",
+      "name": "支出台账查看",
+      "module": "finance",
+      "level": "MENU",
+      "groupName": "支出",
+      "sortOrder": 60
+    },
+    {
+      "id": "cmsn51ti7001og4bw7hoo9ghp",
+      "code": "finance:expense:create",
+      "name": "录入支出",
+      "module": "finance",
+      "level": "ACTION",
+      "groupName": "支出",
+      "sortOrder": 61
+    },
+    {
+      "id": "cmsn51tjm001pg4bwqym9lun7",
+      "code": "finance:expense:update",
+      "name": "编辑支出",
+      "module": "finance",
+      "level": "ACTION",
+      "groupName": "支出",
+      "sortOrder": 62
+    },
+    {
+      "id": "cmsn51tl4001qg4bwgbkwzipq",
+      "code": "finance:expense:delete",
+      "name": "删除支出",
+      "module": "finance",
+      "level": "ACTION",
+      "groupName": "支出",
+      "sortOrder": 63
+    },
+    {
+      "id": "cmsn51tmn001rg4bwesogeacf",
+      "code": "finance:expense:import",
+      "name": "批量导入支出",
+      "module": "finance",
+      "level": "ACTION",
+      "groupName": "支出",
+      "sortOrder": 64
+    },
+    {
+      "id": "cmsn51to4001sg4bwslt77rta",
+      "code": "flow:config:view",
+      "name": "流程配置（标签页）",
+      "module": "flow",
+      "level": "TAB",
+      "groupName": "流程配置",
+      "sortOrder": 65
+    },
+    {
+      "id": "cmsn51tpl001tg4bw0u3j92ov",
+      "code": "flow:config:edit",
+      "name": "新建/编辑审批流",
+      "module": "flow",
+      "level": "ACTION",
+      "groupName": "流程配置",
+      "sortOrder": 66
+    },
+    {
+      "id": "cmsn51tr2001ug4bwd8xo9zxe",
+      "code": "flow:config:toggle",
+      "name": "启用/停用审批流",
+      "module": "flow",
+      "level": "ACTION",
+      "groupName": "流程配置",
+      "sortOrder": 67
+    },
+    {
+      "id": "cmsn51tsi001vg4bwrl9c6lm3",
+      "code": "flow:todo:view",
+      "name": "审批待办（标签页）",
+      "module": "flow",
+      "level": "TAB",
+      "groupName": "审批待办",
+      "sortOrder": 68
+    },
+    {
+      "id": "cmsn51tu1001wg4bw89ppfp79",
+      "code": "flow:todo:approve",
+      "name": "同意/驳回审批",
+      "module": "flow",
+      "level": "ACTION",
+      "groupName": "审批待办",
+      "sortOrder": 69
+    },
+    {
+      "id": "cmsn51tvh001xg4bwf4165lv3",
+      "code": "flow:instance:view",
+      "name": "审批记录（标签页）",
+      "module": "flow",
+      "level": "TAB",
+      "groupName": "审批记录",
+      "sortOrder": 70
+    },
+    {
+      "id": "cmsn51u2t0022g4bw3x1zx02l",
+      "code": "rbac:scope",
+      "name": "配置角色数据范围（敏感）",
+      "module": "system",
+      "level": "ACTION",
+      "groupName": "权限管理",
+      "sortOrder": 75
+    },
+    {
+      "id": "cmtixmcyt0029v36384rch1fz",
+      "code": "community:view",
+      "name": "社群管理查看",
+      "module": "community",
+      "level": "MENU",
+      "groupName": "社群管理",
+      "sortOrder": 82
+    },
+    {
+      "id": "cmtixmcyx002av363t78rl58k",
+      "code": "community:manage",
+      "name": "社群管理操作（创建/编辑/审核）",
+      "module": "community",
+      "level": "ACTION",
+      "groupName": "社群管理",
+      "sortOrder": 83
+    },
+    {
+      "id": "cmtsijbny000x64z7pjnwb4re",
+      "code": "membercard:timediscount",
+      "name": "时段折扣管理",
+      "module": "sales",
+      "level": "ACTION",
+      "groupName": "会员卡",
+      "sortOrder": 33
+    },
+    {
+      "id": "cmvqkg9nm0000g9q4hi0vpgk9",
+      "code": "finance:presence:view",
+      "name": "在场业务看板访问",
+      "module": "finance",
+      "level": "MENU",
+      "groupName": "在场业务",
+      "sortOrder": 65
+    },
+    {
+      "id": "cmvqkg9rm0001g9q4bpt8e2gi",
+      "code": "finance:presence:close",
+      "name": "在场台账手工关账",
+      "module": "finance",
+      "level": "ACTION",
+      "groupName": "在场业务",
+      "sortOrder": 66
+    }
+  ],
+  "rolePermissions": [
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsvd0000144n6dmkltpe"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsvd0000144n6dmkltpe"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmrkbbsvd0000144n6dmkltpe"
+    },
+    {
+      "roleId": "cmsn51v09002hg4bw0i6tuste",
+      "permissionId": "cmrkbbsvd0000144n6dmkltpe"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbsvd0000144n6dmkltpe"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmrkbbsvd0000144n6dmkltpe"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsvj0001144nrz356n6o"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsvj0001144nrz356n6o"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsvo0002144n5q5oenlv"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsvo0002144n5q5oenlv"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsvs0003144n6pdx8vaf"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsvs0003144n6pdx8vaf"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsvw0004144nu4rtb5cs"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsvw0004144nu4rtb5cs"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsvz0005144n0wxb671u"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsvz0005144n0wxb671u"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbsvz0005144n0wxb671u"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsw30006144nk4x9zlvn"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsw30006144nk4x9zlvn"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsw70007144nxrp0atfj"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsw70007144nxrp0atfj"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbswa0008144nhlg7al1m"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbswa0008144nhlg7al1m"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbswa0008144nhlg7al1m"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbswe0009144ndhtwmub3"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbswe0009144ndhtwmub3"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbswi000a144n8iviqlmf"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbswi000a144n8iviqlmf"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbswl000b144nqckgycxx"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbswl000b144nqckgycxx"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbswp000c144nqkuk9nsc"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbswp000c144nqkuk9nsc"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmrkbbswp000c144nqkuk9nsc"
+    },
+    {
+      "roleId": "cmsn51v09002hg4bw0i6tuste",
+      "permissionId": "cmrkbbswp000c144nqkuk9nsc"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbswp000c144nqkuk9nsc"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmrkbbswp000c144nqkuk9nsc"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbswt000d144nzqtvn2vi"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbswt000d144nzqtvn2vi"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmrkbbswt000d144nzqtvn2vi"
+    },
+    {
+      "roleId": "cmsn51v09002hg4bw0i6tuste",
+      "permissionId": "cmrkbbswt000d144nzqtvn2vi"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmrkbbswt000d144nzqtvn2vi"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbswx000e144n0eonuyfn"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbswx000e144n0eonuyfn"
+    },
+    {
+      "roleId": "cmsn51v09002hg4bw0i6tuste",
+      "permissionId": "cmrkbbswx000e144n0eonuyfn"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbswx000e144n0eonuyfn"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsx1000f144n72r43udv"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsx1000f144n72r43udv"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsx4000g144n2auqniqm"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsx4000g144n2auqniqm"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbsx4000g144n2auqniqm"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsx8000h144nz58y25cs"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsx8000h144nz58y25cs"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsxc000i144nknehzw88"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsxc000i144nknehzw88"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsxf000j144nh5q062db"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsxf000j144nh5q062db"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbsxf000j144nh5q062db"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsxj000k144ndat3mvoq"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsxj000k144ndat3mvoq"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsxm000l144nb0k6zos4"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsxm000l144nb0k6zos4"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsxp000m144nk7ex7dvi"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsxp000m144nk7ex7dvi"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbsxp000m144nk7ex7dvi"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsxt000n144nqjfq0fjc"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsxt000n144nqjfq0fjc"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsxx000o144nc2xysv7o"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsxx000o144nc2xysv7o"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsy0000p144n2pmgfmgf"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsy0000p144n2pmgfmgf"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsy3000q144n9a0idjud"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmrkbbsy3000q144n9a0idjud"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsy3000q144n9a0idjud"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbsy3000q144n9a0idjud"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsy6000r144ndxtiye8h"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmrkbbsy6000r144ndxtiye8h"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsy6000r144ndxtiye8h"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsya000s144ngp64s5dq"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmrkbbsya000s144ngp64s5dq"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsya000s144ngp64s5dq"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbsya000s144ngp64s5dq"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsyd000t144nwoe5exjf"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsyd000t144nwoe5exjf"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsyh000u144nck4b3toz"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsyh000u144nck4b3toz"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbsyh000u144nck4b3toz"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsyk000v144nd7fbsyjm"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsyk000v144nd7fbsyjm"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsyn000w144ng0p9ke5r"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsyn000w144ng0p9ke5r"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsyr000x144nepi8qyut"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsyr000x144nepi8qyut"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmrkbbsyr000x144nepi8qyut"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbsyr000x144nepi8qyut"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmrkbbsyr000x144nepi8qyut"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsyv000y144n5s3vab1w"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsyv000y144n5s3vab1w"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsyy000z144njm2cd523"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsyy000z144njm2cd523"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsz20010144nlr5jrlb4"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsz20010144nlr5jrlb4"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmrkbbsz20010144nlr5jrlb4"
+    },
+    {
+      "roleId": "cmsn51v09002hg4bw0i6tuste",
+      "permissionId": "cmrkbbsz20010144nlr5jrlb4"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbsz20010144nlr5jrlb4"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmrkbbsz20010144nlr5jrlb4"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsz50011144nt4ncnlyu"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmrkbbsz50011144nt4ncnlyu"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbsz90012144n9rldkxqy"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbsz90012144n9rldkxqy"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbszc0013144nmlbgp8y9"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbszf0014144ng30rr75i"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbszj0015144nvkwui3fc"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbszn0016144nmp642ygy"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbszn0016144nmp642ygy"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbszq0017144n9jd7jnuv"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbszt0018144n1j4flny4"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbszx0019144nwyncwwor"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbt0b001d144nfpswc0h9"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmrkbbt0b001d144nfpswc0h9"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmrkbbt0f001e144ns7vo644e"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51slh0012g4bwwcckoiik"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51slh0012g4bwwcckoiik"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51slh0012g4bwwcckoiik"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmsn51slh0012g4bwwcckoiik"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51slh0012g4bwwcckoiik"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51slh0012g4bwwcckoiik"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51sn80013g4bwl9rcr5pa"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51soo0014g4bwbq8rgwxh"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51sq40015g4bw43u41f7g"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51srl0016g4bw6e138130"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51srl0016g4bw6e138130"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51srl0016g4bw6e138130"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51st20017g4bw9za554mu"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51st20017g4bw9za554mu"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51st20017g4bw9za554mu"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmsn51st20017g4bw9za554mu"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51st20017g4bw9za554mu"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51st20017g4bw9za554mu"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51suk0018g4bw6nlln834"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51suk0018g4bw6nlln834"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmsn51suk0018g4bw6nlln834"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51suk0018g4bw6nlln834"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51sw10019g4bwa0uudqop"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51sw10019g4bwa0uudqop"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51sxj001ag4bwr5vzemea"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51sxj001ag4bwr5vzemea"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51sz0001bg4bwp7kb2s4f"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51sz0001bg4bwp7kb2s4f"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51sz0001bg4bwp7kb2s4f"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51sz0001bg4bwp7kb2s4f"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51sz0001bg4bwp7kb2s4f"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51t0g001cg4bwlmsf2pf2"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51t0g001cg4bwlmsf2pf2"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51t0g001cg4bwlmsf2pf2"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmsn51t0g001cg4bwlmsf2pf2"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51t0g001cg4bwlmsf2pf2"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51t0g001cg4bwlmsf2pf2"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51t1x001dg4bwi6c98zxy"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51t1x001dg4bwi6c98zxy"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmsn51t1x001dg4bwi6c98zxy"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51t1x001dg4bwi6c98zxy"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51t3h001eg4bwyqplmuig"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51t3h001eg4bwyqplmuig"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51t3h001eg4bwyqplmuig"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmsn51t3h001eg4bwyqplmuig"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51t3h001eg4bwyqplmuig"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51t3h001eg4bwyqplmuig"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51t4x001fg4bwc2bb6l4b"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51t4x001fg4bwc2bb6l4b"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51t6f001gg4bwy8z31pbe"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51t6f001gg4bwy8z31pbe"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51t6f001gg4bwy8z31pbe"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51t6f001gg4bwy8z31pbe"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51t7w001hg4bwotolknn7"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51t7w001hg4bwotolknn7"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmsn51t7w001hg4bwotolknn7"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51t7w001hg4bwotolknn7"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51t7w001hg4bwotolknn7"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51t9b001ig4bwcikuuk95"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51t9b001ig4bwcikuuk95"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51t9b001ig4bwcikuuk95"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tau001jg4bw4ncctvf2"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51tau001jg4bw4ncctvf2"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tcb001kg4bwd6bpq182"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51tcb001kg4bwd6bpq182"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmsn51tcb001kg4bwd6bpq182"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51tcb001kg4bwd6bpq182"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51tcb001kg4bwd6bpq182"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tdr001lg4bw9ure07ck"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51tdr001lg4bw9ure07ck"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tf9001mg4bwxyhyq4cx"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51tf9001mg4bwxyhyq4cx"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tgp001ng4bw0ukd2utu"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51tgp001ng4bw0ukd2utu"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmsn51tgp001ng4bw0ukd2utu"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51tgp001ng4bw0ukd2utu"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51tgp001ng4bw0ukd2utu"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51ti7001og4bw7hoo9ghp"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51ti7001og4bw7hoo9ghp"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmsn51ti7001og4bw7hoo9ghp"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51ti7001og4bw7hoo9ghp"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tjm001pg4bwqym9lun7"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51tjm001pg4bwqym9lun7"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tl4001qg4bwgbkwzipq"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51tl4001qg4bwgbkwzipq"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tmn001rg4bwesogeacf"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51tmn001rg4bwesogeacf"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51to4001sg4bwslt77rta"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51to4001sg4bwslt77rta"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51to4001sg4bwslt77rta"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51to4001sg4bwslt77rta"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tpl001tg4bw0u3j92ov"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tr2001ug4bwd8xo9zxe"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tsi001vg4bwrl9c6lm3"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51tsi001vg4bwrl9c6lm3"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51tsi001vg4bwrl9c6lm3"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmsn51tsi001vg4bwrl9c6lm3"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmsn51tsi001vg4bwrl9c6lm3"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51tsi001vg4bwrl9c6lm3"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51tsi001vg4bwrl9c6lm3"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tu1001wg4bw89ppfp79"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51tu1001wg4bw89ppfp79"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51tu1001wg4bw89ppfp79"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmsn51tu1001wg4bw89ppfp79"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51tu1001wg4bw89ppfp79"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51tvh001xg4bwf4165lv3"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmsn51tvh001xg4bwf4165lv3"
+    },
+    {
+      "roleId": "cmsn51uqv002eg4bw82gx85h3",
+      "permissionId": "cmsn51tvh001xg4bwf4165lv3"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmsn51tvh001xg4bwf4165lv3"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmsn51tvh001xg4bwf4165lv3"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmsn51tvh001xg4bwf4165lv3"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmsn51u2t0022g4bw3x1zx02l"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmtixmcyt0029v36384rch1fz"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmtixmcyx002av363t78rl58k"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmtsijbny000x64z7pjnwb4re"
+    },
+    {
+      "roleId": "cmsn51uu2002fg4bwv0ee3ct6",
+      "permissionId": "cmtsijbny000x64z7pjnwb4re"
+    },
+    {
+      "roleId": "cmrkbbt0l001f144nvtelif6y",
+      "permissionId": "cmvqkg9nm0000g9q4hi0vpgk9"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmvqkg9nm0000g9q4hi0vpgk9"
+    },
+    {
+      "roleId": "cmsn51ux8002gg4bw8jepph2q",
+      "permissionId": "cmvqkg9nm0000g9q4hi0vpgk9"
+    },
+    {
+      "roleId": "cmsn51v37002ig4bw3zn46x95",
+      "permissionId": "cmvqkg9nm0000g9q4hi0vpgk9"
+    },
+    {
+      "roleId": "cmsnbt28d002gw6d4wy1avrx8",
+      "permissionId": "cmvqkg9nm0000g9q4hi0vpgk9"
+    },
+    {
+      "roleId": "cmsn51unj002dg4bwzf54kz8f",
+      "permissionId": "cmvqkg9rm0001g9q4bpt8e2gi"
+    }
+  ],
+  "roles": [
+    {
+      "id": "cmrkbbt0l001f144nvtelif6y",
+      "name": "SUPER_ADMIN",
+      "description": "超级管理员 · 拥有全部权限与全部组织数据，不受任何限制",
+      "dataScope": "ALL",
+      "isBuiltin": true,
+      "createdAt": "2026-07-14T07:11:23.302Z"
+    },
+    {
+      "id": "cmsn51unj002dg4bwzf54kz8f",
+      "name": "HQ_FINANCE",
+      "description": "总部财务 · 财务模块全部权限、进销存查看（含金额）、审批待办处理，可见全部组织",
+      "dataScope": "ALL",
+      "isBuiltin": true,
+      "createdAt": "2026-08-10T11:18:42.032Z"
+    },
+    {
+      "id": "cmsn51uqv002eg4bw82gx85h3",
+      "name": "HQ_PURCHASE",
+      "description": "总部采购 · 进销存全部权限与审批处理，可见全部组织；不可见财务利润",
+      "dataScope": "ALL",
+      "isBuiltin": true,
+      "createdAt": "2026-08-10T11:18:42.152Z"
+    },
+    {
+      "id": "cmsn51uu2002fg4bwv0ee3ct6",
+      "name": "HQ_OPERATION",
+      "description": "总部运营 · 教务与运营销售全部权限，不涉及财务与进销存",
+      "dataScope": "ALL",
+      "isBuiltin": true,
+      "createdAt": "2026-08-10T11:18:42.267Z"
+    },
+    {
+      "id": "cmsn51ux8002gg4bw8jepph2q",
+      "name": "STORE_MANAGER",
+      "description": "门店店长 · 本店及下级：可发起采购、验收入库、查看库存与本店收支；看不到利润明细与采购成本价",
+      "dataScope": "OWN_AND_SUB",
+      "isBuiltin": true,
+      "createdAt": "2026-08-10T11:18:42.380Z"
+    },
+    {
+      "id": "cmsn51v09002hg4bw0i6tuste",
+      "name": "STORE_STAFF",
+      "description": "门店员工 · 仅本组织：课程签到与基础查看，无任何财务与采购权限",
+      "dataScope": "OWN",
+      "isBuiltin": true,
+      "createdAt": "2026-08-10T11:18:42.490Z"
+    },
+    {
+      "id": "cmsn51v37002ig4bw3zn46x95",
+      "name": "AUDITOR",
+      "description": "只读审计 · 全部模块只读（含敏感金额），不能做任何写操作",
+      "dataScope": "ALL",
+      "isBuiltin": true,
+      "createdAt": "2026-08-10T11:18:42.595Z"
+    },
+    {
+      "id": "cmsnbt28d002gw6d4wy1avrx8",
+      "name": "BRANCH_MANAGER",
+      "description": "分公司负责人 · 本公司及下属门店：店长全部能力，额外可审批待办并查看采购金额；不可见利润明细",
+      "dataScope": "OWN_AND_SUB",
+      "isBuiltin": true,
+      "createdAt": "2026-08-10T14:27:49.262Z"
+    }
+  ]
+}

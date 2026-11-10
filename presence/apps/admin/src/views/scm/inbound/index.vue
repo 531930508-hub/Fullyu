@@ -52,9 +52,16 @@
     <!-- 入库记录 -->
     <a-card title="入库记录">
       <a-space style="margin-bottom: 16px" wrap>
-        <a-select v-model:value="query.warehouseId" style="width: 180px" placeholder="全部仓库" allow-clear @change="loadReceipts">
-          <a-select-option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.shortName }}</a-select-option>
-        </a-select>
+        <a-select
+          v-model:value="query.warehouseId"
+          style="width: 220px"
+          placeholder="全部库存地点"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          :options="locationOptions"
+          @change="loadReceipts"
+        />
         <a-button @click="loadReceipts">刷新</a-button>
       </a-space>
       <a-table
@@ -67,7 +74,7 @@
         :pagination="{ pageSize: 10 }"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'warehouse'">{{ orgName(record.warehouseId) }}</template>
+          <template v-if="column.key === 'warehouse'">{{ record.warehouseName }}</template>
           <template v-else-if="column.key === 'items'">{{ record.items.length }} 项</template>
           <template v-else-if="column.key === 'hasDiff'">
             <a-tag :color="record.hasDiff ? 'orange' : 'green'">{{ record.hasDiff ? '有差异' : '全部合格' }}</a-tag>
@@ -100,39 +107,63 @@
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="入库仓库" help="默认入到采购方自己的仓库">
-              <a-select v-model:value="form.warehouseId" allow-clear placeholder="默认采购方仓库">
-                <a-select-option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.shortName }}</a-select-option>
-              </a-select>
+            <a-form-item label="入库地点" help="默认入到采购方自有仓；料体寄存在供应商处时可改选供应商地点">
+              <a-select
+                v-model:value="form.warehouseId"
+                allow-clear
+                show-search
+                option-filter-prop="label"
+                placeholder="默认采购方自有仓"
+                :options="locationOptions"
+              />
             </a-form-item>
           </a-col>
         </a-row>
 
         <a-form-item label="验收明细">
           <a-empty v-if="!form.items.length" description="请先选择采购单" />
-          <div v-for="line in form.items" :key="line.productId" class="gr-line">
-            <div class="gr-name">
-              {{ line.name }}
-              <span class="gr-sub">已收 {{ line.receivedQty }} / 订购 {{ line.qty }}，待收 {{ line.pendingQty }}{{ line.unit }}</span>
+          <div v-for="line in form.items" :key="line.productId" class="gr-item">
+            <div class="gr-line">
+              <div class="gr-name">
+                {{ line.name }}
+                <span class="gr-sub">已收 {{ line.receivedQty }} / 订购 {{ line.qty }}，待收 {{ line.pendingQty }}{{ line.unit }}</span>
+              </div>
+              <a-input-number
+                v-model:value="line.acceptQty"
+                :min="0"
+                :max="line.pendingQty"
+                :precision="3"
+                placeholder="实收"
+                style="width: 100px"
+              />
+              <a-input-number
+                v-model:value="line.rejectQty"
+                :min="0"
+                :precision="3"
+                placeholder="拒收"
+                style="width: 100px"
+              />
+              <a-input v-model:value="line.reason" placeholder="差异原因" style="width: 200px" />
             </div>
-            <a-input-number
-              v-model:value="line.acceptQty"
-              :min="0"
-              :max="line.pendingQty"
-              :precision="0"
-              placeholder="实收"
-              style="width: 100px"
-            />
-            <a-input-number
-              v-model:value="line.rejectQty"
-              :min="0"
-              :precision="0"
-              placeholder="拒收"
-              style="width: 100px"
-            />
-            <a-input v-model:value="line.reason" placeholder="差异原因" style="width: 200px" />
+            <div class="gr-batch">
+              <a-input v-model:value="line.batchNo" placeholder="批号（留空按入库单号）" style="width: 220px" />
+              <a-date-picker
+                v-model:value="line.productionDate"
+                value-format="YYYY-MM-DD"
+                placeholder="生产日期"
+                style="width: 150px"
+              />
+              <a-date-picker
+                v-model:value="line.expiryDate"
+                value-format="YYYY-MM-DD"
+                placeholder="到期日（留空按保质期推算）"
+                style="width: 230px"
+              />
+            </div>
           </div>
-          <div v-if="form.items.length" class="gr-tip">实收为 0 的行不会入库；拒收数量仅作记录，不写入库存。</div>
+          <div v-if="form.items.length" class="gr-tip">
+            实收为 0 的行不会入库；拒收数量仅作记录，不写入库存。批号与效期用于后续先到期先出与临期预警。
+          </div>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -143,7 +174,7 @@
         <a-descriptions :column="1" bordered size="small" style="margin-bottom: 16px">
           <a-descriptions-item label="入库单号">{{ grCurrent.id }}</a-descriptions-item>
           <a-descriptions-item label="关联采购单">{{ grCurrent.poId }}</a-descriptions-item>
-          <a-descriptions-item label="入库仓库">{{ orgName(grCurrent.warehouseId) }}</a-descriptions-item>
+          <a-descriptions-item label="入库地点">{{ grCurrent.warehouseName }}</a-descriptions-item>
           <a-descriptions-item label="操作人">{{ grCurrent.operatorName || grCurrent.operator }}</a-descriptions-item>
           <a-descriptions-item label="入库时间">{{ dt(grCurrent.createdAt) }}</a-descriptions-item>
         </a-descriptions>
@@ -153,26 +184,36 @@
           row-key="productId"
           size="small"
           :pagination="false"
-        />
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'batchNo'">{{ record.batchNo || '—' }}</template>
+            <template v-else-if="column.key === 'expiryDate'">
+              {{ record.expiryDate ? record.expiryDate.slice(0, 10) : '—' }}
+            </template>
+          </template>
+        </a-table>
       </template>
     </a-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { InboxOutlined } from '@ant-design/icons-vue'
-import { PO_STATUS_META, SUPPLIER_TYPE_NAMES } from '@fullyu/shared'
+import { LOCATION_TYPE_NAMES, PO_STATUS_META, SUPPLIER_TYPE_NAMES } from '@fullyu/shared'
 import type { PurchaseOrderStatus, PurchaseSupplierType } from '@fullyu/shared'
-import { createReceipt, listReceipts, listReceivableOrders } from '@/api/scm'
-import type { GoodsReceipt, PurchaseOrder } from '@/api/scm'
-import { listOrgOptions } from '@/api/org'
-import type { OrgOption } from '@/api/org'
+import { createReceipt, listLocations, listReceipts, listReceivableOrders } from '@/api/scm'
+import type { GoodsReceipt, PurchaseOrder, ScmLocation } from '@/api/scm'
 import { dt } from '@/utils/format'
 
-const warehouses = ref<OrgOption[]>([])
-const orgName = (id: string) => warehouses.value.find((w) => w.id === id)?.shortName ?? id
+const locations = ref<ScmLocation[]>([])
+const locationOptions = computed(() =>
+  locations.value.map((l) => ({
+    value: l.id,
+    label: l.type === 'OWN' ? l.name : `${l.name}（${LOCATION_TYPE_NAMES[l.type]}）`,
+  })),
+)
 
 /* ===== 待收货 ===== */
 const receivable = ref<PurchaseOrder[]>([])
@@ -212,7 +253,7 @@ const query = reactive<{ warehouseId?: string }>({})
 const grColumns = [
   { title: '入库单号', dataIndex: 'id', width: 160 },
   { title: '采购单', dataIndex: 'poId', width: 160 },
-  { title: '仓库', key: 'warehouse', width: 120 },
+  { title: '入库地点', key: 'warehouse', width: 150 },
   { title: '明细', key: 'items', width: 80 },
   { title: '验收结果', key: 'hasDiff', width: 110 },
   { title: '操作人', dataIndex: 'operatorName', width: 110 },
@@ -225,6 +266,8 @@ const grItemColumns = [
   { title: '单位', dataIndex: 'unit', width: 70 },
   { title: '实收', dataIndex: 'acceptQty', width: 70 },
   { title: '拒收', dataIndex: 'rejectQty', width: 70 },
+  { title: '批号', key: 'batchNo', width: 160 },
+  { title: '到期日', key: 'expiryDate', width: 110 },
   { title: '差异原因', dataIndex: 'reason' },
 ]
 
@@ -250,6 +293,9 @@ interface GrLine {
   acceptQty: number
   rejectQty: number
   reason: string
+  batchNo: string
+  productionDate: string | undefined
+  expiryDate: string | undefined
 }
 
 const receiveOpen = ref(false)
@@ -276,6 +322,9 @@ function fillItems(poId: string) {
         acceptQty: pendingQty,
         rejectQty: 0,
         reason: '',
+        batchNo: '',
+        productionDate: undefined,
+        expiryDate: undefined,
       }
     })
     .filter((it) => it.pendingQty > 0)
@@ -309,6 +358,9 @@ async function submitReceive() {
         acceptQty: it.acceptQty ?? 0,
         rejectQty: it.rejectQty ?? 0,
         reason: it.reason,
+        batchNo: it.batchNo.trim() || undefined,
+        productionDate: it.productionDate || undefined,
+        expiryDate: it.expiryDate || undefined,
       })),
     })
     message.success('已入库，库存与流水已更新')
@@ -331,9 +383,9 @@ function openGrDetail(gr: GoodsReceipt) {
 
 onMounted(async () => {
   try {
-    warehouses.value = await listOrgOptions({ warehouse: 1 })
+    locations.value = await listLocations()
   } catch (e: any) {
-    message.error(e?.message || '仓库列表加载失败')
+    message.error(e?.message || '库存地点加载失败')
   }
   await Promise.all([loadReceivable(), loadReceipts()])
 })

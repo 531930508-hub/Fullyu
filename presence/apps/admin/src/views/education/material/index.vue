@@ -35,7 +35,7 @@
             ¥{{ Number(record.unitPrice).toFixed(2) }}
           </template>
           <template v-if="column.dataIndex === 'seedsCost'">
-            <span style="color: #F39C12;">{{ record.seedsCost }} Seeds</span>
+            <span style="color: #F39C12;">{{ record.seedsCost }} 积分</span>
           </template>
           <template v-if="column.dataIndex === 'action'">
             <a-space>
@@ -72,7 +72,7 @@
           <a-col :span="12"><a-form-item label="库存数量"><a-input-number v-model:value="form.quantity" :min="0" style="width: 100%" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="单价（元）"><a-input-number v-model:value="form.unitPrice" :min="0" :precision="2" style="width: 100%" /></a-form-item></a-col>
         </a-row>
-        <a-form-item label="所需 Seeds"><a-input-number v-model:value="form.seedsCost" :min="0" style="width: 100%" /></a-form-item>
+        <a-form-item label="所需积分"><a-input-number v-model:value="form.seedsCost" :min="0" style="width: 100%" /></a-form-item>
       </a-form>
     </a-modal>
   </div>
@@ -93,7 +93,7 @@ const columns = [
   { title: '物料属性', dataIndex: 'usageType', width: 120 },
   { title: '库存数量', dataIndex: 'quantity', width: 120 },
   { title: '单价', dataIndex: 'unitPrice', width: 120 },
-  { title: '所需 Seeds', dataIndex: 'seedsCost', width: 120 },
+  { title: '所需积分', dataIndex: 'seedsCost', width: 120 },
   { title: '操作', dataIndex: 'action', width: 160 },
 ]
 

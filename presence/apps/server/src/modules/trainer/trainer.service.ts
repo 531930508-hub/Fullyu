@@ -268,13 +268,13 @@ export class TrainerService {
     return out
   }
 
-  /** 调整导师 Seeds 余额（后台手动） */
+  /** 调整导师积分余额（后台手动） */
   async adjustSeeds(id: string, amount: number, reason: string) {
     return this.prisma.$transaction(async (tx) => {
       const trainer = await tx.trainerProfile.findUnique({ where: { id } })
       if (!trainer) throw new BusinessException('导师不存在', 4040)
       const balance = trainer.seedsBalance + amount
-      if (balance < 0) throw new BusinessException('Seeds 余额不足', 4042)
+      if (balance < 0) throw new BusinessException('积分余额不足', 4042)
       await tx.seedsRecord.create({
         data: { trainerId: id, amount, balance, type: 'ADMIN_ADJUST', reason },
       })

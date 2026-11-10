@@ -2,7 +2,7 @@
  * 微信小程序原生能力封装：登录、支付、订阅消息
  */
 import type { JsapiPayParams } from '@/api/payment'
-import { createJsapiPayment } from '@/api/payment'
+import { createJsapiPayment, getPaymentStatus } from '@/api/payment'
 
 /** uni.login 获取临时登录凭证 code */
 export function wxLogin(): Promise<string> {
@@ -44,12 +44,21 @@ export function requestSubscribeMessage(tmplIds: string[]): Promise<Record<strin
       resolve({})
       return
     }
-    uni.requestSubscribeMessage({
-      tmplIds,
-      success: (res) => resolve(res as unknown as Record<string, string>),
-      // 用户拒绝授权不阻断主流程
-      fail: () => resolve({}),
-    })
+    // H5 等非微信环境无此 API：静默跳过，不影响主流程
+    if (typeof uni.requestSubscribeMessage !== 'function') {
+      resolve({})
+      return
+    }
+    try {
+      uni.requestSubscribeMessage({
+        tmplIds,
+        success: (res: unknown) => resolve(res as Record<string, string>),
+        // 用户拒绝授权不阻断主流程
+        fail: () => resolve({}),
+      })
+    } catch {
+      resolve({})
+    }
   })
 }
 
@@ -59,5 +68,24 @@ export function requestSubscribeMessage(tmplIds: string[]): Promise<Record<strin
  */
 export async function payOrder(orderId: string): Promise<void> {
   const params = await createJsapiPayment(orderId)
+  // 积分/代金券全额抵扣：服务端已直接完成支付，无需调起微信收银台
+  if ('zeroAmount' in params && params.zeroAmount) return
   await requestPayment(params)
+}
+
+/** 视为「已付款」的订单状态（含支付后进入退款流程的订单） */
+const PAID_ORDER_STATUSES = ['PAID', 'COMPLETED', 'REFUNDING', 'REFUNDED', 'CONVERTED']
+
+/**
+ * 以服务端订单状态为准确认支付结果。
+ * 微信 requestPayment 回调可能因切后台、网络抖动丢失，或支付回调落库略晚于客户端，
+ * 此时不能直接提示「支付未完成」，需先核对订单状态。
+ */
+export async function isOrderPaid(orderId: string): Promise<boolean> {
+  try {
+    const { status } = await getPaymentStatus(orderId)
+    return PAID_ORDER_STATUSES.includes(status)
+  } catch {
+    return false
+  }
 }

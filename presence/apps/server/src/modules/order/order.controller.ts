@@ -48,6 +48,12 @@ export class OrderController {
     return this.orderService.findByUser(req.user.userId, status)
   }
 
+  @Get('next-course')
+  @ApiOperation({ summary: '首页下一场已支付课程' })
+  async nextCourse(@Request() req: any) {
+    return this.orderService.findNextCourse(req.user.userId)
+  }
+
   @Post(':id/cancel')
   @ApiOperation({ summary: '取消订单' })
   async cancel(
@@ -56,5 +62,11 @@ export class OrderController {
     @Body() body: { reason: string },
   ) {
     return this.orderService.cancelOrder(id, req.user.userId, body.reason)
+  }
+
+  @Get(':id/refund-preview')
+  @ApiOperation({ summary: '自助取消前的退款金额预览（不动单）' })
+  async refundPreview(@Request() req: any, @Param('id') id: string) {
+    return this.orderService.refundPreview(id, req.user.userId)
   }
 }

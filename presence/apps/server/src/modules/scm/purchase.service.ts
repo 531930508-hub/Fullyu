@@ -9,6 +9,9 @@ import { buildOrgScope } from '../../common/utils/data-scope.util'
 import type { AdminContext } from '../auth/admin-jwt.strategy'
 import { ApprovalService } from '../approval/approval.service'
 import { StockService } from './stock.service'
+import { ScmLocationService } from './scm-location.service'
+import { ScmPriceService } from './scm-price.service'
+import { money2, qty3 } from './scm.util'
 
 export interface PurchaseItemInput {
   productId: string
@@ -29,7 +32,16 @@ export interface CreateReceiptInput {
   poId: string
   /** 收货仓库，默认取采购方组织 */
   warehouseId?: string
-  items: { productId: string; acceptQty: number; rejectQty?: number; reason?: string }[]
+  items: {
+    productId: string
+    acceptQty: number
+    rejectQty?: number
+    reason?: string
+    /** 批号与效期；不填批号时用验收单号落账，效期按商品保质期推算 */
+    batchNo?: string
+    productionDate?: string | null
+    expiryDate?: string | null
+  }[]
 }
 
 const orderInclude = { items: { orderBy: { name: 'asc' } } } satisfies Prisma.PurchaseOrderInclude
@@ -47,6 +59,8 @@ export class PurchaseService {
     private readonly redis: RedisService,
     private readonly approvalService: ApprovalService,
     private readonly stockService: StockService,
+    private readonly locationService: ScmLocationService,
+    private readonly priceService: ScmPriceService,
   ) {}
 
   // ===== 采购订单 =====
@@ -75,8 +89,9 @@ export class PurchaseService {
       take: 200,
       include: orderInclude,
     })
+    const buyers = await this.loadBuyers(rows.map((row) => row.buyerId))
     const canSeePrice = hasPermission(admin.permissions, 'scm:po:price')
-    return rows.map((row) => this.toOrderDto(row, canSeePrice))
+    return rows.map((row) => this.toOrderDto(row, canSeePrice, buyers.get(row.buyerId)))
   }
 
   async detail(admin: AdminContext, id: string) {
@@ -84,7 +99,8 @@ export class PurchaseService {
     if (!row) throw new BusinessException('采购单不存在', 4240)
     const scope = await buildOrgScope(this.prisma, admin)
     scope.assertWritable(row.buyerId)
-    return this.toOrderDto(row, hasPermission(admin.permissions, 'scm:po:price'))
+    const buyer = await this.prisma.organization.findUnique({ where: { id: row.buyerId } })
+    return this.toOrderDto(row, hasPermission(admin.permissions, 'scm:po:price'), buyer)
   }
 
   async create(admin: AdminContext, input: CreatePurchaseOrderInput) {
@@ -94,8 +110,9 @@ export class PurchaseService {
     const buyer = await this.prisma.organization.findUnique({ where: { id: input.buyerId } })
     if (!buyer) throw new BusinessException('采购方组织不存在', 4241)
     if (!buyer.canPurchase) throw new BusinessException(`${buyer.shortName} 未开启采购权限`, 4242)
+    this.assertSupplierRule(buyer, input.supplierType)
 
-    const items = await this.buildItems(admin, input.items, input.supplierType)
+    const items = await this.buildItems(admin, input.items, input.supplierType, buyer.type)
     const totalAmount = sumPurchaseAmount(items)
     const supplierName = await this.resolveSupplierName(input.supplierType, input.supplierId)
 
@@ -137,7 +154,7 @@ export class PurchaseService {
         : { status: 'APPROVED', flowName: '' },
       include: orderInclude,
     })
-    return this.toOrderDto(row, hasPermission(admin.permissions, 'scm:po:price'))
+    return this.toOrderDto(row, hasPermission(admin.permissions, 'scm:po:price'), buyer)
   }
 
   /** 驳回后可改单重提；已在审批中或已收货的单不允许改 */
@@ -150,7 +167,11 @@ export class PurchaseService {
       throw new BusinessException('仅已驳回或已取消的采购单可以修改后重提', 4243)
     }
 
-    const items = await this.buildItems(admin, input.items, input.supplierType)
+    const buyer = await this.prisma.organization.findUnique({ where: { id: current.buyerId } })
+    if (!buyer) throw new BusinessException('采购方组织不存在', 4241)
+    this.assertSupplierRule(buyer, input.supplierType)
+
+    const items = await this.buildItems(admin, input.items, input.supplierType, buyer.type)
     const totalAmount = sumPurchaseAmount(items)
     const supplierName = await this.resolveSupplierName(input.supplierType, input.supplierId)
 
@@ -187,7 +208,7 @@ export class PurchaseService {
         : { status: 'APPROVED', flowName: '' },
       include: orderInclude,
     })
-    return this.toOrderDto(row, hasPermission(admin.permissions, 'scm:po:price'))
+    return this.toOrderDto(row, hasPermission(admin.permissions, 'scm:po:price'), buyer)
   }
 
   /** 作废：已入过货的单不能作废，否则库存与单据对不上 */
@@ -202,7 +223,7 @@ export class PurchaseService {
     if (current.status === 'COMPLETED' || current.status === 'CANCELLED') {
       throw new BusinessException('该采购单已结束，无需作废', 4244)
     }
-    if (current.items.some((it) => it.receivedQty > 0)) {
+    if (current.items.some((it) => Number(it.receivedQty) > 0)) {
       throw new BusinessException('该采购单已有入库记录，不能作废', 4245)
     }
     const row = await this.prisma.purchaseOrder.update({
@@ -210,7 +231,8 @@ export class PurchaseService {
       data: { status: 'CANCELLED' },
       include: orderInclude,
     })
-    return this.toOrderDto(row, hasPermission(admin.permissions, 'scm:po:price'))
+    const buyer = await this.prisma.organization.findUnique({ where: { id: row.buyerId } })
+    return this.toOrderDto(row, hasPermission(admin.permissions, 'scm:po:price'), buyer)
   }
 
   // ===== 验收入库 =====
@@ -223,17 +245,19 @@ export class PurchaseService {
       orderBy: { createdAt: 'asc' },
       include: orderInclude,
     })
+    const buyers = await this.loadBuyers(rows.map((row) => row.buyerId))
     const canSeePrice = hasPermission(admin.permissions, 'scm:po:price')
-    return rows.map((row) => this.toOrderDto(row, canSeePrice))
+    return rows.map((row) => this.toOrderDto(row, canSeePrice, buyers.get(row.buyerId)))
   }
 
   async listReceipts(admin: AdminContext, query: { poId?: string; warehouseId?: string } = {}) {
     const scope = await buildOrgScope(this.prisma, admin)
-    const where: Prisma.GoodsReceiptWhereInput = { ...scope.toWhere('warehouseId') }
+    const where: Prisma.GoodsReceiptWhereInput = { ...scope.toWhere('ownerOrgId') }
     if (query.poId) where.poId = query.poId
     if (query.warehouseId) {
-      scope.assertWritable(query.warehouseId)
-      where.warehouseId = query.warehouseId
+      const location = await this.locationService.resolveLocation(query.warehouseId)
+      scope.assertWritable(this.locationService.ownerOf(location))
+      where.warehouseId = location.id
     }
     const rows = await this.prisma.goodsReceipt.findMany({
       where,
@@ -241,12 +265,26 @@ export class PurchaseService {
       take: 200,
       include: { items: true },
     })
-    return rows
+    const locations = await this.locationService.nameMap(rows.map((row) => row.warehouseId))
+    return rows.map((row) => ({
+      ...row,
+      warehouseName: locations.get(row.warehouseId)?.name ?? row.warehouseId,
+      items: row.items.map((it) => ({
+        ...it,
+        orderedQty: qty3(it.orderedQty),
+        acceptQty: qty3(it.acceptQty),
+        rejectQty: qty3(it.rejectQty),
+      })),
+    }))
   }
 
   /**
    * 执行验收入库。整个过程一个事务：
    * 写验收单 → 累加已收数 → 增库存与流水 → 按累计收货量推采购单状态。
+   *
+   * 收货地点可以是自有仓，也可以是供应商/代工厂存货点（直接入在对方处）。
+   * 向总部订货时，若总部自己也有该商品的结存，同步扣减总部库存；
+   * 总部没有结存则视为总部直发（代发），只增收货方，不凭空造出负库存。
    */
   async createReceipt(admin: AdminContext, input: CreateReceiptInput) {
     const po = await this.prisma.purchaseOrder.findUnique({
@@ -258,42 +296,69 @@ export class PurchaseService {
       throw new BusinessException('该采购单当前状态不允许收货', 4246)
     }
 
-    const warehouseId = input.warehouseId || po.buyerId
+    const locationId = input.warehouseId || po.buyerId
+    const location = await this.locationService.resolveLocation(locationId)
+    if (!location.enabled) throw new BusinessException('收货地点已停用', 4278)
+    const ownerOrgId = this.locationService.ownerOf(location)
     const scope = await buildOrgScope(this.prisma, admin)
-    scope.assertWritable(warehouseId)
-    const warehouse = await this.prisma.organization.findUnique({ where: { id: warehouseId } })
-    if (!warehouse) throw new BusinessException('收货仓库不存在', 4247)
-    if (!warehouse.hasWarehouse) {
-      throw new BusinessException(`${warehouse.shortName} 未开启独立仓库`, 4248)
-    }
+    scope.assertWritable(ownerOrgId)
 
-    const lines = (input.items ?? []).filter((it) => Number(it.acceptQty) > 0 || Number(it.rejectQty) > 0)
+    const lines = (input.items ?? []).filter(
+      (it) => Number(it.acceptQty) > 0 || Number(it.rejectQty) > 0,
+    )
     if (!lines.length) throw new BusinessException('请填写本次验收数量', 4249)
 
     const itemMap = new Map(po.items.map((it) => [it.productId, it]))
+    const products = await this.prisma.scmProduct.findMany({
+      where: { id: { in: lines.map((it) => it.productId) } },
+      select: { id: true, shelfLifeDays: true },
+    })
+    const productMap = new Map(products.map((it) => [it.id, it]))
     const receiptItems = lines.map((line) => {
       const poItem = itemMap.get(line.productId)
       if (!poItem) throw new BusinessException('存在采购单之外的商品', 4250)
-      const acceptQty = Math.max(0, Math.floor(Number(line.acceptQty) || 0))
-      const rejectQty = Math.max(0, Math.floor(Number(line.rejectQty) || 0))
-      const remain = poItem.qty - poItem.receivedQty
+      const acceptQty = Math.max(0, qty3(line.acceptQty))
+      const rejectQty = Math.max(0, qty3(line.rejectQty))
+      const remain = qty3(Number(poItem.qty) - Number(poItem.receivedQty))
       if (acceptQty > remain) {
-        throw new BusinessException(`${poItem.name} 本次实收超出未收数量（剩余 ${remain}）`, 4251)
+        throw new BusinessException(
+          `${poItem.name} 本次实收超出未收数量（剩余 ${remain}${poItem.unit}）`,
+          4251,
+        )
       }
+      const productionDate = toDate(line.productionDate)
+      const shelfLifeDays = productMap.get(line.productId)?.shelfLifeDays ?? 0
+      // 有保质期的商品没填到期日时，按生产日期（缺省为收货当日）自动推算
+      const expiryDate =
+        toDate(line.expiryDate) ??
+        (shelfLifeDays > 0
+          ? addDays(productionDate ?? toDate(new Date())!, shelfLifeDays)
+          : null)
       return {
         productId: line.productId,
         name: poItem.name,
         unit: poItem.unit,
-        orderedQty: poItem.qty,
+        orderedQty: Number(poItem.qty),
         acceptQty,
         rejectQty,
         reason: line.reason ?? '',
+        batchNo: line.batchNo?.trim() ?? '',
+        productionDate,
+        expiryDate,
       }
     })
+
+    // 总部供货：找出供货总部仓库；收货方本身就是总部时由下面的同组织判断跳过扣减
+    const hq =
+      po.supplierType === 'HQ' ? await this.findHqLocation(po.buyerId) : null
 
     const id = await generateDocNo(this.redis, 'GR', async (no) => {
       return !!(await this.prisma.goodsReceipt.findUnique({ where: { id: no } }))
     })
+    // 未填批号时以入库单号作为批号，明细与批次账用同一个值
+    for (const item of receiptItems) {
+      if (!item.batchNo) item.batchNo = id
+    }
     const operator = await this.operatorOf(admin)
 
     return this.prisma.$transaction(async (tx) => {
@@ -301,7 +366,8 @@ export class PurchaseService {
         data: {
           id,
           poId: po.id,
-          warehouseId,
+          warehouseId: location.id,
+          ownerOrgId,
           hasDiff: receiptItems.some((it) => it.rejectQty > 0),
           operator: operator.username,
           operatorName: operator.name,
@@ -315,33 +381,121 @@ export class PurchaseService {
         const poItem = itemMap.get(line.productId)!
         await tx.purchaseOrderItem.update({
           where: { id: poItem.id },
-          data: { receivedQty: poItem.receivedQty + line.acceptQty },
+          data: { receivedQty: qty3(Number(poItem.receivedQty) + line.acceptQty) },
         })
         await this.stockService.move(tx, {
-          warehouseId,
+          warehouseId: location.id,
+          ownerOrgId,
           productId: line.productId,
           qty: line.acceptQty,
           type: 'IN',
           ref: receipt.id,
+          batch: {
+            batchNo: line.batchNo || receipt.id,
+            productionDate: line.productionDate,
+            expiryDate: line.expiryDate,
+            unitCost: Number(poItem.price),
+            sourceType: 'RECEIPT',
+            sourceNo: receipt.id,
+          },
         })
+        // 外部采购的实收价自动沉淀为价格历史，后续工单/采购单优先取最近价
+        if (po.supplierType === 'EXTERNAL' && po.supplierId) {
+          await this.priceService.recordReceipt(tx, {
+            productId: line.productId,
+            supplierId: po.supplierId,
+            price: Number(poItem.price),
+            ref: po.id,
+          })
+        }
+        if (hq && hq.ownerOrgId !== ownerOrgId) {
+          const hqBalance = await tx.stockBalance.findUnique({
+            where: {
+              warehouseId_productId: { warehouseId: hq.locationId, productId: line.productId },
+            },
+          })
+          if (hqBalance) {
+            await this.stockService.move(tx, {
+              warehouseId: hq.locationId,
+              ownerOrgId: hq.ownerOrgId,
+              productId: line.productId,
+              qty: -line.acceptQty,
+              type: 'OUT',
+              ref: receipt.id,
+            })
+          }
+        }
       }
 
       const after = po.items.map((it) => {
         const line = receiptItems.find((l) => l.productId === it.productId)
-        return { qty: it.qty, receivedQty: it.receivedQty + (line?.acceptQty ?? 0) }
+        return {
+          qty: Number(it.qty),
+          receivedQty: Number(it.receivedQty) + (line?.acceptQty ?? 0),
+        }
       })
       await tx.purchaseOrder.update({ where: { id: po.id }, data: { status: derivePoStatus(after) } })
-      return receipt
+      return {
+        ...receipt,
+        warehouseName: location.name,
+        items: receipt.items.map((it) => ({
+          ...it,
+          orderedQty: qty3(it.orderedQty),
+          acceptQty: qty3(it.acceptQty),
+          rejectQty: qty3(it.rejectQty),
+        })),
+      }
     })
   }
 
   // ===== 内部工具 =====
 
-  /** 明细取价：显式传价需要 scm:po:price 权限，否则一律回落到商品档案价 */
+  /**
+   * 向上找最近一级开启了仓库的总部/部门节点。
+   * 门店向总部订货时，货从这一级仓库出。
+   */
+  private async findHqLocation(
+    buyerId: string,
+  ): Promise<{ locationId: string; ownerOrgId: string } | null> {
+    let current = await this.prisma.organization.findUnique({ where: { id: buyerId } })
+    // 组织层级只有四层，循环加个上限防御脏数据
+    for (let depth = 0; current?.parentId && depth < 8; depth += 1) {
+      const parent = await this.prisma.organization.findUnique({ where: { id: current.parentId } })
+      if (!parent) break
+      if ((parent.type === 'GROUP' || parent.type === 'DEPT') && parent.hasWarehouse) {
+        return { locationId: parent.id, ownerOrgId: parent.id }
+      }
+      current = parent
+    }
+    return null
+  }
+
+  /**
+   * 门店/分公司只能向总部采购；只有总部节点可以对外采购。
+   */
+  private assertSupplierRule(
+    buyer: { type: string; shortName: string },
+    supplierType: PurchaseSupplierType,
+  ): void {
+    if (supplierType !== 'HQ' && supplierType !== 'EXTERNAL') {
+      throw new BusinessException('供货方类型不合法', 4255)
+    }
+    const isHqNode = buyer.type === 'GROUP' || buyer.type === 'DEPT'
+    if (supplierType === 'EXTERNAL' && !isHqNode) {
+      throw new BusinessException(`${buyer.shortName} 只能向总部统一采购，不能向外部供应商采购`, 4256)
+    }
+  }
+
+  /**
+   * 明细取价：
+   * - 向总部采购：一律取商品档案供货价，忽略前端传价（门店只能改数量）；
+   * - 总部对外采购：有 scm:po:price 可按实价录入，否则回落到档案采购价。
+   */
   private async buildItems(
     admin: AdminContext,
     inputs: PurchaseItemInput[],
     supplierType: PurchaseSupplierType,
+    buyerType: string,
   ) {
     const lines = (inputs ?? []).filter((it) => it.productId && Number(it.qty) > 0)
     if (!lines.length) throw new BusinessException('请至少添加一行采购明细', 4252)
@@ -349,25 +503,37 @@ export class PurchaseService {
       where: { id: { in: lines.map((it) => it.productId) } },
     })
     const map = new Map(products.map((p) => [p.id, p]))
-    const canSetPrice = hasPermission(admin.permissions, 'scm:po:price')
+    const isHqNode = buyerType === 'GROUP' || buyerType === 'DEPT'
+    const canOverridePrice =
+      isHqNode &&
+      supplierType === 'EXTERNAL' &&
+      hasPermission(admin.permissions, 'scm:po:price')
+    // 对外采购默认带出最近一次成交价，没有历史价才回落到档案价
+    const latestPrices = await this.priceService.latestPriceMap(
+      this.prisma,
+      lines.map((it) => it.productId),
+    )
 
     return lines.map((line) => {
       const product = map.get(line.productId)
       if (!product) throw new BusinessException('商品不存在或已删除', 4253)
-      const basePrice = Number(
-        supplierType === 'HQ' ? product.supplyPrice : product.purchasePrice,
-      )
-      const price =
-        canSetPrice && line.price !== undefined && Number(line.price) >= 0
+      const basePrice =
+        supplierType === 'HQ'
+          ? Number(product.supplyPrice)
+          : (latestPrices.get(product.id) ?? Number(product.purchasePrice))
+      // 门店向总部采购时，即使持有价格权限也不允许改单价
+      const price = money2(
+        canOverridePrice && line.price !== undefined && Number(line.price) >= 0
           ? Number(line.price)
-          : basePrice
+          : basePrice,
+      )
       return {
         productId: product.id,
         name: product.name,
         spec: product.spec,
         unit: product.unit,
         price,
-        qty: Math.floor(Number(line.qty)),
+        qty: qty3(line.qty),
         receivedQty: 0,
       }
     })
@@ -393,17 +559,36 @@ export class PurchaseService {
    * 出参裁剪：无 scm:po:price 权限时把单价与金额抹成 0，
    * 门店只看得到数量，看不到总部的进货价。
    */
+  private async loadBuyers(ids: string[]) {
+    const unique = [...new Set(ids.filter(Boolean))]
+    if (!unique.length) return new Map<string, { name: string; type: string }>()
+    const rows = await this.prisma.organization.findMany({
+      where: { id: { in: unique } },
+      select: { id: true, name: true, type: true },
+    })
+    return new Map(rows.map((row) => [row.id, { name: row.name, type: row.type }]))
+  }
+
+  /**
+   * 出参裁剪：
+   * - 向总部采购的供货单，采购方本来就要付这笔钱，单价/金额直接可见；
+   * - 对外采购单仍按 scm:po:price 裁剪，避免门店看到总部进货价。
+   */
   private toOrderDto(
     row: Prisma.PurchaseOrderGetPayload<{ include: typeof orderInclude }>,
     canSeePrice: boolean,
+    buyer?: { name: string; type: string } | null,
   ) {
+    const priceVisible = canSeePrice || row.supplierType === 'HQ'
     return {
       id: row.id,
       buyerId: row.buyerId,
+      buyerName: buyer?.name ?? row.buyerId,
+      buyerType: buyer?.type ?? null,
       supplierType: row.supplierType,
       supplierId: row.supplierId,
       supplierName: row.supplierName,
-      totalAmount: canSeePrice ? Number(row.totalAmount) : 0,
+      totalAmount: priceVisible ? Number(row.totalAmount) : 0,
       status: row.status,
       createdBy: row.createdBy,
       createdByName: row.createdByName,
@@ -411,17 +596,37 @@ export class PurchaseService {
       approvalId: row.approvalId,
       flowName: row.flowName,
       createdAt: row.createdAt,
-      priceVisible: canSeePrice,
+      priceVisible,
       items: row.items.map((it) => ({
         id: it.id,
         productId: it.productId,
         name: it.name,
         spec: it.spec,
         unit: it.unit,
-        price: canSeePrice ? Number(it.price) : 0,
-        qty: it.qty,
-        receivedQty: it.receivedQty,
+        price: priceVisible ? money2(it.price) : 0,
+        amount: priceVisible ? money2(Number(it.price) * Number(it.qty)) : 0,
+        qty: qty3(it.qty),
+        receivedQty: qty3(it.receivedQty),
       })),
     }
   }
+}
+
+/** DATE 列统一用 UTC 零点，避免东八区本地时间被截成前一天 */
+function toDate(value: string | Date | null | undefined): Date | null {
+  if (!value) return null
+  const matched =
+    typeof value === 'string' ? /^(\d{4})-(\d{2})-(\d{2})/.exec(value) : null
+  if (matched) {
+    return new Date(Date.UTC(Number(matched[1]), Number(matched[2]) - 1, Number(matched[3])))
+  }
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+}
+
+function addDays(base: Date, days: number): Date {
+  const date = new Date(base)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date
 }

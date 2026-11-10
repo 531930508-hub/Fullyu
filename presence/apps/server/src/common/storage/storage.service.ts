@@ -72,13 +72,72 @@ export class StorageService {
     }
   }
 
-  /** 生成私有对象的临时签名访问 URL（默认 1 小时） */
-  signedUrl(key: string, expiresSeconds = 3600): string {
+  /** 生成私有对象的临时签名访问 URL（默认 1 小时；可选图片处理参数） */
+  signedUrl(key: string, expiresSeconds = 3600, process?: string): string {
     if (this.cdnHost) {
       // CDN 场景通常配置回源鉴权，这里退化为直接拼域名
-      return `${this.cdnHost.replace(/\/+$/, '')}/${key}`
+      const suffix = process ? `?x-oss-process=${process}` : ''
+      return `${this.cdnHost.replace(/\/+$/, '')}/${key}${suffix}`
     }
-    return this.client.signatureUrl(key, { expires: expiresSeconds })
+    return this.client.signatureUrl(key, process ? { expires: expiresSeconds, process } : { expires: expiresSeconds })
+  }
+
+  /** OSS 是否已配置；未配置时保持原有值，避免接口报错 */
+  get configured(): boolean {
+    return Boolean(this.bucket && this.accessKeyId && this.accessKeySecret)
+  }
+
+  private get bucketHost() {
+    return `${this.bucket}.${this.region}.aliyuncs.com`
+  }
+
+  /** 判断字符串是否像 OSS 对象 key（而不是 base64、外链或渐变样式） */
+  looksLikeObjectKey(value: string): boolean {
+    if (!value || value.length > 512) return false
+    if (/\s/.test(value) || value.startsWith('data:') || /^https?:\/\//i.test(value)) return false
+    return /^[A-Za-z0-9._\-/]+\.(jpe?g|png|webp|gif|pdf|docx?|xlsx?)$/i.test(value)
+  }
+
+  /** 从本桶/CDN 的 http(s) 地址中还原对象 key */
+  private extractOwnKey(value: string): string | null {
+    if (!/^https?:\/\//i.test(value)) return null
+    try {
+      const url = new URL(value)
+      const cdnHost = this.cdnHost ? new URL(this.cdnHost).hostname : ''
+      if (url.hostname !== this.bucketHost && (!cdnHost || url.hostname !== cdnHost)) return null
+      const key = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
+      return this.looksLikeObjectKey(key) ? key : null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * 把数据库中的图片引用转换为可直接展示的地址：
+   * - data URL / 外链 / 渐变样式：原样返回
+   * - 本桶历史签名 URL：还原 key 后重新签名
+   * - OSS 对象 key：签名
+   * 每次返回新鲜签名，避免列表缓存超过签名有效期后图片失效。
+   */
+  resolveImageRef(value: unknown, expiresSeconds = 21600, process?: string): unknown {
+    if (typeof value !== 'string') return value
+    const trimmed = value.trim()
+    if (!trimmed || trimmed.startsWith('data:') || trimmed.startsWith('blob:')) return value
+    const key = this.extractOwnKey(trimmed) || (this.looksLikeObjectKey(trimmed) ? trimmed : null)
+    if (!key || !this.configured) return value
+    // 图片处理只对图片对象生效，合同/文档等保持原文件。
+    const safeProcess = process && /\.(jpe?g|png|webp|gif)$/i.test(key) ? process : undefined
+    try {
+      return this.signedUrl(key, expiresSeconds, safeProcess)
+    } catch {
+      return value
+    }
+  }
+
+  /** 上传入参规范化：本桶旧链接转为 key，外链与 data URL 保持原样 */
+  normalizeStoredRef(value: unknown): unknown {
+    if (typeof value !== 'string') return value
+    return this.extractOwnKey(value) || value
   }
 
   /**

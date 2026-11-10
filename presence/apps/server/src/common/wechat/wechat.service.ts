@@ -88,7 +88,56 @@ export class WechatService {
       this.logger.error(`getPhoneNumber 失败: ${JSON.stringify(data)}`)
       throw new BusinessException('获取手机号失败，请重试', 5003)
     }
-    return data.phone_info.purePhoneNumber
+    // purePhoneNumber 不含国家码；境外会员必须拼回 +CC，否则会和 CRM 身份对不上。
+    const countryCode = String(data.phone_info.countryCode || '86').trim()
+    return countryCode === '86'
+      ? data.phone_info.purePhoneNumber
+      : `+${countryCode}${data.phone_info.purePhoneNumber}`
+  }
+
+  /**
+   * 生成不限数量的小程序码（服务端专用）。
+   * scene 最长 32 字符，且只能是数字/字母/部分符号；这里统一做校验。
+   * 返回 PNG Buffer；失败时抛业务异常。
+   */
+  async getUnlimitedQrCode(params: {
+    scene: string
+    page: string
+    envVersion?: 'release' | 'trial' | 'develop'
+    width?: number
+  }): Promise<Buffer> {
+    if (!params.scene || Buffer.byteLength(params.scene, 'utf8') > 32) {
+      throw new BusinessException('小程序码 scene 超长', 5004)
+    }
+    const token = await this.getAccessToken()
+    const url = `https://api.weixin.qq.com/wxa/getwxacodeunlimit?access_token=${token}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scene: params.scene,
+        page: params.page,
+        check_path: false,
+        env_version: params.envVersion || 'release',
+        width: Math.min(1280, Math.max(280, params.width || 430)),
+        auto_color: false,
+        line_color: { r: 58, g: 42, b: 26 },
+        is_hyaline: true,
+      }),
+    })
+    const contentType = res.headers.get('content-type') || ''
+    const buffer = Buffer.from(await res.arrayBuffer())
+    if (contentType.includes('application/json')) {
+      let detail = ''
+      try {
+        detail = buffer.toString('utf8')
+      } catch {
+        detail = ''
+      }
+      this.logger.error(`getwxacodeunlimit 失败: ${detail}`)
+      throw new BusinessException('小程序码生成失败', 5005)
+    }
+    return buffer
   }
 
   /** 下发订阅消息 */

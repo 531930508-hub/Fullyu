@@ -43,7 +43,11 @@
           <template v-if="selectedRole">
             <a-alert v-if="selectedRole.isBuiltin" type="warning" show-icon style="margin-bottom: 16px">
               <template #message>
-                内置角色的权限与数据范围由系统统一维护，不可直接修改。如需调整，请复制为自定义角色后再配置。
+                内置角色只是预置了一份默认权限，可在此按实际需要调整；保存后立即对该角色下的
+                {{ selectedRole.userCount }} 名成员生效。
+                <template v-if="selectedRole.name === 'SUPER_ADMIN'">
+                  超级管理员是系统兜底角色，保存时必须保留「权限管理」的查看与修改权限，否则将无人能再维护角色。
+                </template>
               </template>
               <template #action>
                 <a-button v-perm="'rbac:create'" size="small" @click="openClone">复制为自定义角色</a-button>
@@ -60,7 +64,7 @@
                 <a-select
                   v-model:value="scopeValue"
                   style="width: 260px"
-                  :disabled="selectedRole.isBuiltin || !auth.hasPerm('rbac:scope')"
+                  :disabled="!auth.hasPerm('rbac:scope')"
                 >
                   <a-select-option v-for="s in dataScopes" :key="s.value" :value="s.value">
                     {{ s.name }}
@@ -78,7 +82,7 @@
               :tree-data="filteredTree"
               checkable
               :selectable="false"
-              :disabled="selectedRole.isBuiltin || !auth.hasPerm('rbac:update')"
+              :disabled="!auth.hasPerm('rbac:update')"
             >
               <template #title="node">
                 <span>{{ node.title }}</span>
@@ -91,7 +95,6 @@
 
             <div style="margin-top: 16px;">
               <a-button
-                v-if="!selectedRole.isBuiltin"
                 v-perm="'rbac:update'"
                 type="primary"
                 :loading="savingPerms"

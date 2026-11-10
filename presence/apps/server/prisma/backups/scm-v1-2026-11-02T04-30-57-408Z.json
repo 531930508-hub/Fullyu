@@ -1,0 +1,544 @@
+{
+  "scm_suppliers": [
+    {
+      "id": "cmso3sv9k00482ohabpqdd2xa",
+      "name": "广州康益医疗器械有限公司",
+      "contact": "范敏",
+      "phone": "13712340001",
+      "enabled": 1,
+      "remark": "理疗耗材主供",
+      "created_at": "2026-08-11T03:31:29.481Z",
+      "updated_at": "2026-09-08T10:14:52.370Z"
+    },
+    {
+      "id": "cmso3sv9v00492ohake9e9ihy",
+      "name": "深圳洁净日化用品有限公司",
+      "contact": "许强",
+      "phone": "13712340002",
+      "enabled": 1,
+      "remark": "清洁与一次性用品",
+      "created_at": "2026-08-11T03:31:29.491Z",
+      "updated_at": "2026-09-08T10:14:52.459Z"
+    },
+    {
+      "id": "cmso3sva0004a2ohakpmyjyt6",
+      "name": "东莞印象礼品制造厂",
+      "contact": "何珊",
+      "phone": "13712340003",
+      "enabled": 1,
+      "remark": "会员礼品、宣传物料",
+      "created_at": "2026-08-11T03:31:29.497Z",
+      "updated_at": "2026-09-08T10:14:52.519Z"
+    },
+    {
+      "id": "cmvyqq1b000dacautgy34c8nn",
+      "name": "东莞立鼎发皮塑有限公司",
+      "contact": "",
+      "phone": "",
+      "enabled": 1,
+      "remark": "",
+      "created_at": "2026-11-02T04:09:57.276Z",
+      "updated_at": "2026-11-02T04:09:57.276Z"
+    }
+  ],
+  "scm_products": [
+    {
+      "id": "cmso3sva4004b2ohahk2bqqpu",
+      "code": "P001",
+      "name": "一次性理疗垫巾",
+      "spec": "80×180cm / 100 张",
+      "unit": "箱",
+      "purchase_price": "120",
+      "supply_price": "150",
+      "safety_stock": 10,
+      "enabled": 1,
+      "remark": "",
+      "created_at": "2026-08-11T03:31:29.500Z",
+      "updated_at": "2026-09-08T10:14:52.569Z"
+    },
+    {
+      "id": "cmso3svaa004c2oha5ygyps2p",
+      "code": "P002",
+      "name": "艾草艾条",
+      "spec": "18×200mm / 30 支",
+      "unit": "盒",
+      "purchase_price": "45",
+      "supply_price": "58",
+      "safety_stock": 20,
+      "enabled": 1,
+      "remark": "",
+      "created_at": "2026-08-11T03:31:29.506Z",
+      "updated_at": "2026-09-08T10:14:52.648Z"
+    },
+    {
+      "id": "cmso3svae004d2ohak6g58x4a",
+      "code": "P003",
+      "name": "推拿精油",
+      "spec": "500ml",
+      "unit": "瓶",
+      "purchase_price": "68",
+      "supply_price": "88",
+      "safety_stock": 15,
+      "enabled": 1,
+      "remark": "",
+      "created_at": "2026-08-11T03:31:29.510Z",
+      "updated_at": "2026-09-08T10:14:52.698Z"
+    },
+    {
+      "id": "cmso3svai004e2ohaqjmmayre",
+      "code": "P004",
+      "name": "瑜伽垫（专业款）",
+      "spec": "183×61cm 6mm",
+      "unit": "张",
+      "purchase_price": "96",
+      "supply_price": "128",
+      "safety_stock": 8,
+      "enabled": 1,
+      "remark": "",
+      "created_at": "2026-08-11T03:31:29.514Z",
+      "updated_at": "2026-09-08T10:14:52.748Z"
+    },
+    {
+      "id": "cmso3svam004f2ohafuwyrlnp",
+      "code": "P005",
+      "name": "筋膜球套装",
+      "spec": "3 件套",
+      "unit": "套",
+      "purchase_price": "32",
+      "supply_price": "45",
+      "safety_stock": 12,
+      "enabled": 1,
+      "remark": "",
+      "created_at": "2026-08-11T03:31:29.518Z",
+      "updated_at": "2026-09-08T10:14:52.796Z"
+    },
+    {
+      "id": "cmso3svaq004g2oha3eonvhff",
+      "code": "P006",
+      "name": "会员迎新礼盒",
+      "spec": "含水杯+毛巾",
+      "unit": "份",
+      "purchase_price": "58",
+      "supply_price": "78",
+      "safety_stock": 30,
+      "enabled": 1,
+      "remark": "",
+      "created_at": "2026-08-11T03:31:29.522Z",
+      "updated_at": "2026-09-08T10:14:52.847Z"
+    }
+  ],
+  "purchase_orders": [
+    {
+      "id": "PO20260811001",
+      "buyer_id": "S001",
+      "supplier_type": "EXTERNAL",
+      "supplier_id": "cmso3sv9k00482ohabpqdd2xa",
+      "supplier_name": "广州康益医疗器械有限公司",
+      "total_amount": "30000",
+      "status": "CANCELLED",
+      "created_by": "admin",
+      "created_by_name": "超级管理员",
+      "remark": "冒烟测试单，勿处理",
+      "approval_id": "AP20260811001",
+      "flow_name": "门店采购·大额（≥5000）",
+      "created_at": "2026-08-11T03:38:43.361Z",
+      "updated_at": "2026-08-11T03:38:43.936Z"
+    },
+    {
+      "id": "PO20260811002",
+      "buyer_id": "S001",
+      "supplier_type": "EXTERNAL",
+      "supplier_id": "cmso3sv9k00482ohabpqdd2xa",
+      "supplier_name": "广州康益医疗器械有限公司",
+      "total_amount": "1",
+      "status": "CANCELLED",
+      "created_by": "admin",
+      "created_by_name": "超级管理员",
+      "remark": "冒烟测试单，勿处理",
+      "approval_id": "AP20260811002",
+      "flow_name": "门店采购·常规（<5000）",
+      "created_at": "2026-08-11T03:38:43.509Z",
+      "updated_at": "2026-08-11T03:38:43.915Z"
+    },
+    {
+      "id": "PO20261027001",
+      "buyer_id": "S002",
+      "supplier_type": "HQ",
+      "supplier_id": null,
+      "supplier_name": "总部",
+      "total_amount": "188",
+      "status": "PENDING_APPROVAL",
+      "created_by": "13817227229",
+      "created_by_name": "田昊",
+      "remark": "",
+      "approval_id": "AP20261027001",
+      "flow_name": "门店采购·常规（<5000）",
+      "created_at": "2026-10-27T09:03:20.481Z",
+      "updated_at": "2026-10-27T17:03:20.532Z"
+    },
+    {
+      "id": "PO20261027002",
+      "buyer_id": "S001",
+      "supplier_type": "HQ",
+      "supplier_id": null,
+      "supplier_name": "总部",
+      "total_amount": "150",
+      "status": "CANCELLED",
+      "created_by": "13900001011",
+      "created_by_name": "李文静",
+      "remark": "发布验收-锁价",
+      "approval_id": "AP20261027002",
+      "flow_name": "门店采购·常规（<5000）",
+      "created_at": "2026-10-27T10:53:35.904Z",
+      "updated_at": "2026-10-27T18:53:39.625Z"
+    }
+  ],
+  "purchase_order_items": [
+    {
+      "id": "cmso426200000131les0fab25",
+      "order_id": "PO20260811001",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "name": "一次性理疗垫巾",
+      "spec": "80×180cm / 100 张",
+      "unit": "箱",
+      "price": "60",
+      "qty": 500,
+      "received_qty": 0
+    },
+    {
+      "id": "cmso4265x0004131l6ul25k8m",
+      "order_id": "PO20260811002",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "name": "一次性理疗垫巾",
+      "spec": "80×180cm / 100 张",
+      "unit": "箱",
+      "price": "1",
+      "qty": 1,
+      "received_qty": 0
+    },
+    {
+      "id": "cmvqgk80x00061re73s9iolkq",
+      "order_id": "PO20261027001",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "name": "一次性理疗垫巾",
+      "spec": "80×180cm / 100 张",
+      "unit": "箱",
+      "price": "120",
+      "qty": 1,
+      "received_qty": 0
+    },
+    {
+      "id": "cmvqgk80x00071re7ektg7cmq",
+      "order_id": "PO20261027001",
+      "product_id": "cmso3svae004d2ohak6g58x4a",
+      "name": "推拿精油",
+      "spec": "500ml",
+      "unit": "瓶",
+      "price": "68",
+      "qty": 1,
+      "received_qty": 0
+    },
+    {
+      "id": "cmvqki0io0050dtv6zoto75af",
+      "order_id": "PO20261027002",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "name": "一次性理疗垫巾",
+      "spec": "80×180cm / 100 张",
+      "unit": "箱",
+      "price": "150",
+      "qty": 1,
+      "received_qty": 0
+    }
+  ],
+  "goods_receipts": [],
+  "goods_receipt_items": [],
+  "stock_balances": [
+    {
+      "id": "cmso3svaz004i2ohavd3p1n4e",
+      "warehouse_id": "HQ",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "qty": 120,
+      "updated_at": "2026-08-11T03:31:29.531Z"
+    },
+    {
+      "id": "cmso3svb9004l2ohayenxanbs",
+      "warehouse_id": "HQ",
+      "product_id": "cmso3svaa004c2oha5ygyps2p",
+      "qty": 200,
+      "updated_at": "2026-08-11T03:31:29.542Z"
+    },
+    {
+      "id": "cmso3svbi004o2ohaeg22vqg3",
+      "warehouse_id": "HQ",
+      "product_id": "cmso3svae004d2ohak6g58x4a",
+      "qty": 150,
+      "updated_at": "2026-08-11T03:31:29.550Z"
+    },
+    {
+      "id": "cmso3svbp004r2ohaz7esp7xf",
+      "warehouse_id": "HQ",
+      "product_id": "cmso3svai004e2ohaqjmmayre",
+      "qty": 60,
+      "updated_at": "2026-08-11T03:31:29.557Z"
+    },
+    {
+      "id": "cmso3svbw004u2oha71uhewdd",
+      "warehouse_id": "HQ",
+      "product_id": "cmso3svam004f2ohafuwyrlnp",
+      "qty": 90,
+      "updated_at": "2026-08-11T03:31:29.565Z"
+    },
+    {
+      "id": "cmso3svc5004x2ohadhfsiyxa",
+      "warehouse_id": "HQ",
+      "product_id": "cmso3svaq004g2oha3eonvhff",
+      "qty": 200,
+      "updated_at": "2026-08-11T03:31:29.574Z"
+    },
+    {
+      "id": "cmso3svcd00502ohakyaxkm5a",
+      "warehouse_id": "S001",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "qty": 18,
+      "updated_at": "2026-08-11T03:31:29.581Z"
+    },
+    {
+      "id": "cmso3svck00532ohai9w4tc6f",
+      "warehouse_id": "S001",
+      "product_id": "cmso3svaa004c2oha5ygyps2p",
+      "qty": 35,
+      "updated_at": "2026-08-11T03:31:29.589Z"
+    },
+    {
+      "id": "cmso3svcs00562ohal891cpw9",
+      "warehouse_id": "S001",
+      "product_id": "cmso3svae004d2ohak6g58x4a",
+      "qty": 22,
+      "updated_at": "2026-08-11T03:31:29.596Z"
+    },
+    {
+      "id": "cmso3svcz00592ohaj0xf3obx",
+      "warehouse_id": "S001",
+      "product_id": "cmso3svaq004g2oha3eonvhff",
+      "qty": 40,
+      "updated_at": "2026-08-11T03:31:29.604Z"
+    },
+    {
+      "id": "cmso3svd8005c2oha7feldvkw",
+      "warehouse_id": "S002",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "qty": 6,
+      "updated_at": "2026-08-11T03:31:29.613Z"
+    },
+    {
+      "id": "cmso3svdg005f2ohatntgg9i2",
+      "warehouse_id": "S002",
+      "product_id": "cmso3svaa004c2oha5ygyps2p",
+      "qty": 12,
+      "updated_at": "2026-08-11T03:31:29.620Z"
+    },
+    {
+      "id": "cmso3svdn005i2ohatcr9hban",
+      "warehouse_id": "S002",
+      "product_id": "cmso3svai004e2ohaqjmmayre",
+      "qty": 5,
+      "updated_at": "2026-08-11T03:31:29.627Z"
+    },
+    {
+      "id": "cmso3svdu005l2ohat4t11k14",
+      "warehouse_id": "S003",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "qty": 25,
+      "updated_at": "2026-08-11T03:31:29.635Z"
+    },
+    {
+      "id": "cmso3sve2005o2ohapiiq2b4t",
+      "warehouse_id": "S003",
+      "product_id": "cmso3svae004d2ohak6g58x4a",
+      "qty": 18,
+      "updated_at": "2026-08-11T03:31:29.642Z"
+    },
+    {
+      "id": "cmso3sve9005r2ohazqkxbr09",
+      "warehouse_id": "S003",
+      "product_id": "cmso3svam004f2ohafuwyrlnp",
+      "qty": 14,
+      "updated_at": "2026-08-11T03:31:29.650Z"
+    }
+  ],
+  "stock_ledgers": [
+    {
+      "id": "cmso3svb2004j2ohaxrasfl2i",
+      "warehouse_id": "HQ",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "type": "IN",
+      "qty": 120,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.535Z"
+    },
+    {
+      "id": "cmso3svbc004m2ohac03c6uxc",
+      "warehouse_id": "HQ",
+      "product_id": "cmso3svaa004c2oha5ygyps2p",
+      "type": "IN",
+      "qty": 200,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.545Z"
+    },
+    {
+      "id": "cmso3svbk004p2ohaiqj372dc",
+      "warehouse_id": "HQ",
+      "product_id": "cmso3svae004d2ohak6g58x4a",
+      "type": "IN",
+      "qty": 150,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.553Z"
+    },
+    {
+      "id": "cmso3svbs004s2oha7uujv4qs",
+      "warehouse_id": "HQ",
+      "product_id": "cmso3svai004e2ohaqjmmayre",
+      "type": "IN",
+      "qty": 60,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.560Z"
+    },
+    {
+      "id": "cmso3svbz004v2oharqzw2u05",
+      "warehouse_id": "HQ",
+      "product_id": "cmso3svam004f2ohafuwyrlnp",
+      "type": "IN",
+      "qty": 90,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.568Z"
+    },
+    {
+      "id": "cmso3svc8004y2ohaqiotkj8r",
+      "warehouse_id": "HQ",
+      "product_id": "cmso3svaq004g2oha3eonvhff",
+      "type": "IN",
+      "qty": 200,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.577Z"
+    },
+    {
+      "id": "cmso3svcg00512oha286f36co",
+      "warehouse_id": "S001",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "type": "IN",
+      "qty": 18,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.584Z"
+    },
+    {
+      "id": "cmso3svcn00542ohau86pb3ul",
+      "warehouse_id": "S001",
+      "product_id": "cmso3svaa004c2oha5ygyps2p",
+      "type": "IN",
+      "qty": 35,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.592Z"
+    },
+    {
+      "id": "cmso3svcv00572ohajcvhr1g4",
+      "warehouse_id": "S001",
+      "product_id": "cmso3svae004d2ohak6g58x4a",
+      "type": "IN",
+      "qty": 22,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.599Z"
+    },
+    {
+      "id": "cmso3svd3005a2ohaevfoa042",
+      "warehouse_id": "S001",
+      "product_id": "cmso3svaq004g2oha3eonvhff",
+      "type": "IN",
+      "qty": 40,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.607Z"
+    },
+    {
+      "id": "cmso3svdb005d2ohaztimrtqm",
+      "warehouse_id": "S002",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "type": "IN",
+      "qty": 6,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.615Z"
+    },
+    {
+      "id": "cmso3svdi005g2ohawl9157k1",
+      "warehouse_id": "S002",
+      "product_id": "cmso3svaa004c2oha5ygyps2p",
+      "type": "IN",
+      "qty": 12,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.623Z"
+    },
+    {
+      "id": "cmso3svdq005j2oha4ckrym9p",
+      "warehouse_id": "S002",
+      "product_id": "cmso3svai004e2ohaqjmmayre",
+      "type": "IN",
+      "qty": 5,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.630Z"
+    },
+    {
+      "id": "cmso3svdy005m2ohangvdivkv",
+      "warehouse_id": "S003",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "type": "IN",
+      "qty": 25,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.638Z"
+    },
+    {
+      "id": "cmso3sve5005p2ohaa7dnowlc",
+      "warehouse_id": "S003",
+      "product_id": "cmso3svae004d2ohak6g58x4a",
+      "type": "IN",
+      "qty": 18,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.645Z"
+    },
+    {
+      "id": "cmso3svec005s2oha4xnkh6ls",
+      "warehouse_id": "S003",
+      "product_id": "cmso3svam004f2ohafuwyrlnp",
+      "type": "IN",
+      "qty": 14,
+      "ref": "SEED-INIT",
+      "created_at": "2026-08-11T03:31:29.653Z"
+    }
+  ],
+  "stock_adjusts": [
+    {
+      "id": "SA20260811001",
+      "warehouse_id": "S001",
+      "reason": "LOSS",
+      "remark": "冒烟测试，跑完撤销",
+      "total_amount": "150",
+      "status": "CANCELLED",
+      "created_by": "admin",
+      "created_by_name": "超级管理员",
+      "approval_id": "AP20260811004",
+      "flow_name": "库存调整审批",
+      "created_at": "2026-08-11T03:38:43.682Z",
+      "updated_at": "2026-08-11T03:38:43.847Z"
+    }
+  ],
+  "stock_adjust_items": [
+    {
+      "id": "cmso426aq0009131l5kc2uywj",
+      "adjust_id": "SA20260811001",
+      "product_id": "cmso3sva4004b2ohahk2bqqpu",
+      "name": "一次性理疗垫巾",
+      "unit": "箱",
+      "before_qty": 18,
+      "after_qty": 17,
+      "diff_qty": -1,
+      "price": "150"
+    }
+  ]
+}

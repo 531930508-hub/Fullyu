@@ -63,23 +63,25 @@ export class TaskService {
   /** 导师领取任务 */
   async claim(taskId: string, userId: string) {
     return this.prisma.$transaction(async (tx) => {
+      // 锁住任务行，串行化名额判断，避免并发领取突破 maxParticipants
+      await tx.$queryRaw`SELECT id FROM tasks WHERE id = ${taskId} FOR UPDATE`
       const task = await tx.task.findUnique({ where: { id: taskId } })
       if (!task || task.status !== 'PUBLISHED') {
         throw new BusinessException('任务不存在或已结束', 4070)
-      }
-      const claimed = await tx.taskClaim.count({ where: { taskId } })
-      if (claimed >= task.maxParticipants) {
-        throw new BusinessException('任务名额已满', 4071)
       }
       const exists = await tx.taskClaim.findUnique({
         where: { taskId_userId: { taskId, userId } },
       })
       if (exists) throw new BusinessException('已领取该任务', 4072)
+      const claimed = await tx.taskClaim.count({ where: { taskId } })
+      if (claimed >= task.maxParticipants) {
+        throw new BusinessException('任务名额已满', 4071)
+      }
       return tx.taskClaim.create({ data: { taskId, userId, status: 'CLAIMED' } })
     })
   }
 
-  /** 审核完成任务 → 发放导师 Seeds */
+  /** 审核完成任务 → 发放导师积分 */
   async complete(claimId: string) {
     return this.prisma.$transaction(async (tx) => {
       const claim = await tx.taskClaim.findUnique({
@@ -89,29 +91,31 @@ export class TaskService {
       if (!claim) throw new BusinessException('领取记录不存在', 4073)
       if (claim.status === 'COMPLETED') return claim
 
-      await tx.taskClaim.update({
-        where: { id: claimId },
+      // 条件更新：并发/重复审核只有一个事务能完成状态迁移，奖励只发一次
+      const updated = await tx.taskClaim.updateMany({
+        where: { id: claimId, status: 'CLAIMED' },
         data: { status: 'COMPLETED', completedAt: new Date() },
       })
+      if (!updated.count) return { success: true }
 
       const trainer = await tx.trainerProfile.findUnique({
         where: { userId: claim.userId },
       })
       if (trainer && claim.task.seedsReward > 0) {
-        const balance = trainer.seedsBalance + claim.task.seedsReward
+        // 原子自增，避免并发审核时基于旧余额覆盖
+        const rewarded = await tx.trainerProfile.update({
+          where: { id: trainer.id },
+          data: { seedsBalance: { increment: claim.task.seedsReward } },
+        })
         await tx.seedsRecord.create({
           data: {
             trainerId: trainer.id,
             amount: claim.task.seedsReward,
-            balance,
+            balance: rewarded.seedsBalance,
             type: 'TASK_REWARD',
             reason: `完成任务：${claim.task.title}`,
             relatedId: claim.taskId,
           },
-        })
-        await tx.trainerProfile.update({
-          where: { id: trainer.id },
-          data: { seedsBalance: balance },
         })
       }
       return { success: true }

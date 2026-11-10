@@ -3,6 +3,9 @@ import { FinanceController } from './finance.controller'
 import { RevenueService } from './revenue.service'
 import { ExpenseService } from './expense.service'
 import { DashboardService } from './dashboard.service'
+import { PresenceLedgerService } from './presence-ledger.service'
+import { PresenceReportService } from './presence-report.service'
+import { PresenceFinanceTasks } from './presence-finance.tasks'
 import { ApprovalModule } from '../approval/approval.module'
 
 /**
@@ -14,7 +17,20 @@ import { ApprovalModule } from '../approval/approval.module'
 @Module({
   imports: [ApprovalModule],
   controllers: [FinanceController],
-  providers: [RevenueService, ExpenseService, DashboardService],
-  exports: [RevenueService, ExpenseService, DashboardService],
+  providers: [
+    RevenueService,
+    ExpenseService,
+    DashboardService,
+    PresenceLedgerService,
+    PresenceReportService,
+    PresenceFinanceTasks,
+  ],
+  exports: [
+    RevenueService,
+    ExpenseService,
+    DashboardService,
+    PresenceLedgerService,
+    PresenceReportService,
+  ],
 })
 export class FinanceModule {}

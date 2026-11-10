@@ -1,108 +1,60 @@
 <template>
   <view class="page">
-    <view class="nav-bar">
-      <view class="back-btn" @tap="goBack"><text>←</text></view>
-      <text class="nav-title serif">导师工作台</text>
-    </view>
+    <view :style="{ height: statusBarHeight + 'px' }"></view>
+    <FloatingBack fallback="/pages/profile/index" />
+    <view class="nav-bar" :style="{ paddingTop: headerTop + 'px' }"><view class="back-spacer"></view><text class="nav-title serif">{{ tr('导师工作台', 'Trainer Studio') }}</text></view>
+    <PageState v-if="!userStore.isLoggedIn" state="guest" :title="tr('登录后查看工作台', 'Log in to view the studio')" :message="tr('课程安排与合作记录仅本人可见。', 'Your schedule and collaboration records are private.')" :action="tr('去登录', 'Log in')" @action="goProfile" />
+    <PageState v-else-if="!userStore.isTrainer" state="empty" :title="tr('工作台仅向合作导师开放', 'The studio is for partner guides only')" :action="tr('返回我的', 'Back to Me')" @action="goProfile" />
+    <PageState v-else-if="loading" state="loading" :title="tr('正在载入今日安排', 'Loading the daily schedule')" />
+    <PageState v-else-if="loadError" state="error" :title="tr('工作台加载失败', 'Failed to load the studio')" :action="tr('重新加载', 'Reload')" @action="load" />
+    <view v-else class="content">
+      <view class="greeting"><text class="greeting-title serif">{{ tr(`${userStore.userInfo?.nickname || '老师'}，欢迎回来`, `Welcome back, ${userStore.userInfo?.nickname || 'guide'}`) }}</text><text class="secondary">{{ todayLabel }} · {{ tr(`今天 ${todaySchedule.length} 门课程`, `${todaySchedule.length} classes today`) }}</text></view>
 
-    <!-- 统计卡片 -->
-    <view class="stats-section">
-      <view class="stat-card">
-        <text class="stat-value latin">{{ stats.monthHours }}</text>
-        <text class="stat-label">本月课时</text>
+      <view class="section-heading"><text class="serif">{{ tr('今日课程', "Today's classes") }}</text><text class="caption">Today</text></view>
+      <view class="card">
+        <view v-if="todaySchedule.length" class="schedule-list">
+          <view v-for="item in todaySchedule" :key="item.id" class="schedule-item">
+            <view class="schedule-time"><text class="time-start latin">{{ item.startTime }}</text><text class="secondary">{{ item.endTime }}</text></view>
+            <view class="grow"><text class="course-name">{{ item.name }}</text><text class="secondary">{{ item.venue || tr('场地待确认', 'Venue TBC') }} · {{ tr(`已约 ${item.enrolled} / ${item.maxCapacity} 人`, `${item.enrolled} / ${item.maxCapacity} booked`) }}</text><view class="schedule-actions"><text class="tag" :class="{ active: item.current }">{{ item.current ? tr('进行中', 'In progress') : item.past ? tr('时段已结束', 'Session ended') : tr('待开始', 'Not started') }}</text><button class="outline-btn small-btn" @tap="goDetail(item.id)">{{ tr('查看课程', 'View class') }}<PresenceIcon name="arrow" :size="26" /></button></view></view>
+          </view>
+        </view>
+        <PageState v-else state="empty" :title="tr('今天没有课程', 'No classes today')" :message="tr('留一点时间给自己，也可以看看接下来的安排。', 'Take some time for yourself, or check what is coming up.')" :action="tr('查看近期安排', 'View upcoming')" @action="scrollTo('upcoming')" />
       </view>
-      <view class="stat-card">
-        <text class="stat-value latin">¥{{ stats.monthIncome }}</text>
-        <text class="stat-label">本月收入</text>
-      </view>
-      <view class="stat-card">
-        <text class="stat-value latin">{{ stats.rating || '-' }}</text>
-        <text class="stat-label">评分</text>
-      </view>
-    </view>
 
-    <!-- 今日日程 -->
-    <view class="section">
-      <text class="section-title serif">今日日程</text>
-      <view v-if="todaySchedule.length" class="schedule-list">
-        <view v-for="item in todaySchedule" :key="item.id" class="schedule-item" :class="{ current: item.current, past: item.past }">
-          <view class="schedule-time">
-            <text class="time-start">{{ item.startTime }}</text>
-            <text class="time-end">{{ item.endTime }}</text>
-          </view>
-          <view class="schedule-line">
-            <view class="line-dot" :class="{ active: item.current }"></view>
-            <view class="line-bar"></view>
-          </view>
-          <view class="schedule-content">
-            <text class="schedule-name">{{ item.name }}</text>
-            <text class="schedule-venue">{{ item.venue }}</text>
-            <view class="schedule-meta">
-              <text class="schedule-students">{{ item.enrolled }}/{{ item.maxCapacity }}人</text>
-              <text v-if="item.current" class="schedule-badge current">进行中</text>
-              <text v-if="item.past" class="schedule-badge past">已完成</text>
-            </view>
-          </view>
+      <view class="section-heading"><text class="serif">{{ tr('本月概览', 'This month') }}</text><text class="caption">{{ monthLabel }}</text></view>
+      <view class="card">
+        <view class="stats-row">
+          <view class="stat"><text class="stat-value latin">{{ stats?.monthHours ?? '—' }}</text><text class="secondary">{{ tr('带课时长 / 小时', 'Teaching hours') }}</text></view>
+          <view class="stat"><text class="stat-value latin">{{ stats?.monthIncome != null ? `¥${stats.monthIncome}` : '—' }}</text><text class="secondary">{{ tr('课程收益估算', 'Estimated income') }}</text></view>
+          <view class="stat"><text class="stat-value latin">{{ stats?.rating || tr('暂无', 'N/A') }}</text><text class="secondary">{{ tr('累计学员评分', 'Overall rating') }}</text></view>
         </view>
+        <text class="secondary metric-note">{{ tr('时长与收益按接口返回的已完成课程统计；收益为估算，不代表已结算或到账金额。', 'Hours and income are based on completed classes returned by the API. Income is an estimate, not a settlement or received amount.') }}</text>
       </view>
-      <text v-else class="empty-line">今日暂无排课</text>
-    </view>
 
-    <!-- 近期课程 -->
-    <view class="section">
-      <text class="section-title serif">近期课程安排</text>
-      <view v-if="upcomingCourses.length" class="course-list">
-        <view v-for="course in upcomingCourses" :key="course.id" class="course-item">
-          <view class="course-date">
-            <text class="date-day">{{ course.day }}</text>
-            <text class="date-weekday">{{ course.weekday }}</text>
-          </view>
-          <view class="course-info">
-            <text class="course-name">{{ course.name }}</text>
-            <text class="course-time">{{ course.time }} · {{ course.venue }}</text>
-          </view>
-          <view class="course-enrolled">
-            <text class="enrolled-count">{{ course.enrolled }}/{{ course.max }}</text>
-          </view>
-        </view>
+      <view class="section-heading"><text class="serif">{{ tr('快捷入口', 'Shortcuts') }}</text><text class="caption">Shortcuts</text></view>
+      <view class="card shortcuts">
+        <button class="shortcut" @tap="scrollTo('upcoming')"><PresenceIcon name="calendar" :size="40" /><text>{{ tr('近期安排', 'Upcoming') }}</text></button>
+        <button class="shortcut" @tap="scrollTo('income')"><PresenceIcon name="chart" :size="40" /><text>{{ tr('收益记录', 'Income records') }}</text></button>
+        <button class="shortcut" @tap="goCommunities"><PresenceIcon name="users" :size="40" /><text>{{ tr('我的社群', 'My communities') }}</text></button>
       </view>
-      <text v-else class="empty-line">暂无近期课程</text>
-    </view>
 
-    <!-- 收入明细 -->
-    <view class="section">
-      <view class="section-header">
-        <text class="section-title serif">收入明细</text>
-        <text class="section-more">本月合计 <text class="latin">¥{{ stats.monthIncome }}</text></text>
+      <view id="upcoming" class="section-heading"><text class="serif">{{ tr('近期课程安排', 'Upcoming schedule') }}</text><text class="caption">Upcoming</text></view>
+      <view class="card">
+        <view v-if="upcomingCourses.length" class="course-list"><button v-for="course in upcomingCourses" :key="course.id" class="course-item" @tap="goDetail(course.id)"><view class="date-block"><text class="date-day latin">{{ course.day }}{{ tr('日', '') }}</text><text class="secondary">{{ weekdayLabel(course.weekday) }}</text></view><view class="grow"><text class="course-name">{{ course.name }}</text><text class="secondary">{{ course.time }} · {{ course.venue || tr('场地待确认', 'Venue TBC') }}</text><text class="secondary">{{ tr(`已约 ${course.enrolled} / ${course.max} 人`, `${course.enrolled} / ${course.max} booked`) }}</text></view><PresenceIcon name="arrow" :size="28" /></button></view>
+        <PageState v-else state="empty" :title="tr('暂无近期课程', 'No upcoming classes')" :message="tr('新课程发布后会同步到这里。', 'New classes will appear here once published.')" />
       </view>
-      <view v-if="incomeRecords.length" class="income-list">
-        <view v-for="item in incomeRecords" :key="item.id" class="income-item">
-          <view class="income-left">
-            <text class="income-name">{{ item.course }}</text>
-            <text class="income-date">{{ item.date }} · {{ item.hours }}课时 · {{ item.students }}人</text>
-          </view>
-          <text class="income-amount latin">+¥{{ item.amount }}</text>
-        </view>
-      </view>
-      <text v-else class="empty-line">暂无已完成课程收入</text>
-    </view>
 
-    <!-- 学员签到 -->
-    <view class="section">
-      <text class="section-title serif">本周签到情况</text>
-      <view class="checkin-summary">
-        <view class="checkin-stat">
-          <text class="checkin-value">{{ checkin.weekAttendanceRate }}%</text>
-          <text class="checkin-label">本周出勤率</text>
-        </view>
-        <view class="checkin-stat">
-          <text class="checkin-value">{{ checkin.weekAbsent }}</text>
-          <text class="checkin-label">缺勤人次</text>
-        </view>
-        <view class="checkin-stat">
-          <text class="checkin-value">{{ checkin.weekStudents }}</text>
-          <text class="checkin-label">本周学员人次</text>
-        </view>
+      <view id="income" class="section-heading"><text class="serif">{{ tr('课程收益记录', 'Class income records') }}</text><text class="caption">Records</text></view>
+      <view class="card">
+        <text class="secondary">{{ tr(`已完成课程 · 最近 ${incomeRecords.length} 条，非结算明细`, `Completed classes · latest ${incomeRecords.length} records, not a settlement statement`) }}</text>
+        <view v-if="incomeRecords.length" class="income-list"><view v-for="item in incomeRecords" :key="item.id" class="income-item"><view class="grow"><text class="course-name">{{ item.course }}</text><text class="secondary">{{ localizeServerDate(item.date) }} · {{ tr(`${item.hours} 小时`, `${item.hours} hrs`) }} · {{ tr(`${item.students} 人`, `${item.students} students`) }}</text></view><text class="income-amount latin">¥{{ item.amount }}</text></view></view>
+        <PageState v-else state="empty" :title="tr('暂无已完成课程记录', 'No completed class records')" />
+      </view>
+
+      <view class="section-heading"><text class="serif">{{ tr('本周签到概览', 'Weekly attendance') }}</text><text class="caption">Attendance</text></view>
+      <view class="card">
+        <view class="stats-row"><view class="stat"><text class="stat-value latin">{{ checkin?.weekStudents ? `${checkin.weekAttendanceRate}%` : '—' }}</text><text class="secondary">{{ tr('当前签到率', 'Check-in rate') }}</text></view><view class="stat"><text class="stat-value latin">{{ checkin?.weekAbsent ?? '—' }}</text><text class="secondary">{{ tr('未签到人次', 'Not checked in') }}</text></view><view class="stat"><text class="stat-value latin">{{ checkin?.weekStudents ?? '—' }}</text><text class="secondary">{{ tr('预约人次', 'Bookings') }}</text></view></view>
+        <text class="secondary metric-note">{{ tr('本周为周一至周日，包含尚未开始的课程，未签到不等于缺勤。', 'The week runs Monday to Sunday and includes classes that have not started. Not checking in is not the same as absence.') }}</text>
       </view>
     </view>
   </view>
@@ -112,92 +64,110 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getTrainerWorkspace, type TrainerWorkspace } from '@/api/trainer'
+import { useUserStore } from '@/stores/user'
+import { tr, isEnglish } from '@/locale'
+import { readCapsuleLayout } from '@/utils/capsule'
+import PresenceIcon from '@/components/PresenceIcon.vue'
+import PageState from '@/components/PageState.vue'
+import FloatingBack from '@/components/FloatingBack.vue'
 
-const stats = ref<TrainerWorkspace['stats']>({ monthHours: 0, monthIncome: 0, rating: 0 })
+const userStore = useUserStore()
+const capsule = readCapsuleLayout()
+const statusBarHeight = capsule.statusBarHeight
+const headerTop = capsule.headerTop
+const loading = ref(false)
+const loadError = ref(false)
+const stats = ref<TrainerWorkspace['stats'] | null>(null)
 const todaySchedule = ref<TrainerWorkspace['todaySchedule']>([])
 const upcomingCourses = ref<TrainerWorkspace['upcomingCourses']>([])
 const incomeRecords = ref<TrainerWorkspace['incomeRecords']>([])
-const checkin = ref<TrainerWorkspace['checkin']>({ weekAttendanceRate: 0, weekAbsent: 0, weekStudents: 0 })
+const checkin = ref<TrainerWorkspace['checkin'] | null>(null)
+const todayLabel = ref('')
+const monthLabel = ref('')
 
 async function load() {
+  if (loading.value) return
+  stats.value = null
+  checkin.value = null
+  todaySchedule.value = []
+  upcomingCourses.value = []
+  incomeRecords.value = []
+  if (!userStore.isLoggedIn || !userStore.isTrainer) return
+  loading.value = true
+  loadError.value = false
+  const now = new Date()
+  todayLabel.value = isEnglish()
+    ? now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : `${now.getMonth() + 1}月${now.getDate()}日`
+  monthLabel.value = isEnglish()
+    ? now.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+    : `${now.getFullYear()}年${now.getMonth() + 1}月`
   try {
     const data = await getTrainerWorkspace()
-    if (!data) return
-    stats.value = data.stats
+    if (!data) throw new Error(tr('工作台数据暂不可用', 'Studio data is unavailable'))
+    stats.value = data.stats ?? null
     todaySchedule.value = data.todaySchedule || []
     upcomingCourses.value = data.upcomingCourses || []
     incomeRecords.value = data.incomeRecords || []
-    checkin.value = data.checkin
-  } catch (e) {
-    // 错误已由 request 统一提示
-  }
+    checkin.value = data.checkin ?? null
+  } catch {
+    loadError.value = true
+  } finally { loading.value = false }
 }
-
-onShow(() => {
-  load()
-})
-
-function goBack() {
-  uni.navigateBack()
+onShow(() => { load() })
+const WEEKDAY_EN: Record<string, string> = { 周日: 'Sun', 周一: 'Mon', 周二: 'Tue', 周三: 'Wed', 周四: 'Thu', 周五: 'Fri', 周六: 'Sat' }
+function weekdayLabel(value: string) { return isEnglish() ? (WEEKDAY_EN[value] || value) : value }
+function localizeServerDate(value: string) {
+  if (!isEnglish()) return value
+  const match = /^(\d{1,2})月(\d{1,2})日$/.exec(value || '')
+  if (!match) return value
+  const date = new Date(new Date().getFullYear(), Number(match[1]) - 1, Number(match[2]))
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
+function goBack() { if (getCurrentPages().length > 1) uni.navigateBack(); else goProfile() }
+function goProfile() { uni.switchTab({ url: '/pages/profile/index' }) }
+function goDetail(id: string) { if (id) uni.navigateTo({ url: `/pages/course-detail/index?id=${id}` }) }
+function goCommunities() { uni.navigateTo({ url: '/pages/community-mine/index' }) }
+function scrollTo(section: string) { uni.pageScrollTo({ selector: `#${section}`, duration: 250 }) }
 </script>
 
 <style scoped>
-.page { min-height: 100vh; background: #EAE0D7; }
-.nav-bar { display: flex; align-items: center; padding: 32rpx 32rpx 20rpx; gap: 16rpx; }
-.back-btn { width: 48rpx; height: 48rpx; display: flex; align-items: center; justify-content: center; font-size: 32rpx; color: #3F2F10; }
-.nav-title { font-size: 38rpx; color: #3F2F10; }
-
-.stats-section { display: flex; padding: 8rpx 32rpx 28rpx; gap: 20rpx; }
-.stat-card { flex: 1; background: #FBF8F3; border-radius: 32rpx; padding: 28rpx 16rpx; text-align: center; box-shadow: 0 6rpx 24rpx rgba(88, 66, 25, 0.05); }
-.stat-value { font-size: 34rpx; font-weight: 600; color: #584219; display: block; margin-bottom: 6rpx; }
-.stat-label { font-size: 22rpx; color: #A78E70; }
-
-.section { margin: 0 32rpx 28rpx; background: #FBF8F3; border-radius: 44rpx; padding: 36rpx 32rpx; box-shadow: 0 6rpx 24rpx rgba(88, 66, 25, 0.05); }
-.section-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20rpx; }
-.section-header .section-title { margin-bottom: 0; }
-.section-title { font-size: 32rpx; color: #584219; margin-bottom: 20rpx; display: block; }
-.section-more { font-size: 24rpx; color: #A78E70; }
-.empty-line { font-size: 24rpx; color: #A78E70; text-align: center; display: block; padding: 32rpx 0; }
-
-.schedule-list { display: flex; flex-direction: column; }
-.schedule-item { display: flex; gap: 20rpx; padding: 20rpx 0; }
-.schedule-item.past { opacity: 0.55; }
-.schedule-time { width: 84rpx; text-align: right; }
-.time-start { font-size: 26rpx; font-weight: 500; color: #3F2F10; display: block; }
-.time-end { font-size: 22rpx; color: #A78E70; }
-.schedule-line { display: flex; flex-direction: column; align-items: center; width: 24rpx; }
-.line-dot { width: 16rpx; height: 16rpx; border-radius: 50%; background: rgba(88, 66, 25, 0.2); margin-top: 8rpx; }
-.line-dot.active { background: #584219; box-shadow: 0 0 0 6rpx rgba(88, 66, 25, 0.12); }
-.line-bar { width: 2rpx; flex: 1; background: rgba(88, 66, 25, 0.14); margin-top: 4rpx; }
-.schedule-content { flex: 1; }
-.schedule-name { font-size: 28rpx; font-weight: 500; color: #3F2F10; display: block; margin-bottom: 4rpx; letter-spacing: 1rpx; }
-.schedule-venue { font-size: 22rpx; color: #A78E70; display: block; margin-bottom: 8rpx; }
-.schedule-meta { display: flex; align-items: center; gap: 12rpx; }
-.schedule-students { font-size: 22rpx; color: #6D5934; }
-.schedule-badge { font-size: 20rpx; padding: 4rpx 18rpx; border-radius: 999rpx; letter-spacing: 1rpx; }
-.schedule-badge.current { background: rgba(211, 149, 110, 0.16); color: #B06A3F; }
-.schedule-badge.past { background: rgba(88, 66, 25, 0.08); color: #6D5934; }
-
-.course-list { display: flex; flex-direction: column; gap: 16rpx; }
-.course-item { display: flex; align-items: center; gap: 20rpx; padding: 24rpx; background: #F4EEE6; border-radius: 32rpx; }
-.course-date { text-align: center; min-width: 72rpx; }
-.date-day { font-size: 34rpx; font-weight: 600; color: #584219; display: block; font-family: var(--font-latin); }
-.date-weekday { font-size: 20rpx; color: #A78E70; }
-.course-info { flex: 1; }
-.course-name { font-size: 26rpx; color: #3F2F10; display: block; margin-bottom: 4rpx; }
-.course-time { font-size: 22rpx; color: #A78E70; }
-.enrolled-count { font-size: 24rpx; color: #584219; font-weight: 500; font-family: var(--font-latin); }
-
-.income-list { display: flex; flex-direction: column; }
-.income-item { display: flex; justify-content: space-between; align-items: center; padding: 20rpx 0; border-bottom: 2rpx dashed rgba(88, 66, 25, 0.14); }
-.income-item:last-child { border-bottom: none; }
-.income-name { font-size: 26rpx; color: #3F2F10; display: block; margin-bottom: 4rpx; }
-.income-date { font-size: 22rpx; color: #A78E70; }
-.income-amount { font-size: 30rpx; font-weight: 600; color: #584219; }
-
-.checkin-summary { display: flex; padding: 20rpx 0 4rpx; }
-.checkin-stat { flex: 1; text-align: center; }
-.checkin-value { font-size: 34rpx; font-weight: 600; color: #584219; display: block; margin-bottom: 6rpx; font-family: var(--font-latin); }
-.checkin-label { font-size: 22rpx; color: #A78E70; }
+.page { min-height: 100vh; background: var(--c-cream); color: var(--c-ink); font-size: 28rpx; line-height: 1.6; padding-bottom: env(safe-area-inset-bottom); }
+button { margin: 0; font-size: 28rpx; line-height: 1.6; }
+button::after { border: 0; }
+.nav-bar { display: flex; align-items: center; gap: 24rpx; padding: 16rpx 32rpx 8rpx; }
+.back-spacer { width: 80rpx; height: 80rpx; flex-shrink: 0; }
+.nav-title { font-size: 34rpx; }
+.content { padding: 16rpx 32rpx 32rpx; }
+.greeting { padding: 8rpx 0 0; }
+.greeting-title { display: block; font-size: 42rpx; margin-bottom: 8rpx; }
+.secondary, .caption { display: block; color: var(--c-muted); font-size: 24rpx; font-weight: 400; }
+.section-heading { display: flex; align-items: baseline; gap: 14rpx; margin: 40rpx 0 20rpx; font-size: 34rpx; }
+.card { padding: 32rpx; border-radius: var(--radius-card); background: var(--c-card); box-shadow: var(--shadow-card); }
+.grow { flex: 1; min-width: 0; text-align: left; }
+.schedule-item { display: flex; gap: 24rpx; padding: 28rpx 0; border-bottom: 1rpx solid var(--line-soft); }
+.schedule-item:first-child { padding-top: 0; }
+.schedule-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.schedule-time { width: 94rpx; flex-shrink: 0; }
+.time-start { display: block; color: var(--c-primary); font-size: 30rpx; font-weight: 600; }
+.course-name { display: block; font-weight: 500; font-size: 28rpx; margin-bottom: 8rpx; overflow-wrap: anywhere; }
+.schedule-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16rpx; margin-top: 20rpx; }
+.tag { padding: 4rpx 16rpx; color: var(--c-primary); background: var(--c-card-2); border-radius: 16rpx; font-size: 24rpx; }
+.tag.active { background: var(--c-gold); }
+.outline-btn { display: flex; align-items: center; justify-content: center; gap: 12rpx; padding: 16rpx 24rpx; min-height: 80rpx; color: var(--c-primary); background: var(--c-card); border: 2rpx solid var(--c-primary); border-radius: var(--radius-button); }
+.small-btn { font-size: 24rpx; }
+.stats-row { display: flex; gap: 16rpx; }
+.stat { flex: 1; min-width: 0; text-align: center; }
+.stat-value { display: block; font-size: 34rpx; color: var(--c-primary); font-weight: 600; overflow-wrap: anywhere; }
+.metric-note { margin-top: 24rpx; padding-top: 24rpx; border-top: 1rpx solid var(--line-soft); }
+.shortcuts { display: flex; gap: 12rpx; }
+.shortcut { display: flex; flex: 1; flex-direction: column; align-items: center; gap: 16rpx; padding: 16rpx 0; color: var(--c-ink); background: var(--c-card); border-radius: var(--radius-button); font-size: 24rpx; }
+.course-item { display: flex; align-items: center; gap: 24rpx; width: 100%; padding: 28rpx 0; color: var(--c-ink); background: var(--c-card); border-bottom: 1rpx solid var(--line-soft); }
+.course-item:first-child { padding-top: 0; }
+.course-item:last-child { padding-bottom: 0; border: 0; }
+.date-block { width: 100rpx; flex-shrink: 0; text-align: center; }
+.date-day { display: block; font-size: 32rpx; color: var(--c-primary); font-weight: 600; }
+.income-item { display: flex; align-items: center; gap: 24rpx; padding: 24rpx 0; border-bottom: 1rpx solid var(--line-soft); }
+.income-item:last-child { border: 0; padding-bottom: 0; }
+.income-amount { font-size: 30rpx; font-weight: 600; color: var(--c-primary); }
 </style>

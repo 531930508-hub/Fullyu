@@ -3,13 +3,13 @@ import { currentMonth, isBelowSafety, orderAmountToFen, resolveWorkbenchBlocks }
 import { PrismaService } from '../../common/prisma.service'
 import { buildOrgScope } from '../../common/utils/data-scope.util'
 import type { AdminContext } from '../auth/admin-jwt.strategy'
-import { ApprovalService } from '../approval/approval.service'
+import { TodoService } from '../todo/todo.service'
 
 @Injectable()
 export class AnalyticsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly approvalService: ApprovalService,
+    private readonly todoService: TodoService,
   ) {}
 
   /** 仪表盘概览统计 */
@@ -86,9 +86,8 @@ export class AnalyticsService {
       reservations,
       recentOrdersRaw,
       stockRows,
-      refundingCount,
       todayCheckinCount,
-      myTodoCount,
+      todoPreview,
       monthRevenueAgg,
     ] = await Promise.all([
       // 今日课程条数是所有人可见的统计卡，这条无论有没有 course:view 都要查
@@ -120,15 +119,14 @@ export class AnalyticsService {
         : [],
       blocks.stock
         ? this.prisma.stockBalance.findMany({
-            where: scope.toWhere('warehouseId'),
+            where: scope.toWhere('ownerOrgId'),
             include: { product: { select: { name: true, unit: true, safetyStock: true } } },
             orderBy: { qty: 'asc' },
           })
         : [],
-      blocks.orders ? this.prisma.order.count({ where: { status: 'REFUNDING' } }) : 0,
       this.prisma.checkIn.count({ where: { checkedAt: { gte: dayStart, lt: dayEnd } } }),
-      // 「待我审批」数的是指派到我名下的当前节点，不是全系统 PENDING 总量
-      this.approvalService.todoCount(admin),
+      // 待办统一走待办中心：审批、退款跟进、入群审核、库存预警同一份口径
+      this.todoService.preview(admin, 4),
       blocks.revenue
         ? this.prisma.revenueRecord.aggregate({
             _sum: { amount: true },
@@ -256,48 +254,47 @@ export class AnalyticsService {
 
     // 库存预警：按商品各自维护的安全库存判定，阈值不再写死
     const stockAlerts = stockRows
-      .filter((row) => isBelowSafety(row.qty, row.product.safetyStock))
+      .filter((row) => isBelowSafety(Number(row.qty), row.product.safetyStock))
       .map((row) => ({
         warehouseId: row.warehouseId,
         name: row.product.name,
         unit: row.product.unit,
-        stock: row.qty,
+        stock: Number(row.qty),
         safetyStock: row.product.safetyStock,
       }))
 
     /**
-     * 待处理事项。每条都带 link，前端直接跳，不再自己猜路由；
-     * 也不再有「点一下打勾」的假处理 —— 事项消不消失只由真实数据决定。
+     * 待处理事项。全部来自待办中心，每条都带明确的处理去向：
+     * 审批/入群审核进 /todos 对应详情；退款跟进、库存补货跳业务页。
+     * 不再把「退款中订单」错误地指向订单列表当作审批入口。
      */
-    const todoItems: { id: string; text: string; urgent: boolean; link: string }[] = []
-    if (myTodoCount > 0)
+    const todoItems: { id: string; source: string; text: string; urgent: boolean; link: string }[] =
+      todoPreview.items.map((it) => ({
+      id: it.id,
+      source: it.source,
+      text: `${it.bizLabel} · ${it.summary}`,
+      urgent: it.urgent,
+      link: `/todos?focus=${encodeURIComponent(it.id)}`,
+    }))
+    if (todoPreview.counts.all > todoPreview.items.length) {
       todoItems.push({
-        id: 'approval',
-        text: `${myTodoCount} 项审批待我处理`,
-        urgent: true,
-        link: '/system/approval-flow',
-      })
-    if (refundingCount > 0)
-      todoItems.push({
-        id: 'refund',
-        text: `${refundingCount} 笔退款待处理`,
-        urgent: true,
-        link: '/sales/orders',
-      })
-    if (stockAlerts.length > 0)
-      todoItems.push({
-        id: 'stock',
-        text: `${stockAlerts.length} 种商品低于安全库存，需补货`,
+        id: 'todo-more',
+        source: 'SUMMARY',
+        text: `还有 ${todoPreview.counts.all - todoPreview.items.length} 项待办未展示，去待办中心查看`,
         urgent: false,
-        link: '/scm/stock',
+        link: '/todos',
       })
+    }
 
     return {
       blocks,
       stats: {
         todayCourseCount: todayCourses.length,
         todayCheckinCount,
-        myTodoCount,
+        /** 待我审批（仅审批来源） */
+        myTodoCount: todoPreview.counts.approval,
+        /** 全部待办，含退款跟进/入群审核/库存预警 */
+        todoCount: todoPreview.counts.all,
         /** 单位：元。无财务看板权限时给 null，前端据此不渲染这张卡 */
         monthRevenue: monthRevenueAgg ? Number(monthRevenueAgg._sum.amount ?? 0) : null,
       },
@@ -309,6 +306,7 @@ export class AnalyticsService {
       totalSlots: venues.length * SLOT_TOTAL,
       recentOrders,
       stockAlerts,
+      todo: todoPreview,
       todoItems,
     }
   }

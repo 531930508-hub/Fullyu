@@ -12,7 +12,8 @@ export interface WaitlistQuote {
 
 export interface WaitlistJoinResult {
   orderId: string
-  actualPaid: number
+  actualPaid?: number
+  lockedPrice?: number
   position: number
   seatType: string
   expireInSeconds?: number
@@ -21,11 +22,16 @@ export interface WaitlistJoinResult {
 export interface WaitlistEntry {
   id: string
   courseId: string
+  orderId?: string | null
   seatType: string
   position: number
   lockedPrice: number
   status: string
   createdAt: string
+  /** 当前队列位置（服务端实时计算）；非排队状态为 null */
+  queuePosition?: number | null
+  aheadCount?: number | null
+  queueSize?: number
   course?: any
 }
 
