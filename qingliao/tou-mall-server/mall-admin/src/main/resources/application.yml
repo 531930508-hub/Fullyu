@@ -1,0 +1,166 @@
+spring:
+  application:
+    name: mall-admin
+  profiles:
+    active: dev #默认为开发环境
+  servlet:
+    multipart:
+      enabled: true #开启文件上传
+      max-file-size: 10MB #限制文件上传大小为10M
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+server:
+  port: 9929
+
+mybatis-plus:
+  mapper-locations:
+    - classpath:dao/*.xml
+    - classpath*:com/**/mapper/*.xml
+
+jwt:
+  tokenHeader: Authorization #JWT存储的请求头
+  secret: ${JWT_SECRET:mall-admin-secret} #JWT加解密使用的密钥
+  expiration: 2592000 #JWT的超期限时间(60*60*24*7)
+  tokenHead: 'Bearer '  #JWT负载中拿到开头
+
+redis:
+  database: mall
+  key:
+    admin: 'ums:admin'
+    resourceList: 'ums:resourceList'
+  expire:
+    common: 86400 # 24小时
+
+secure:
+  ignored:
+    urls: #安全路径白名单
+      - /swagger-ui/
+      - /swagger-resources/**
+      - /**/v2/api-docs
+      - /**/*.html
+      - /**/*.js
+      - /**/*.css
+      - /**/*.png
+      - /**/*.map
+      - /favicon.ico
+      - /actuator/**
+      - /druid/**
+      - /admin/login
+      - /admin/register
+      - /admin/info
+      - /admin/logout
+      - /minio/upload
+      - /admin/open/**
+      - /wx/**
+      - /customer/login
+      - /crm/brand-card #CRM 品牌卡事件推送（验签在接口内完成）
+      - /miniImage/splashScreenImageList #开屏图列表接口
+      - /miniImage/bannerList #banner图片列表
+      - /miniImage/couponImageList #couponImageList
+      - /product/get/list #获取项目和券包
+      - /order/timeList
+      - /order/booking/dates
+      - /botChatRecord/arriveTimeList
+      - /giveGift/info #查看券包
+      - /giveGift/infoNew #查看券包
+      - /bed/maxBedCount
+      - /shop/list
+      - /shop/minilist
+      - /shop/miniCityAndStreet
+      - /shop/get/list
+      - /customerCoupon/getCouponCount
+      - /customer/getIntegration
+      - /miniImage/popupImageList #弹窗图片列表
+      - /miniImage/appointmentImageList #预约也banner图列表
+      - /miniImage/appointmentImageListNew #微信官方审核时屏蔽几项功能用
+      - /customerCoupon/getListData #合并数据
+      - /customerCoupon/getListDataExce
+      - /order/newCustomerZheKou
+      - /memberCard/config #年卡配置（无需登录）
+      - /memberCard/info #年卡信息（未登录返回未开通状态）
+      - /brandMember/me #品牌会员身份（客户 token，由接口自行校验）
+      - /brandMember/products #品牌会员卡目录
+      - /brandMember/game/ticket #愈行之旅票据
+      - /brandMember/purchase #品牌卡在线开通（汇付小程序支付）
+      - /brandMember/purchase/mock #品牌卡模拟支付（仅测试模式）
+      - /brandMember/order #品牌卡开卡订单状态
+      - /brandMember/orders #品牌卡支付单列表与退款资格
+      - /brandMember/refund/preview #品牌卡退卡试算
+      - /brandMember/refund #品牌卡客户自助退卡
+      - /brandMember/gift/claim #兑换赠送会员码（客户 token，由接口自行校验）
+      - /brandMember/feedback #会员意见反馈
+      - /brandMember/stories #会员故事（仅有效会员）
+      - /crm-internal/** #CRM 后台内部支付接口（服务端 HMAC 签名，接口内校验）
+    openUrls:
+      - /fully/open/**
+
+# 会员中心（CRM）对接，默认关闭。
+# 开启后积分以 CRM 为唯一账本；CRM 不可用时登录/积分接口直接失败，不回退本地积分。
+# 密钥只通过环境变量注入，不写入仓库。
+crm:
+  enabled: ${CRM_ENABLED:}
+  base-url: "${CRM_BASE_URL:}"
+  key-id: "${CRM_KEY_ID:}"
+  secret: "${CRM_SECRET:}"
+  timeout-ms: ${CRM_TIMEOUT_MS:3000}
+
+# 品牌会员（Full愈年卡）对接，默认关闭。
+# 开启后卡期/积分/愈行之旅以 CRM 为唯一账本；密钥按业务绑定（retreat），不能复用旧 CRM 的 ql 密钥。
+brand-crm:
+  enabled: ${BRAND_CRM_ENABLED:}
+  base-url: "${BRAND_CRM_BASE_URL:${CRM_BASE_URL:}}"
+  key-id: "${BRAND_CRM_KEY_ID:}"
+  secret: "${BRAND_CRM_SECRET:}"
+  timeout-ms: ${BRAND_CRM_TIMEOUT_MS:3000}
+  # CRM 推送验签使用的外网路径（nginx 会去掉 /api 前缀，签名按外网地址计算）。
+  webhook-path: ${BRAND_CRM_WEBHOOK_PATH:/api/crm/brand-card}
+  # 消费订单上报（每满 ¥300 得一颗骰子、累计会员已享优惠，影响 7 天后退款金额），默认关闭。
+  # 品牌卡对外开售前必须开启，否则 CRM 退款试算缺少轻疗优惠记录。
+  order-report-enabled: ${BRAND_ORDER_REPORT_ENABLED:}
+
+# CRM → 轻疗内部支付接口（仅供 CRM 服务端调用），默认关闭。
+# 配置 key-id 与 secret 即启用；密钥只通过环境变量注入，不写入仓库。
+incentive:
+  # 内训师三人考核：默认关闭，仅测试环境通过环境变量打开。
+  team-cert-enabled: ${INCENTIVE_TEAM_CERT_ENABLED:false}
+  team-cert-backfill-days: 30
+  team-cert-duplicate-minutes: 10
+
+crm-internal:
+  enabled: ${CRM_INTERNAL_ENABLED:}
+  key-id: ${CRM_INTERNAL_KEY_ID:}
+  secret: ${CRM_INTERNAL_SECRET:}
+  max-skew-seconds: ${CRM_INTERNAL_MAX_SKEW_SECONDS:300}
+
+aliyun:
+  oss:
+    endpoint: https://oss-cn-hangzhou.aliyuncs.com # oss对外服务的访问域名
+    accessKeyId: ${ALIYUN_OSS_ACCESS_KEY_ID:} # 访问身份验证中用到用户标识
+    accessKeySecret: ${ALIYUN_OSS_ACCESS_KEY_SECRET:} # 用户用于加密签名字符串和oss用来验证签名字符串的密钥
+    bucketName: fullytherapy # oss的存储空间
+    policy:
+      expire: 300 # 签名有效期(S)
+    maxSize: 10 # 上传文件大小(M)
+    callback: '' # http://39.98.190.128:8080/aliyun/oss/callback 文件上传成功后的回调地址
+    dir:
+      prefix: fully/file/ # 上传文件夹路径前缀
+
+wx:
+  miniapp:
+    configs:
+      - appid: wxeb4e8a99b7eeebf8
+        secret: ${WX_MINIAPP_SECRET:}
+        #        token: #微信小程序消息服务器配置的token
+        #        aesKey: #微信小程序消息服务器配置的EncodingAESKey
+        msgDataFormat: JSON
+  mp:
+    useRedis: false
+    redisConfig:
+      host: 127.0.0.1
+      port: 6379
+    configs:
+      - appId: wx3b4f1e642bda21a1
+        secret: ${WX_MP_SECRET:}
+        token: ${WX_MP_TOKEN:}
+        aesKey: ${WX_MP_AES_KEY:}

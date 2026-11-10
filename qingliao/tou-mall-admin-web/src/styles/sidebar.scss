@@ -1,0 +1,304 @@
+@import './variables.scss';
+
+#app {
+  .main-container {
+    min-height: 100%;
+    transition: margin-left .28s cubic-bezier(.2, .7, .3, 1);
+    margin-left: $sidebar-width;
+    background: $bg;
+  }
+
+  // ---------- 侧边栏 ----------
+  .sidebar-container {
+    .horizontal-collapse-transition {
+      transition: 0s width ease-in-out, 0s padding-left ease-in-out, 0s padding-right ease-in-out;
+    }
+
+    transition: width .28s cubic-bezier(.2, .7, .3, 1), transform .28s cubic-bezier(.2, .7, .3, 1);
+    width: $sidebar-width !important;
+    height: 100%;
+    position: fixed;
+    font-size: 0;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1001;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, $menuBg 0%, $menuBg-2 100%);
+    border-right: 1px solid rgba(255, 255, 255, .04);
+
+    a {
+      display: inline-block;
+      width: 100%;
+      outline: none;
+    }
+
+    // logo 是 flex 布局的 router-link，不能被上面的通用 a 规则压成 inline-block
+    a.sidebar-logo {
+      display: flex;
+      width: auto;
+    }
+
+    .el-menu {
+      border: none;
+      width: 100% !important;
+      padding: 6px 12px 24px;
+      background: transparent;
+    }
+
+    .svg-icon {
+      width: 18px;
+      height: 18px;
+      margin-right: 10px;
+      flex-shrink: 0;
+      color: inherit;
+    }
+
+    .el-menu-item,
+    .el-submenu__title {
+      height: 44px;
+      line-height: 44px;
+      margin: 3px 0;
+      padding: 0 14px !important;
+      border-radius: $radius-md;
+      color: $menuText;
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: .01em;
+      transition: background-color .18s ease, color .18s ease;
+
+      &:hover,
+      &:focus {
+        background: $menuHover !important;
+        color: #fff;
+      }
+
+      i {
+        color: inherit;
+      }
+    }
+
+    .el-submenu__title .el-submenu__icon-arrow {
+      right: 14px;
+      margin-top: -4px;
+      color: rgba(255, 255, 255, .38);
+      font-size: 11px;
+      transition: transform .2s ease, color .2s ease;
+    }
+
+    .el-submenu.is-opened > .el-submenu__title {
+      color: #fff;
+
+      .el-submenu__icon-arrow {
+        color: rgba(255, 255, 255, .7);
+      }
+    }
+
+    .el-submenu.is-active > .el-submenu__title {
+      color: #fff;
+    }
+
+    // 一级选中：品牌色胶囊
+    > .el-scrollbar .el-menu > .el-menu-item.is-active,
+    > .el-menu > .el-menu-item.is-active,
+    .el-menu > .submenu-title-noDropdown.is-active {
+      background: $brand !important;
+      color: #fff !important;
+      box-shadow: 0 10px 22px -12px rgba(103, 80, 164, .95);
+
+      .svg-icon {
+        color: #fff;
+      }
+    }
+
+    // 子菜单
+    .el-menu--inline {
+      background: transparent !important;
+      padding: 2px 0 4px;
+
+      .el-menu-item {
+        height: 38px;
+        line-height: 38px;
+        margin: 1px 0;
+        padding-left: 44px !important;
+        font-size: 13px;
+        font-weight: 400;
+        color: rgba(255, 255, 255, .56);
+        border-radius: $radius-sm;
+
+        &:hover {
+          color: #fff;
+          background: $menuHover !important;
+        }
+
+        &.is-active {
+          color: #fff;
+          background: rgba(255, 255, 255, .09) !important;
+          font-weight: 500;
+
+          &::before {
+            content: "";
+            position: absolute;
+            left: 24px;
+            top: 50%;
+            width: 5px;
+            height: 5px;
+            margin-top: -2.5px;
+            border-radius: 50%;
+            background: #CBBBF7;
+          }
+        }
+      }
+    }
+
+    .nest-menu .el-submenu > .el-submenu__title,
+    .el-submenu .el-menu-item {
+      min-width: 0 !important;
+      background-color: transparent !important;
+    }
+
+    .el-menu--inline .svg-icon {
+      display: none;
+    }
+  }
+
+  // 收起：仅图标
+  .hideSidebar {
+    .sidebar-container {
+      width: $sidebar-collapsed-width !important;
+    }
+
+    .main-container {
+      margin-left: $sidebar-collapsed-width;
+    }
+
+    .sidebar-container .el-menu {
+      padding: 6px 12px 24px;
+    }
+
+    .sidebar-container .el-menu--collapse {
+      width: $sidebar-collapsed-width !important;
+    }
+
+    .sidebar-container .el-menu--collapse > .el-menu-item,
+    .sidebar-container .el-menu--collapse > .el-submenu > .el-submenu__title {
+      padding: 0 !important;
+      text-align: center;
+
+      .svg-icon {
+        margin: 0;
+        width: 20px;
+        height: 20px;
+      }
+
+      .el-submenu__icon-arrow {
+        display: none;
+      }
+
+      span {
+        height: 0;
+        width: 0;
+        overflow: hidden;
+        visibility: hidden;
+        display: inline-block;
+      }
+    }
+
+    .sidebar-container .el-menu--collapse > .el-menu-item.is-active {
+      background: $brand !important;
+    }
+  }
+
+  // 移动端：抽屉式
+  .mobile {
+    .main-container {
+      margin-left: 0;
+    }
+
+    .sidebar-container {
+      top: 0;
+      width: $sidebar-width !important;
+      transition: transform .28s cubic-bezier(.2, .7, .3, 1);
+      transform: translate3d(0, 0, 0);
+    }
+
+    &.hideSidebar {
+      .sidebar-container {
+        transition-duration: .3s;
+        transform: translate3d(-100%, 0, 0);
+      }
+
+      .main-container {
+        margin-left: 0;
+      }
+    }
+  }
+
+  .withoutAnimation {
+    .main-container,
+    .sidebar-container {
+      transition: none;
+    }
+  }
+}
+
+// ---------- 折叠态弹出子菜单（Element 会 teleport 到 body，不能写在 #app 内）----------
+.el-menu--vertical {
+  // 弹出层与收起后的侧栏留出 5px 间距，避免压住侧栏
+  transform: translateX(12px);
+  border-radius: $radius-md;
+  filter: drop-shadow(0 12px 24px rgba(31, 26, 43, .16));
+}
+
+.el-menu--vertical .el-menu--popup {
+  min-width: 188px;
+  padding: 6px;
+  border-radius: $radius-md;
+  // Element 会给 popup 写内联 transparent，这里必须提权
+  background: #fff !important;
+  box-shadow: none;
+
+  .el-menu-item {
+    height: 36px;
+    line-height: 36px;
+    margin: 1px 0;
+    padding: 0 12px !important;
+    border-radius: $radius-sm;
+    color: $ink-secondary !important;
+    font-size: 13.5px;
+    font-weight: 500;
+    background: transparent !important;
+
+    &:hover,
+    &:focus {
+      background: $brand-soft !important;
+      color: $brand !important;
+    }
+
+    &.is-active {
+      background: $brand-soft !important;
+      color: $brand !important;
+      font-weight: 600;
+
+      &::before {
+        content: "";
+        position: absolute;
+        left: 3px;
+        top: 50%;
+        width: 4px;
+        height: 14px;
+        margin-top: -7px;
+        border-radius: $radius-pill;
+        background: $brand;
+      }
+    }
+  }
+
+  .svg-icon {
+    display: none;
+  }
+}
+
+

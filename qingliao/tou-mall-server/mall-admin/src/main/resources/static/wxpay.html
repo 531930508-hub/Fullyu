@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Full愈</title>
+    <meta id="viewport" name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no">
+    <link href="https://cdn.bootcdn.net/ajax/libs/noty/3.1.4/noty.min.css" rel="stylesheet">
+    <style>
+      body {
+        margin: 0;
+        background-color: #F3F5F7;
+      }
+      .head {
+        width: 100%;
+        background: linear-gradient(270deg, #7EB6FF 0%, #4682F9 100%);
+        padding: 24px 16px;
+        margin-bottom: 12px;
+      }
+      .head-title {
+        font-size: 18px;
+        font-family: PingFangSC-Medium, PingFang SC;
+        font-weight: 500;
+        color: #FFFFFF;
+        line-height: 25px;
+      }
+      .head-desc {
+        font-size: 12px;
+        font-family: PingFangSC-Regular, PingFang SC;
+        font-weight: 400;
+        color: #FFFFFF;
+        line-height: 17px;
+      }
+      .flex {
+        display: flex;
+      }
+      .f-r {
+        display: flex;
+        flex-direction: row;
+      }
+      .f-c {
+        display: flex;
+        flex-direction: column;
+      }
+      .p-card {
+        padding: 16px;
+        background: #FFFFFF;
+        border-radius: 6px;
+        margin: 6px 16px;
+      }
+      .p-info {
+        margin-left: 10px;
+      }
+      .p-img {
+        width: 90px;
+        height: 90px;
+        border-radius: 4px;
+      }
+      .p-name {
+        color: #303133;
+        font-size: 16px;
+      }
+      .p-price {
+        margin-top: 5px;
+        color: #303133;
+        font-size: 16px;
+      }
+      .price-bar {
+        margin-top: 10px;
+        border-top: 1px dashed #e5e5e5;
+        justify-content: space-between;
+        padding-top: 8px;
+        display: flex;
+        align-items: center;
+      }
+      .order-price {
+        font-size: 14px;
+        font-family: DINAlternate-Bold, DINAlternate;
+        font-weight: bold;
+        color: #E62626;
+      }
+      .order-info {
+        margin: 12px 16px;
+        background: #FFFFFF;
+        border-radius: 6px;
+        padding: 16px;
+      }
+      .order-info div {
+        margin: 5px 0;
+        display: flex;
+        justify-content: space-between;
+      }
+      .o-label {
+        font-size: 14px;
+        font-family: PingFangSC-Regular, PingFang SC;
+        font-weight: 400;
+        color: #999999;
+        line-height: 14px;
+      }
+      .o-val {
+        font-size: 14px;
+        font-family: PingFangSC-Regular, PingFang SC;
+        font-weight: 400;
+        color: #303133;
+        line-height: 14px;
+      }
+      .pay-btn-div {
+        height: 90px;
+        padding: 12px 16px; 
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+      }
+      .pay-btn {
+        height: 55px;
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        background: #1678FF;
+        border-radius: 4px;
+        color: #fff;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .panel {
+        height: 100vh;
+        position: relative;
+      }
+    </style>
+</head>
+<body style="margin: 0">
+    <div id="app">
+      <div v-if="isAlipay()">
+          当前是支付宝
+      </div>
+      <div v-if="isWeChat()">
+        <div v-if="orderInfo && orderInfo.id && !isPayFin" class="panel">
+          <div class="head">
+            <div class="head-title">{{orderStatus(orderInfo)}}</div>
+            <div class="head-desc">请及时支付订单，以便我们尽快为您提供服务</div>
+          </div>
+          <div class="p-card">
+            <div class="f-r">
+              <img class="p-img" :src="`http://cdn.mall.corpbay.com/${orderInfo.orderItemList[0].productPic}`">
+              <div class="p-info f-c">
+                <div class="p-name">{{orderInfo.productTitle}}</div>
+                <div class="p-price">￥{{orderInfo.totalAmount}}</div>
+              </div>
+            </div>
+            <div class="f-r price-bar">
+              <div>待付款</div>
+              <div class="order-price">￥{{orderInfo.payAmount}}</div>
+            </div>
+          </div>
+
+          <div class="order-info">
+            <div>订单信息</div>
+            <div class="f-r">
+              <div class="o-label">订单编号</div>
+              <div class="o-val">{{orderInfo.orderSn}}</div>
+            </div>
+<!--            <div class="f-r">-->
+<!--              <div class="o-label">支付方式</div>-->
+<!--              <div class="o-val">{{payType(orderInfo.payType)}}</div>-->
+<!--            </div>-->
+            <div class="f-r">
+              <div class="o-label">创建时间</div>
+              <div class="o-val">{{orderInfo.createTime}}</div>
+            </div>
+          </div>
+          
+          <div class="pay-btn" @click="pay">去付款</div>
+        </div>
+
+        <div v-if="isPayFin" style="display: flex;justify-content: center;padding-top: 80px;">
+          <div style="color: #303133;font-size: 16px;margin: 10px;">支付完成</div>
+          <div style="font-size: 14px;color: #737475;line-height: 20px;">您可进入微信小程序服务订单页面查看具体订单信息</div>
+        </div>
+      </div>
+      <div v-else>
+        暂不支持当前浏览器支付订单，请使用微信扫码进入页面支付
+      </div>
+    </div>
+    <script src="https://cdn.bootcdn.net/ajax/libs/noty/3.1.4/noty.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/vue/3.2.45/vue.global.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/axios/1.2.1/axios.min.js"></script>
+    <script>
+  const { createApp, ref } = Vue
+  
+  // const Apis = {
+  //   orderInfo: 'http://proxy.oahnus.top/open/dgpay/order/info',
+  //   getPayInfo: 'http://proxy.oahnus.top/open/dgpay/wxWapPay',
+  // }
+
+  const Base = 'https://manage.fullytherapy.com'
+  const Base2 = 'https://proxy.oahnus.top'
+
+  const Apis = {
+    orderInfo: Base2 + '/api/admin/open/dgpay/order/info',
+    getPayInfo: Base2 + '/api/admin/open/dgpay/wxWapPay',
+  }
+
+  const tip = function(msg,type='danger') {
+    new Noty({
+        type: type,
+        layout: 'topCenter',
+        text: msg,
+        timeout: 3000,
+        theme: 'light'
+    }).show()
+  }
+
+  window.location.href = 'https://qr.alipay.com/bax04427xq5edniwmeog005c'
+
+  createApp({
+    setup(props, context) {
+      const getUrlParams = function(paramName) {
+        let url = window.location.href
+        let getqyinfo = url.split('?')[1]
+        let getqys = getqyinfo.split('&')
+        let obj = {}  //创建空对象，接收截取的参数
+        for(let i = 0;i < getqys.length;i++ ){
+          let item = getqys[i].split('=')
+          let key = item[0]
+          let value = item[1]
+          obj[key] = value 
+          if (key === paramName) {
+            return value
+          }
+        }
+
+        return null;
+      }
+      const isWeChat = function(){
+        return /MicroMessenger/i.test(window.navigator.userAgent);
+      }
+
+      const isAlipay = function () {
+          return /AlipayClient/i.test(window.navigator.userAgent);
+      }
+
+      let orderInfo = ref({})
+      let orderSn = ref('')
+      let appId = ref('')
+      let payInfo = ref({})
+      let code = ref('')
+      let openId = ref('')
+
+      const getOrderInfo = function(_orderSn, _code) {
+        axios({
+          method: 'get',
+          url: Apis.orderInfo,
+          params: {
+            orderSn: _orderSn,
+            code: _code
+          }
+        }).then(function(res) {
+          console.log(res)
+          if (res && res.status == 200) {
+            let respData = res.data
+            if (respData) {
+              orderInfo.value = respData.orderInfo
+              openId.value = respData.openId
+            }
+          } else {
+            tip('获取订单信息失败', 'error')
+          }
+        })
+      }
+
+      let orderSnVal = getUrlParams('orderSn')
+      let appIdVal = getUrlParams('appId')
+      
+      orderSn.value = orderSnVal
+      appId.value = appIdVal
+
+      let codeVal = getUrlParams('code')
+      code.value = codeVal
+
+      console.log('code', codeVal)
+      console.log('orderSn', orderSnVal)
+      
+      let payUrl = ref('')
+
+      if (isWeChat()) {
+          if (!codeVal || codeVal == null || codeVal == 'null') {
+              // 未授权openId
+              // let urlNow = window.location.href
+              // console.log('getCode')
+              // let urlNow = Base + '/wxWapPay/wxpay.html'
+              // let scope = 'snsapi_base'
+              // let url=`https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appIdVal}&redirect_uri=${encodeURIComponent(urlNow)}&response_type=code&scope=${scope}&state=${orderSnVal}&connect_redirect=1#wechat_redirect`;
+              // console.log(url)
+              // window.location.replace(url);
+              // payUrl.value = url
+          } else {
+              // 已拿到code，请求后台获取openId
+              console.log('code=', codeVal)
+              let orderSnVal = getUrlParams('state')
+              if (orderSnVal) {
+                  orderSnVal = orderSnVal.replace("#/", "")
+              }
+              orderSn.value = orderSnVal
+              getOrderInfo(orderSnVal, codeVal)
+          }
+      }
+      if (isAlipay()) {
+
+      }
+
+      return {
+        orderSn,
+        appId,
+        payUrl,
+        orderInfo,
+        payInfo,
+        code,
+        openId,
+
+        getUrlParams,
+        isWeChat,
+        getOrderInfo,
+      }
+    },
+    data() {
+      return {
+        message: 'Hello Vue!',
+        time: '',
+        isPayFin: false,
+      }
+    },
+    methods: {
+      
+      getPayInfo(_orderSn, openId) {
+        let that = this
+        axios({
+          method: 'post',
+          url: Apis.getPayInfo,
+          params: {
+            orderSn: _orderSn,
+            openId: openId,
+          }
+        }).then(function(res) {
+          console.log(res)
+          if (res && res.status === 200) {
+            let respData = res.data
+            
+            // 检测支付环境中的 WeixinJSBridge
+            if (typeof WeixinJSBridge == "undefined") {
+              if (document.addEventListener) {
+                document.addEventListener('WeixinJSBridgeReady', onBridgeReady, false);
+              } else if (document.attachEvent) {
+                document.attachEvent('WeixinJSBridgeReady', onBridgeReady);
+                document.attachEvent('onWeixinJSBridgeReady', onBridgeReady);
+              }
+            } else {
+              // 获取订单支付信息
+              if (!respData || !respData.payParams) {
+                tip('获取支付信息失败', 'error')
+                return false
+              }
+              let {appId, timeStamp, package,paySign,nonceStr, signType} = respData.payParams
+
+              WeixinJSBridge.invoke(
+                'getBrandWCPayRequest', {
+                  "appId": appId, //公众号名称，由商户传入     
+                  "timeStamp": timeStamp, //时间戳，自1970年以来的秒数     
+                  "nonceStr": nonceStr, //随机串     
+                  "package": package,
+                  "signType": signType, //微信签名方式：     
+                  "paySign": paySign //微信签名 
+                },
+              function(res) {
+                // 支付成功
+                if (res.err_msg == "get_brand_wcpay_request:ok") {
+                  // 使用以上方式判断前端返回,微信团队郑重提示：
+                  //res.err_msg将在用户支付成功后返回ok，但并不保证它绝对可靠。
+                  that.isPayFin = true
+                }
+                // 支付过程中用户取消
+                if (res.err_msg == "get_brand_wcpay_request:cancel") {
+                  that.tip('支付已取消', 'warning')
+                }
+                // 支付失败
+                if (res.err_msg == "get_brand_wcpay_request:fail") {
+                  that.tip('支付失败', 'error')                  
+                }
+                /**
+                 * 其它
+                 * 1、请检查预支付会话标识prepay_id是否已失效
+                 * 2、请求的appid与下单接口的appid是否一致
+                 * */
+                if (res.err_msg == "调用支付JSAPI缺少参数：total_fee") {
+
+                }
+              })
+            }
+          }
+        }).catch(function(err) {
+          tip('支付失败,请联系客服或商务人员处理', 'error')
+        })
+      },
+      pay() {
+        console.log('pay')
+
+        if (!this.orderInfo) {
+          tip('订单信息不存在', 'warning')
+          return false
+        }
+        let status = this.orderInfo.state
+        if (status !== 0) {
+          tip('订单' + this.orderStatus(this.orderInfo), 'warning')
+          return false
+        }
+
+        this.getPayInfo(this.orderSn, this.openId)
+      },
+      orderStatus(order) {
+        if(!order) {
+          return '订单不存在'
+        }
+        let orderStatus = order.state
+        switch(orderStatus) {
+          case 0:
+            return '待付款'
+          case 1:
+          case 2:
+            return '已付款'
+          case 3:
+            return '已超时'
+          case 4:
+            return '已取消'
+          case 5:
+            return '退款中'
+          case 6:
+            return '已退款'
+          case 7:
+            return '退款中'
+          default:
+            return '未知'
+        }
+      },
+      payType(payTypeVal) {
+        switch (payTypeVal) {
+          case 0:
+            return '微信支付'
+          case 1:
+            return '银行打款'
+          case 2:
+            return '微信app'
+          case 3:
+            return '支付宝'
+          case 4:
+            return '微信扫码'
+          default:
+            return '未知'
+        }
+      },
+      
+    },
+  }).mount('#app')
+</script>
+</body>
+</html>

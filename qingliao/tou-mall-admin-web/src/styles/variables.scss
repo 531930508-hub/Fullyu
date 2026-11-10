@@ -1,0 +1,79 @@
+// ---------------------------------------------------------------------------
+// Full愈 轻疗 · 运营台设计变量
+// 品牌紫 + 中性暖灰，圆角 & 柔和投影；供全局样式与单页 scss 共用
+// ---------------------------------------------------------------------------
+
+// 品牌色阶（以 #6750A4 为主色）
+$--color-primary: #6750A4;
+$--color-primary-light-1: #7B68B8;
+$--color-primary-light-2: #8F7FCC;
+$--color-primary-light-3: #A396E0;
+$--color-primary-light-4: #B7ADF4;
+$--color-primary-light-5: #CBC4FF;
+$--color-primary-light-6: #DFDBFF;
+$--color-primary-light-7: #E8DEF8;
+$--color-primary-light-8: #F1ECFF;
+$--color-primary-light-9: #F9F6FF;
+
+$brand: #6750A4;
+$brand-hover: #5A4495;
+$brand-deep: #4B367D;
+$brand-soft: #F1ECFB;
+$brand-tint: #E8DEF8;
+
+// 辅助色（用于奖励、审批等强调场景）
+$gold: #B08243;
+$gold-soft: #FBF2E3;
+
+// 文本
+$ink: #1C1B20;
+$ink-secondary: #49454F;
+$ink-muted: #79747E;
+$ink-faint: #A29BA9;
+
+// 背景 / 描边
+$bg: #F5F3F8;
+$bg-deep: #EFEBF5;
+$surface: #FFFFFF;
+$surface-2: #FAF9FC;
+$line: #ECE8F3;
+$line-strong: #DFD9EA;
+
+// 语义色
+$success: #2E7D52;
+$success-soft: #E8F4EC;
+$warning: #B26A00;
+$warning-soft: #FDF2E2;
+$danger: #B3261E;
+$danger-soft: #FBEAE8;
+$info: #3D6E9E;
+$info-soft: #EAF1F8;
+
+// 侧边栏（深色）
+$menuBg: #1F1A2B;
+$menuBg-2: #2A2338;
+$subMenuBg: #1F1A2B;
+$menuHover: rgba(255, 255, 255, 0.07);
+$menuText: rgba(255, 255, 255, 0.66);
+$menuTextActive: #FFFFFF;
+
+// 圆角
+$radius-xs: 6px;
+$radius-sm: 8px;
+$radius-md: 12px;
+$radius-lg: 16px;
+$radius-xl: 20px;
+$radius-pill: 999px;
+
+// 投影
+$shadow-xs: 0 1px 2px rgba(28, 27, 32, 0.05);
+$shadow-sm: 0 1px 2px rgba(28, 27, 32, 0.04), 0 6px 18px -10px rgba(28, 27, 32, 0.18);
+$shadow-md: 0 10px 28px -12px rgba(28, 27, 32, 0.28);
+$shadow-lg: 0 24px 60px -24px rgba(28, 27, 32, 0.38);
+$shadow-brand: 0 10px 24px -10px rgba(103, 80, 164, 0.55);
+
+// 尺寸
+$sidebar-width: 236px;
+$sidebar-collapsed-width: 72px;
+$navbar-height: 64px;
+$page-gutter: 24px;

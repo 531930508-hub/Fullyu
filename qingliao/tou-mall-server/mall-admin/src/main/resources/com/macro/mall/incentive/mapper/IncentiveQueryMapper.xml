@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.macro.mall.incentive.mapper.IncentiveQueryMapper">
+
+    <sql id="validOrderJoins">
+        FROM oms_order_detail od
+        INNER JOIN s_order o ON o.id = od.order_id
+        INNER JOIN c_customer c ON c.id = o.customer_id
+        LEFT JOIN s_project p ON p.id = od.project_id
+    </sql>
+
+    <sql id="validOrderWhere">
+        o.state IN (1, 2)
+        AND o.appointment_state IN (1, 2)
+        AND o.type = 0
+        AND o.pay_time IS NOT NULL
+        AND od.state = 2
+        AND od.massagist_id IS NOT NULL
+        AND c.phone IS NOT NULL
+        AND TRIM(c.phone) &lt;&gt; ''
+        AND NOT EXISTS (
+            SELECT 1 FROM s_stat_internal_account ia
+            WHERE ia.enabled = 1 AND ia.phone = TRIM(c.phone)
+        )
+    </sql>
+
+    <sql id="shopFilter">
+        <if test="shopIds != null and shopIds.size() > 0">
+            AND od.shop_id IN
+            <foreach collection="shopIds" item="shopId" open="(" separator="," close=")">
+                #{shopId}
+            </foreach>
+        </if>
+        <if test="massagistId != null">
+            AND od.massagist_id = #{massagistId}
+        </if>
+    </sql>
+
+    <select id="selectServiceDetails" resultType="com.macro.mall.incentive.model.ServiceDetailRow">
+        SELECT od.id AS detail_id,
+               o.id AS order_id,
+               od.massagist_id,
+               od.shop_id,
+               TRIM(c.phone) AS phone,
+               DATE(od.end_time) AS service_date,
+               DATE(o.pay_time) AS pay_date,
+               od.duration,
+               COALESCE(p.coefficient, 1.00) AS project_coefficient,
+               od.project_id,
+               COALESCE(p.title, o.product_title) AS project_title,
+               o.parts AS parts
+        <include refid="validOrderJoins"/>
+        WHERE <include refid="validOrderWhere"/>
+          AND od.end_time &gt;= #{start}
+          AND od.end_time &lt; #{end}
+        <include refid="shopFilter"/>
+        ORDER BY od.massagist_id, od.end_time, od.id
+    </select>
+
+    <select id="selectServiceDetailsForMassagists" resultType="com.macro.mall.incentive.model.ServiceDetailRow">
+        SELECT od.id AS detail_id, o.id AS order_id,
+               od.massagist_id, od.shop_id, DATE(od.end_time) AS service_date,
+               od.duration, od.project_id,
+               COALESCE(p.title, o.product_title) AS project_title, o.parts
+        <include refid="validOrderJoins"/>
+        WHERE <include refid="validOrderWhere"/>
+          AND od.end_time &gt;= #{start} AND od.end_time &lt; #{end}
+        <choose>
+            <when test="massagistIds != null and massagistIds.size() > 0">
+                AND od.massagist_id IN
+                <foreach collection="massagistIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <otherwise>AND 1=0</otherwise>
+        </choose>
+        <if test="shopIds != null">
+            <choose>
+                <when test="shopIds.size() > 0">
+                    AND od.shop_id IN
+                    <foreach collection="shopIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                </when>
+                <otherwise>AND 1=0</otherwise>
+            </choose>
+        </if>
+        ORDER BY od.massagist_id, od.end_time, od.id
+    </select>
+
+    <select id="selectServiceDetailsByPayDate" resultType="com.macro.mall.incentive.model.ServiceDetailRow">
+        SELECT od.id AS detail_id,
+               o.id AS order_id,
+               od.massagist_id,
+               od.shop_id,
+               TRIM(c.phone) AS phone,
+               DATE(od.end_time) AS service_date,
+               DATE(o.pay_time) AS pay_date,
+               od.duration,
+               COALESCE(p.coefficient, 1.00) AS project_coefficient,
+               od.project_id,
+               COALESCE(p.title, o.product_title) AS project_title,
+               o.parts AS parts
+        <include refid="validOrderJoins"/>
+        WHERE <include refid="validOrderWhere"/>
+          AND DATE(o.pay_time) &gt;= #{start}
+          AND DATE(o.pay_time) &lt;= #{end}
+        <include refid="shopFilter"/>
+        ORDER BY o.pay_time, od.id
+    </select>
+
+    <select id="selectVisits" resultType="com.macro.mall.incentive.model.CustomerVisit">
+        SELECT TRIM(c.phone) AS phone,
+               DATE(od.end_time) AS service_date,
+               od.massagist_id,
+               od.shop_id
+        <include refid="validOrderJoins"/>
+        WHERE <include refid="validOrderWhere"/>
+          AND od.end_time &gt;= #{start}
+          AND od.end_time &lt; #{end}
+        <include refid="shopFilter"/>
+        ORDER BY od.end_time, od.id
+    </select>
+
+    <select id="selectVisitsByPhones" resultType="com.macro.mall.incentive.model.CustomerVisit">
+        SELECT TRIM(c.phone) AS phone,
+               DATE(od.end_time) AS service_date,
+               od.massagist_id,
+               od.shop_id
+        <include refid="validOrderJoins"/>
+        WHERE <include refid="validOrderWhere"/>
+          AND od.end_time &gt;= #{historyStart}
+          AND od.end_time &lt; #{end}
+          AND TRIM(c.phone) IN
+        <foreach collection="phones" item="phone" open="(" separator="," close=")">
+            #{phone}
+        </foreach>
+        ORDER BY c.phone, od.end_time, od.id
+    </select>
+
+    <select id="selectEarliestServiceDate" resultType="java.time.LocalDate">
+        SELECT MIN(DATE(od.end_time))
+        <include refid="validOrderJoins"/>
+        WHERE <include refid="validOrderWhere"/>
+          AND od.massagist_id = #{massagistId}
+    </select>
+
+</mapper>

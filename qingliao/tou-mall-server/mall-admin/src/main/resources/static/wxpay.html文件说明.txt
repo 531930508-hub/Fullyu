@@ -1,0 +1,1 @@
+wx.html页面文件在 manage.fullytherapy.com/wxWapPay/wx.html路径下

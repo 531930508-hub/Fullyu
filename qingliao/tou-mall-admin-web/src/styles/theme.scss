@@ -1,0 +1,843 @@
+// ---------------------------------------------------------------------------
+// Element UI 主题层
+// 统一圆角、描边、投影、状态色与交互反馈；在 element-ui.scss 之后加载
+// ---------------------------------------------------------------------------
+@import './variables.scss';
+
+// ---------- 基础文本 ----------
+.el-button,
+.el-input,
+.el-textarea,
+.el-select,
+.el-table,
+.el-tag,
+.el-pagination,
+.el-form,
+.el-dialog,
+.el-drawer,
+.el-dropdown-menu,
+.el-message-box {
+  font-family: inherit;
+}
+
+::selection {
+  background: rgba(103, 80, 164, 0.18);
+  color: $ink;
+}
+
+// ---------- 按钮 ----------
+// 设计规范：操作按钮不带外圈描边，用软底填充区分层级；
+// border 保持 1px transparent 以维持尺寸，background-clip 默认 border-box 不会露缝
+.el-button {
+  border-radius: $radius-md;
+  border-color: transparent;
+  background: $bg-deep;
+  color: $ink-secondary;
+  font-weight: 500;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+
+  &:hover,
+  &:focus {
+    color: $brand;
+    border-color: transparent;
+    background: $brand-soft;
+  }
+
+  &:active {
+    color: $brand-deep;
+    border-color: transparent;
+    background: $brand-tint;
+  }
+
+  &.is-disabled,
+  &.is-disabled:hover,
+  &.is-disabled:focus {
+    border-color: transparent;
+    background: $surface-2;
+    color: $ink-faint;
+  }
+}
+
+.el-button--primary {
+  background: $brand;
+  border-color: transparent;
+  color: #fff;
+
+  &:hover,
+  &:focus {
+    background: $brand-hover;
+    border-color: transparent;
+    color: #fff;
+    box-shadow: $shadow-brand;
+  }
+
+  &:active {
+    background: $brand-deep;
+    border-color: transparent;
+  }
+
+  &.is-disabled,
+  &.is-disabled:hover,
+  &.is-disabled:focus {
+    background: #CFC7E2;
+    border-color: transparent;
+    color: #fff;
+    box-shadow: none;
+  }
+
+  &.is-plain {
+    background: $brand-soft;
+    border-color: transparent;
+    color: $brand;
+
+    &:hover,
+    &:focus {
+      background: $brand;
+      border-color: transparent;
+      color: #fff;
+    }
+  }
+}
+
+.el-button--text {
+  color: $brand;
+  padding: 0 6px;
+
+  &:hover,
+  &:focus {
+    color: $brand-hover;
+    background: transparent;
+  }
+}
+
+.el-button--mini {
+  border-radius: 8px;
+}
+
+.el-button--small {
+  border-radius: 9px;
+}
+
+.el-button--large {
+  border-radius: 13px;
+}
+
+.el-button.is-round {
+  border-radius: $radius-pill;
+}
+
+.el-button.is-circle {
+  padding: 10px;
+}
+
+.el-button-group > .el-button:first-child {
+  border-radius: $radius-md 0 0 $radius-md;
+}
+
+.el-button-group > .el-button:last-child {
+  border-radius: 0 $radius-md $radius-md 0;
+}
+
+// 键盘可达性：焦点反馈收进按钮内部，不出现外圈描边
+.el-button:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(103, 80, 164, .45);
+}
+
+.el-button--primary:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .7);
+}
+
+.el-input__inner:focus-visible,
+.el-textarea__inner:focus-visible {
+  outline: none;
+}
+
+// ---------- 输入 / 选择 ----------
+.el-input__inner,
+.el-textarea__inner {
+  border-color: $line-strong;
+  border-radius: $radius-md;
+  color: $ink;
+  background-color: #fff;
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+
+  &::placeholder {
+    color: $ink-faint !important;
+    -webkit-text-fill-color: $ink-faint !important;
+    opacity: 1 !important;
+  }
+
+  &:hover {
+    border-color: #C9C2D6;
+  }
+
+  &:focus {
+    border-color: $brand;
+    box-shadow: 0 0 0 3px rgba(103, 80, 164, .12);
+  }
+}
+
+.el-range-input::placeholder {
+  color: $ink-faint !important;
+  -webkit-text-fill-color: $ink-faint !important;
+  opacity: 1 !important;
+}
+
+.el-textarea__inner {
+  padding: 9px 12px;
+  line-height: 1.6;
+}
+
+.el-input.is-disabled .el-input__inner,
+.el-textarea.is-disabled .el-textarea__inner {
+  background: $surface-2;
+  border-color: $line;
+  color: $ink-muted;
+}
+
+.el-input__prefix,
+.el-input__suffix {
+  color: $ink-faint;
+}
+
+.el-select .el-input.is-focus .el-input__inner {
+  border-color: $brand;
+  box-shadow: 0 0 0 3px rgba(103, 80, 164, .12);
+}
+
+.el-select .el-tag {
+  background: $brand-soft;
+  border-color: transparent;
+  color: $brand;
+}
+
+.el-select-dropdown {
+  border: 1px solid $line;
+  border-radius: $radius-md;
+  box-shadow: $shadow-md;
+  padding: 6px;
+
+  .el-scrollbar__view {
+    padding: 0;
+  }
+}
+
+.el-select-dropdown__item {
+  height: 34px;
+  line-height: 34px;
+  margin: 1px 0;
+  padding: 0 12px;
+  border-radius: $radius-sm;
+  color: $ink-secondary;
+  font-size: 14px;
+
+  &.hover,
+  &:hover {
+    background: $brand-soft;
+    color: $brand;
+  }
+
+  &.selected {
+    color: $brand;
+    font-weight: 600;
+  }
+}
+
+.el-select-dropdown__empty {
+  color: $ink-muted;
+  padding: 16px 0;
+}
+
+// ---------- 表单 ----------
+.el-form-item__label {
+  color: $ink-secondary;
+  font-weight: 500;
+}
+
+.el-form-item__error {
+  color: $danger;
+  padding-top: 4px;
+}
+
+// ---------- 表格 ----------
+.el-table {
+  color: $ink-secondary;
+  font-size: 13.5px;
+  background: #fff;
+  border-radius: $radius-lg;
+
+  th.el-table__cell {
+    background: $surface-2;
+    color: $ink-secondary;
+    font-size: 13px;
+    font-weight: 600;
+    height: 46px;
+    border-bottom-color: $line;
+  }
+
+  td.el-table__cell {
+    border-bottom-color: $line;
+    padding: 11px 0;
+  }
+
+  .cell {
+    line-height: 22px;
+  }
+
+  &::before {
+    display: none;
+  }
+
+  th:first-child {
+    border-top-left-radius: $radius-lg;
+  }
+
+  th:last-child {
+    border-top-right-radius: $radius-lg;
+  }
+
+  &--border {
+    border-color: $line;
+    border-radius: $radius-lg;
+
+    th.el-table__cell,
+    td.el-table__cell {
+      border-right-color: $line;
+    }
+  }
+
+  &--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+    background: $surface-2;
+  }
+
+  .el-table__body tr:hover > td.el-table__cell {
+    background: #FAF8FE;
+  }
+
+  .el-table__expanded-cell {
+    background: $surface-2;
+  }
+
+  .el-table__empty-block {
+    background: #fff;
+    min-height: 160px;
+  }
+
+  .el-table__empty-text {
+    color: $ink-muted;
+    font-size: 13px;
+  }
+}
+
+.el-table__fixed-right::before,
+.el-table__fixed::before {
+  display: none;
+}
+
+.el-table__fixed-right-patch {
+  background: $surface-2;
+  border-bottom-color: $line;
+}
+
+// ---------- 分页 ----------
+.el-pagination {
+  color: $ink-muted;
+  font-weight: 400;
+  padding: 0;
+
+  .btn-prev,
+  .btn-next,
+  .el-pager li {
+    min-width: 32px;
+    height: 32px;
+    line-height: 32px;
+    border-radius: $radius-sm;
+    background: transparent;
+    color: $ink-secondary;
+    font-weight: 500;
+  }
+
+  .btn-prev:hover,
+  .btn-next:hover,
+  .el-pager li:hover {
+    color: $brand;
+    background: $brand-soft;
+  }
+
+  .el-pager li.active {
+    background: $brand;
+    color: #fff;
+  }
+
+  .el-pager li.active:hover {
+    background: $brand-hover;
+    color: #fff;
+  }
+
+  .el-pagination__sizes .el-input .el-input__inner {
+    height: 32px;
+    line-height: 32px;
+    border-radius: $radius-sm;
+  }
+
+  .el-pagination__total,
+  .el-pagination__jump {
+    color: $ink-muted;
+  }
+}
+
+// ---------- 标签 ----------
+.el-tag {
+  height: 24px;
+  line-height: 22px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: $radius-sm;
+  background: #F2F0F6;
+  color: $ink-secondary;
+  font-size: 12px;
+  font-weight: 500;
+
+  &--success {
+    background: $success-soft;
+    color: $success;
+  }
+
+  &--warning {
+    background: $warning-soft;
+    color: $warning;
+  }
+
+  &--danger {
+    background: $danger-soft;
+    color: $danger;
+  }
+
+  &--info {
+    background: #F2F0F6;
+    color: $ink-muted;
+  }
+
+  &--primary {
+    background: $brand-soft;
+    color: $brand;
+  }
+
+  &.el-tag--dark {
+    background: $brand;
+    color: #fff;
+  }
+
+  .el-tag__close {
+    color: inherit;
+
+    &:hover {
+      background: rgba(0, 0, 0, .08);
+      color: inherit;
+    }
+  }
+}
+
+// ---------- 页签 ----------
+.el-tabs__header {
+  margin-bottom: 18px;
+}
+
+.el-tabs__item {
+  height: 46px;
+  line-height: 46px;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 500;
+  color: $ink-muted;
+
+  &:hover {
+    color: $brand;
+  }
+
+  &.is-active {
+    color: $ink;
+    font-weight: 600;
+  }
+}
+
+.el-tabs__active-bar {
+  height: 3px;
+  border-radius: 3px;
+  background: $brand;
+}
+
+.el-tabs__nav-wrap::after {
+  height: 1px;
+  background: $line;
+}
+
+.el-tabs--card > .el-tabs__header .el-tabs__nav,
+.el-tabs--card > .el-tabs__header .el-tabs__item {
+  border-color: $line;
+}
+
+.el-tabs--card > .el-tabs__header .el-tabs__item.is-active {
+  border-bottom-color: #fff;
+}
+
+// ---------- 弹窗 ----------
+.el-dialog {
+  margin: 7vh auto 40px;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-lg;
+  overflow: hidden;
+
+  &__header {
+    padding: 24px 28px 6px;
+  }
+
+  &__title {
+    font-size: 17px;
+    font-weight: 600;
+    color: $ink;
+    line-height: 26px;
+  }
+
+  &__headerbtn {
+    top: 22px;
+    right: 22px;
+    width: 32px;
+    height: 32px;
+    border-radius: $radius-sm;
+
+    &:hover {
+      background: $brand-soft;
+    }
+  }
+
+  &__close {
+    color: $ink-muted;
+  }
+
+  &__body {
+    padding: 12px 28px 8px;
+    color: $ink-secondary;
+    font-size: 14px;
+    line-height: 1.65;
+  }
+
+  &__footer {
+    padding: 14px 28px 24px;
+    text-align: right;
+  }
+}
+
+.el-dialog__wrapper {
+  background-color: rgba(28, 27, 32, .32);
+}
+
+.el-message-box {
+  border: 0;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-lg;
+  padding-bottom: 8px;
+
+  &__header {
+    padding: 24px 24px 4px;
+  }
+
+  &__title {
+    font-size: 17px;
+    font-weight: 600;
+    color: $ink;
+  }
+
+  &__content {
+    padding: 12px 24px 18px;
+    color: $ink-secondary;
+    font-size: 14px;
+    line-height: 1.65;
+  }
+
+  &__btns {
+    padding: 0 24px 20px;
+  }
+
+  &__status.el-icon-warning {
+    color: $warning;
+  }
+}
+
+.el-drawer {
+  border-radius: $radius-xl 0 0 $radius-xl;
+  box-shadow: $shadow-lg;
+  overflow: hidden;
+
+  &__header {
+    padding: 20px 24px 12px;
+    color: $ink;
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  &__body {
+    padding: 12px 24px 24px;
+    color: $ink-secondary;
+    overflow: auto;
+  }
+}
+
+// ---------- 下拉菜单 ----------
+.el-dropdown-menu {
+  padding: 6px;
+  border: 1px solid $line;
+  border-radius: $radius-md;
+  box-shadow: $shadow-md;
+}
+
+.el-dropdown-menu__item {
+  padding: 0 12px;
+  border-radius: $radius-sm;
+  line-height: 34px;
+  font-size: 14px;
+  color: $ink-secondary;
+
+  &:not(.is-disabled):hover,
+  &:focus {
+    background: $brand-soft;
+    color: $brand;
+  }
+
+  &--divided {
+    margin-top: 6px;
+    border-top-color: $line;
+
+    &::before {
+      display: none;
+    }
+  }
+}
+
+.el-dropdown-menu--medium .el-dropdown-menu__item {
+  line-height: 34px;
+}
+
+// ---------- 卡片 ----------
+.el-card {
+  border: 1px solid $line;
+  border-radius: $radius-lg;
+  background: #fff;
+  box-shadow: $shadow-sm;
+  overflow: hidden;
+
+  &.is-never-shadow,
+  &.is-always-shadow {
+    box-shadow: $shadow-sm;
+  }
+
+  &__header {
+    padding: 18px 22px;
+    border-bottom: 1px solid $line;
+    color: $ink;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  &__body {
+    padding: 20px 22px;
+  }
+}
+
+// ---------- 日期 / 时间面板 ----------
+.el-picker-panel {
+  border: 1px solid $line;
+  border-radius: $radius-md;
+  box-shadow: $shadow-md;
+  color: $ink-secondary;
+}
+
+.el-date-picker__header-label {
+  color: $ink-secondary;
+  font-weight: 500;
+}
+
+.el-date-table td.available:hover,
+.el-time-panel__content .el-time-panel__item:hover {
+  color: $brand;
+}
+
+.el-date-table td.today span {
+  color: $brand;
+  font-weight: 600;
+}
+
+.el-date-table td.current:not(.disabled) span {
+  background: $brand;
+  color: #fff;
+}
+
+.el-time-panel {
+  border-radius: $radius-sm;
+}
+
+// ---------- 提示 / 通知 ----------
+.el-message {
+  min-width: 320px;
+  border: 1px solid $line;
+  border-radius: $radius-md;
+  box-shadow: $shadow-md;
+  padding: 12px 16px;
+
+  &__content {
+    color: $ink;
+    font-size: 14px;
+  }
+}
+
+.el-notification {
+  border: 1px solid $line;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-md;
+
+  &__title {
+    font-size: 15px;
+    font-weight: 600;
+    color: $ink;
+  }
+
+  &__content {
+    color: $ink-secondary;
+    font-size: 13.5px;
+  }
+}
+
+.el-tooltip__popper.is-dark {
+  background: #2C2539;
+  border-radius: $radius-sm;
+  padding: 7px 10px;
+  font-size: 12.5px;
+}
+
+.el-popover {
+  border: 1px solid $line;
+  border-radius: $radius-md;
+  box-shadow: $shadow-md;
+}
+
+// ---------- 加载 ----------
+.el-loading-mask {
+  background-color: rgba(250, 249, 252, .78);
+  border-radius: inherit;
+  transition: opacity .2s ease;
+}
+
+.el-loading-spinner .path {
+  stroke: $brand;
+}
+
+.el-loading-spinner .el-loading-text {
+  color: $brand;
+}
+
+// ---------- 单选 / 复选 / 开关 ----------
+.el-radio-button__inner {
+  height: 36px;
+  line-height: 14px;
+  padding: 11px 20px;
+  border-color: $line-strong;
+  color: $ink-secondary;
+  font-weight: 500;
+  background: #fff;
+  transition: all .18s ease;
+}
+
+.el-radio-button:first-child .el-radio-button__inner {
+  border-radius: $radius-md 0 0 $radius-md;
+}
+
+.el-radio-button:last-child .el-radio-button__inner {
+  border-radius: 0 $radius-md $radius-md 0;
+}
+
+.el-radio-button__orig-radio:checked + .el-radio-button__inner {
+  background: $brand;
+  border-color: $brand;
+  color: #fff;
+  box-shadow: -1px 0 0 0 $brand;
+}
+
+.el-radio__label,
+.el-checkbox__label {
+  color: $ink-secondary;
+  font-size: 14px;
+}
+
+.el-switch.is-checked .el-switch__core {
+  border-color: $brand;
+  background-color: $brand;
+}
+
+// ---------- 步骤条 / 描述列表 / 折叠 ----------
+.el-step__title.is-process {
+  color: $ink;
+  font-weight: 600;
+}
+
+.el-step__head.is-process {
+  color: $brand;
+  border-color: $brand;
+}
+
+.el-descriptions__label {
+  color: $ink-muted;
+  font-weight: 500;
+}
+
+.el-collapse,
+.el-collapse-item__header,
+.el-collapse-item__wrap {
+  border-color: $line;
+}
+
+.el-collapse-item__header {
+  color: $ink;
+  font-weight: 600;
+}
+
+// ---------- 图片预览 ----------
+.el-image-viewer__mask {
+  background: #1C1B20;
+  opacity: .86;
+}
+
+// ---------- 空状态（自定义组件） ----------
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 20px;
+  color: $ink-muted;
+
+  &__icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+    background: $brand-soft;
+    color: $brand;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin-bottom: 14px;
+  }
+
+  &__title {
+    font-size: 14px;
+    font-weight: 500;
+    color: $ink-secondary;
+  }
+
+  &__desc {
+    margin-top: 4px;
+    font-size: 12.5px;
+    color: $ink-faint;
+  }
+}

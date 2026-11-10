@@ -41,3 +41,10 @@ deploy-secrets.*
 *.tar.gz
 qa/
 vibe_images/
+
+# 轻疗商城（tou-mall）构建产物与本地日志
+qingliao/tou-mall-server/**/target/
+qingliao/tou-mall-server/logs/
+qingliao/tou-mall-admin-web/node_modules/
+qingliao/**/*.log
+qingliao/**/application-local.yml

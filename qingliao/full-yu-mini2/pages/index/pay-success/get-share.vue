@@ -4,7 +4,7 @@
 			<view class="bg-white rounded-lg p-2">
 				<view class="h-full">
 					<image class="rounded-lg " style="max-width: 100%;"
-						src="https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/file/shop/20250618/f0150089-3138-4424-bc56-459f7101f23a%28._.%29mentou.png?Expires=1770604214&OSSAccessKeyId=LTAI5tRkattW3YRJ5mqceetF&Signature=aMhsH9H9Qnte67HOIJ69uArb33k%3D"
+						src="https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/file/shop/20250618/f0150089-3138-4424-bc56-459f7101f23a%28._.%29mentou.png"
 						mode="widthFix" ></image>
 				</view>
 				<view class="text-[#584219] text-[32rpx] pl-1  pt-4 pb-4">您的好友「小毛」邀请您一起享受Full愈时刻</view>
@@ -23,7 +23,7 @@
 					<view class="text-center">（+86）123456789</view>
 					<view class="flex justify-center pt-1">
 						<image class="h-[280rpx] w-[280rpx]" mode="widthFix"
-						src="https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/file/shop/20250618/f0150089-3138-4424-bc56-459f7101f23a%28._.%29mentou.png?Expires=1770604214&OSSAccessKeyId=LTAI5tRkattW3YRJ5mqceetF&Signature=aMhsH9H9Qnte67HOIJ69uArb33k%3D"
+						src="https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/file/shop/20250618/f0150089-3138-4424-bc56-459f7101f23a%28._.%29mentou.png"
 						></image>
 					</view>
 				</view>

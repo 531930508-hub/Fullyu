@@ -1,0 +1,740 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.macro.mall.mapper.OrderMapper">
+    <select id="operatingRevenue" resultType="com.macro.mall.dto.OperatingRevenueDto">
+        SELECT operatingRevenue.*, cc.phone,
+        CASE
+            WHEN cc.comment IS NOT NULL AND cc.comment != '' AND cc.gender IS NOT NULL THEN CONCAT(cc.comment, CASE cc.gender WHEN 1 THEN '先生' WHEN 2 THEN '女士' ELSE '' END)
+            WHEN cc.nickname IS NOT NULL AND cc.nickname = CONCAT('用户', cc.phone) THEN phone
+            ELSE cc.nickname
+            END nickname
+        FROM (
+        -- 收入部分
+        SELECT
+        '收入' AS type,
+        CASE
+        WHEN type = 0 AND pay_type = 0 THEN '二维码支付'
+        WHEN type = 0 AND pay_type = 1 THEN '微信支付'
+        WHEN type = 0 AND pay_type = 2 THEN '核券收入'
+        WHEN type = 0 AND pay_type = 3 THEN '美团点评'
+        WHEN type = 0 AND pay_type = 4 THEN '现金支付'
+        WHEN type = 1 THEN '购券预收'
+        ELSE '无'
+        END AS businessType,
+        CASE WHEN type = 0 AND pay_type = 2 THEN caa.couponActualAmount ELSE pay_amount END AS amount,
+        '已支付' AS payState,
+        pay_time AS payTime,
+        case
+        when type = 1 then pay_time
+        else end_time
+        end AS finishTime,
+        CASE
+        WHEN pay_type = 0 THEN '二维码支付'
+        WHEN pay_type = 1 THEN '微信支付'
+        WHEN pay_type = 2 THEN '卡券支付'
+        WHEN pay_type = 3 THEN '美团点评'
+        WHEN pay_type = 4 THEN '现金支付'
+        ELSE '其他'
+        END AS payType,
+        CASE
+        WHEN type = 1 THEN '已购券'
+        WHEN type = 0 AND appointment_state = 0 THEN '已预约未服务'
+        WHEN type = 0 AND appointment_state = 1 THEN '已预约服务中'
+        WHEN type = 0 AND appointment_state = 2 THEN '服务完成'
+        WHEN type = 0 AND appointment_state = 3 THEN '服务取消'
+        ELSE '无'
+        END AS consumptionState,
+        customer_id customerId,
+        s_order.id AS orderId,
+        s_order.state AS `state`,
+        s_order.appointment_state AS appointmentState,
+        shop_id AS shopId
+        FROM s_order
+        LEFT JOIN (SELECT order_id,MAX(end_time) end_time FROM oms_order_detail GROUP BY order_id) od on s_order.id = od.order_id
+        LEFT JOIN (SELECT s.id,SUM(scc.amount) couponActualAmount FROM s_order s
+        JOIN JSON_TABLE(s.use_coupon_map,'$[*]' COLUMNS (coupon_id BIGINT PATH '$')) AS c
+        LEFT JOIN sms_customer_coupon scc ON c.coupon_id=scc.id
+        GROUP BY s.id) caa ON s_order.id=caa.id
+        WHERE `state` IN (1, 2, 5, 6, 7) and s_order.customer_id is not null
+
+        UNION ALL
+
+        -- 支出部分
+        SELECT
+        '支出' AS type,
+        CASE
+        WHEN s_order.type = 0 AND pay_type = 0 THEN '二维码支付'
+        WHEN s_order.type = 0 AND pay_type = 1 THEN '微信支付'
+        WHEN s_order.type = 0 AND pay_type = 2 THEN '核券收入'
+        WHEN s_order.type = 0 AND pay_type = 3 THEN '美团点评'
+        WHEN s_order.type = 0 AND pay_type = 4 THEN '现金支付'
+        WHEN s_order.type = 1 THEN '购券预收'
+        ELSE '无'
+        END AS businessType,
+        CASE
+        WHEN s_order.type = 0 AND pay_type = 2 THEN caa.couponActualAmount
+        WHEN ra.refund_amount is not NULL THEN ra.refund_amount
+        ELSE pay_amount
+        END AS amount,
+        CASE
+        WHEN ra.id is NULL and `state` = 6 THEN '已支付'
+        WHEN refund_status = 3 THEN '已支付'
+        ELSE '未支付'
+        END AS payState,
+        case
+        when pass_time is not null then pass_time
+        WHEN ra.id is not NULL THEN null
+        else s_order.pay_time
+        end AS payTime,
+        case
+        when pass_time is not null and pass_time &lt;= end_time then end_time
+        when pass_time is not null and pass_time &gt; end_time then pass_time
+        when ra.create_time is not null then ra.create_time
+        when s_order.pay_time &lt;= end_time then end_time
+        when s_order.pay_time &gt; end_time then s_order.pay_time
+        else s_order.pay_time
+        end AS finishTime,
+        CASE
+        WHEN ra.id is not NULL and refund_amount != 0 and pay_type = 3 THEN '美团点评'
+        WHEN ra.id is not NULL and refund_amount != 0 and pay_type = 4 THEN '现金支付'
+        WHEN ra.id is not NULL and refund_amount != 0 THEN '汇付天下'
+        WHEN (pay_type = 0 || pay_type = 1) THEN '汇付天下'
+        WHEN pay_type = 2 THEN '卡券支付'
+        WHEN pay_type = 3 THEN '美团点评'
+        WHEN pay_type = 4 THEN '现金支付'
+        ELSE '其他'
+        END AS payType,
+        CASE
+        WHEN s_order.appointment_state = 2 and `state` = 6 THEN '仅退款'
+        WHEN ra.id is NULL and `state` = 6 THEN '已退款'
+        WHEN refund_status = 3 THEN '已退款'
+        ELSE '退款中'
+        END AS consumptionState,
+        s_order.customer_id as customerId,
+        s_order.id AS orderId,
+        s_order.state AS `state`,
+        s_order.appointment_state AS appointmentState,
+        s_order.shop_id AS shopId
+        FROM s_order LEFT JOIN (SELECT id, order_id, refund_status, refund_amount, pass_time, create_time FROM (SELECT id,order_id,refund_status,refund_amount,pass_time,create_time,ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY pass_time DESC) AS rn FROM refund_apply WHERE refund_status in (2,3)) AS ran WHERE rn = 1) ra on s_order.id = ra.order_id
+        LEFT JOIN (SELECT order_id,MAX(end_time) end_time FROM oms_order_detail GROUP BY order_id) od on s_order.id = od.order_id
+        LEFT JOIN (SELECT s.id,SUM(scc.amount) couponActualAmount FROM s_order s
+        JOIN JSON_TABLE(s.use_coupon_map,'$[*]' COLUMNS (coupon_id BIGINT PATH '$')) AS c
+        LEFT JOIN sms_customer_coupon scc ON c.coupon_id=scc.id
+        GROUP BY s.id) caa ON s_order.id=caa.id
+        WHERE `state` IN (5, 6, 7) and s_order.customer_id is not null
+        ) AS operatingRevenue LEFT JOIN c_customer cc ON operatingRevenue.customerId = cc.id
+        <where>
+            <if test="startPayTime != null and endPayTime != null">
+                AND finishTime BETWEEN #{startPayTime} AND #{endPayTime}
+            </if>
+            <if test="type != null and type != ''">
+                AND type=#{type}
+            </if>
+            <if test="shopId != null and shopId != ''">
+                AND shopId=#{shopId}
+            </if>
+            <if test="payState != null and payState != ''">
+                AND payState=#{payState}
+            </if>
+            <if test="payType != null and payType != ''">
+                AND payType=#{payType}
+            </if>
+            <if test="consumptionState != null and consumptionState != ''">
+                AND consumptionState=#{consumptionState}
+            </if>
+            <if test="businessType != null and businessType != ''">
+                AND businessType=#{businessType}
+            </if>
+            <if test="nickname != null and nickname != ''">
+                AND nickname LIKE CONCAT('%',#{nickname},'%')
+            </if>
+        </where>
+        ORDER BY finishTime DESC
+    </select>
+    <select id="operatingRevenueTop" resultType="com.alibaba.fastjson2.JSONObject">
+        WITH raw_data AS (
+        SELECT
+        -- 收入-预收
+        SUM(couponAmount) couponAmount,
+        SUM(wechatAmount) wechatAmount,
+        SUM(qrCodeAmount) qrCodeAmount,
+        SUM(meituanAmount) meituanAmount,
+        SUM(cashAmount) cashAmount,
+        -- 支出-预收
+        SUM(refundCouponAmount) refundCouponAmount,
+        -- 支出-实收
+        SUM(refundWechatAmount) refundWechatAmount,
+        SUM(refundQrCodeAmount) refundQrCodeAmount,
+        SUM(refundMeituanAmount) refundMeituanAmount,
+        SUM(refundCashAmount) refundCashAmount,
+        -- 支出-预收退款中
+        SUM(refundingCouponAmount) refundingCouponAmount,
+        -- 支出-实收退款中
+        SUM(refundingWechatAmount) refundingWechatAmount,
+        SUM(refundingQrCodeAmount) refundingQrCodeAmount,
+        SUM(refundingMeituanAmount) refundingMeituanAmount,
+        SUM(refundingCashAmount) refundingCashAmount,
+
+        -- 收入-实收
+        SUM(fullCardActualAmount) fullCardActualAmount,
+        SUM(wechatActualAmount) wechatActualAmount,
+        SUM(qrCodeActualAmount) qrCodeActualAmount,
+        SUM(meituanActualAmount) meituanActualAmount,
+        SUM(cashActualAmount) cashActualAmount,
+        -- 收入-实收完成
+        SUM(fullCardNoFinishActualAmount) fullCardNoFinishActualAmount,
+        SUM(wechatNoFinishActualAmount) wechatNoFinishActualAmount,
+        SUM(qrCodeNoFinishActualAmount) qrCodeNoFinishActualAmount,
+        SUM(meituanNoFinishActualAmount) meituanNoFinishActualAmount,
+        SUM(cashNoFinishActualAmount) cashNoFinishActualAmount,
+        -- 支出-实收已退款
+        SUM(refundFullCardActualAmount) refundFullCardActualAmount,
+        SUM(refundWechatActualAmount) refundWechatActualAmount,
+        SUM(refundQrCodeActualAmount) refundQrCodeActualAmount,
+        SUM(refundMeituanActualAmount) refundMeituanActualAmount,
+        SUM(refundCashActualAmount) refundCashActualAmount,
+        -- 支出-实收退款中
+        SUM(refundingFullCardActualAmount) refundingFullCardActualAmount,
+        SUM(refundingWechatActualAmount) refundingWechatActualAmount,
+        SUM(refundingQrCodeActualAmount) refundingQrCodeActualAmount,
+        SUM(refundingMeituanActualAmount) refundingMeituanActualAmount,
+        SUM(refundingCashActualAmount) refundingCashActualAmount
+        FROM (
+        SELECT
+            -- 收入-预收
+            SUM(couponAmount) couponAmount,
+            -- 收入-实收包含预收
+            SUM(wechatAmount) wechatAmount,
+            SUM(qrCodeAmount) qrCodeAmount,
+            SUM(meituanAmount) meituanAmount,
+            SUM(cashAmount) cashAmount,
+            -- 支出-预收
+            SUM(refundCouponAmount) refundCouponAmount,
+            -- 支出-实收
+            SUM(refundWechatAmount) refundWechatAmount,
+            SUM(refundQrCodeAmount) refundQrCodeAmount,
+            SUM(refundMeituanAmount) refundMeituanAmount,
+            SUM(refundCashAmount) refundCashAmount,
+            -- 支出-预收退款中
+            SUM(refundingCouponAmount) refundingCouponAmount,
+            -- 支出-实收退款中
+            SUM(refundingWechatAmount) refundingWechatAmount,
+            SUM(refundingQrCodeAmount) refundingQrCodeAmount,
+            SUM(refundingMeituanAmount) refundingMeituanAmount,
+            SUM(refundingCashAmount) refundingCashAmount,
+
+            -- 收入-实收
+            SUM(0) fullCardActualAmount,
+            SUM(0) wechatActualAmount,
+            SUM(0) qrCodeActualAmount,
+            SUM(0) meituanActualAmount,
+            SUM(0) cashActualAmount,
+            -- 收入-实收完成
+            SUM(0) fullCardNoFinishActualAmount,
+            SUM(0) wechatNoFinishActualAmount,
+            SUM(0) qrCodeNoFinishActualAmount,
+            SUM(0) meituanNoFinishActualAmount,
+            SUM(0) cashNoFinishActualAmount,
+            -- 支出-实收已退款
+            SUM(0) refundFullCardActualAmount,
+            SUM(0) refundWechatActualAmount,
+            SUM(0) refundQrCodeActualAmount,
+            SUM(0) refundMeituanActualAmount,
+            SUM(0) refundCashActualAmount,
+            -- 支出-实收退款中
+            SUM(0) refundingFullCardActualAmount,
+            SUM(0) refundingWechatActualAmount,
+            SUM(0) refundingQrCodeActualAmount,
+            SUM(0) refundingMeituanActualAmount,
+            SUM(0) refundingCashActualAmount
+        FROM (
+        SELECT
+            -- 收入-预收
+            CASE WHEN type = '收入' AND businessType = '购券预收' THEN amount ELSE 0 END AS couponAmount,
+            -- 收入-实收包含预收
+            CASE WHEN type = '收入' AND businessType = '微信支付' THEN amount ELSE 0 END AS wechatAmount,
+            CASE WHEN type = '收入' AND businessType = '二维码支付' THEN amount ELSE 0 END AS qrCodeAmount,
+            CASE WHEN type = '收入' AND businessType = '美团点评' THEN amount ELSE 0 END AS meituanAmount,
+            CASE WHEN type = '收入' AND businessType = '现金支付' THEN amount ELSE 0 END AS cashAmount,
+            -- 支出-预收
+            CASE WHEN type = '支出' AND businessType = '购券预收' AND (consumptionState = '仅退款' OR  consumptionState = '已退款') THEN amount ELSE 0 END AS refundCouponAmount,
+            -- 支出-实收
+            CASE WHEN type = '支出' AND businessType = '微信支付' AND (consumptionState = '仅退款' OR  consumptionState = '已退款') THEN amount ELSE 0 END AS refundWechatAmount,
+            CASE WHEN type = '支出' AND businessType = '二维码支付' AND (consumptionState = '仅退款' OR  consumptionState = '已退款') THEN amount ELSE 0 END AS refundQrCodeAmount,
+            CASE WHEN type = '支出' AND businessType = '美团点评' AND (consumptionState = '仅退款' OR  consumptionState = '已退款') THEN amount ELSE 0 END AS refundMeituanAmount,
+            CASE WHEN type = '支出' AND businessType = '现金支付' AND (consumptionState = '仅退款' OR  consumptionState = '已退款') THEN amount ELSE 0 END AS refundCashAmount,
+            -- 支出-预收退款中
+            CASE WHEN type = '支出' AND businessType = '购券预收' AND consumptionState = '退款中' THEN amount ELSE 0 END AS refundingCouponAmount,
+            -- 支出-实收退款中
+            CASE WHEN type = '支出' AND businessType = '微信支付' AND consumptionState = '退款中' THEN amount ELSE 0 END AS refundingWechatAmount,
+            CASE WHEN type = '支出' AND businessType = '二维码支付' AND consumptionState = '退款中' THEN amount ELSE 0 END AS refundingQrCodeAmount,
+            CASE WHEN type = '支出' AND businessType = '美团点评' AND consumptionState = '退款中' THEN amount ELSE 0 END AS refundingMeituanAmount,
+            CASE WHEN type = '支出' AND businessType = '现金支付' AND consumptionState = '退款中' THEN amount ELSE 0 END AS refundingCashAmount
+        FROM (
+        -- 收入部分
+        SELECT
+        '收入' AS type,
+        CASE
+        WHEN type = 0 AND pay_type = 0 THEN '二维码支付'
+        WHEN type = 0 AND pay_type = 1 THEN '微信支付'
+        WHEN type = 0 AND pay_type = 2 THEN '核券收入'
+        WHEN type = 0 AND pay_type = 3 THEN '美团点评'
+        WHEN type = 0 AND pay_type = 4 THEN '现金支付'
+        WHEN type = 1 THEN '购券预收'
+        ELSE '无'
+        END AS businessType,
+        pay_amount AS amount,
+        '已支付' AS payState,
+        pay_time AS payTime,
+        CASE
+        WHEN pay_type = 0 THEN '二维码支付'
+        WHEN pay_type = 1 THEN '微信支付'
+        WHEN pay_type = 2 THEN '卡券支付'
+        WHEN pay_type = 3 THEN '美团点评'
+        WHEN pay_type = 4 THEN '现金支付'
+        ELSE '其他'
+        END AS payType,
+        CASE
+        WHEN type = 1 THEN '已购券'
+        WHEN type = 0 AND appointment_state = 0 THEN '已预约未服务'
+        WHEN type = 0 AND appointment_state = 1 THEN '已预约服务中'
+        WHEN type = 0 AND appointment_state = 2 THEN '服务完成'
+        WHEN type = 0 AND appointment_state = 3 THEN '服务取消'
+        ELSE '无'
+        END AS consumptionState,
+        customer_id customerId,
+        s_order.id AS orderId,
+        s_order.state AS `state`,
+        s_order.appointment_state AS appointmentState,
+        shop_id AS shopId
+        FROM s_order
+        WHERE `state` IN (1, 2, 5, 6, 7) and s_order.customer_id is not null
+
+        UNION ALL
+
+        -- 支出部分
+        SELECT
+        '支出' AS type,
+        CASE
+        WHEN s_order.type = 0 AND pay_type = 0 THEN '二维码支付'
+        WHEN s_order.type = 0 AND pay_type = 1 THEN '微信支付'
+        WHEN s_order.type = 0 AND pay_type = 2 THEN '核券收入'
+        WHEN s_order.type = 0 AND pay_type = 3 THEN '美团点评'
+        WHEN s_order.type = 0 AND pay_type = 4 THEN '现金支付'
+        WHEN s_order.type = 1 THEN '购券预收'
+        ELSE '无'
+        END AS businessType,
+        CASE
+        WHEN ra.refund_amount is not NULL THEN ra.refund_amount
+        ELSE pay_amount
+        END AS amount,
+        CASE
+        WHEN ra.id is NULL and `state` = 6 THEN '已支付'
+        WHEN refund_status = 3 THEN '已支付'
+        ELSE '未支付'
+        END AS payState,
+        case
+        when pass_time is not null then pass_time
+        WHEN ra.id is not NULL THEN null
+        else s_order.pay_time
+        end AS payTime,
+        CASE
+        WHEN ra.id is not NULL and refund_amount != 0 and pay_type = 3 THEN '美团点评'
+        WHEN ra.id is not NULL and refund_amount != 0 and pay_type = 4 THEN '现金支付'
+        WHEN ra.id is not NULL and refund_amount != 0 THEN '汇付天下'
+        WHEN (pay_type = 0 || pay_type = 1) THEN '汇付天下'
+        WHEN pay_type = 2 THEN '卡券支付'
+        WHEN pay_type = 3 THEN '美团点评'
+        WHEN pay_type = 4 THEN '现金支付'
+        ELSE '其他'
+        END AS payType,
+        CASE
+        WHEN s_order.appointment_state = 2 and `state` = 6 THEN '仅退款'
+        WHEN ra.id is NULL and `state` = 6 THEN '已退款'
+        WHEN refund_status = 3 THEN '已退款'
+        ELSE '退款中'
+        END AS consumptionState,
+        s_order.customer_id as customerId,
+        s_order.id AS orderId,
+        s_order.state AS `state`,
+        s_order.appointment_state AS appointmentState,
+        s_order.shop_id AS shopId
+        FROM s_order LEFT JOIN (SELECT id, order_id, refund_status, refund_amount, pass_time, create_time FROM (SELECT id,order_id,refund_status,refund_amount,pass_time,create_time,ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY pass_time DESC) AS rn FROM refund_apply WHERE refund_status in (2,3)) AS ran WHERE rn = 1) ra on s_order.id = ra.order_id
+        WHERE `state` IN (5, 6, 7) and s_order.customer_id is not null
+        ) AS operatingRevenue LEFT JOIN c_customer cc ON operatingRevenue.customerId = cc.id
+        <where>
+            <if test="startPayTime != null and endPayTime != null">
+                AND payTime BETWEEN #{startPayTime} AND #{endPayTime}
+            </if>
+            <if test="type != null and type != ''">
+                AND type=#{type}
+            </if>
+            <if test="shopId != null and shopId != ''">
+                AND shopId=#{shopId}
+            </if>
+            <if test="payState != null and payState != ''">
+                AND payState=#{payState}
+            </if>
+            <if test="payType != null and payType != ''">
+                AND payType=#{payType}
+            </if>
+            <if test="consumptionState != null and consumptionState != ''">
+                AND consumptionState=#{consumptionState}
+            </if>
+            <if test="businessType != null and businessType != ''">
+                AND businessType=#{businessType}
+            </if>
+            <if test="nickname != null and nickname != ''">
+                AND nickname LIKE CONCAT('%',#{nickname},'%')
+            </if>
+        </where>
+        ORDER BY payTime DESC) dd
+
+        union all
+
+        SELECT
+        -- 收入-预收
+        SUM(0) couponAmount,
+        -- 收入-实收包含预收
+        SUM(0) wechatAmount,
+        SUM(0) qrCodeAmount,
+        SUM(0) meituanAmount,
+        SUM(0) cashAmount,
+        -- 支出-预收
+        SUM(0) refundCouponAmount,
+        -- 支出-实收退款
+        SUM(0) refundWechatAmount,
+        SUM(0) refundQrCodeAmount,
+        SUM(0) refundMeituanAmount,
+        SUM(0) refundCashAmount,
+        -- 支出-预收退款中
+        SUM(0) refundingCouponAmount,
+        -- 支出-实收退款中
+        SUM(0) refundingWechatAmount,
+        SUM(0) refundingQrCodeAmount,
+        SUM(0) refundingMeituanAmount,
+        SUM(0) refundingCashAmount,
+
+        -- 收入-实收
+        SUM(fullCardActualAmount) fullCardActualAmount,
+        SUM(wechatActualAmount) wechatActualAmount,
+        SUM(qrCodeActualAmount) qrCodeActualAmount,
+        SUM(meituanActualAmount) meituanActualAmount,
+        SUM(cashActualAmount) cashActualAmount,
+        -- 收入-实收完成
+        SUM(fullCardNoFinishActualAmount) fullCardNoFinishActualAmount,
+        SUM(wechatNoFinishActualAmount) wechatNoFinishActualAmount,
+        SUM(qrCodeNoFinishActualAmount) qrCodeNoFinishActualAmount,
+        SUM(meituanNoFinishActualAmount) meituanNoFinishActualAmount,
+        SUM(cashNoFinishActualAmount) cashNoFinishActualAmount,
+        -- 支出-实收完成退款
+        SUM(refundFullCardActualAmount) refundFullCardActualAmount,
+        SUM(refundWechatActualAmount) refundWechatActualAmount,
+        SUM(refundQrCodeActualAmount) refundQrCodeActualAmount,
+        SUM(refundMeituanActualAmount) refundMeituanActualAmount,
+        SUM(refundCashActualAmount) refundCashActualAmount,
+        -- 支出-实收完成退款中
+        SUM(refundingFullCardActualAmount) refundingFullCardActualAmount,
+        SUM(refundingWechatActualAmount) refundingWechatActualAmount,
+        SUM(refundingQrCodeActualAmount) refundingQrCodeActualAmount,
+        SUM(refundingMeituanActualAmount) refundingMeituanActualAmount,
+        SUM(refundingCashActualAmount) refundingCashActualAmount
+        FROM (
+        SELECT
+        -- 收入-实收包含预收
+        CASE WHEN type = '收入' AND businessType = '核券收入' THEN amount ELSE 0 END AS fullCardActualAmount,
+        CASE WHEN type = '收入' AND businessType = '微信支付' THEN amount ELSE 0 END AS wechatActualAmount,
+        CASE WHEN type = '收入' AND businessType = '二维码支付' THEN amount ELSE 0 END AS qrCodeActualAmount,
+        CASE WHEN type = '收入' AND businessType = '美团点评' THEN amount ELSE 0 END AS meituanActualAmount,
+        CASE WHEN type = '收入' AND businessType = '现金支付' THEN amount ELSE 0 END AS cashActualAmount,
+        -- 收入-实收
+        CASE WHEN type = '收入' AND businessType = '核券收入' AND state in (1,2) AND appointmentState=1 THEN amount ELSE 0 END AS fullCardNoFinishActualAmount,
+        CASE WHEN type = '收入' AND businessType = '微信支付' AND state in (1,2) AND appointmentState=1 THEN amount ELSE 0 END AS wechatNoFinishActualAmount,
+        CASE WHEN type = '收入' AND businessType = '二维码支付' AND state in (1,2) AND appointmentState=1 THEN amount ELSE 0 END AS qrCodeNoFinishActualAmount,
+        CASE WHEN type = '收入' AND businessType = '美团点评' AND state in (1,2) AND appointmentState=1 THEN amount ELSE 0 END AS meituanNoFinishActualAmount,
+        CASE WHEN type = '收入' AND businessType = '现金支付' AND state in (1,2) AND appointmentState=1 THEN amount ELSE 0 END AS cashNoFinishActualAmount,
+        -- 支出-实收完成退款
+        CASE WHEN type = '支出' AND businessType = '核券收入' AND (consumptionState = '仅退款' OR  consumptionState = '已退款') THEN amount ELSE 0 END AS refundFullCardActualAmount,
+        CASE WHEN type = '支出' AND businessType = '微信支付' AND (consumptionState = '仅退款' OR  consumptionState = '已退款')  THEN amount ELSE 0 END AS refundWechatActualAmount,
+        CASE WHEN type = '支出' AND businessType = '二维码支付' AND (consumptionState = '仅退款' OR  consumptionState = '已退款')  THEN amount ELSE 0 END AS refundQrCodeActualAmount,
+        CASE WHEN type = '支出' AND businessType = '美团点评' AND (consumptionState = '仅退款' OR  consumptionState = '已退款')  THEN amount ELSE 0 END AS refundMeituanActualAmount,
+        CASE WHEN type = '支出' AND businessType = '现金支付' AND (consumptionState = '仅退款' OR  consumptionState = '已退款')  THEN amount ELSE 0 END AS refundCashActualAmount,
+        -- 支出-实收完成退款中
+        CASE WHEN type = '支出' AND businessType = '核券收入' AND consumptionState = '退款中' THEN amount ELSE 0 END AS refundingFullCardActualAmount,
+        CASE WHEN type = '支出' AND businessType = '微信支付' AND consumptionState = '退款中' THEN amount ELSE 0 END AS refundingWechatActualAmount,
+        CASE WHEN type = '支出' AND businessType = '二维码支付' AND consumptionState = '退款中' THEN amount ELSE 0 END AS refundingQrCodeActualAmount,
+        CASE WHEN type = '支出' AND businessType = '美团点评' AND consumptionState = '退款中' THEN amount ELSE 0 END AS refundingMeituanActualAmount,
+        CASE WHEN type = '支出' AND businessType = '现金支付' AND consumptionState = '退款中' THEN amount ELSE 0 END AS refundingCashActualAmount
+        FROM (
+        -- 收入部分
+        SELECT
+        '收入' AS type,
+        CASE
+        WHEN type = 0 AND pay_type = 0 THEN '二维码支付'
+        WHEN type = 0 AND pay_type = 1 THEN '微信支付'
+        WHEN type = 0 AND pay_type = 2 THEN '核券收入'
+        WHEN type = 0 AND pay_type = 3 THEN '美团点评'
+        WHEN type = 0 AND pay_type = 4 THEN '现金支付'
+        WHEN type = 1 THEN '购券预收'
+        ELSE '无'
+        END AS businessType,
+        CASE WHEN type = 0 AND pay_type = 2 THEN caa.couponActualAmount ELSE pay_amount END AS amount,
+        '已支付' AS payState,
+        pay_time AS payTime,
+        case
+        when type = 1 then pay_time
+        else end_time
+        end AS finishTime,
+        CASE
+        WHEN pay_type = 0 THEN '二维码支付'
+        WHEN pay_type = 1 THEN '微信支付'
+        WHEN pay_type = 2 THEN '卡券支付'
+        WHEN pay_type = 3 THEN '美团点评'
+        WHEN pay_type = 4 THEN '现金支付'
+        ELSE '其他'
+        END AS payType,
+        CASE
+        WHEN type = 1 THEN '已购券'
+        WHEN type = 0 AND appointment_state = 0 THEN '已预约未服务'
+        WHEN type = 0 AND appointment_state = 1 THEN '已预约服务中'
+        WHEN type = 0 AND appointment_state = 2 THEN '服务完成'
+        WHEN type = 0 AND appointment_state = 3 THEN '服务取消'
+        ELSE '无'
+        END AS consumptionState,
+        customer_id customerId,
+        s_order.id AS orderId,
+        s_order.state AS `state`,
+        s_order.appointment_state AS appointmentState,
+        shop_id AS shopId
+        FROM s_order
+        LEFT JOIN (SELECT order_id,MAX(end_time) end_time FROM oms_order_detail GROUP BY order_id) od on s_order.id = od.order_id
+        LEFT JOIN (SELECT s.id,SUM(scc.amount) couponActualAmount FROM s_order s
+        JOIN JSON_TABLE(s.use_coupon_map,'$[*]' COLUMNS (coupon_id BIGINT PATH '$')) AS c
+        LEFT JOIN sms_customer_coupon scc ON c.coupon_id=scc.id
+        GROUP BY s.id) caa ON s_order.id=caa.id
+        WHERE `state` IN (1, 2, 5, 6, 7) and s_order.customer_id is not null
+
+        UNION ALL
+
+        -- 支出部分
+        SELECT
+        '支出' AS type,
+        CASE
+        WHEN s_order.type = 0 AND pay_type = 0 THEN '二维码支付'
+        WHEN s_order.type = 0 AND pay_type = 1 THEN '微信支付'
+        WHEN s_order.type = 0 AND pay_type = 2 THEN '核券收入'
+        WHEN s_order.type = 0 AND pay_type = 3 THEN '美团点评'
+        WHEN s_order.type = 0 AND pay_type = 4 THEN '现金支付'
+        WHEN s_order.type = 1 THEN '购券预收'
+        ELSE '无'
+        END AS businessType,
+        CASE
+        WHEN s_order.type = 0 AND pay_type = 2 THEN caa.couponActualAmount
+        WHEN ra.refund_amount is not NULL THEN ra.refund_amount
+        ELSE pay_amount
+        END AS amount,
+        CASE
+        WHEN ra.id is NULL and `state` = 6 THEN '已支付'
+        WHEN refund_status = 3 THEN '已支付'
+        ELSE '未支付'
+        END AS payState,
+        case
+        when pass_time is not null then pass_time
+        WHEN ra.id is not NULL THEN null
+        else s_order.pay_time
+        end AS payTime,
+        case
+        when pass_time is not null and pass_time &lt;= end_time then end_time
+        when pass_time is not null and pass_time &gt; end_time then pass_time
+        when ra.create_time is not null then ra.create_time
+        when s_order.pay_time &lt;= end_time then end_time
+        when s_order.pay_time &gt; end_time then s_order.pay_time
+        else s_order.pay_time
+        end AS finishTime,
+        CASE
+        WHEN ra.id is not NULL and refund_amount != 0 and pay_type = 3 THEN '美团点评'
+        WHEN ra.id is not NULL and refund_amount != 0 and pay_type = 4 THEN '现金支付'
+        WHEN ra.id is not NULL and refund_amount != 0 THEN '汇付天下'
+        WHEN (pay_type = 0 || pay_type = 1) THEN '汇付天下'
+        WHEN pay_type = 2 THEN '卡券支付'
+        WHEN pay_type = 3 THEN '美团点评'
+        WHEN pay_type = 4 THEN '现金支付'
+        ELSE '其他'
+        END AS payType,
+        CASE
+        WHEN s_order.appointment_state = 2 and `state` = 6 THEN '仅退款'
+        WHEN ra.id is NULL and `state` = 6 THEN '已退款'
+        WHEN refund_status = 3 THEN '已退款'
+        ELSE '退款中'
+        END AS consumptionState,
+        s_order.customer_id as customerId,
+        s_order.id AS orderId,
+        s_order.state AS `state`,
+        s_order.appointment_state AS appointmentState,
+        s_order.shop_id AS shopId
+        FROM s_order LEFT JOIN (SELECT id, order_id, refund_status, refund_amount, pass_time, create_time FROM (SELECT id,order_id,refund_status,refund_amount,pass_time,create_time,ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY pass_time DESC) AS rn FROM refund_apply WHERE refund_status in (2,3)) AS ran WHERE rn = 1) ra on s_order.id = ra.order_id
+        LEFT JOIN (SELECT order_id,MAX(end_time) end_time FROM oms_order_detail GROUP BY order_id) od on s_order.id = od.order_id
+        LEFT JOIN (SELECT s.id,SUM(scc.amount) couponActualAmount FROM s_order s
+        JOIN JSON_TABLE(s.use_coupon_map,'$[*]' COLUMNS (coupon_id BIGINT PATH '$')) AS c
+        LEFT JOIN sms_customer_coupon scc ON c.coupon_id=scc.id
+        GROUP BY s.id) caa ON s_order.id=caa.id
+        WHERE `state` IN (5, 6, 7) and s_order.customer_id is not null
+        ) AS operatingRevenue LEFT JOIN c_customer cc ON operatingRevenue.customerId = cc.id
+        <where>
+            <if test="startPayTime != null and endPayTime != null">
+                AND finishTime BETWEEN #{startPayTime} AND #{endPayTime}
+            </if>
+            <if test="type != null and type != ''">
+                AND type=#{type}
+            </if>
+            <if test="shopId != null and shopId != ''">
+                AND shopId=#{shopId}
+            </if>
+            <if test="payState != null and payState != ''">
+                AND payState=#{payState}
+            </if>
+            <if test="payType != null and payType != ''">
+                AND payType=#{payType}
+            </if>
+            <if test="consumptionState != null and consumptionState != ''">
+                AND consumptionState=#{consumptionState}
+            </if>
+            <if test="businessType != null and businessType != ''">
+                AND businessType=#{businessType}
+            </if>
+            <if test="nickname != null and nickname != ''">
+                AND nickname LIKE CONCAT('%',#{nickname},'%')
+            </if>
+        </where>
+        ORDER BY finishTime DESC) aa
+        ) cc
+        )
+
+        SELECT
+        type,
+        title,
+        amount,
+        totalAmount,
+        refundAmount,
+        refundingAmount,
+        otherAmount
+        FROM (
+        -- 预收部分
+        SELECT
+        '预收款' AS type,
+        title,
+        COALESCE(totalAmount - refundAmount - refundingAmount, 0) AS amount,
+        totalAmount,
+        refundAmount,
+        refundingAmount,
+        NULL AS otherAmount
+        FROM raw_data
+        CROSS JOIN (
+        SELECT '购券预收' AS title,
+        couponAmount AS totalAmount,
+        refundCouponAmount AS refundAmount,
+        refundingCouponAmount AS refundingAmount
+        FROM raw_data
+        WHERE couponAmount != 0 OR refundCouponAmount != 0 OR refundingCouponAmount != 0
+
+        UNION ALL
+
+        SELECT '微信支付' AS title,
+        wechatAmount AS totalAmount,
+        refundWechatAmount AS refundAmount,
+        refundingWechatAmount AS refundingAmount
+        FROM raw_data
+        WHERE wechatAmount != 0 OR refundWechatAmount != 0 OR refundingWechatAmount != 0
+
+        UNION ALL
+
+        SELECT '二维码支付' AS title,
+        qrCodeAmount AS totalAmount,
+        refundQrCodeAmount AS refundAmount,
+        refundingQrCodeAmount AS refundingAmount
+        FROM raw_data
+        WHERE qrCodeAmount != 0 OR refundQrCodeAmount != 0 OR refundingQrCodeAmount != 0
+
+        UNION ALL
+
+        SELECT '美团点评' AS title,
+        meituanAmount AS totalAmount,
+        refundMeituanAmount AS refundAmount,
+        refundingMeituanAmount AS refundingAmount
+        FROM raw_data
+        WHERE meituanAmount != 0 OR refundMeituanAmount != 0 OR refundingMeituanAmount != 0
+
+        UNION ALL
+
+        SELECT '现金支付' AS title,
+        cashAmount AS totalAmount,
+        refundCashAmount AS refundAmount,
+        refundingCashAmount AS refundingAmount
+        FROM raw_data
+        WHERE cashAmount != 0 OR refundCashAmount != 0 OR refundingCashAmount != 0
+        ) AS pre_sale
+
+        UNION ALL
+
+        -- 实收部分
+        SELECT
+        '实收款' AS type,
+        title,
+        COALESCE(totalAmount - refundAmount - otherAmount, 0) AS amount,
+        COALESCE(totalAmount - refundAmount - refundingAmount, 0) AS totalAmount,
+        refundAmount,
+        refundingAmount,
+        COALESCE(otherAmount - refundingAmount, 0) AS otherAmount
+        FROM raw_data
+        CROSS JOIN (
+        SELECT '核券收入' AS title,
+        fullCardActualAmount AS totalAmount,
+        fullCardNoFinishActualAmount AS otherAmount,
+        refundFullCardActualAmount AS refundAmount,
+        refundingFullCardActualAmount AS refundingAmount
+        FROM raw_data
+        WHERE fullCardActualAmount != 0 OR fullCardNoFinishActualAmount != 0 OR refundFullCardActualAmount != 0 OR refundingFullCardActualAmount != 0
+
+        UNION ALL
+
+        SELECT '微信支付' AS title,
+        wechatActualAmount AS totalAmount,
+        wechatNoFinishActualAmount AS otherAmount,
+        refundWechatActualAmount AS refundAmount,
+        refundingWechatActualAmount AS refundingAmount
+        FROM raw_data
+        WHERE wechatActualAmount != 0 OR wechatNoFinishActualAmount != 0 OR refundWechatActualAmount != 0 OR refundingWechatActualAmount != 0
+
+        UNION ALL
+
+        SELECT '二维码支付' AS title,
+        qrCodeActualAmount AS totalAmount,
+        qrCodeNoFinishActualAmount AS otherAmount,
+        refundQrCodeActualAmount AS refundAmount,
+        refundingQrCodeActualAmount AS refundingAmount
+        FROM raw_data
+        WHERE qrCodeActualAmount != 0 OR qrCodeNoFinishActualAmount != 0 OR refundQrCodeActualAmount != 0 OR refundingQrCodeActualAmount != 0
+
+        UNION ALL
+
+        SELECT '美团点评' AS title,
+        meituanActualAmount AS totalAmount,
+        meituanNoFinishActualAmount AS otherAmount,
+        refundMeituanActualAmount AS refundAmount,
+        refundingMeituanActualAmount AS refundingAmount
+        FROM raw_data
+        WHERE meituanActualAmount != 0 OR meituanNoFinishActualAmount != 0 OR refundMeituanActualAmount != 0 OR refundingMeituanActualAmount != 0
+
+        UNION ALL
+
+        SELECT '现金支付' AS title,
+        cashActualAmount AS totalAmount,
+        cashNoFinishActualAmount AS otherAmount,
+        refundCashActualAmount AS refundAmount,
+        refundingCashActualAmount AS refundingAmount
+        FROM raw_data
+        WHERE cashActualAmount != 0 OR cashNoFinishActualAmount != 0 OR refundCashActualAmount != 0 OR refundingCashActualAmount != 0
+        ) AS actual_sale
+        ) AS combined_data
+    </select>
+</mapper>
