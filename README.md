@@ -8,6 +8,8 @@
 | `shixu/` | 时叙（茶饮零售） | 小程序 + 后台 + API | 自有前端 + NestJS |
 | `crm/` | 品牌会员 CRM | 后台 + 小程序 + 游戏化模块 | React + NestJS |
 | `qingliao/` | 轻疗（历史 uni-app 小程序存档） | 小程序源码 + 说明文档 | uni-app(Vue2) |
+| `qingliao/tou-mall-server` | 轻疗商城后台 API（admin / portal） | 双 Spring Boot 服务 | Java 8 + Spring Boot + MyBatis-Plus |
+| `qingliao/tou-mall-admin-web` | 轻疗商城管理后台前端 | 静态站点 | Vue2 + Element UI |
 
 ## 快速上手
 
@@ -35,6 +37,7 @@ pnpm --filter @fullyu/miniprogram dev:h5
   - 在场 ECS：`/root/fullyu/presence/apps/server/.env.local`（600）
   - 时叙 ECS：`/etc/teahour/api.env`
   - CRM ECS：`/etc/fullyu-crm/crm.env`
+  - 轻疗商城 ECS：`/etc/fullyu/qingliao-mall.env`（本机原件：`~/.fullyu-secrets/qingliao-tou-mall-server.env`）
 - 新增环境变量时，同步更新对应目录的 `.env.example`，并在文档里写清用途与取值范围。
 
 ## 部署
@@ -42,7 +45,9 @@ pnpm --filter @fullyu/miniprogram dev:h5
 - **在场**：根目录 `.github/workflows/ci-deploy.yml`，push 到 `main` 触发构建 + 部署到 ECS。
   - 部署步骤默认关闭，需在仓库 `Settings → Variables` 设置 `ENABLE_DEPLOY=true` 后才执行，避免迁移期误触生产。
   - 需要在 `Settings → Secrets` 配置：`ECS_HOST`、`ECS_USER`、`ECS_SSH_KEY`、`SERVER_PATH`、`ADMIN_DIST_PATH`、`H5_DIST_PATH`、`PM2_APP`。
-- **时叙 / CRM / 轻疗**：见各自目录下的 `deploy/` 或 README；目前手工部署，后续按需接入同一套 workflow。
+- **时叙 / CRM**：见各自目录下的 `deploy/` 或 README；目前手工部署，后续按需接入同一套 workflow。
+- **轻疗商城（tou-mall）**：见 `qingliao/tou-mall-server/DEPLOY.md`。手工部署，**必须**先注入环境变量
+  （数据库/OSS/SMS/微信/汇付支付密钥均已从仓库移出，缺失时不会报错、只在调用第三方时失败）。
 
 ## 分支约定
 
