@@ -1,6 +1,7 @@
-# Full愈 CI/CD
-# 触发：push 到 main 或手动。先做类型检查与全量构建（server + admin + H5），
+# Full愈 CI/CD（单仓库：只看 presence/）
+# 触发：presence/ 或有本 workflow 变化并 push 到 main，或手动。先做类型检查与全量构建（server + admin + H5），
 # 通过后把前端静态产物同步到 ECS 的 nginx 目录，并更新后端 PM2 进程。
+# 实际部署必须显式开启：Settings → Variables 增加 ENABLE_DEPLOY=true。
 #
 # 线上真实拓扑（非 docker）：
 #   - 后端：PM2 进程 fullyu-api，源码在 SERVER_PATH（默认 /root/fullyu），在 ECS 上 tsc 编译
@@ -14,6 +15,9 @@
 #   ADMIN_DIST_PATH  后台 nginx 根（默认 /opt/fullyu/apps/admin/dist）
 #   H5_DIST_PATH     H5 nginx 根（默认 /opt/fullyu/apps/miniprogram/dist/build/h5）
 #   PM2_APP          后端 PM2 进程名（默认 fullyu-api）
+#
+# 单仓库布局：后端源码位于 SERVER_PATH/presence/apps/server，
+# 首次部署会自动把旧的 SERVER_PATH/apps/server/.env.local 复制到新位置并重建 PM2 进程（cwd 变更）。
 # ECS 前置：SERVER_PATH 为本仓库 git 工作副本；apps/server/.env.local 指向阿里云 RDS/Redis。
 
 name: CI/CD
@@ -146,7 +150,9 @@ jobs:
           script: |
             set -e
             cd "$SERVER_PATH"
-            git pull --ff-only
+            # 单仓库迁移后 main 历史已重写，不能再 --ff-only；ECS 是纯部署副本，直接对齐即可
+            git fetch --all --prune
+            git reset --hard origin/main
             export PATH="/root/.local/node/bin:$PATH"
             # 单仓库迁移：旧的 apps/server/.env.local 迁到 presence/apps/server（仅首次生效，原文件保留作回滚）
             if [ -f apps/server/.env.local ] && [ ! -f presence/apps/server/.env.local ]; then
