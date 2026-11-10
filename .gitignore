@@ -1,0 +1,43 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 构建产物
+dist/
+dist-ssr/
+build/
+.output/
+
+# 环境变量与本地私密配置（仅保留示例）
+.env
+.env.*
+!.env.example
+*.local
+apps/*/.env.local
+presence/apps/*/.env.local
+shixu/apps/*/.env.local
+crm/apps/*/.env.local
+
+# 凭据 / 密钥 / 证书（严禁入库）
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+deploy-secrets.*
+*.exp
+*账号密码*
+*密钥*
+*秘钥*
+
+# 系统与编辑器
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# 临时与归档（不入库，留在各自本地目录）
+*.zip
+*.tar.gz
+qa/
+vibe_images/
