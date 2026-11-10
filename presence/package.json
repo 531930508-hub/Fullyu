@@ -1,0 +1,20 @@
+{
+  "name": "fullyu-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full愈 品牌运营系统 - 微信小程序 + PC管理后台",
+  "scripts": {
+    "dev:server": "pnpm --filter @fullyu/server dev",
+    "dev:admin": "pnpm --filter @fullyu/admin dev",
+    "dev:mp": "pnpm --filter @fullyu/miniprogram dev:mp-weixin",
+    "build:server": "pnpm --filter @fullyu/server build",
+    "build:admin": "pnpm --filter @fullyu/admin build",
+    "build:mp": "pnpm --filter @fullyu/miniprogram build:mp-weixin",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write \"**/*.{ts,tsx,vue,json,md}\""
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

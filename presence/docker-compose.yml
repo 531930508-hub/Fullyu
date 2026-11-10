@@ -1,0 +1,88 @@
+# Full愈 编排文件
+#
+# 生产：连接阿里云 RDS MySQL / Redis（在 apps/server/.env.local 配置指向阿里云的
+#       DATABASE_URL、REDIS_HOST 等），仅启动 server：
+#         docker compose up -d --build server
+#
+# 预发/本地：使用内置 mysql + redis（profile=local），并让 .env.local 指向服务名
+#       (DATABASE_URL=mysql://fullyu:fullyu@mysql:3306/fullyu, REDIS_HOST=redis)：
+#         docker compose --profile local up -d --build
+#
+# 数据库迁移（生产使用 migrate deploy，绝不使用 dev migrate）：
+#         docker compose --profile migrate run --rm migrate
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    image: fullyu-server:latest
+    container_name: fullyu-server
+    restart: unless-stopped
+    env_file:
+      - apps/server/.env.local
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # 设为 true 时容器启动前自动执行 prisma migrate deploy
+      RUN_MIGRATIONS: "${RUN_MIGRATIONS:-false}"
+    ports:
+      - "3000:3000"
+    networks:
+      - fullyu
+
+  # 一次性数据库迁移任务（run --rm 执行后退出）
+  migrate:
+    image: fullyu-server:latest
+    profiles: ["migrate"]
+    env_file:
+      - apps/server/.env.local
+    working_dir: /app/apps/server
+    entrypoint: ["sh", "-lc", "./node_modules/.bin/prisma migrate deploy"]
+    networks:
+      - fullyu
+
+  # ===== 以下仅用于预发/本地（profile=local），生产请连阿里云 RDS/Redis =====
+  mysql:
+    image: mysql:8.0
+    profiles: ["local"]
+    container_name: fullyu-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: fullyu
+      MYSQL_USER: fullyu
+      MYSQL_PASSWORD: fullyu
+      MYSQL_ROOT_PASSWORD: fullyu
+    volumes:
+      - mysqldata:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ufullyu", "-pfullyu"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fullyu
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["local"]
+    container_name: fullyu-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fullyu
+
+volumes:
+  mysqldata:
+
+networks:
+  fullyu:
+    driver: bridge

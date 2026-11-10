@@ -1,0 +1,172 @@
+/* Full愈 管理后台全局样式 */
+
+body {
+  margin: 0;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system, sans-serif;
+  background: #F5E8D8;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D8CBBB;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 页面容器 */
+.page-container {
+  padding: 24px;
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #4B3621;
+  margin: 0;
+}
+
+/* 卡片覆盖 */
+.ant-card {
+  border-radius: 12px;
+  box-shadow: 0px 2px 4px rgba(107, 70, 60, 0.08);
+}
+
+/* ============================================================
+ * 移动端全局适配（<768px 断点，横竖屏均适用）
+ * 原则：只在窄屏范围内生效，PC 端一像素不变
+ * 详见 docs/移动端适配规范.md
+ * ============================================================ */
+@media (max-width: 767px) {
+  /* 允许一定横向滚动，避免极窄内容撑破布局；表格另有独立滚动 */
+  body {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* 页面容器：收窄内边距 */
+  .page-container {
+    padding: 12px;
+  }
+  .page-header {
+    margin-bottom: 16px;
+    /* 兼容内联 style="display:flex; justify-content:space-between" 写法，防止溢出 */
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .page-title {
+    font-size: 18px;
+    line-height: 1.4;
+  }
+
+  /* Ant Design Vue 组件全局降级 */
+
+  /* 表格：容器加横向滚动，首列非"操作列"可根据业务在页面内单独设置 sticky */
+  .ant-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ant-table {
+    font-size: 13px;
+  }
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    padding: 8px 8px !important;
+    white-space: nowrap;
+  }
+
+  /* 弹窗：满宽显示，去除固定宽度限制 */
+  .ant-modal {
+    max-width: calc(100vw - 16px) !important;
+    margin: 8px auto !important;
+    top: 8px !important;
+    padding-bottom: 0 !important;
+  }
+  .ant-modal-body {
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
+  }
+  .ant-modal-content {
+    border-radius: 10px;
+  }
+
+  /* 抽屉：满宽 */
+  .ant-drawer-content-wrapper {
+    max-width: 100vw !important;
+  }
+
+  /* 表单：label 顶部对齐；输入框全宽 */
+  .ant-form-horizontal .ant-form-item-label,
+  .ant-form-inline .ant-form-item-label {
+    text-align: left;
+    padding-bottom: 4px;
+  }
+  .ant-form-inline .ant-form-item {
+    display: block;
+    margin-right: 0;
+    margin-bottom: 12px;
+  }
+  .ant-form-item {
+    margin-bottom: 12px;
+  }
+
+  /* 按钮：page-header 里的按钮组换行、按钮组 flex-wrap */
+  .page-header .ant-btn,
+  .page-header .ant-space,
+  .page-header .ant-space-item {
+    flex-wrap: wrap;
+  }
+  .ant-space {
+    flex-wrap: wrap;
+  }
+
+  /* Descriptions / Card / Tabs 细节 */
+  .ant-descriptions-item-label,
+  .ant-descriptions-item-content {
+    padding: 8px !important;
+  }
+  .ant-tabs-tab {
+    padding: 8px 12px !important;
+    font-size: 13px;
+  }
+  .ant-card-body {
+    padding: 16px;
+  }
+
+  /* 分页组件在窄屏下允许换行 */
+  .ant-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  /* Select / DatePicker / Input 默认全宽（避免固定 width:200px 溢出） */
+  .ant-form-item .ant-input,
+  .ant-form-item .ant-input-number,
+  .ant-form-item .ant-select,
+  .ant-form-item .ant-picker,
+  .ant-form-item .ant-input-affix-wrapper,
+  .ant-form-item .ant-input-password {
+    width: 100%;
+  }
+
+  /* Popconfirm / Tooltip 遮挡时点击外部关闭已由 Ant Design 处理，不需额外样式 */
+}
+
+/* 横屏(landscape)下若高度非常小，进一步压缩顶栏与弹窗 */
+@media (max-width: 767px) and (orientation: landscape) {
+  .ant-modal-body {
+    max-height: calc(100vh - 140px);
+  }
+}

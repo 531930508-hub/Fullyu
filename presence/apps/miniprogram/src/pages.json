@@ -1,0 +1,97 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/course-detail/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/my-courses/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/member/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/assets/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/profile/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-home/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-workspace/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/my-reviews/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/profile-edit/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/community-list/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/community-detail/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/community-mine/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/community-create/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/community-workspace/index",
+      "style": { "navigationStyle": "custom" }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "Full愈",
+    "navigationBarBackgroundColor": "#EAE0D7",
+    "backgroundColor": "#EAE0D7",
+    "backgroundColorTop": "#EAE0D7",
+    "backgroundColorBottom": "#EAE0D7"
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#A78E70",
+    "selectedColor": "#584219",
+    "backgroundColor": "#FBF8F3",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/my-courses/index",
+        "text": "课程"
+      },
+      {
+        "pagePath": "pages/member/index",
+        "text": "会员"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的"
+      }
+    ]
+  }
+}

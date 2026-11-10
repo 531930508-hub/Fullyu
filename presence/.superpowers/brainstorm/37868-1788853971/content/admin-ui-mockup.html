@@ -1,0 +1,77 @@
+<h2>第 3 节：后台「时段折扣」界面草图</h2>
+<p class="subtitle">入口：销售模块 → 会员卡管理 → 新增「时段折扣」标签页。共三块：规则列表、编辑抽屉、一周总览预览。</p>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">① 规则列表页（拖拽排序 = 优先级）</div>
+    <div class="mockup-body" style="padding:16px;background:#F5E8D8">
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
+        <span style="background:#fff;border:1px solid #D8CBBB;border-radius:8px;padding:6px 12px;font-size:13px">门店：人广来福士店 ▾</span>
+        <span style="background:#fff;border:1px solid #D8CBBB;border-radius:8px;padding:6px 12px;font-size:13px">卡类型：全部 ▾</span>
+        <span style="flex:1"></span>
+        <span style="background:#6B463C;color:#fff;border-radius:8px;padding:7px 16px;font-size:13px">＋ 新建规则</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;font-size:12.5px">
+        <tr style="background:#F5E8D8;color:#4B3621;text-align:left">
+          <th style="padding:8px">⠿ 优先级</th><th style="padding:8px">规则名</th><th style="padding:8px">卡类型</th><th style="padding:8px">星期</th><th style="padding:8px">时间段</th><th style="padding:8px">日期范围</th><th style="padding:8px">折扣率</th><th style="padding:8px">状态</th><th style="padding:8px">操作</th>
+        </tr>
+        <tr style="border-top:1px solid #EEE0C6"><td style="padding:8px">⠿ 1</td><td style="padding:8px">国庆假期峰值</td><td style="padding:8px">月卡/季卡/年卡</td><td style="padding:8px">不限</td><td style="padding:8px">10:00–23:00</td><td style="padding:8px">10-01 ~ 10-07</td><td style="padding:8px"><b style="color:#C0392B">115%（加价）</b></td><td style="padding:8px"><span style="color:#2E7D32">● 启用</span></td><td style="padding:8px;color:#6B463C">编辑 · 停用</td></tr>
+        <tr style="border-top:1px solid #EEE0C6"><td style="padding:8px">⠿ 2</td><td style="padding:8px">周末峰值</td><td style="padding:8px">月卡/季卡/年卡</td><td style="padding:8px">周五 周六 周日</td><td style="padding:8px">14:00–18:00，19:00–21:30</td><td style="padding:8px">长期</td><td style="padding:8px"><b>100%（原价）</b></td><td style="padding:8px"><span style="color:#2E7D32">● 启用</span></td><td style="padding:8px;color:#6B463C">编辑 · 停用</td></tr>
+        <tr style="border-top:1px solid #EEE0C6"><td style="padding:8px">⠿ 3</td><td style="padding:8px">工作日午间</td><td style="padding:8px">月卡/季卡/年卡</td><td style="padding:8px">周一 ~ 周五</td><td style="padding:8px">12:00–13:30</td><td style="padding:8px">长期</td><td style="padding:8px"><b>100%（原价）</b></td><td style="padding:8px"><span style="color:#2E7D32">● 启用</span></td><td style="padding:8px;color:#6B463C">编辑 · 停用</td></tr>
+        <tr style="border-top:1px solid #EEE0C6"><td style="padding:8px">⠿ 4</td><td style="padding:8px">闲时引流</td><td style="padding:8px">月卡/季卡/年卡</td><td style="padding:8px">不限</td><td style="padding:8px">10:00–12:00，22:00–23:00</td><td style="padding:8px">长期</td><td style="padding:8px"><b style="color:#2E7D32">70%（7折）</b></td><td style="padding:8px"><span style="color:#2E7D32">● 启用</span></td><td style="padding:8px;color:#6B463C">编辑 · 停用</td></tr>
+      </table>
+      <div style="margin-top:8px;color:#A08A72;font-size:12px">⠿ 按住拖拽调整顺序，越靠前越优先；未命中任何规则 → 回退课程固定折扣 → 原价</div>
+    </div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">② 新建/编辑抽屉</div>
+    <div class="mockup-body" style="padding:16px;background:#FFF3E0;font-size:13px;line-height:2.1">
+      <div>规则名称　<input class="mock-input" style="width:55%;padding:4px 8px" value="周末峰值"></div>
+      <div>门店　　　<span style="border:1px solid #D8CBBB;background:#fff;border-radius:6px;padding:3px 10px">人广来福士店 ▾</span></div>
+      <div>卡类型　　<span style="border:1px solid #6B463C;background:#6B463C;color:#fff;border-radius:6px;padding:3px 10px">月卡</span> <span style="border:1px solid #6B463C;background:#6B463C;color:#fff;border-radius:6px;padding:3px 10px">季卡</span> <span style="border:1px solid #6B463C;background:#6B463C;color:#fff;border-radius:6px;padding:3px 10px">年卡</span></div>
+      <div>星期　　　<span style="border:1px solid #D8CBBB;background:#fff;border-radius:6px;padding:3px 8px">一</span> <span style="border:1px solid #D8CBBB;background:#fff;border-radius:6px;padding:3px 8px">二</span> <span style="border:1px solid #D8CBBB;background:#fff;border-radius:6px;padding:3px 8px">三</span> <span style="border:1px solid #D8CBBB;background:#fff;border-radius:6px;padding:3px 8px">四</span> <span style="border:1px solid #6B463C;background:#6B463C;color:#fff;border-radius:6px;padding:3px 8px">五</span> <span style="border:1px solid #6B463C;background:#6B463C;color:#fff;border-radius:6px;padding:3px 8px">六</span> <span style="border:1px solid #6B463C;background:#6B463C;color:#fff;border-radius:6px;padding:3px 8px">日</span> <span style="color:#A08A72">(不选=每天)</span></div>
+      <div>时间段　　<input class="mock-input" style="width:26%;padding:4px 8px" value="14:00"> – <input class="mock-input" style="width:26%;padding:4px 8px" value="18:00"> <span style="color:#6B463C">＋加一段</span></div>
+      <div>日期范围　<input class="mock-input" style="width:26%;padding:4px 8px" placeholder="开始日期"> – <input class="mock-input" style="width:26%;padding:4px 8px" placeholder="结束日期"> <span style="color:#A08A72">(留空=长期)</span></div>
+      <div>折扣率　　<input class="mock-input" style="width:20%;padding:4px 8px" value="100"> % <span style="color:#A08A72">(50–200，100=原价，&lt;100打折，&gt;100加价)</span></div>
+      <div style="margin-top:10px"><span style="background:#6B463C;color:#fff;border-radius:8px;padding:6px 18px;font-size:13px">保存</span>　<span style="color:#6B463C;border:1px solid #6B463C;border-radius:8px;padding:5px 18px;font-size:13px">取消</span></div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">③ 一周总览预览（保存前实时算给你看）</div>
+    <div class="mockup-body" style="padding:12px;background:#fff">
+      <div style="font-size:11px;color:#A08A72;margin-bottom:6px">人广来福士店 · 年卡 · 每格 = 该时段最终生效折扣率</div>
+      <table style="width:100%;border-collapse:collapse;font-size:10px;text-align:center">
+        <tr style="color:#A08A72"><td></td><td>10-12</td><td>12-14</td><td>14-16</td><td>16-18</td><td>18-19</td><td>19-21:30</td><td>21:30-23</td></tr>
+        <tr><td style="color:#4B3621;text-align:left">周一~四</td><td style="background:#C8E6C9;padding:5px">70%</td><td style="background:#FFF9C4;padding:5px">100%*</td><td style="background:#FFE0B2;padding:5px">90%†</td><td style="background:#FFE0B2;padding:5px">90%†</td><td style="background:#FFE0B2;padding:5px">90%†</td><td style="background:#FFE0B2;padding:5px">90%†</td><td style="background:#C8E6C9;padding:5px">70%</td></tr>
+        <tr><td style="color:#4B3621;text-align:left">周五</td><td style="background:#C8E6C9;padding:5px">70%</td><td style="background:#FFF9C4;padding:5px">100%*</td><td style="background:#FFCDD2;padding:5px">100%</td><td style="background:#FFCDD2;padding:5px">100%</td><td style="background:#FFE0B2;padding:5px">90%†</td><td style="background:#FFCDD2;padding:5px">100%</td><td style="background:#C8E6C9;padding:5px">70%</td></tr>
+        <tr><td style="color:#4B3621;text-align:left">周六~日</td><td style="background:#C8E6C9;padding:5px">70%</td><td style="background:#FFE0B2;padding:5px">90%†</td><td style="background:#FFCDD2;padding:5px">100%</td><td style="background:#FFCDD2;padding:5px">100%</td><td style="background:#FFE0B2;padding:5px">90%†</td><td style="background:#FFCDD2;padding:5px">100%</td><td style="background:#C8E6C9;padding:5px">70%</td></tr>
+      </table>
+      <div style="font-size:10.5px;color:#A08A72;margin-top:8px;line-height:1.7">
+        红=峰值规则命中 · 绿=闲时规则 · 黄橙=未命中时段规则<br>
+        * 命中的是「工作日午间」规则　† 回退到课程固定折扣（9折）<br>
+        规则重叠时按优先级取第一条，格子 hover 显示命中规则名
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3>这个界面结构 OK 吗？</h3>
+  <div class="options">
+    <div class="option" data-choice="ok" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content"><h3>可以，就这个结构</h3><p>列表 + 抽屉 + 一周总览三件套</p></div>
+    </div>
+    <div class="option" data-choice="no-preview" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content"><h3>去掉一周总览</h3><p>只要列表和编辑抽屉，先做简单版</p></div>
+    </div>
+    <div class="option" data-choice="adjust" onclick="toggleSelect(this)">
+      <div class="letter">C</div>
+      <div class="content"><h3>要调整</h3><p>在终端里告诉我改哪里</p></div>
+    </div>
+  </div>
+</div>
