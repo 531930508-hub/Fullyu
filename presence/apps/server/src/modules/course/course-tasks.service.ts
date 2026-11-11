@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
+import { tasksEnabled } from '../../common/tasks-enabled'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { PrismaService } from '../../common/prisma.service'
 import { PaymentService } from '../payment/payment.service'
@@ -27,6 +28,8 @@ export class CourseTasksService {
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async cancelUnformedCourses(courseId?: string) {
+    // 双机部署：备用机 TASKS_ENABLED=false，只接请求不跑定时任务（详见 common/tasks-enabled.ts）
+    if (!tasksEnabled()) return
     const now = new Date()
 
     // 查找已过成团截止且人数不足的已发布课程
@@ -124,6 +127,8 @@ export class CourseTasksService {
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async sendCourseStartReminders(): Promise<number> {
+    // 双机部署：备用机 TASKS_ENABLED=false，只接请求不跑定时任务（详见 common/tasks-enabled.ts）
+    if (!tasksEnabled()) return 0
     const now = new Date()
     const windowEnd = new Date(now.getTime() + 70 * 60 * 1000)
     // startDate 存的是开课日 0 点（后台按 YYYY-MM-DD 提交），真实开课时刻 = 日期 + startTime，

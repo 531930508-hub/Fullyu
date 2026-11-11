@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
+import { tasksEnabled } from '../../common/tasks-enabled'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { PrismaService } from '../../common/prisma.service'
 import { AlertService } from '../../common/alert/alert.service'
@@ -38,6 +39,8 @@ export class WaitlistTasksService {
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async refundExpiredWaitlist(courseId?: string) {
+    // 双机部署：备用机 TASKS_ENABLED=false，只接请求不跑定时任务（详见 common/tasks-enabled.ts）
+    if (!tasksEnabled()) return
     const now = new Date()
     const entries = await this.prisma.waitlistEntry.findMany({
       where: { status: 'WAITING', ...(courseId ? { courseId } : {}) },

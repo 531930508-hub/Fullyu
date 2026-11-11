@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
+import { tasksEnabled } from '../../common/tasks-enabled'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
@@ -23,6 +24,8 @@ export class OrderTasksService {
    */
   @Cron(CronExpression.EVERY_MINUTE)
   async cancelExpiredOrders() {
+    // 双机部署：备用机 TASKS_ENABLED=false，只接请求不跑定时任务（详见 common/tasks-enabled.ts）
+    if (!tasksEnabled()) return
     const deadline = new Date(Date.now() - SEAT_LOCK_DURATION_MINUTES * 60 * 1000)
     const expired = await this.prisma.order.findMany({
       where: {
@@ -111,6 +114,8 @@ export class OrderTasksService {
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async completeEndedCourseOrders(courseId?: string): Promise<number> {
+    // 双机部署：备用机 TASKS_ENABLED=false，只接请求不跑定时任务（详见 common/tasks-enabled.ts）
+    if (!tasksEnabled()) return 0
     const now = new Date()
     // 只扫「今天及以前结课」的课程：原来只按 createdAt 升序取 500 条，
     // 一旦在售的未结课订单超过 500，后面的订单永远进不了扫描窗口，自退窗口会过期失效。

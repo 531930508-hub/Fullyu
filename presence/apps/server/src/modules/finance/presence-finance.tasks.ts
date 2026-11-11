@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
+import { tasksEnabled } from '../../common/tasks-enabled'
 import { Cron } from '@nestjs/schedule'
 import { PresenceLedgerService } from './presence-ledger.service'
 
@@ -16,6 +17,8 @@ export class PresenceFinanceTasks {
 
   @Cron('10 0 * * *', { timeZone: 'Asia/Shanghai' })
   async autoClose(): Promise<void> {
+    // 双机部署：备用机 TASKS_ENABLED=false，只接请求不跑定时任务（详见 common/tasks-enabled.ts）
+    if (!tasksEnabled()) return
     try {
       const result = await this.ledger.autoCloseDueMonths()
       if (result.closed.length) {
