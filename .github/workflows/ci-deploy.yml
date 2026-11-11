@@ -181,7 +181,11 @@ jobs:
             pnpm --filter @fullyu/shared build
             pnpm --filter @fullyu/server db:generate
             # 生产用 db push（仓库无 migrations 目录），绝不使用 migrate dev / reset
-            pnpm --filter @fullyu/server exec prisma db push --schema=prisma/schema.prisma
+            # 测试库存在历史漂移（5 张遗留表 + orders.points_source 列）。这些表已无代码引用，
+            # 但含少量数据，是否 DROP 需人工确认；因此 db push 失败只告警不阻断，避免拖垮整次部署。
+            if ! pnpm --filter @fullyu/server exec prisma db push --schema=prisma/schema.prisma; then
+              echo "::warning::prisma db push 未执行成功（测试库 schema 漂移，疑似需 DROP 遗留表/列），已跳过；请人工核对后再对齐 schema"
+            fi
             cd apps/server
             npx tsc --project tsconfig.json
             # PM2 进程 cwd 已是 $SERVER_PATH/apps/server，重启即可；进程不存在时按该 cwd 拉起
