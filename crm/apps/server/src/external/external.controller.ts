@@ -22,6 +22,12 @@ export class ExternalController {
     return this.external.getByLocalUser(localUserId, req.external!);
   }
 
+  @Post('members/birthdays')
+  @HttpCode(200)
+  birthdays(@Body() body: { localUserIds?: unknown }, @Req() req: ExternalRequest) {
+    return this.external.getBirthdays(body?.localUserIds, req.external!);
+  }
+
   @Post('members/import')
   @HttpCode(200)
   importMembers(@Body() body: { members?: ResolveInput[] }, @Req() req: ExternalRequest) {

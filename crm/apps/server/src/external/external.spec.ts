@@ -94,6 +94,39 @@ describe('CRM 1C：业务端签名接口、身份与积分', () => {
     expect(again.body.memberNo).toBe(first.body.memberNo);
   });
 
+  it('按本地用户批量读取生日，未同步用户忽略且按业务隔离', async () => {
+    const created = await signed('post', '/external/members/resolve', {
+      body: {
+        localUserId: 'ql-u-birthday',
+        phone: '13700008888',
+        name: '生日会员',
+        birthday: '1992-09-09'
+      }
+    });
+    expect(created.status).toBe(200);
+
+    const birthdays = await signed('post', '/external/members/birthdays', {
+      body: { localUserIds: ['ql-u-birthday', 'ql-not-synced'] }
+    });
+    expect(birthdays.status).toBe(200);
+    expect(birthdays.body.items).toEqual([
+      { localUserId: 'ql-u-birthday', birthday: '1992-09-09' }
+    ]);
+
+    // 其它业务看不到这条身份，也就拿不到生日。
+    const cross = await signed('post', '/external/members/birthdays', {
+      key: 'sx-test',
+      body: { localUserIds: ['ql-u-birthday'] }
+    });
+    expect(cross.status).toBe(200);
+    expect(cross.body.items).toEqual([]);
+
+    const invalid = await signed('post', '/external/members/birthdays', {
+      body: { localUserIds: ['bad id!'] }
+    });
+    expect(invalid.status).toBe(400);
+  });
+
   it('同一 unionId 跨业务命中同一会员，不重复建号', async () => {
     const resolved = await signed('post', '/external/members/resolve', {
       key: 'sx-test',

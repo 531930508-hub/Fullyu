@@ -117,6 +117,7 @@ pnpm dev:server                                # 先编 shared，再 tsx watch
 | `POST /external/members/resolve` | 按本地用户 id + unionId + 手机号解析/创建；返回会员号与余额 |
 | `GET /external/members/:localUserId` | 查本业务用户 |
 | `POST /external/members/import` | ≤500 条批量导入，逐条幂等，返回新建/绑定/已存在/失败 |
+| `POST /external/members/birthdays` | ≤200 个本地用户 id 批量查生日，仅返回本业务已同步身份（`YYYY-MM-DD` 或 null） |
 | `POST /external/points/earn` | 加分，`points>0`，带 `reason` 与 `ref` |
 | `POST /external/points/consume` | 扣分，余额不足 422，按到期最早优先 |
 

@@ -82,6 +82,30 @@ export class ExternalService {
     };
   }
 
+  /**
+   * 业务端签到/建单页批量读取生日：只返回命中的身份，未同步或无生日时 birthday 为 null。
+   * 生日只给业务端做提醒展示，不暴露其它档案字段。
+   */
+  async getBirthdays(localUserIds: unknown, context: ExternalContext) {
+    const list = Array.isArray(localUserIds) ? localUserIds : [];
+    const ids = Array.from(
+      new Set(list.filter((id): id is string => typeof id === 'string' && Boolean(id)))
+    );
+    if (ids.length > 200) throw badRequest('单次最多查询 200 个用户');
+    ids.forEach((id) => this.assertLocalId(id));
+    if (!ids.length) return { items: [] as { localUserId: string; birthday: string | null }[] };
+    const identities = await this.prisma.memberIdentity.findMany({
+      where: { business: context.business, localUserId: { in: ids } },
+      select: { localUserId: true, member: { select: { birthday: true } } }
+    });
+    return {
+      items: identities.map((identity) => ({
+        localUserId: identity.localUserId,
+        birthday: identity.member.birthday ? shanghaiDate(identity.member.birthday) : null
+      }))
+    };
+  }
+
   async importMembers(inputs: ResolveInput[], context: ExternalContext) {
     const list = Array.isArray(inputs) ? inputs : [];
     if (!list.length) throw badRequest('导入列表不能为空');
@@ -401,6 +425,11 @@ export class ExternalService {
     if (text.length > max) throw badRequest(`字段长度不能超过 ${max}`);
     return text;
   }
+}
+
+/** 生日对外统一 yyyy-MM-dd；库内可能按 +08:00 零点存，先换算到上海时区再取日期。 */
+function shanghaiDate(value: Date): string {
+  return new Date(value.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 /** 会员号形如 FY-2611-000123；按月递增，不复用。 */
