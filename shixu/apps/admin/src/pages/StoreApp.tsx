@@ -29,6 +29,7 @@ import {
   CHANNEL_LABEL,
   ORDER_TYPE_LABEL,
   SERIES,
+  birthdayCountdownLabel,
   dateTimeText,
   money,
   minutesAgo,
@@ -704,7 +705,12 @@ function AssistedOrder({
   const [seat, setSeat] = useState('');
   const [note, setNote] = useState('');
   const [payment, setPayment] = useState<'wechat' | 'alipay' | 'cash'>('wechat');
-  const [member, setMember] = useState<{ code: string; discountPerCupCents: number; name?: string } | null>(null);
+  const [member, setMember] = useState<{
+    code: string;
+    discountPerCupCents: number;
+    name?: string;
+    birthday?: string | null;
+  } | null>(null);
   const [memberOpen, setMemberOpen] = useState(false);
   const [memberCameraOpen, setMemberCameraOpen] = useState(false);
   const [memberCode, setMemberCode] = useState('');
@@ -885,7 +891,8 @@ function AssistedOrder({
       setMember({
         code: result.benefit.code,
         discountPerCupCents: result.benefit.discountPerCupCents,
-        name: result.benefit.name
+        name: result.benefit.name,
+        birthday: result.benefit.birthday ?? null
       });
       setMemberOpen(false);
       setMemberCode('');
@@ -1314,6 +1321,9 @@ function AssistedOrder({
                   {member
                     ? `已识别${member.name || '会员'} · 单杯减 ${money(member.discountPerCupCents)}`
                     : '扫顾客会员码，带入单杯权益；不需要手机号'}
+                  {member && birthdayCountdownLabel(member.birthday) ? (
+                    <span className="member-birthday">{birthdayCountdownLabel(member.birthday)}</span>
+                  ) : null}
                 </p>
               </div>
               {member ? (

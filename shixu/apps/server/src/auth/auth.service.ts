@@ -291,6 +291,7 @@ export class AuthService {
       tier: discountPerCupCents ? 'annual' : 'standard',
       discountPerCupCents,
       name: row.name,
+      birthday: row.birthday ? row.birthday.toISOString().slice(0, 10) : null,
       memberUntil: row.memberUntil ? row.memberUntil.toISOString() : null
     };
   }

@@ -164,7 +164,7 @@ export const api = {
     request<{ order: import('./types').Order }>(`/store/orders/${orderId}/cancel`, { method: 'POST' }),
   storeVerifyMember: (code: string) =>
     request<{
-      benefit: { code: string; tier: 'annual' | 'guest'; discountPerCupCents: number; name?: string };
+      benefit: { code: string; tier: 'annual' | 'guest'; discountPerCupCents: number; name?: string; birthday?: string | null };
       mode: string;
     }>('/store/member/verify', { method: 'POST', body: { code } }),
   storeOrder: (id: string) =>

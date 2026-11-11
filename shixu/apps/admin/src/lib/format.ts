@@ -56,6 +56,26 @@ export function todayText() {
   return dateText(Date.now());
 }
 
+/** 距下一次生日的天数；只按「月-日」，今天为 0。 */
+export function daysUntilBirthday(birthday: string | null | undefined, now = new Date()) {
+  const matched = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(birthday || ''));
+  if (!matched) return null;
+  const month = Number(matched[2]);
+  const day = Number(matched[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const next = new Date(today.getFullYear(), month - 1, day);
+  if (next.getTime() < today.getTime()) next.setFullYear(today.getFullYear() + 1);
+  return Math.round((next.getTime() - today.getTime()) / 86400000);
+}
+
+/** 生日提醒统一口径：7 天内显示倒计时，当天显示「今天生日」。 */
+export function birthdayCountdownLabel(birthday: string | null | undefined, now = new Date(), windowDays = 7) {
+  const days = daysUntilBirthday(birthday, now);
+  if (days === null || days > windowDays) return '';
+  return days === 0 ? '今天生日' : `还有 ${days} 天生日`;
+}
+
 export function minutesAgo(ts: number, now = Date.now()) {
   return Math.max(0, Math.floor((now - ts) / 60000));
 }

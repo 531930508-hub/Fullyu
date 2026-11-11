@@ -153,6 +153,7 @@ dialog{border:1px solid var(--line);border-radius:22px;padding:0;background:var(
 .pos-member-box strong{font-size:12px}
 .pos-member-box p{margin-top:2px}
 .pos-member-box .text-btn{min-height:30px;padding:3px 0}
+.pos-member-box .member-birthday{display:inline-block;margin-left:6px;padding:0 7px;border-radius:9px;background:#fdf0f4;color:#b4557a;font-size:11px;line-height:18px;white-space:nowrap}
 .pay-mode-toggle{display:flex;margin:16px 0 4px;width:100%}
 .pay-mode-toggle button{flex:1;min-height:38px;font-size:12px}
 .loss-watch.warn{border-color:#dcbeb9;background:#fff9f6}
