@@ -128,6 +128,23 @@ jobs:
         with:
           name: frontend-dist
 
+      # 部署前的 Secret 体检：缺哪个就明确报哪个，避免只看到 scp 的 undefined method 之类模糊报错
+      - name: Preflight deploy secrets
+        env:
+          ECS_HOST_V: ${{ secrets.ECS_HOST }}
+          ECS_USER_V: ${{ secrets.ECS_USER }}
+          ECS_KEY_V: ${{ secrets.ECS_SSH_KEY }}
+        run: |
+          missing=""
+          [ -n "$ECS_HOST_V" ] || missing="$missing ECS_HOST"
+          [ -n "$ECS_USER_V" ] || missing="$missing ECS_USER"
+          [ -n "$ECS_KEY_V" ] || missing="$missing ECS_SSH_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::缺少仓库 Secret:$missing。请在 Settings → Secrets and variables → Actions → Secrets 新建"
+            exit 1
+          fi
+          echo "secrets ok: host=$ECS_HOST_V user=$ECS_USER_V key_lines=$(printf '%s' "$ECS_KEY_V" | grep -c .)"
+
       # 前端静态产物 + 后端源码包：scp 到 ECS 临时目录，再原子替换 nginx 根 / 覆盖 src（均保留上一份以便回滚）
       - name: Copy dists and server source to ECS
         uses: appleboy/scp-action@v0.1.7
