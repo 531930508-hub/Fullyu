@@ -362,4 +362,5 @@ apps/miniprogram/
 - 目标机路径映射：后端源码 `SERVER_PATH=/root/fullyu`；后台静态 `/opt/fullyu/apps/admin/dist`（:8080）；H5 静态 `/opt/fullyu/apps/miniprogram/dist/build/h5`（:8101）
 - 部署动作：静态产物整目录替换（旧产物先打 tar 备份到 /tmp）→ 覆盖 `apps/server/src|prisma`、`packages/shared/src` → shared 构建 → prisma generate → tsc → pm2 重启 → health 检查
 - 不跑 `pnpm install`（ECS 拉公网依赖不稳），新增依赖需先在 ECS 手工安装
+- 仓库 Secrets：`ECS_HOST`、`ECS_USER`、`ECS_SSH_KEY`（专用部署密钥 `github-actions-presence`，公钥已加入 ECS `authorized_keys`）；缺失时部署前的 Secret 体检会点名报错
 - `prisma db push` 遇测试库历史漂移（遗留表 `payment_attempts`/`refund_attempts`/`member_points_operations`/`member_card_sync`/`member_user_sync`、列 `orders.points_source`）时只告警不阻断；是否 DROP 需人工确认
