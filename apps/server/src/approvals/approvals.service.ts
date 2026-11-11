@@ -48,14 +48,32 @@ export class ApprovalsService {
     };
   }
 
-  async list(options: { storeIds: string[]; status?: string; kind?: string; limit?: number }) {
+  async list(options: {
+    storeIds: string[];
+    status?: string;
+    kind?: string;
+    limit?: number;
+    /** 我提交的：只看自己发起的申请 */
+    requestedBy?: string;
+    /** 我已处理：只看自己做过决定的申请 */
+    decidedBy?: string;
+    /** 按权限收敛可审批类型；空数组表示一类都没有，返回空列表 */
+    kinds?: string[];
+  }) {
     // SEC-04：空门店范围 = 什么都看不到（fail closed），绝不能退化成全库查询。
     if (!options.storeIds.length) return [];
+    if (options.kinds && !options.kinds.length) return [];
     const rows = await this.prisma.approval.findMany({
       where: {
         storeId: { in: options.storeIds },
-        ...(options.status && options.status !== 'all' ? { status: options.status } : {}),
-        ...(options.kind && options.kind !== 'all' ? { kind: options.kind } : {})
+        ...(options.requestedBy ? { requestedBy: options.requestedBy } : {}),
+        ...(options.decidedBy ? { decidedBy: options.decidedBy } : {}),
+        ...(options.kinds
+          ? { kind: { in: options.kinds } }
+          : options.kind && options.kind !== 'all'
+            ? { kind: options.kind }
+            : {}),
+        ...(options.status && options.status !== 'all' ? { status: options.status } : {})
       },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       take: options.limit || 200
@@ -224,5 +242,22 @@ export class ApprovalsService {
     });
     const map = Object.fromEntries(rows.map((x) => [x.status, x._count._all]));
     return { pending: map.pending || 0, approved: map.approved || 0, rejected: map.rejected || 0 };
+  }
+
+  /** 审批中心三个页签的口径：待我审批（按权限收敛）/ 我已处理 / 全部记录。 */
+  async tabCounts(staff: StaffContext, storeIds: string[], kinds: string[]) {
+    if (!storeIds.length) return { pending: 0, done: 0, total: 0, approved: 0, rejected: 0 };
+    const [pending, done, total, approved, rejected] = await Promise.all([
+      kinds.length
+        ? this.prisma.approval.count({
+            where: { storeId: { in: storeIds }, status: 'pending', kind: { in: kinds } }
+          })
+        : Promise.resolve(0),
+      this.prisma.approval.count({ where: { storeId: { in: storeIds }, decidedBy: staff.id } }),
+      this.prisma.approval.count({ where: { storeId: { in: storeIds } } }),
+      this.prisma.approval.count({ where: { storeId: { in: storeIds }, status: 'approved' } }),
+      this.prisma.approval.count({ where: { storeId: { in: storeIds }, status: 'rejected' } })
+    ]);
+    return { pending, done, total, approved, rejected };
   }
 }

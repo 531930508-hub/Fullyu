@@ -1,3 +1,5 @@
+import type { TsplLabelStyle } from '@teahour/integrations';
+
 /**
  * 运行配置守门：凡是「缺了不该静默降级」的配置都在这里集中校验。
  * 生产环境的密钥要求在模块加载时就会执行（app.module 顶部调用），保证带病配置起不来。
@@ -60,4 +62,62 @@ export function loginRateLimit(env: NodeJS.ProcessEnv = process.env): { limit: n
   const parsed = Number((env.LOGIN_RATE_LIMIT || '').trim());
   const limit = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 10;
   return { limit, windowMs: 15 * 60_000 };
+}
+
+/**
+ * 杯贴打印：门店打印代理的令牌表。
+ *
+ * 芯烨 XP-420B 是 USB 机，只能由营业台电脑上的代理拉任务。代理没有后台账号，
+ * 用「门店 → 一次性长随机串」的令牌证明身份：拿 sh 的令牌只能领 sh 的任务。
+ * 表为空时 agent 接口一律 401 —— 绝不允许无凭据的设备来取杯贴内容（含顾客称呼）。
+ */
+export function printAgentTokens(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  const raw = (env.PRINT_AGENT_TOKENS || '').trim();
+  if (!raw) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('PRINT_AGENT_TOKENS 必须是 {"门店ID":"令牌"} 形式的 JSON');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('PRINT_AGENT_TOKENS 必须是 {"门店ID":"令牌"} 形式的 JSON');
+  }
+  const result: Record<string, string> = {};
+  for (const [storeId, token] of Object.entries(parsed as Record<string, unknown>)) {
+    const key = String(storeId || '').trim();
+    const value = String(token ?? '').trim();
+    if (!key || value.length < 16) {
+      throw new Error('PRINT_AGENT_TOKENS 每个门店都要给 16 位以上令牌，缺一不可');
+    }
+    result[key] = value;
+  }
+  return result;
+}
+
+/**
+ * TSPL 标签与打印参数（芯烨 XP-420B，203dpi）。
+ * 40×60mm = 320×480 dots；默认字体 TSS24.BF2 是简体中文点阵，代理侧会转 GB18030。
+ */
+export function tsplLabelStyle(env: NodeJS.ProcessEnv = process.env): TsplLabelStyle {
+  const num = (raw: string | undefined, fallback: number, min: number, max: number): number => {
+    const parsed = Number((raw || '').trim());
+    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+    return Math.min(Math.max(Math.round(parsed), min), max);
+  };
+  return {
+    widthMm: num(env.TSPL_LABEL_WIDTH_MM, 40, 20, 104),
+    heightMm: num(env.TSPL_LABEL_HEIGHT_MM, 60, 20, 300),
+    gapMm: num(env.TSPL_LABEL_GAP_MM, 2, 0, 10),
+    gapOffsetMm: 0,
+    fontCn: (env.TSPL_FONT_CN || '').trim() || 'TSS24.BF2',
+    density: num(env.TSPL_DENSITY, 8, 0, 15),
+    speed: num(env.TSPL_SPEED, 4, 1, 6),
+    timeZone: (env.LABEL_TIME_ZONE || '').trim() || 'Asia/Shanghai'
+  };
+}
+
+/** 杯贴上的求助电话（门店直线或品牌客服号）；未配置时不印，不拿占位号码凑数。 */
+export function servicePhone(env: NodeJS.ProcessEnv = process.env): string {
+  return (env.TEAHOUR_SERVICE_PHONE || '').trim();
 }

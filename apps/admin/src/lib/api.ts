@@ -278,10 +278,11 @@ export const api = {
   adminVoidExpense: (id: string) =>
     request<{ expense: import('./types').Expense }>(`/admin/expenses/${id}/void`, { method: 'POST' }),
 
-  adminApprovals: (query: { status?: string; kind?: string }) =>
+  adminApprovals: (query: { view?: 'todo' | 'done' | 'all'; kind?: string; status?: string }) =>
     request<{
+      view: 'todo' | 'done' | 'all';
       approvals: import('./types').Approval[];
-      counts: { pending: number; approved: number; rejected: number };
+      counts: { pending: number; done: number; total: number; approved: number; rejected: number };
     }>('/admin/approvals', { query }),
   adminDecide: (id: string, decision: 'approve' | 'reject', comment?: string) =>
     request<{ approval: import('./types').Approval }>(`/admin/approvals/${id}/decide`, {

@@ -1,6 +1,6 @@
 <template>
   <!--
-    会员卡：一张卡承载身份、本年已省、三业态权益与续费。
+    会员卡：一张卡承载身份、本年已省、全平台权益与续费。
     不做翻面：卡脚是稳稳的一条，左侧看明细、右侧拉开权益，
     所有内容都在文档流里，不会有元素互相压住。
   -->
@@ -8,7 +8,7 @@
     <view class="bmc-main">
       <view class="bmc-row1">
         <text class="bmc-eyebrow">FULL YU MEMBER</text>
-        <text class="bmc-scope">{{ tt('全业态通用', 'All locations') }}</text>
+        <text class="bmc-scope">{{ tt('全平台通用', 'All locations') }}</text>
         <text class="bmc-state" :class="{ 'is-warn': expiring }">{{ stateText }}</text>
       </view>
       <text class="bmc-name serif">{{ tt('Full愈会员卡', 'Full Yuk member card') }}</text>
@@ -34,7 +34,7 @@
     <!-- 展开区：往下长，把下面的内容推下去 -->
     <view class="bmc-drawer">
       <view class="bmc-drawer-in">
-        <text class="bmc-dhead">{{ tt('三业态权益 · 全门店可用', 'Benefits across three stores · all locations') }}</text>
+        <text class="bmc-dhead">{{ tt('全平台权益 · 全门店可用', 'Platform-wide benefits · all locations') }}</text>
         <view v-for="item in benefitRows" :key="item.business + item.title" class="bmc-ben">
           <text class="bmc-brand">{{ brandName(item.business) }}</text>
           <view class="bmc-ben-body">
@@ -127,7 +127,7 @@ const benefitRows = computed(() => {
 });
 
 function brandName(business) {
-  return BRAND_LABEL[business] || '全业态';
+  return BRAND_LABEL[business] || '全平台';
 }
 
 function onSaved() {
@@ -335,14 +335,16 @@ function onSaved() {
   width: 100%;
   margin-top: 10px;
   padding: 9px;
+  border: 0;
   border-radius: 10px;
-  background: #f7f1e7;
+  background: #e8c58d;
   color: #3a2a1e;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   line-height: 1.2;
 }
+.bmc-renew::after { border: 0; }
 .bmc-note {
   display: block;
   margin-top: 7px;

@@ -12,6 +12,7 @@ import { mapCustomer, mapStaffSummary } from '../common/mappers';
 import { LoginAttemptLimiter } from './login-attempts';
 import { loginRateLimit } from '../config/config';
 import { CrmClient, type CrmIdentity } from '../crm/crm.client';
+import { BrandPerksService, DEFAULT_PER_CUP_CENTS } from '../crm/brand-perks.service';
 
 export type CustomerSessionInput = {
   memberCode?: string;
@@ -41,7 +42,8 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly staffService: StaffService,
     private readonly hardware: HardwareService,
-    private readonly crm: CrmClient
+    private readonly crm: CrmClient,
+    private readonly perkRates: BrandPerksService
   ) {}
 
   async login(username: string, password: string, sourceIp = 'unknown') {
@@ -285,7 +287,7 @@ export class AuthService {
     if (!normalized) return null;
     const row = await this.prisma.customer.findUnique({ where: { memberCode: normalized } });
     if (!row) return null;
-    const discountPerCupCents = annualDiscountCents(row);
+    const discountPerCupCents = await this.annualDiscountFor(row);
     return {
       code: row.memberCode,
       tier: discountPerCupCents ? 'annual' : 'standard',
@@ -358,9 +360,21 @@ export class AuthService {
    * 未开启 CRM 时沿用本地只读字段；开启后调用失败必须报错，绝不静默回退本地 0 分。
    */
   private async customerView(customer: CrmCustomer): Promise<ReturnType<typeof customerPayload>> {
-    if (!this.crm.enabled) return customerPayload(customer);
+    const perCupCents = await this.perkRates.perCupCents();
+    if (!this.crm.enabled) return customerPayload(customer, undefined, perCupCents);
     const member = await this.crm.resolve(this.crmIdentity(customer));
-    return customerPayload(customer, member.balance);
+    return customerPayload(customer, member.balance, perCupCents);
+  }
+
+  /**
+   * 按库内会籍计算年卡每杯立减（分）。
+   * 资格看本地 memberTier/memberUntil，金额取 CRM 卡版本，业务侧只认这一个入口。
+   */
+  async annualDiscountFor(customer: {
+    memberTier?: string | null;
+    memberUntil?: Date | null;
+  }): Promise<number> {
+    return annualDiscountCents(customer, await this.perkRates.perCupCents());
   }
 
   /** 只传业务端本地标识与档案字段；会员号由 CRM 生成，业务端不持有。 */
@@ -435,18 +449,21 @@ function normalizeBirthday(value: string | null): Date | null {
   return date;
 }
 
-/** 年卡会员每杯减免（分）；会员身份与有效期以数据库为准，由服务端统一核验。 */
-export const ANNUAL_DISCOUNT_PER_CUP_CENTS = 200;
-
-/** 只有未过期的年卡会员享受每杯立减；普通会员与过期年卡一律 0。 */
-export function annualDiscountCents(customer: {
-  memberTier?: string | null;
-  memberUntil?: Date | null;
-}): number {
+/**
+ * 年卡会员每杯减免（分）：会员身份与有效期以数据库为准（CRM 同步而来），
+ * 金额由 CRM 卡版本下发（见 BrandPerksService），未接入 CRM 时用本地默认值。
+ */
+export function annualDiscountCents(
+  customer: {
+    memberTier?: string | null;
+    memberUntil?: Date | null;
+  },
+  perCupCents: number = DEFAULT_PER_CUP_CENTS
+): number {
   const active =
     customer.memberTier === 'annual' &&
     (!customer.memberUntil || customer.memberUntil.getTime() > Date.now());
-  return active ? ANNUAL_DISCOUNT_PER_CUP_CENTS : 0;
+  return active ? perCupCents : 0;
 }
 
 export function customerPayload(
@@ -463,10 +480,12 @@ export function customerPayload(
     memberUntil?: Date | null;
   },
   /** 会员中心余额；传入时以它为准，用于替换业务端本地只读积分。 */
-  pointsOverride?: number
+  pointsOverride?: number,
+  /** CRM 下发的每杯立减金额（分）；缺省用本地默认值。 */
+  perCupCents?: number
 ) {
   // UI-02：会员等级与折扣由服务端按库内记录和有效期判定，不信任客户端申报。
-  const discount = annualDiscountCents(customer);
+  const discount = annualDiscountCents(customer, perCupCents);
   return {
     ...mapCustomer(customer),
     memberTier: discount ? 'annual' : 'standard',

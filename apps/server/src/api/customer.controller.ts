@@ -6,7 +6,7 @@ import { ApiError, badRequest, notImplemented } from '../common/errors';
 import { parseInput } from '../common/zod';
 import { CustomerGuard } from '../auth/customer.guard';
 import { Customer } from '../auth/decorators';
-import { AuthService, annualDiscountCents } from '../auth/auth.service';
+import { AuthService } from '../auth/auth.service';
 import type { CustomerContext } from '../common/auth.types';
 import { CatalogService } from '../catalog/catalog.service';
 import { ContentService } from '../content/content.service';
@@ -269,7 +269,7 @@ export class CustomerController {
     if (!row?.phone) throw badRequest('请先使用微信手机号登录');
     // 折扣只认当前登录账号的库内会籍：客户端传来的 memberCode 不参与判定，
     // 避免普通会员或他人的会员码被误当成折扣凭证。
-    const discount = input.business === 'fresh' ? annualDiscountCents(row) : 0;
+    const discount = input.business === 'fresh' ? await this.auth.annualDiscountFor(row) : 0;
     const result = await this.orders.createOrder({
       storeId: input.storeId,
       business: input.business,

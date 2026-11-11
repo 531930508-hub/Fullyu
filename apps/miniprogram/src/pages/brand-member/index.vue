@@ -24,7 +24,7 @@
         </view>
 
         <template v-else-if="data">
-          <!-- 会员卡：身份、本年已省、三业态权益与续费都在这张卡里 -->
+          <!-- 会员卡：身份、本年已省、全平台权益与续费都在这张卡里 -->
           <MemberCard
             :data="data"
             :active="active"
@@ -206,7 +206,7 @@
           </button>
         </view>
         <view class="bm-confirm-row"><text>{{ active ? tt('续费账户', 'Renew for') : tt('开卡账户', 'Open for') }}</text><text>{{ data.member.name }} · {{ data.member.phoneMasked }}</text></view>
-        <view class="bm-confirm-row"><text>{{ tt('包含', 'Includes') }}</text><text>{{ tt('全业态会员价 · 愈行之旅', 'Member prices · Healing Journey') }}</text></view>
+        <view class="bm-confirm-row"><text>{{ tt('包含', 'Includes') }}</text><text>{{ tt('全平台会员价 · 愈行之旅', 'Member prices · Healing Journey') }}</text></view>
         <view class="bm-confirm-row"><text>{{ tt('卡类型', 'Card type') }}</text><text>{{ tt('服务权益卡（非储值，不可提现）', 'Service benefit card (not stored value, not withdrawable)') }}</text></view>
         <view class="bm-confirm-row"><text>{{ tt('收款方', 'Payee') }}</text><text>{{ tt('时叙（本小程序）', '时叙 (this mini program)') }}</text></view>
         <view v-if="isMock" class="bm-mock-note">{{ tt(`本地联调：不会发起真实扣款，${active ? '续费' : '开通'}只更新本页状态。`, 'Local mock: no real charge is made; this only updates the page state.') }}</view>
@@ -223,13 +223,13 @@
         <view class="bm-confirm-head">
           <view>
             <text class="bm-confirm-name serif">{{ tt(`本年已省 ¥${formatYuan(data.savedCents)}`, `Saved ¥${formatYuan(data.savedCents)} this year`) }}</text>
-            <text class="bm-confirm-desc">{{ tt('按各业态会员价结算累计', 'Accumulated from member-price settlements') }}</text>
+            <text class="bm-confirm-desc">{{ tt('按全平台会员价结算累计', 'Accumulated from member-price settlements') }}</text>
           </view>
         </view>
         <view class="bm-confirm-row"><text>{{ tt('计入范围', 'Scope') }}</text><text>{{ tt('时叙 · 轻疗 · 在场 全门店', '时叙 · 轻疗 · 在场, all stores') }}</text></view>
         <view class="bm-confirm-row"><text>{{ tt('统计口径', 'Basis') }}</text><text>{{ tt('会员价与原价差额，按订单实付结算', 'Difference between member and list price, per paid order') }}</text></view>
         <view class="bm-confirm-row"><text>{{ tt('退款订单', 'Refunded orders') }}</text><text>{{ tt('退款后对应节省金额同步扣减', 'Savings are deducted when an order is refunded') }}</text></view>
-        <text class="bm-fine">{{ tt('分业态明细与逐笔记录以门店小票为准；需要核对时联系门店店员。', 'Per-store breakdowns and individual records follow the printed receipts; ask in store if you need a check.') }}</text>
+        <text class="bm-fine">{{ tt('各店明细与逐笔记录以门店小票为准；需要核对时联系门店店员。', 'Per-store breakdowns and individual records follow the printed receipts; ask in store if you need a check.') }}</text>
         <button hover-class="none" class="bm-btn primary full" @click="closeDetail">{{ tt('知道了', 'Got it') }}</button>
       </view>
     </BottomSheet>

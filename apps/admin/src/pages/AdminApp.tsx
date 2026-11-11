@@ -1364,13 +1364,13 @@ function ProfitPage() {
 function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
   const { can } = useStaffAuth();
   const notify = useToast();
-  const [status, setStatus] = useStoredState<'pending' | 'all' | 'approved' | 'rejected'>(
-    'teahour.admin.approvals.status',
-    'pending',
-    ['pending', 'all', 'approved', 'rejected']
+  const [view, setView] = useStoredState<'todo' | 'done' | 'all'>(
+    'teahour.admin.approvals.view',
+    'todo',
+    ['todo', 'done', 'all']
   );
   const [kind, setKind] = useStoredState<'all' | 'REFUND' | 'LOSS'>('teahour.admin.approvals.kind', 'all', ['all', 'REFUND', 'LOSS']);
-  const query = useApi(() => api.adminApprovals({ status, kind }), [status, kind]);
+  const query = useApi(() => api.adminApprovals({ view, kind }), [view, kind]);
   const [decision, setDecision] = useState<{ approval: Approval; action: 'approve' | 'reject' } | null>(null);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1410,8 +1410,7 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
       <PageHead
         eyebrow="品牌总部 · 风控"
         title="审批中心"
-        description="退款与超限报损在同一处处理。审批通过后按业务规则执行退款或扣减库存成本。"
-        meta={<span>待处理 {data.counts.pending} · 已通过 {data.counts.approved} · 已驳回 {data.counts.rejected}</span>}
+        description="退款与超限报损都在这里处理：先看等待你审批的，再回看自己处理过的和全部留档。"
         actions={
           <Segmented
             value={kind}
@@ -1427,20 +1426,19 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
       />
 
       <Tabs
-        value={status}
-        onChange={setStatus}
+        value={view}
+        onChange={setView}
         options={[
-          { value: 'pending', label: '待处理', count: data.counts.pending },
-          { value: 'approved', label: '已通过', count: data.counts.approved },
-          { value: 'rejected', label: '已驳回', count: data.counts.rejected },
-          { value: 'all', label: '全部' }
+          { value: 'todo', label: '待我审批', count: data.counts.pending },
+          { value: 'done', label: '我已处理', count: data.counts.done },
+          { value: 'all', label: '全部记录', count: data.counts.total }
         ]}
       />
 
       <div style={{ marginTop: 14 }}>
         {data.approvals.map((approval) => {
           const permission = approval.kind === 'REFUND' ? 'order:refund:approve' : 'loss:approve';
-          const canDecide = approval.status === 'pending' && can(permission);
+          const canDecide = view === 'todo' && approval.status === 'pending' && can(permission);
           return (
             <article className="approval-card" key={approval.id}>
               <div className="approval-head">
@@ -1468,7 +1466,7 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
                 </div>
                 <div className="approval-actions">
                   <span className="approval-amount">{money(approval.amountCents)}</span>
-                  {approval.status === 'pending' ? (
+                  {view === 'todo' && approval.status === 'pending' ? (
                     canDecide ? (
                       <>
                         <button type="button" className="btn btn-sm btn-success-soft" onClick={() => openDecision(approval, 'approve')}>
@@ -1490,7 +1488,23 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
           );
         })}
         {!data.approvals.length ? (
-          <EmptyState icon="check" title="没有待处理的申请" description="新的退款或超限报损会自动出现在这里。" />
+          <EmptyState
+            icon="check"
+            title={
+              view === 'todo'
+                ? '没有待你审批的申请'
+                : view === 'done'
+                  ? '还没有处理记录'
+                  : '还没有审批记录'
+            }
+            description={
+              view === 'todo'
+                ? '新的退款或超限报损会自动出现在这里，审批后进入「我已处理」。'
+                : view === 'done'
+                  ? '通过或驳回过的退款、报损会保留在这里，金额与执行结果可回查。'
+                  : '门店发起的退款、超限报损都会留档在这里，可按类型筛选回查。'
+            }
+          />
         ) : null}
       </div>
 

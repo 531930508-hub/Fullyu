@@ -300,6 +300,7 @@ export class AdminController {
   async approvalList(@Query() query: unknown, @Staff() staff: StaffContext) {
     const input = parseInput(
       z.object({
+        view: z.enum(['todo', 'done', 'all']).optional(),
         status: z.string().optional(),
         kind: z.string().optional(),
         limit: z.coerce.number().optional()
@@ -307,14 +308,24 @@ export class AdminController {
       query ?? {}
     );
     const storeIds = await this.financeScope(staff);
+    // 兼容旧调用：显式传 status（如 status=all）视为查全部记录；新前端用 view 三页签。
+    const view = input.view || (input.status ? 'all' : 'todo');
+    // 待我审批只收敛到当前账号真有审批权限的类型；无审批权限时为空，而不是展示点不动的按钮。
+    const kinds = [
+      ...(hasPerm(staff, 'order:refund:approve') ? ['REFUND'] : []),
+      ...(hasPerm(staff, 'loss:approve') ? ['LOSS'] : [])
+    ];
+    const approvals = await this.approvals.list(
+      view === 'all'
+        ? { storeIds, status: input.status, kind: input.kind, limit: input.limit }
+        : view === 'done'
+          ? { storeIds, decidedBy: staff.id, status: input.status, kind: input.kind, limit: input.limit }
+          : { storeIds, status: 'pending', kind: input.kind, kinds, limit: input.limit }
+    );
     return {
-      approvals: await this.approvals.list({
-        storeIds,
-        status: input.status,
-        kind: input.kind,
-        limit: input.limit
-      }),
-      counts: await this.approvals.counts(storeIds)
+      view,
+      approvals,
+      counts: await this.approvals.tabCounts(staff, storeIds, kinds)
     };
   }
 
