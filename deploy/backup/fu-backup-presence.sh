@@ -69,4 +69,11 @@ ls -1dt "$BASE"/*/ 2>/dev/null | tail -n +4 | while read -r d; do
   [ "$(find "$d" -maxdepth 0 -mtime +13 | wc -l)" -gt 0 ] && rm -rf "$d" && echo "pruned $d"
 done
 
+# 7) 异地备份到 OSS（0.5b）：失败不影响本地备份，只记日志
+if [ -x /usr/local/bin/fu-oss-upload.sh ]; then
+  /usr/local/bin/fu-oss-upload.sh presence "$DEST" || echo "$(date '+%F %T') OSS 异地备份失败，本地备份已保留"
+else
+  echo "$(date '+%F %T') fu-oss-upload.sh 未安装，跳过异地备份"
+fi
+
 echo "=== $(date '+%F %T') done, size: $(du -sh "$DEST" | cut -f1)"
