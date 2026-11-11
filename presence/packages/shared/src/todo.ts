@@ -183,11 +183,3 @@ export interface RefundDetailResult {
   link: string
 }
 
-export const ORDER_STATUS_LABELS: Record<string, string> = {
-  PENDING_PAYMENT: '待支付',
-  PAID: '已支付',
-  COMPLETED: '已完成',
-  CANCELLED: '已取消',
-  REFUNDING: '退款中',
-  REFUNDED: '已退款',
-}

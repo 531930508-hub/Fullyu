@@ -57,10 +57,31 @@ const PHASE_LABELS: Record<CourseDisplayPhase, { zh: string; en: string }> = {
   ENDED: { zh: '已结束', en: 'Ended' },
 }
 
-/** 展示状态中文/英文文案 */
-export function coursePhaseLabel(phase: CourseDisplayPhase, language: string = 'zh'): string {
-  const item = PHASE_LABELS[phase] || PHASE_LABELS.ENROLLING
+/** 后台标签颜色：可报名绿色、补报名金色、进行中蓝色、终态灰色 */
+export const COURSE_PHASE_COLORS: Record<CourseDisplayPhase, string> = {
+  DRAFT: 'default',
+  CANCELLED: 'default',
+  COMPLETED: 'default',
+  EXPIRED: 'default',
+  ENROLL_UPCOMING: 'blue',
+  ENROLLING: 'green',
+  ENROLL_CLOSED: 'orange',
+  LATE_ENROLLING: 'gold',
+  ONGOING: 'cyan',
+  ENDED: 'default',
+}
+
+/** 展示状态中文/英文文案；未知 phase 返回空字符串，由调用方兜底 */
+export function coursePhaseLabel(phase?: string | null, language: string = 'zh'): string {
+  const item = phase ? PHASE_LABELS[phase as CourseDisplayPhase] : undefined
+  if (!item) return ''
   return language === 'en' ? item.en : item.zh
+}
+
+/** 展示状态颜色；未知 phase 回落到 default，不猜测成可报名 */
+export function coursePhaseColor(phase?: string | null): string {
+  if (!phase) return 'default'
+  return COURSE_PHASE_COLORS[phase as CourseDisplayPhase] || 'default'
 }
 
 function parseDate(value: string | Date | null | undefined): Date | null {

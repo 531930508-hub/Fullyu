@@ -147,6 +147,7 @@ export enum OrderType {
   COURSE = 'COURSE',           // 普通课程报名
   WAITLIST = 'WAITLIST',       // 候补报名（预付）
   MEMBER_CARD = 'MEMBER_CARD', // 会员卡购买
+  COMMUNITY = 'COMMUNITY',     // 社群年费
 }
 
 /** 订单信息 */
@@ -272,12 +273,25 @@ export interface IVoucher {
 
 // ========== 任务相关（培训师） ==========
 
-/** 任务状态 */
+/** 任务状态（与 Prisma TaskStatus 一致） */
 export enum TaskStatus {
   PUBLISHED = 'PUBLISHED',   // 已发布
+  COMPLETED = 'COMPLETED',   // 已完成
+  CANCELLED = 'CANCELLED',   // 已取消
+}
+
+/** 任务领取状态（与 Prisma TaskClaimStatus 一致） */
+export enum TaskClaimStatus {
   CLAIMED = 'CLAIMED',       // 已领取
   COMPLETED = 'COMPLETED',   // 已完成
   CANCELLED = 'CANCELLED',   // 已取消
+}
+
+/** 社群审核状态（与 Prisma CommunityStatus 一致） */
+export enum CommunityStatus {
+  PENDING = 'PENDING',       // 待审核
+  APPROVED = 'APPROVED',     // 已通过
+  REJECTED = 'REJECTED',     // 已驳回
 }
 
 /** 任务信息 */
