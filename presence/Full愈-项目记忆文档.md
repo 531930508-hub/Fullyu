@@ -353,3 +353,13 @@ apps/miniprogram/
 ---
 
 *本文档由项目记忆系统导出，版本 1.0 | 2025-06-24*
+
+## 部署（CI/CD）
+
+- 仓库：`git@github.com:531930508-hub/Fullyu.git`（单仓库，在场代码在 `presence/`）
+- 流水线：`.github/workflows/ci-deploy.yml`。push 到 `main` 且改动命中 `presence/**` 或该 workflow 文件时触发；也可用 `workflow_dispatch` 手动运行
+- 自动部署开关：仓库变量 `ENABLE_DEPLOY=true`（Settings → Secrets and variables → Actions → Variables）。关闭后只构建不部署
+- 目标机路径映射：后端源码 `SERVER_PATH=/root/fullyu`；后台静态 `/opt/fullyu/apps/admin/dist`（:8080）；H5 静态 `/opt/fullyu/apps/miniprogram/dist/build/h5`（:8101）
+- 部署动作：静态产物整目录替换（旧产物先打 tar 备份到 /tmp）→ 覆盖 `apps/server/src|prisma`、`packages/shared/src` → shared 构建 → prisma generate → tsc → pm2 重启 → health 检查
+- 不跑 `pnpm install`（ECS 拉公网依赖不稳），新增依赖需先在 ECS 手工安装
+- `prisma db push` 遇测试库历史漂移（遗留表 `payment_attempts`/`refund_attempts`/`member_points_operations`/`member_card_sync`/`member_user_sync`、列 `orders.points_source`）时只告警不阻断；是否 DROP 需人工确认
