@@ -126,7 +126,7 @@ const stateText = computed(() => (props.active ? cardStateLabel(card.value.state
 const nameLine = computed(() => {
   const name = props.active ? card.value.productName : ''
   const fallback = name || tr('Full愈年卡', 'Full Yu Annual')
-  return isEnglish() ? PLAN_NAME_EN[fallback] || PLAN_EN[card.value.productCode] || fallback : fallback
+  return isEnglish() ? PLAN_NAME_EN[fallback] || (card.value.productCode ? PLAN_EN[card.value.productCode] : '') || fallback : fallback
 })
 const whoLine = computed(() => {
   const member = props.data?.member

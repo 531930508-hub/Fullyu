@@ -68,8 +68,8 @@ export function requestSubscribeMessage(tmplIds: string[]): Promise<Record<strin
  */
 export async function payOrder(orderId: string): Promise<void> {
   const params = await createJsapiPayment(orderId)
-  // 积分/代金券全额抵扣：服务端已直接完成支付，无需调起微信收银台
-  if ('zeroAmount' in params && params.zeroAmount) return
+  // 积分/代金券全额抵扣：服务端已直接完成支付，返回体不带支付签名，无需调起微信收银台
+  if (!('paySign' in params)) return
   await requestPayment(params)
 }
 

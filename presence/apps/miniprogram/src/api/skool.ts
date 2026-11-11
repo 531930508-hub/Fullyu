@@ -34,6 +34,8 @@ export interface Community {
   description: string
   /** 今日活跃成员数 */
   activeToday: number
+  /** 平台审核状态，仅主理人工作台可见 */
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED'
   createdAt?: string
   /** PUBLIC=公开；HIDDEN=隐藏；INVITE_ONLY=仅受邀可见 */
   visibility?: 'PUBLIC' | 'HIDDEN' | 'INVITE_ONLY'

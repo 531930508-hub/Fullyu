@@ -395,7 +395,7 @@ import { onLoad, onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/un
 import {
   fetchCommunity, fetchMembership, fetchEvents, fetchPosts, fetchMembers, fetchMemberCard, fetchHostCard,
   joinCommunity, submitPost, postComment, togglePostLike, moderateContent, applyJoin, updatePrivacy,
-  type Community, type CommunityEvent, type CommunityPost, type CommunityMember, type CommunityMembership,
+  type Community, type CommunityEvent, type CommunityPost, type CommunityComment, type CommunityMember, type CommunityMembership,
   type MemberCard, type HostCard,
 } from '@/api/skool'
 import { payOrder } from '@/utils/wechat'
@@ -902,11 +902,11 @@ async function submitModeration() {
   }
 }
 
-function commentsOf(post: CommunityPost & { commentsList?: { id: string }[] }) {
+function commentsOf(post: CommunityPost & { commentsList?: CommunityComment[] }) {
   return post.commentsList || []
 }
 
-function visibleComments(post: CommunityPost & { commentsList?: { id: string }[] }) {
+function visibleComments(post: CommunityPost & { commentsList?: CommunityComment[] }) {
   const list = commentsOf(post)
   return expandedPosts.value[post.id] ? list : list.slice(0, 3)
 }

@@ -119,6 +119,16 @@ export const PERMISSIONS: PermissionDef[] = [
   { code: 'scm:stock:view', name: '库存查看', module: 'scm', level: 'MENU', group: '库存' },
   { code: 'scm:stock:adjust', name: '库存调整', module: 'scm', level: 'ACTION', group: '库存' },
   { code: 'scm:stock:cost', name: '库存成本金额（敏感）', module: 'scm', level: 'FIELD', group: '库存' },
+  { code: 'scm:location:view', name: '库存地点（标签页）', module: 'scm', level: 'TAB', group: '基础档案' },
+  { code: 'scm:location:update', name: '库存地点维护', module: 'scm', level: 'ACTION', group: '基础档案' },
+  { code: 'scm:bom:view', name: 'BOM 配方（标签页）', module: 'scm', level: 'TAB', group: '基础档案' },
+  { code: 'scm:bom:update', name: 'BOM 配方维护', module: 'scm', level: 'ACTION', group: '基础档案' },
+  { code: 'scm:transfer:view', name: '库存调拨查看', module: 'scm', level: 'MENU', group: '库存调拨' },
+  { code: 'scm:transfer:create', name: '发起库存调拨', module: 'scm', level: 'ACTION', group: '库存调拨' },
+  { code: 'scm:production:view', name: '生产工单查看', module: 'scm', level: 'MENU', group: '生产工单' },
+  { code: 'scm:production:create', name: '创建生产工单', module: 'scm', level: 'ACTION', group: '生产工单' },
+  { code: 'scm:production:issue', name: '生产领料/发料', module: 'scm', level: 'ACTION', group: '生产工单' },
+  { code: 'scm:production:complete', name: '生产完工入库', module: 'scm', level: 'ACTION', group: '生产工单' },
 
   // ===== 财务 =====
   { code: 'finance:dashboard:view', name: '财务看板访问', module: 'finance', level: 'MENU', group: '财务看板' },
@@ -132,6 +142,8 @@ export const PERMISSIONS: PermissionDef[] = [
   { code: 'finance:expense:update', name: '编辑支出', module: 'finance', level: 'ACTION', group: '支出' },
   { code: 'finance:expense:delete', name: '删除支出', module: 'finance', level: 'ACTION', group: '支出' },
   { code: 'finance:expense:import', name: '批量导入支出', module: 'finance', level: 'ACTION', group: '支出' },
+  { code: 'finance:presence:view', name: '在场业务看板访问', module: 'finance', level: 'MENU', group: '在场业务' },
+  { code: 'finance:presence:close', name: '在场台账手工关账', module: 'finance', level: 'ACTION', group: '在场业务' },
 
   // ===== 审批流 =====
   { code: 'flow:config:view', name: '流程配置（标签页）', module: 'flow', level: 'TAB', group: '流程配置' },
@@ -185,6 +197,8 @@ const STORE_MANAGER_PERMISSIONS = [
   'scm:inbound:view',
   'scm:inbound:create',
   'scm:stock:view',
+  'scm:location:view',
+  'scm:transfer:view',
   'finance:dashboard:view',
   'finance:revenue:view',
   'finance:expense:view',
@@ -228,6 +242,10 @@ export const BUILTIN_ROLES: BuiltinRoleDef[] = [
       'scm:inbound:view',
       'scm:stock:view',
       'scm:stock:cost',
+      'scm:location:view',
+      'scm:bom:view',
+      'scm:transfer:view',
+      'scm:production:view',
       'org:view',
       'org:rate',
       'flow:config:view',
@@ -256,9 +274,14 @@ export const BUILTIN_ROLES: BuiltinRoleDef[] = [
   {
     name: 'HQ_OPERATION',
     label: '总部运营',
-    description: '教务与运营销售全部权限，不涉及财务与进销存',
+    description: '教务与运营销售全部权限，不涉及财务与进销存；可处理指派给自己的审批待办',
     dataScope: 'ALL',
-    permissions: [...moduleAll('education', 'sales')],
+    permissions: [
+      ...moduleAll('education', 'sales'),
+      // 退款等流程会把「客服主管」节点指派给总部运营，没有待办权限就点不开、也表不了态
+      'flow:todo:view',
+      'flow:todo:approve',
+    ],
   },
   {
     name: 'BRANCH_MANAGER',

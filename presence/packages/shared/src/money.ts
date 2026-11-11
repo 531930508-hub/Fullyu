@@ -3,16 +3,17 @@
  *
  * 订单金额列（originalPrice / discountAmount / pointsDeduction /
  * voucherDeduction / actualPaid / refundAmount）的单位随订单类型而不同：
- * COURSE / WAITLIST 跟随课程价格链，单位为「分」；MEMBER_CARD 跟随卡商品
- * 价格，单位为「元」。凡是要换算到支付网关（分）或展示/统计（元），都必须
- * 经过本文件的函数，禁止在调用方直接乘除 100。
+ * COURSE / WAITLIST 跟随课程价格链，单位为「分」；COMMUNITY 跟随社群年费，
+ * 同样为「分」；MEMBER_CARD 跟随卡商品价格，单位为「元」。凡是要换算到
+ * 支付网关（分）或展示/统计（元），都必须经过本文件的函数，禁止在调用方
+ * 直接乘除 100。
  */
 
 import { POINTS_TO_YUAN_RATIO } from './constants'
 
 /** 该订单类型的金额列是否以「分」为单位 */
 export function isFenDenominatedOrder(orderType: string): boolean {
-  return orderType === 'COURSE' || orderType === 'WAITLIST'
+  return orderType === 'COURSE' || orderType === 'WAITLIST' || orderType === 'COMMUNITY'
 }
 
 /** 订单金额列值 → 分（支付网关口径） */

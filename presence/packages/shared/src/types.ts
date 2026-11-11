@@ -250,8 +250,11 @@ export enum VoucherStatus {
 /** 代金券信息 */
 export interface IVoucher {
   id: string
-  userId: string
+  /** 兑换码批次券在被领取前不归属用户 */
+  userId?: string | null
+  mode?: 'REDUCE_BY' | 'REDUCE_TO'
   amount: number
+  targetPrice?: number | null
   applicableCourseIds?: string[]
   applicableAll: boolean
   expiresAt: string
@@ -259,6 +262,12 @@ export interface IVoucher {
   source: string
   usedAt?: string
   createdAt: string
+  /** 兑换码（批量发券） */
+  redeemCode?: string | null
+  /** 发券批次号 */
+  batchNo?: string | null
+  /** 兑换时间 */
+  redeemedAt?: string | null
 }
 
 // ========== 任务相关（培训师） ==========
