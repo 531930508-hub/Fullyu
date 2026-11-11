@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { PrismaService } from '../../common/prisma.service'
-import { PaymentService } from './payment.service'
+import { AlertService } from '../../common/alert/alert.service'
+import { PaymentService, REFUND_RECONCILE_MAX_ATTEMPTS } from './payment.service'
 
 /** 超过该时长仍未收到回调的退款，主动向网关对账 */
 const STALE_AFTER_MS = 5 * 60 * 1000
@@ -24,6 +25,7 @@ export class RefundReconcileTasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentService: PaymentService,
+    private readonly alert: AlertService,
   ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -36,6 +38,8 @@ export class RefundReconcileTasksService {
       where: {
         status: { in: ['PROCESSING', 'UNKNOWN'] },
         updatedAt: { lt: staleBefore },
+        // 对账封顶：查不到结果的流水不能无限重查（每查一次都会刷新 updatedAt 再次入选）
+        attempts: { lt: REFUND_RECONCILE_MAX_ATTEMPTS },
       },
       select: { id: true, orderId: true, outRefundNo: true },
       orderBy: { updatedAt: 'asc' },
@@ -89,6 +93,27 @@ export class RefundReconcileTasksService {
 
     if (handled > 0) {
       this.logger.log(`本轮退款对账完成，结算 ${handled} 笔`)
+    }
+
+    // 3) 已停止自动对账的卡单：只提示不处理。
+    //    这类流水网关查不到、也不能判失败，必须人工在后台核对后决定「确认未退 / 重新发起」。
+    //    每小时提醒一次，避免刷屏又不会没人看见。
+    if (new Date().getMinutes() < 5) {
+      const stuck = await this.prisma.orderRefund.count({
+        where: {
+          status: { in: ['PROCESSING', 'UNKNOWN'] },
+          attempts: { gte: REFUND_RECONCILE_MAX_ATTEMPTS },
+        },
+      })
+      if (stuck > 0) {
+        this.logger.error(
+          `退款流水 ${stuck} 笔已对账 ${REFUND_RECONCILE_MAX_ATTEMPTS} 次仍未确认，自动查询已停止，需人工核对`,
+        )
+        await this.alert.notify(
+          '退款流水对账卡单',
+          `${stuck} 笔退款已对账 ${REFUND_RECONCILE_MAX_ATTEMPTS} 次仍未确认（网关查不到），自动查询已停止。\n处理：后台「销售 → 订单 → 退款流水」逐笔核对，确认未退后重新发起或标记失败。`,
+        )
+      }
     }
   }
 }

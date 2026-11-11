@@ -112,12 +112,19 @@ export class OrderTasksService {
   @Cron(CronExpression.EVERY_5_MINUTES)
   async completeEndedCourseOrders(courseId?: string): Promise<number> {
     const now = new Date()
+    // 只扫「今天及以前结课」的课程：原来只按 createdAt 升序取 500 条，
+    // 一旦在售的未结课订单超过 500，后面的订单永远进不了扫描窗口，自退窗口会过期失效。
+    const todayEnd = new Date(now)
+    todayEnd.setHours(23, 59, 59, 999)
     const orders = await this.prisma.order.findMany({
       where: {
         orderType: 'COURSE',
         status: 'PAID',
         ...(courseId ? { courseId } : {}),
-        course: { status: { in: ['PUBLISHED', 'COMPLETED'] } },
+        course: {
+          status: { in: ['PUBLISHED', 'COMPLETED'] },
+          endDate: { lte: todayEnd },
+        },
       },
       include: { course: true },
       orderBy: { createdAt: 'asc' },

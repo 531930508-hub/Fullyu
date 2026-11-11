@@ -93,12 +93,21 @@ export class OrderAdminController {
     if (!summary.canForceRefund) {
       throw new BusinessException('该订单当前不可发起强制退款（退款处理中或可退金额已退完）', 4026)
     }
+    if (amount > 0 && Math.round(amount * 100) > summary.remainingFen) {
+      throw new BusinessException(
+        `退款金额超过可退金额（可退 ¥${(summary.remainingFen / 100).toFixed(2)}）`,
+        4026,
+      )
+    }
+    // 审批必须按「实际退款金额」路由：不填金额时 amount=0 表示退剩余全部，
+    // 若直接拿 0 去匹配流程，会命中最低档规则甚至无规则免审，大额退款等于绕过审批。
+    const routeAmount = amount > 0 ? amount : summary.remainingFen / 100
     const operator = { id: req.user?.adminId, name: req.user?.name || req.user?.username }
     const approval = await this.approvalService.submit({
       bizType: 'ORDER_FORCE_REFUND',
       bizId: id,
-      summary: `强制退款：订单 ${id}${amount > 0 ? ` 退 ¥${amount}` : ' 退剩余全部'}（${reason}）`,
-      amount,
+      summary: `强制退款：订单 ${id}${amount > 0 ? ` 退 ¥${amount}` : ` 退剩余全部 ¥${routeAmount.toFixed(2)}`}（${reason}）`,
+      amount: routeAmount,
       payload: { orderId: id, refundAmount: amount, reason },
       requesterId: req.user.adminId,
     })

@@ -3,6 +3,7 @@ import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
 import { HuifuPayService } from './huifu-pay.service'
 import { NotificationService } from '../../common/notification/notification.service'
+import { AlertService } from '../../common/alert/alert.service'
 import { WaitlistService } from '../waitlist/waitlist.service'
 import { BrandPresenceSync } from '../member/brand-presence.sync'
 import { BusinessException } from '../../common/exceptions/business.exception'
@@ -21,6 +22,13 @@ import { computeCommunityPaidUntil } from './community-membership.util'
 const LATE_PAYMENT_REFUND_REASON = '订单已取消后收到支付，已自动原路退款'
 /** 课程已取消后仍收到支付成功回调时，退款原因标记（订单从未占用名额） */
 const COURSE_CANCELLED_REFUND_REASON = '课程已取消，已自动原路退款'
+
+/**
+ * 单笔退款流水自动对账次数上限（每 5 分钟一次 ≈ 1 小时）。
+ * 达到上限后停止自动查询并打上 [需人工] 标记：
+ * 「网关查不到」既可能是真没退，也可能是查询日期不匹配，系统不应自行判失败，但也不能无限重查。
+ */
+export const REFUND_RECONCILE_MAX_ATTEMPTS = 12
 
 /** 这类退款没有占用过课程名额，回调时不得扣减 currentEnrolled、也不得触发候补递补 */
 function skipsSeatRelease(reason: string | null | undefined): boolean {
@@ -49,6 +57,7 @@ export class PaymentService {
     @Inject(forwardRef(() => WaitlistService))
     private readonly waitlist: WaitlistService,
     private readonly brandSync: BrandPresenceSync,
+    private readonly alert: AlertService,
   ) {}
 
   /**
@@ -197,6 +206,11 @@ export class PaymentService {
     } catch (e) {
       this.logger.error(
         `订单 ${orderId} 取消后支付自动退款失败，需人工处理: ${(e as Error).message}`,
+      )
+      // 用户的钱已经付了、订单却取消了，退款再失败 = 钱货两空，必须立刻出圈
+      await this.alert.notify(
+        '取消后收款、自动退款失败',
+        `订单 ${orderId} 已取消但收到支付，自动退款失败。\n明细：${(e as Error).message}\n处理：后台该订单强制退款。`,
       )
     }
   }
@@ -615,6 +629,17 @@ export class PaymentService {
     })
     if (!order) throw new BusinessException('订单不存在', 4004)
     if (order.status !== 'PAID' && order.status !== 'COMPLETED') {
+      return { refundAmount: 0 }
+    }
+    // 已有受理中/待确认的退款流水：等待回调或由对账任务结算，不重复发起
+    // （否则每次重试都会新增一条 order_refunds，且可能对同一笔支付重复退款）
+    const activeRefund = order.refunds.find(
+      (r) => r.status === 'PROCESSING' || r.status === 'UNKNOWN',
+    )
+    if (activeRefund) {
+      this.logger.warn(
+        `订单 ${orderId} 已有退款在途（${activeRefund.outRefundNo}），跳过本次全额退款`,
+      )
       return { refundAmount: 0 }
     }
     const totalFen = orderAmountToFen(order.orderType, Number(order.actualPaid))
@@ -1037,11 +1062,19 @@ export class PaymentService {
         data: { status: 'PROCESSING', failMessage: null },
       })
     } else {
-      // 查不到不等于没退：可能尚未受理，也可能查询日期不匹配，保持订单与流水状态交人工判断
+      // 查不到不等于没退：可能尚未受理，也可能查询日期不匹配，保持订单与流水状态交人工判断。
+      // 但必须计数并封顶：每 5 分钟对账一次会刷新 updatedAt，此前无上限会导致同一笔流水被无限重查。
       await this.ensureLegacyRefundAttempt(order, attempt, outRefundNo, amountFen, 'UNKNOWN')
+      const nextAttempts = (attempt?.attempts ?? 0) + 1
       await this.prisma.orderRefund.updateMany({
         where: { orderId, outRefundNo, status: { in: ['PROCESSING', 'UNKNOWN'] } },
-        data: { failMessage: '网关未查询到该笔退款（可能尚未受理或查询日期不匹配）' },
+        data: {
+          attempts: { increment: 1 },
+          failMessage:
+            nextAttempts >= REFUND_RECONCILE_MAX_ATTEMPTS
+              ? `[需人工] 已对账 ${nextAttempts} 次仍未查询到该笔退款，自动查询已停止，请人工核对`
+              : `网关未查询到该笔退款（第 ${nextAttempts} 次，可能尚未受理或查询日期不匹配）`,
+        },
       })
     }
 

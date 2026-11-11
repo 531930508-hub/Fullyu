@@ -33,6 +33,7 @@ import { CommunityModule } from './modules/community/community.module'
 import { ShareModule } from './modules/share/share.module'
 import { PrismaModule } from './common/prisma.module'
 import { RedisModule } from './common/redis.module'
+import { AlertModule } from './common/alert/alert.module'
 import { PasswordPolicyModule } from './common/password-policy.service'
 import { WechatModule } from './common/wechat/wechat.module'
 import { StorageModule } from './common/storage/storage.module'
@@ -71,6 +72,7 @@ if (SCHEDULER_DISABLED) {
     // 基础服务
     PrismaModule,
     RedisModule,
+    AlertModule,
     PasswordPolicyModule,
     WechatModule,
     StorageModule,

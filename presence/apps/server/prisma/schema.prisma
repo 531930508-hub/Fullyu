@@ -329,6 +329,11 @@ model WaitlistEntry {
   paidAt      DateTime?        @map("paid_at")
   convertedAt DateTime?        @map("converted_at")
   refundedAt  DateTime?        @map("refunded_at")
+  // 候补自动退款的重试控制：失败次数 / 下次允许重试时间 / 最近一次失败原因。
+  // refundAttempts 达到上限后不再自动重试，只留人工处理（避免每 5 分钟无限刷退款流水）。
+  refundAttempts    Int       @default(0) @map("refund_attempts")
+  refundNextRetryAt DateTime? @map("refund_next_retry_at")
+  refundLastError   String?   @map("refund_last_error") @db.Text
   createdAt   DateTime         @default(now()) @map("created_at")
   updatedAt   DateTime         @updatedAt @map("updated_at")
 

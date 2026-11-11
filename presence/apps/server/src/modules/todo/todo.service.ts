@@ -4,10 +4,10 @@ import {
   ADJUST_REASON_NAMES,
   BIZ_TYPE_META,
   EXPENSE_CATEGORY_NAMES,
-  ORDER_STATUS_LABELS,
   hasPermission,
   isBelowSafety,
   orderAmountToYuan,
+  orderStatusLabel,
   type ApprovalBizContext,
   type ApprovalContextItem,
   type ApprovalContextOrder,
@@ -537,7 +537,7 @@ export class TodoService {
     const applyAmount = Number(payload.refundAmount) || 0
     const userName = order.user?.nickname || order.user?.phone || '用户'
     const itemName = itemNameOf(order)
-    const statusLabel = ORDER_STATUS_LABELS[order.status] || order.status
+    const statusLabel = orderStatusLabel(order.status) || order.status
 
     const snapshot: ApprovalContextOrder = {
       id: order.id,
@@ -614,7 +614,7 @@ export class TodoService {
         userPhone: order.user?.phone || '',
         itemName: itemNameOf(order),
         status: order.status,
-        statusLabel: ORDER_STATUS_LABELS[order.status] || order.status,
+        statusLabel: orderStatusLabel(order.status) || order.status,
         originalPrice,
         actualPaid,
         refundAmount,
