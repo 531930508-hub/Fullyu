@@ -12,6 +12,7 @@ import type {
 import { WechatMiniProgramAuth } from './wechat';
 import { HuifuPaymentGateway } from './huifu';
 import { FeieLabelPrinter } from './feie';
+import { AgentLabelPrinter } from './agent';
 
 export type LiveContext = {
   config: IntegrationsConfig;
@@ -34,10 +35,12 @@ export type LiveProviderFactories = {
 
 export const liveProviders: Partial<LiveProviderFactories> = {
   /**
-   * 飞鹅云标签机：杯贴右侧打印杯号二维码，按门店解析 SN。
-   * 缺 FEIE_USER / FEIE_UKEY 时启动即失败；缺门店 SN 时诚实报错，不把标签打到别的店。
+   * 杯贴打印机按 PRINTER_DRIVER 分流：
+   * - feie：飞鹅云标签机，服务端直推（缺 FEIE_USER / FEIE_UKEY 启动即失败）；
+   * - agent：芯烨 XP-420B 等 USB 桌面机，由门店打印代理领取 TSPL 任务。
    */
-  printer: (ctx) => new FeieLabelPrinter(ctx.config.feie),
+  printer: (ctx) =>
+    ctx.config.printerDriver === 'agent' ? new AgentLabelPrinter() : new FeieLabelPrinter(ctx.config.feie),
   /**
    * 汇付天下（斗拱 v2）服务商模式：小程序支付、收款码（C 扫 B）、顾客付款码（B 扫 C）与退款。
    * 凭证在首次调用时惰性读取，缺文件不会阻止服务启动，只会诚实地报告未就绪。

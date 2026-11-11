@@ -14,6 +14,7 @@ import { CustomerController } from './customer.controller';
 import { HealthController } from './health.controller';
 import { CrmWebhookController } from './crm-webhook.controller';
 import { HooksController } from './hooks.controller';
+import { PrintAgentController } from './print-agent.controller';
 import { StoreController } from './store.controller';
 
 @Module({
@@ -33,6 +34,7 @@ import { StoreController } from './store.controller';
     CustomerController,
     CustomerBrandMemberController,
     StoreController,
+    PrintAgentController,
     HealthController,
     HooksController,
     CrmWebhookController

@@ -55,6 +55,18 @@ const parseMode = (value: string | undefined): IntegrationsMode => {
 };
 
 /**
+ * 杯贴打印机驱动选择。
+ * 芯烨 XP-420B 是 USB 桌面机，云端服务器够不到，必须走门店打印代理（agent）；
+ * 飞鹅是整机云通道（feie）。写错值直接报错，不静默挑一个。
+ */
+const parsePrinterDriver = (value: string | undefined): 'feie' | 'agent' => {
+  const text = (value || '').trim().toLowerCase();
+  if (!text || text === 'feie' || text === 'feieyun') return 'feie';
+  if (text === 'agent' || text === 'xprinter' || text === 'local') return 'agent';
+  throw new Error(`PRINTER_DRIVER 只接受 feie / agent，当前为「${value}」`);
+};
+
+/**
  * 从环境变量装配对接配置。
  *
  * - INTEGRATIONS_MODE：mock（开发默认）| live | disabled（生产默认）
@@ -92,6 +104,7 @@ export function loadIntegrationsConfig(input: ConfigInput): IntegrationsConfig {
     mode: resolved,
     channels,
     env: trim(env.INTEGRATIONS_ENV) || trim(env.NODE_ENV) || 'local',
+    printerDriver: parsePrinterDriver(env.PRINTER_DRIVER),
     wechat: {
       appId: trim(env.WECHAT_APPID) || DEFAULT_APPID,
       appSecret: trim(env.WECHAT_APPSECRET),

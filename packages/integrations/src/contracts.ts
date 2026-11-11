@@ -21,6 +21,18 @@ export type CupLabelPayload = {
   cupIndex: number;
   cupTotal: number;
   printedAt: string;
+  /** 取餐号（A001）。缺省时从杯贴码 A001-1 反推，保证旧任务也能打。 */
+  pickupCode?: string;
+  /** 系列代码 xing / song / qing / mian，用来出英文系列名。 */
+  series?: string;
+  /** 系列中文名；缺省时用品名「·」前的一段。 */
+  seriesName?: string;
+  /** 顾客称呼，只放昵称/姓氏，不放全名与手机号。 */
+  customerName?: string;
+  /** 门店电话或品牌客服号。 */
+  storePhone?: string;
+  /** 下单时间（ISO）；缺省回落到 printedAt。 */
+  orderedAt?: string;
 };
 
 export type PrintJobPayload = {
@@ -40,6 +52,11 @@ export type PrintResult = {
 export interface LabelPrinter {
   readonly name: string;
   readonly mode: string;
+  /**
+   * cloud：服务端可直接把内容推给厂商（飞鹅等整机云通道）；
+   * agent：打印机 USB 直连门店电脑（芯烨 XP-420B），只能由门店打印代理领取任务。
+   */
+  readonly transport?: 'cloud' | 'agent';
   print(job: PrintJobPayload): Promise<PrintResult>;
   status(): Promise<DeviceStatus>;
 }
@@ -446,6 +463,12 @@ export type IntegrationsConfig = {
     /** 由存储 key 生成对外可访问地址。 */
     assetUrl: (key: string) => string;
   };
+  /**
+   * 杯贴打印机驱动：
+   * - feie：飞鹅云标签机（云端直推，需账号 SN）；
+   * - agent：芯烨 XP-420B 这类 USB 桌面机，由门店打印代理领取 TSPL 任务。
+   */
+  printerDriver: 'feie' | 'agent';
   /**
    * 飞鹅云标签机（杯贴打印，含杯号二维码）。
    * user / UKEY 只从服务器环境变量读取；门店 SN 可单独映射，避免所有店打到同一台机器。

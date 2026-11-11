@@ -12,4 +12,24 @@ export {
   type FeieLabelPrinterOptions,
   type FeieLabelStyle
 } from './providers/live/feie';
+export { AgentLabelPrinter, isAgentTransport } from './providers/live/agent';
+export {
+  buildCupLabelTspl,
+  buildTsplJob,
+  CUP_LABEL_LAYOUT,
+  CUP_LABEL_TRACK,
+  DEFAULT_TSPL_LABEL_STYLE,
+  TSPL_DOTS_PER_MM,
+  fitDots,
+  fitTracked,
+  formatLabelTime,
+  measureDots,
+  optionLine,
+  pickupCodeOf,
+  splitProductName,
+  trackedWidth,
+  truncateUnits,
+  tsplText,
+  type TsplLabelStyle
+} from './label/tspl';
 export * from './providers/mock/index';
