@@ -41,6 +41,10 @@
               <a-tag color="warning">缺照片</a-tag>
             </a-tooltip>
           </template>
+          <template v-if="column.dataIndex === 'name'">
+            <span>{{ record.name }}</span>
+            <a-tag v-if="record.birthday" color="magenta" style="margin-left: 6px;">{{ record.birthday }}</a-tag>
+          </template>
           <template v-if="column.dataIndex === 'cardType'">
             <a-tag v-if="record.cardType" :color="cardColors[record.cardType]">{{ cardLabels[record.cardType] }}</a-tag>
             <span v-else style="color: #ccc;">-</span>
@@ -90,6 +94,10 @@
                     <a-tag color="warning">缺照片</a-tag>
                   </a-tooltip>
                 </template>
+                <template v-if="column.dataIndex === 'name'">
+                  <span>{{ record.name }}</span>
+                  <a-tag v-if="record.birthday" color="magenta" style="margin-left: 6px;">{{ record.birthday }}</a-tag>
+                </template>
                 <template v-if="column.dataIndex === 'cardType'">
                   <a-tag v-if="record.cardType" :color="cardColors[record.cardType]">{{ cardLabels[record.cardType] }}</a-tag>
                   <span v-else style="color: #ccc;">-</span>
@@ -118,6 +126,7 @@ import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import { upcomingCheckins, checkinCourses, courseRoster, manualCheckIn, cancelCheckIn } from '@/api/checkin'
+import { birthdayCountdownLabel } from '@/utils/format'
 
 const loading = ref(false)
 const searching = ref(false)
@@ -146,6 +155,7 @@ function mapRosterItem(o: any) {
     name: o.user?.nickname || o.user?.phone || '学员',
     phone: o.user?.phone || '-',
     photo: o.user?.photo || '',
+    birthday: birthdayCountdownLabel(o.user?.birthday),
     cardType: o.cardType || '',
     checkedIn: o.checkedIn,
   }

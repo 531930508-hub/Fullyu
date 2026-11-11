@@ -76,6 +76,23 @@ describe('CRM 接入配置与客户端（在场）', () => {
     expect((failure as Error).message).not.toMatch(/内部堆栈/)
   })
 
+  it('批量生日按本地用户返回；CRM 故障时降级为空表，不阻断签到', async () => {
+    const client = new CrmClient(configOf({ ...baseEnv, CRM_BASE_URL: fake.url }))
+    fake.birthdays.set('u-b1', '1992-09-09')
+    fake.birthdays.set('u-b2', null)
+    const birthdays = await client.getBirthdays(['u-b1', 'u-b2', 'u-missing'])
+    expect(birthdays.get('u-b1')).toBe('1992-09-09')
+    expect(birthdays.get('u-b2')).toBeNull()
+    expect(birthdays.has('u-missing')).toBe(false)
+    const sent = JSON.parse(fake.requests[fake.requests.length - 1]!.body) as {
+      localUserIds: string[]
+    }
+    expect(sent.localUserIds).toEqual(['u-b1', 'u-b2', 'u-missing'])
+
+    fake.failNext = { status: 500, body: { message: '内部堆栈' } }
+    await expect(client.getBirthdays(['u-b1'])).resolves.toEqual(new Map())
+  })
+
   it('身份冲突返回 409 业务码，由顾客联系客服', async () => {
     const client = new CrmClient(configOf({ ...baseEnv, CRM_BASE_URL: fake.url }))
     fake.failNext = { status: 409, body: { error: 'CONFLICT' } }

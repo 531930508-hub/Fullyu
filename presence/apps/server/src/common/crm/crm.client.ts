@@ -33,6 +33,11 @@ export interface CrmMember {
   bound?: boolean
 }
 
+export interface CrmBirthday {
+  localUserId: string
+  birthday?: string | null
+}
+
 export class CrmResponseError extends Error {
   constructor(
     readonly status: number,
@@ -103,6 +108,37 @@ export class CrmClient {
       if (error instanceof CrmResponseError && error.status === 404) return null
       throw this.mapError(error)
     }
+  }
+
+  /**
+   * 批量读取生日，供课程签到名单做生日提醒。
+   * 生日属于增强信息：CRM 未配置或调用失败时返回空表，不阻断签到主流程。
+   */
+  async getBirthdays(localUserIds: string[]): Promise<Map<string, string | null>> {
+    const result = new Map<string, string | null>()
+    if (!this.config) return result
+    const ids = Array.from(new Set(localUserIds.filter(Boolean)))
+    const chunkSize = 200
+    try {
+      for (let start = 0; start < ids.length; start += chunkSize) {
+        const chunk = ids.slice(start, start + chunkSize)
+        const body = await this.request<{ items?: CrmBirthday[] }>(
+          'POST',
+          '/api/external/members/birthdays',
+          { localUserIds: chunk },
+        )
+        for (const item of body?.items || []) {
+          if (typeof item?.localUserId === 'string') {
+            result.set(item.localUserId, item.birthday ?? null)
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.warn(
+        `会员生日查询失败，签到名单暂不展示生日：${error instanceof Error ? error.message : '未知错误'}`,
+      )
+    }
+    return result
   }
 
   private normalize(member: CrmMember): CrmMember {

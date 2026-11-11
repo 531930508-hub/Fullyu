@@ -25,6 +25,7 @@ export interface FakeCrmRequest {
 export interface FakeCrm {
   url: string
   members: Map<string, FakeCrmMember>
+  birthdays: Map<string, string | null>
   requests: FakeCrmRequest[]
   failNext: { status: number; body: unknown } | null
   delayMs: number
@@ -54,11 +55,13 @@ const sign = (secret: string, timestamp: string, method: string, url: string, ra
 export async function startFakeCrm(options: { keyId: string; secret: string }): Promise<FakeCrm> {
   const { keyId, secret } = options
   const members = new Map<string, FakeCrmMember>()
+  const birthdays = new Map<string, string | null>()
   const requests: FakeCrmRequest[] = []
   let seq = 0
   const state: FakeCrm = {
     url: '',
     members,
+    birthdays,
     requests,
     failNext: null,
     delayMs: 0,
@@ -110,6 +113,16 @@ export async function startFakeCrm(options: { keyId: string; secret: string }): 
         return
       }
       reply(res, 200, { ...member, created: false, bound: false })
+      return
+    }
+
+    if (req.method === 'POST' && path === '/api/external/members/birthdays') {
+      const input = JSON.parse(rawBody) as { localUserIds?: string[] }
+      reply(res, 200, {
+        items: (input.localUserIds || [])
+          .filter((id) => birthdays.has(id))
+          .map((id) => ({ localUserId: id, birthday: birthdays.get(id) ?? null })),
+      })
       return
     }
 

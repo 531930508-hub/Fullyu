@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../../common/prisma.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
+import { CrmClient } from '../../common/crm/crm.client'
 
 @Injectable()
 export class CheckinService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly crm: CrmClient,
+  ) {}
 
   /** 某课程报名学员 + 签到状态 + 报名日期 + 有效会员卡 */
   async courseRoster(courseId: string) {
@@ -19,17 +23,20 @@ export class CheckinService {
     ])
     const checkedUserIds = new Set(checkIns.map((c) => c.userId))
     const userIds = orders.map((o) => o.userId)
-    const cards = userIds.length
-      ? await this.prisma.memberCard.findMany({
-          where: { userId: { in: userIds }, status: 'ACTIVE', endDate: { gt: now } },
-          select: { userId: true, type: true },
-          orderBy: { endDate: 'desc' },
-        })
-      : []
+    const [cards, birthdays] = await Promise.all([
+      userIds.length
+        ? this.prisma.memberCard.findMany({
+            where: { userId: { in: userIds }, status: 'ACTIVE', endDate: { gt: now } },
+            select: { userId: true, type: true },
+            orderBy: { endDate: 'desc' },
+          })
+        : [],
+      this.crm.getBirthdays(userIds),
+    ])
     const cardMap = new Map(cards.map((c) => [c.userId, c.type]))
     return orders.map((o) => ({
       orderId: o.id,
-      user: o.user,
+      user: { ...o.user, birthday: birthdays.get(o.userId) ?? null },
       checkedIn: checkedUserIds.has(o.userId),
       enrolledAt: o.createdAt,
       cardType: cardMap.get(o.userId) ?? null,
