@@ -10,7 +10,9 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -48,7 +50,18 @@ public class BrandOrderReporter {
     static final long MEMBER_MISSING_BACKOFF_MINUTES = 60;
 
     private static final Pattern ORDER_REF = Pattern.compile("^[A-Za-z0-9._:-]{1,80}$");
-    private static final DateTimeFormatter CRM_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'+08:00'");
+    /**
+     * CRM 契约：时间必须是带偏移的绝对时间。库里 payTime 是北京时间墙钟，
+     * 这里显式按上海时区解析，不依赖 JVM 默认时区（容器化默认 UTC 时不会打偏 8 小时）。
+     */
+    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter CRM_TIME =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssxxx", Locale.ROOT);
+
+    /** 上海墙钟 → 带偏移的 CRM 时间串，如 2026-11-09T08:00:00+08:00。 */
+    static String crmTime(LocalDateTime shanghaiWallClock) {
+        return CRM_TIME.format(shanghaiWallClock.atZone(SHANGHAI));
+    }
     private static final int STATE_PAID_NOT_COMMENT = 1;
     private static final int STATE_PAID_COMMENTED = 2;
     private static final int STATE_REFUNDING = 5;
@@ -91,7 +104,7 @@ public class BrandOrderReporter {
             return;
         }
         try {
-            Result result = runOnce(LocalDateTime.now());
+            Result result = runOnce(LocalDateTime.now(SHANGHAI));
             if (result.reported > 0 || result.refunded > 0 || result.failed > 0) {
                 log.info("品牌会员订单上报：新增 {}、退款 {}、失败 {}", result.reported, result.refunded, result.failed);
             }
@@ -147,10 +160,10 @@ public class BrandOrderReporter {
                 attempts++;
                 try {
                     client.reportOrder(order.localUserId, order.orderRef, order.paidCents, order.savedCents,
-                            CRM_TIME.format(order.paidAt));
+                            crmTime(order.paidAt));
                     result.reported++;
                     if (order.refundCents > 0) {
-                        client.refundOrder(order.localUserId, order.orderRef, order.refundCents, CRM_TIME.format(now));
+                        client.refundOrder(order.localUserId, order.orderRef, order.refundCents, crmTime(now));
                         result.refunded++;
                     }
                     sent.put(order.id, order.fingerprint());
@@ -211,15 +224,16 @@ public class BrandOrderReporter {
         }
     }
 
+    /** 库里 payTime 读出来要还原成「北京时间墙钟」；不经过 JVM 默认时区，容器 UTC 也不会错。 */
     private static LocalDateTime dateTime(Object value) {
         if (value instanceof LocalDateTime) {
             return (LocalDateTime) value;
         }
         if (value instanceof java.sql.Timestamp) {
-            return ((java.sql.Timestamp) value).toLocalDateTime();
+            return LocalDateTime.ofInstant(((java.sql.Timestamp) value).toInstant(), SHANGHAI);
         }
         if (value instanceof java.util.Date) {
-            return new java.sql.Timestamp(((java.util.Date) value).getTime()).toLocalDateTime();
+            return LocalDateTime.ofInstant(Instant.ofEpochMilli(((java.util.Date) value).getTime()), SHANGHAI);
         }
         return null;
     }

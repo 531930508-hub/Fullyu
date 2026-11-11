@@ -7,12 +7,14 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -34,6 +36,8 @@ import static org.mockito.Mockito.when;
  */
 class BrandOrderReporterTest {
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 9, 10, 0, 0);
+    /** 库里 payTime 是北京时间墙钟；驱动读出来是"该墙钟在 +08 下的那一刻"。 */
+    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
 
     private OrderMapper orderMapper;
     private BrandMemberClient client;
@@ -60,7 +64,7 @@ class BrandOrderReporterTest {
         row.put("payAmount", new BigDecimal(pay));
         row.put("benefitAmount", benefit == null ? null : new BigDecimal(benefit));
         row.put("hasRefundAmount", refunded == null ? null : new BigDecimal(refunded));
-        row.put("payTime", Timestamp.valueOf(NOW.minusHours(2)));
+        row.put("payTime", Timestamp.from(NOW.minusHours(2).atZone(SHANGHAI).toInstant()));
         row.put("state", state);
         return row;
     }
@@ -86,6 +90,23 @@ class BrandOrderReporterTest {
         assertEquals(1, result.reported);
         verify(client).reportOrder("42", "QL20261109001", 32850L, 3650L, "2026-11-09T08:00:00+08:00");
         verify(client, never()).refundOrder(anyString(), anyString(), anyLong(), anyString());
+    }
+
+    /** 进程默认时区被改成 UTC 时，报给 CRM 的仍必须是北京时间 +08:00，不能整体偏 8 小时。 */
+    @Test
+    void crmTimeStaysShanghaiWhenJvmTimezoneIsUtc() {
+        TimeZone original = TimeZone.getDefault();
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+            rows.add(order(7, "QL20261109001", 42L, "328.50", "36.50", null, 2));
+
+            BrandOrderReporter.Result result = reporter("1").runOnce(NOW);
+
+            assertEquals(1, result.reported);
+            verify(client).reportOrder("42", "QL20261109001", 32850L, 3650L, "2026-11-09T08:00:00+08:00");
+        } finally {
+            TimeZone.setDefault(original);
+        }
     }
 
     @Test
