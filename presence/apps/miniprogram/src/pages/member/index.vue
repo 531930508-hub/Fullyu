@@ -65,12 +65,18 @@
       </view>
       <view class="account-row"><text>{{ tr('开卡账户', 'Account') }} · {{ userName }}</text><button class="text-button" :disabled="submitting || !!pendingOrderId" @tap="goEditProfile">{{ tr('编辑资料', 'Edit profile') }}</button></view>
       <view v-if="!pendingOrderId" class="photo-section">
-        <text class="field-label">{{ tr('个人核验照片', 'Verification photo') }}{{ hasVerificationPhoto ? tr('（选填）', ' (optional)') : tr('（必填）', ' (required)') }}</text>
-        <button class="photo-upload" :disabled="submitting" @tap="choosePhoto">
-          <image v-if="buyForm.photo" :src="buyForm.photo" class="photo-preview" mode="aspectFill" />
-          <view v-else class="photo-placeholder"><PresenceIcon name="camera" :size="44" /><text>{{ hasVerificationPhoto ? tr('选择新照片', 'Choose a new photo') : tr('上传照片', 'Upload photo') }}</text></view>
-        </button>
-        <text class="muted">{{ hasVerificationPhoto ? tr('可沿用已有照片；仅用于签到核验，卡期内不可修改。', 'Your existing photo is reused; it is only used for check-in and cannot be changed during the term.') : tr('首次开卡需上传本人照片，仅用于签到核验，卡期内不可修改。', 'A photo of yourself is required for your first card; it is only used for check-in and cannot be changed during the term.') }}</text>
+        <text class="field-label">{{ tr('个人核验照片', 'Verification photo') }}</text>
+        <view v-if="activeCard && hasVerificationPhoto" class="photo-reuse">
+          <PresenceIcon name="check" :size="36" />
+          <text>{{ tr('续费沿用已有核验照片，无需重新上传。', 'Your existing verification photo will be reused for this renewal.') }}</text>
+        </view>
+        <template v-else>
+          <button class="photo-upload" :disabled="submitting" @tap="choosePhoto">
+            <image v-if="buyForm.photo" :src="buyForm.photo" class="photo-preview" mode="aspectFill" />
+            <view v-else class="photo-placeholder"><PresenceIcon name="camera" :size="44" /><text>{{ tr('上传照片', 'Upload photo') }}</text></view>
+          </button>
+          <text class="muted">{{ hasVerificationPhoto ? tr('可沿用已有照片；仅用于签到核验，卡期内不可修改。', 'Your existing photo is reused; it is only used for check-in and cannot be changed during the term.') : tr('首次开卡需上传本人照片，仅用于签到核验，卡期内不可修改。', 'A photo of yourself is required for your first card; it is only used for check-in and cannot be changed during the term.') }}</text>
+        </template>
       </view>
       <view v-else class="notice"><PresenceIcon name="info" :size="30" /><text>{{ tr('已创建订单，请继续完成支付，勿重复下单。放弃支付后，可等待订单失效再核实状态。', 'An order has been created. Continue to payment and do not place another order. If you abandon payment, wait for the order to expire before checking its status.') }}</text></view>
       <button v-if="pendingOrderId" class="text-button" :disabled="submitting" @tap="refreshPendingPurchase">{{ tr('重新核实订单状态', 'Recheck order status') }}</button>
@@ -428,6 +434,7 @@ button[disabled] { opacity: .6; }
 .photo-upload { display: flex; align-items: center; justify-content: center; width: 200rpx; height: 200rpx; padding: 0; margin: 0 0 20rpx; background: var(--c-card-2); border: 2rpx dashed var(--line-soft); border-radius: var(--radius-button); overflow: hidden; }
 .photo-preview { width: 200rpx; height: 200rpx; }
 .photo-placeholder { display: flex; flex-direction: column; align-items: center; gap: 16rpx; font-size: 24rpx; color: var(--c-brown); }
+.photo-reuse { display: flex; align-items: center; gap: 16rpx; padding: 24rpx; color: var(--c-brown); background: var(--c-card-2); border-radius: var(--radius-button); font-size: 26rpx; line-height: 1.6; }
 .muted { color: var(--c-muted); font-size: 24rpx; line-height: 1.7; }
 .feedback { display: block; color: var(--c-primary); background: var(--c-card-2); border-left: 4rpx solid var(--c-apricot); padding: 20rpx; margin-top: 24rpx; font-size: 26rpx; line-height: 1.7; }
 .full-button { width: 100%; }

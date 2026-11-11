@@ -335,14 +335,16 @@ function onSaved() {
   width: 100%;
   margin-top: 10px;
   padding: 9px;
+  border: 0;
   border-radius: 10px;
-  background: #f7f1e7;
+  background: #e8c58d;
   color: #3a2a1e;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   line-height: 1.2;
 }
+.bmc-renew::after { border: 0; }
 .bmc-note {
   display: block;
   margin-top: 7px;
