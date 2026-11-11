@@ -34,7 +34,7 @@
             </div>
           </template>
           <template v-else-if="column.dataIndex === 'type'">
-            <a-tag :color="typeColors[record.type]">{{ typeLabels[record.type] }}</a-tag>
+            <a-tag :color="memberCardTypeColor(record.type)">{{ memberCardTypeLabel(record.type) }}</a-tag>
           </template>
           <template v-else-if="column.dataIndex === 'photo'">
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -52,7 +52,7 @@
             {{ record.endDate ? dayjs(record.endDate).format('YYYY-MM-DD') : '-' }}
           </template>
           <template v-else-if="column.dataIndex === 'status'">
-            <a-tag :color="statusColors[record.status]">{{ statusLabels[record.status] }}</a-tag>
+            <a-tag :color="memberCardStatusColor(record.status)">{{ memberCardStatusLabel(record.status) }}</a-tag>
           </template>
           <template v-else-if="column.dataIndex === 'action'">
             <a-space>
@@ -77,15 +77,11 @@ import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import { adminListCards, freezeCard, unfreezeCard } from '@/api/member'
 import { updateUserPhoto } from '@/api/user'
+import { memberCardStatusColor, memberCardStatusLabel, memberCardTypeColor, memberCardTypeLabel } from '@fullyu/shared'
 
 const loading = ref(false)
 const filterStatus = ref('')
 const uploadingId = ref('')
-
-const typeLabels: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
-const typeColors: Record<string, string> = { MONTHLY: 'blue', QUARTERLY: 'purple', YEARLY: 'gold' }
-const statusLabels: Record<string, string> = { ACTIVE: '有效', FROZEN: '冻结', EXPIRED: '过期' }
-const statusColors: Record<string, string> = { ACTIVE: 'green', FROZEN: 'orange', EXPIRED: 'default' }
 
 const columns = [
   { title: '会员', dataIndex: 'user', width: 200 },

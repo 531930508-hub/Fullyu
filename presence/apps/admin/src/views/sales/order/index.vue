@@ -6,12 +6,7 @@
         <a-input-search v-model:value="searchText" placeholder="搜索用户昵称/手机号" style="width: 220px" @search="loadOrders" />
         <a-select v-model:value="filterStatus" style="width: 130px" @change="loadOrders">
           <a-select-option value="">全部状态</a-select-option>
-          <a-select-option value="PAID">已支付</a-select-option>
-          <a-select-option value="PENDING_PAYMENT">待支付</a-select-option>
-          <a-select-option value="COMPLETED">已完成</a-select-option>
-          <a-select-option value="REFUNDING">退款中</a-select-option>
-          <a-select-option value="REFUNDED">已退款</a-select-option>
-          <a-select-option value="CANCELLED">已取消</a-select-option>
+          <a-select-option v-for="item in orderStatusOptions" :key="item.value" :value="item.value">{{ item.zh }}</a-select-option>
         </a-select>
       </a-space>
     </div>
@@ -45,7 +40,7 @@
             </div>
           </template>
           <template v-if="column.dataIndex === 'type'">
-            <a-tag :color="record.orderType === 'MEMBER_CARD' ? 'gold' : 'blue'">{{ record.typeLabel }}</a-tag>
+            <a-tag :color="orderTypeColor(record.orderType)">{{ record.typeLabel }}</a-tag>
           </template>
           <template v-if="column.dataIndex === 'itemName'">
             <span>{{ record.itemName }}</span>
@@ -58,7 +53,7 @@
             </div>
           </template>
           <template v-if="column.dataIndex === 'status'">
-            <a-tag :color="statusColorMap[record.status]">{{ record.statusLabel }}</a-tag>
+            <a-tag :color="orderStatusColor(record.status)">{{ record.statusLabel }}</a-tag>
           </template>
           <template v-if="column.dataIndex === 'action'">
             <a-button type="link" size="small" @click="showOrderDetail(record)">详情</a-button>
@@ -93,7 +88,7 @@
           <a-descriptions-item label="支付时间">{{ currentOrder.payTime || '-' }}</a-descriptions-item>
           <a-descriptions-item v-if="currentOrder.refundTime" label="退款时间">{{ currentOrder.refundTime }}</a-descriptions-item>
           <a-descriptions-item label="状态">
-            <a-tag :color="statusColorMap[currentOrder.status]">{{ currentOrder.statusLabel }}</a-tag>
+            <a-tag :color="orderStatusColor(currentOrder.status)">{{ currentOrder.statusLabel }}</a-tag>
           </a-descriptions-item>
         </a-descriptions>
 
@@ -181,6 +176,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { ORDER_STATUS_OPTIONS, memberCardTypeLabel, orderStatusColor, orderStatusLabel, orderTypeColor, orderTypeLabel } from '@fullyu/shared'
 import {
   adminListOrders,
   forceRefundOrder,
@@ -200,10 +196,7 @@ const filterStatus = ref('')
 const orderType = ref('ALL')
 const orders = ref<any[]>([])
 
-const statusColorMap: Record<string, string> = { PAID: 'green', COMPLETED: 'cyan', PENDING_PAYMENT: 'orange', REFUNDING: 'orange', REFUNDED: 'red', CANCELLED: 'default' }
-const statusLabelMap: Record<string, string> = { PAID: '已支付', COMPLETED: '已完成', PENDING_PAYMENT: '待支付', REFUNDING: '退款中', REFUNDED: '已退款', CANCELLED: '已取消' }
-const typeLabelMap: Record<string, string> = { COURSE: '课程', WAITLIST: '候补', MEMBER_CARD: '会员卡', COMMUNITY: '社群' }
-const cardTypeLabelMap: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
+const orderStatusOptions = ORDER_STATUS_OPTIONS
 const refundStatusColorMap: Record<string, string> = { PROCESSING: 'orange', UNKNOWN: 'gold', SUCCESS: 'green', FAILED: 'red', CANCELLED: 'default' }
 const refundStatusLabelMap: Record<string, string> = { PROCESSING: '受理中', UNKNOWN: '结果待确认', SUCCESS: '已到账', FAILED: '已失败', CANCELLED: '已作废' }
 
@@ -237,10 +230,10 @@ function mapOrder(o: any) {
     id: o.id,
     orderNo: o.orderNo || o.id, // 优先使用自定义订单号
     orderType: o.orderType,
-    typeLabel: typeLabelMap[o.orderType] || o.orderType,
+    typeLabel: orderTypeLabel(o.orderType) || o.orderType,
     userName: o.user?.nickname || o.user?.phone || '用户',
     itemName: o.orderType === 'MEMBER_CARD'
-      ? (cardTypeLabelMap[o.cardType] || '会员卡')
+      ? (memberCardTypeLabel(o.cardType) || '会员卡')
       : o.orderType === 'COMMUNITY'
         ? (o.community?.name || '社群年费')
         : (o.course?.title || '—'),
@@ -248,7 +241,7 @@ function mapOrder(o: any) {
     actualPaid,
     discount: Math.max(0, originalPrice - actualPaid),
     status: o.status,
-    statusLabel: statusLabelMap[o.status] || o.status,
+    statusLabel: orderStatusLabel(o.status) || o.status,
     createTime: o.createdAt ? String(o.createdAt).replace('T', ' ').slice(0, 16) : '',
     payTime: o.paymentTime ? String(o.paymentTime).replace('T', ' ').slice(0, 16) : '',
     refundAmount: o.refundAmount == null ? null : toYuan(o, o.refundAmount),
@@ -313,7 +306,7 @@ async function loadRefundRecords(record: any) {
     // 主动查询/确认失败后订单状态会变化，同步刷新抽屉与列表行
     if (summary?.orderStatus) {
       record.status = summary.orderStatus
-      record.statusLabel = statusLabelMap[summary.orderStatus] || summary.orderStatus
+      record.statusLabel = orderStatusLabel(summary.orderStatus) || summary.orderStatus
     }
   } catch {
     record.refundRecords = []

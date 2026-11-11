@@ -187,6 +187,7 @@ import ShareSheet from '@/components/ShareSheet.vue'
 import type { ShareTargetOption } from '@/utils/share'
 import { tr, isEnglish } from '@/locale'
 import { courseTagLabel } from '@/utils/course-labels'
+import { coursePhaseLabel } from '@fullyu/shared'
 
 type TimeDiscount = { ruleName: string; actionType: string; discountPercent: number | null; fixedPrice: number | null }
 type BookingQuote = EnrollQuote & { timeDiscount?: TimeDiscount | null }
@@ -218,23 +219,10 @@ const capacityKnown = computed(() => course.value && Number.isFinite(course.valu
 const seatsLeft = computed(() => capacityKnown.value ? Math.max(0, course.value.maxCapacity - course.value.currentEnrolled) : 0)
 const isFull = computed(() => !!capacityKnown.value && seatsLeft.value === 0)
 
-/** 展示状态与后端生命周期口径一致；旧数据缺字段时回退到 PUBLISHED 判断。 */
-const PHASE_TEXT: Record<string, { zh: string; en: string }> = {
-  DRAFT: { zh: '草稿', en: 'Draft' },
-  CANCELLED: { zh: '已下架', en: 'Cancelled' },
-  COMPLETED: { zh: '已结束', en: 'Completed' },
-  EXPIRED: { zh: '已过期', en: 'Expired' },
-  ENROLL_UPCOMING: { zh: '报名未开始', en: 'Enrollment soon' },
-  ENROLLING: { zh: '报名中', en: 'Enrolling' },
-  ENROLL_CLOSED: { zh: '报名截止', en: 'Enrollment closed' },
-  LATE_ENROLLING: { zh: '补报名中', en: 'Late enrollment' },
-  ONGOING: { zh: '进行中', en: 'In progress' },
-  ENDED: { zh: '已结束', en: 'Ended' },
-}
+/** 展示状态与后端生命周期口径一致；旧数据缺字段时由后端 phaseLabel 兜底。 */
 const phase = computed(() => String(course.value?.phase || '').toUpperCase())
 const phaseText = computed(() => {
-  const item = PHASE_TEXT[phase.value]
-  return item ? tr(item.zh, item.en) : (course.value?.phaseLabel || '')
+  return coursePhaseLabel(phase.value, isEnglish() ? 'en' : 'zh') || course.value?.phaseLabel || ''
 })
 const isBookablePhase = computed(() => {
   if (typeof course.value?.bookable === 'boolean') return course.value.bookable

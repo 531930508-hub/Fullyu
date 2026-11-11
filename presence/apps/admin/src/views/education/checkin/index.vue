@@ -46,7 +46,7 @@
             <a-tag v-if="record.birthday" color="magenta" style="margin-left: 6px;">{{ record.birthday }}</a-tag>
           </template>
           <template v-if="column.dataIndex === 'cardType'">
-            <a-tag v-if="record.cardType" :color="cardColors[record.cardType]">{{ cardLabels[record.cardType] }}</a-tag>
+            <a-tag v-if="record.cardType" :color="memberCardTypeColor(record.cardType)">{{ memberCardTypeLabel(record.cardType) }}</a-tag>
             <span v-else style="color: #ccc;">-</span>
           </template>
           <template v-if="column.dataIndex === 'status'">
@@ -99,7 +99,7 @@
                   <a-tag v-if="record.birthday" color="magenta" style="margin-left: 6px;">{{ record.birthday }}</a-tag>
                 </template>
                 <template v-if="column.dataIndex === 'cardType'">
-                  <a-tag v-if="record.cardType" :color="cardColors[record.cardType]">{{ cardLabels[record.cardType] }}</a-tag>
+                  <a-tag v-if="record.cardType" :color="memberCardTypeColor(record.cardType)">{{ memberCardTypeLabel(record.cardType) }}</a-tag>
                   <span v-else style="color: #ccc;">-</span>
                 </template>
                 <template v-if="column.dataIndex === 'status'">
@@ -123,6 +123,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { memberCardTypeColor, memberCardTypeLabel } from '@fullyu/shared'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import { upcomingCheckins, checkinCourses, courseRoster, manualCheckIn, cancelCheckIn } from '@/api/checkin'
@@ -134,9 +135,6 @@ const selectedCourseId = ref<string>()
 const courseOptions = ref<any[]>([])
 const roster = ref<any[]>([])
 const upcoming = ref<any[]>([])
-
-const cardLabels: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
-const cardColors: Record<string, string> = { MONTHLY: 'blue', QUARTERLY: 'purple', YEARLY: 'gold' }
 
 const checkinColumns = [
   { title: '照片', dataIndex: 'photo', width: 70 },

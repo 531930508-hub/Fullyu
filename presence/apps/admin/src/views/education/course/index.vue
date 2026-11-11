@@ -54,7 +54,7 @@
             <div class="course-meta">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <span style="font-weight: 600; color: #4B3621;">{{ course.trainer }}</span>
-                <a-tag :color="phaseColor(course)">
+                <a-tag :color="coursePhaseColor(course.phase)">
                   {{ course.phaseLabel || course.statusLabel }}
                 </a-tag>
               </div>
@@ -490,7 +490,7 @@
         <a-space>
           <a-button @click="currentView = 'list'">← 返回列表</a-button>
           <h2 class="page-title" style="margin: 0;">{{ currentCourse.name }}</h2>
-          <a-tag :color="phaseColor(currentCourse)">{{ currentCourse.phaseLabel || currentCourse.statusLabel }}</a-tag>
+          <a-tag :color="coursePhaseColor(currentCourse.phase)">{{ currentCourse.phaseLabel || currentCourse.statusLabel }}</a-tag>
           <a-tag v-if="currentCourse.status !== 'PUBLISHED'" color="default">数据状态：{{ currentCourse.statusLabel }}</a-tag>
         </a-space>
         <a-space>
@@ -574,7 +574,7 @@
                   <a-tag :color="record.seatType === 'MEMBER' ? 'gold' : 'default'">{{ record.seatType === 'MEMBER' ? '会员席位' : '普通席位' }}</a-tag>
                 </template>
                 <template v-if="column.dataIndex === 'status'">
-                  <a-tag :color="waitlistStatusColor(record.status)">{{ waitlistStatusLabel(record.status) }}</a-tag>
+                  <a-tag :color="waitlistStatusColor(record.status)">{{ waitlistStatusLabel(record.status) || record.status }}</a-tag>
                 </template>
                 <template v-if="column.dataIndex === 'action'">
                   <a-space>
@@ -651,6 +651,14 @@ import { listVenues } from '@/api/venue'
 import { courseReviews as fetchCourseReviews } from '@/api/review'
 import { courseRoster } from '@/api/checkin'
 import { useDictStore } from '@/stores/dict'
+import {
+  coursePhaseColor,
+  coursePhaseLabel,
+  courseStatusLabel,
+  memberCardTypeLabel,
+  waitlistStatusColor,
+  waitlistStatusLabel,
+} from '@fullyu/shared'
 
 const currentView = ref<'list' | 'create' | 'detail'>('list')
 const loading = ref(false)
@@ -729,31 +737,7 @@ const form = ref(createDefaultForm())
 
 const courses = ref<any[]>([])
 
-const statusLabelMap: Record<string, string> = { PUBLISHED: '已发布', DRAFT: '草稿', CANCELLED: '已下架', COMPLETED: '已完成', EXPIRED: '已过期', ENDED: '已下架', ON_SHELF: '已上架', OFF_SHELF: '已下架' }
-const phaseLabelMap: Record<string, string> = {
-  DRAFT: '草稿',
-  CANCELLED: '已下架',
-  COMPLETED: '已结束',
-  EXPIRED: '已过期',
-  ENROLL_UPCOMING: '报名未开始',
-  ENROLLING: '报名中',
-  ENROLL_CLOSED: '报名截止',
-  LATE_ENROLLING: '补报名中',
-  ONGOING: '进行中',
-  ENDED: '已结束',
-}
-
-/** 展示状态颜色：可报名绿色、补报名金色、进行中蓝色、终态灰色 */
-function phaseColor(course: any) {
-  const phase = String(course?.phase || '').toUpperCase()
-  if (phase === 'ENROLLING') return 'green'
-  if (phase === 'LATE_ENROLLING') return 'gold'
-  if (phase === 'ENROLL_UPCOMING') return 'blue'
-  if (phase === 'ONGOING') return 'cyan'
-  if (phase === 'ENROLL_CLOSED') return 'orange'
-  if (phase === 'ENDED' || phase === 'COMPLETED' || phase === 'EXPIRED' || phase === 'CANCELLED') return 'default'
-  return course?.status === 'PUBLISHED' ? 'green' : course?.status === 'DRAFT' ? 'default' : 'red'
-}
+/** 课程展示状态统一取自共享生命周期口径 */
 
 /** 已结束课程不能再改报名窗口，只能复制新排期 */
 function canAdjustEnrollment(course: any) {
@@ -788,9 +772,9 @@ function mapCourse(c: any) {
     capacity: c.maxCapacity ?? 0,
     enrolled: c.currentEnrolled ?? 0,
     status: c.status,
-    statusLabel: statusLabelMap[c.status] || c.status,
+    statusLabel: courseStatusLabel(c.status) || c.status,
     phase,
-    phaseLabel: phaseLabelMap[phase] || statusLabelMap[c.status] || c.status,
+    phaseLabel: coursePhaseLabel(phase) || courseStatusLabel(c.status) || c.status,
     bookable: c.bookable === true,
     enrollDeadline: c.enrollDeadline || c.enrollEndAt || c.startAt || null,
     startAt: c.startAt || null,
@@ -878,7 +862,6 @@ const studentColumns = [
   { title: '会员卡', dataIndex: 'card', width: 100 },
   { title: '签到状态', dataIndex: 'checkedIn', width: 110 },
 ]
-const CARD_TYPE_LABEL: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
 const courseStudentData = ref<any[]>([])
 const studentsLoading = ref(false)
 
@@ -890,7 +873,7 @@ async function loadStudents(courseId: string) {
       name: r.user?.nickname || '匿名用户',
       phone: r.user?.phone || '-',
       enrollDate: r.enrolledAt ? dayjs(r.enrolledAt).format('YYYY-MM-DD') : '-',
-      card: CARD_TYPE_LABEL[r.cardType] || '-',
+      card: memberCardTypeLabel(r.cardType) || '-',
       checkedIn: !!r.checkedIn,
     }))
   } catch (e: any) {
@@ -1302,22 +1285,6 @@ const waitlistColumns = [
 ]
 const waitlistData = ref<any[]>([])
 const waitlistLoading = ref(false)
-
-const WAITLIST_STATUS_LABEL: Record<string, string> = {
-  PENDING_PAYMENT: '待支付', WAITING: '排队中', CONVERTED: '已递补', CANCELLED: '已取消', REFUNDED: '已退款',
-}
-function waitlistStatusLabel(status: string) {
-  return WAITLIST_STATUS_LABEL[status] || status
-}
-function waitlistStatusColor(status: string) {
-  switch (status) {
-    case 'PENDING_PAYMENT': return 'orange'
-    case 'WAITING': return 'blue'
-    case 'CONVERTED': return 'green'
-    case 'REFUNDED': return 'red'
-    default: return 'default'
-  }
-}
 
 async function loadWaitlist(courseId: string) {
   waitlistLoading.value = true

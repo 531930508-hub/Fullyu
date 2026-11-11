@@ -85,7 +85,7 @@
           <template v-if="column.dataIndex === 'cardTypes'">
             <a-tag v-if="!record.cardTypes?.length" color="gold">全部卡</a-tag>
             <template v-else>
-              <a-tag v-for="t in record.cardTypes" :key="t" :color="typeColors[t]">{{ typeLabels[t] }}</a-tag>
+              <a-tag v-for="t in record.cardTypes" :key="t" :color="memberCardTypeColor(t)">{{ typeLabels[t] }}</a-tag>
             </template>
           </template>
           <template v-if="column.dataIndex === 'weekdays'">
@@ -209,7 +209,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { listOrgs } from '@/api/org'
-import { pickTimeDiscountRule, type TimeDiscountRuleLike } from '@fullyu/shared'
+import { MEMBER_CARD_TYPE_META, memberCardTypeColor, pickTimeDiscountRule, type TimeDiscountRuleLike } from '@fullyu/shared'
 import {
   listTimeDiscountRules,
   createTimeDiscountRule,
@@ -219,8 +219,7 @@ import {
   reorderTimeDiscountRules,
 } from '@/api/timeDiscount'
 
-const typeLabels: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
-const typeColors: Record<string, string> = { MONTHLY: 'blue', QUARTERLY: 'purple', YEARLY: 'gold' }
+const typeLabels = Object.fromEntries(Object.entries(MEMBER_CARD_TYPE_META).map(([type, meta]) => [type, meta.zh]))
 const weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 const loading = ref(false)

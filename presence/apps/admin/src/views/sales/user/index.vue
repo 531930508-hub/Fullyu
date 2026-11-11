@@ -109,13 +109,12 @@ import dayjs, { Dayjs } from 'dayjs'
 import { adminListUsers } from '@/api/user'
 import { grantVoucher } from '@/api/voucher'
 import { adminListCourses } from '@/api/course'
+import { memberCardTypeLabel } from '@fullyu/shared'
 
 const loading = ref(false)
 const searchText = ref('')
 const filterCard = ref('')
 const users = ref<any[]>([])
-
-const cardLabelMap: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
 
 const columns = [
   { title: '用户', dataIndex: 'name', width: 220 },
@@ -132,7 +131,7 @@ function mapUser(u: any) {
     phone: u.phone,
     avatar: u.avatar,
     cardType: card?.type || '',
-    cardLabel: card ? cardLabelMap[card.type] : '',
+    cardLabel: card ? memberCardTypeLabel(card.type) : '',
     cardExpire: card?.endDate ? String(card.endDate).slice(0, 10) : '',
     registerDate: u.createdAt ? String(u.createdAt).slice(0, 10) : '',
   }

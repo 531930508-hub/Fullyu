@@ -28,7 +28,7 @@
             <div style="font-size: 12px; color: #999;">{{ record.description }}</div>
           </template>
           <template v-if="column.dataIndex === 'type'">
-            <a-tag :color="typeColors[record.type]">{{ typeLabels[record.type] }}</a-tag>
+            <a-tag :color="memberCardTypeColor(record.type)">{{ memberCardTypeLabel(record.type) }}</a-tag>
           </template>
           <template v-if="column.dataIndex === 'price'">
             <span style="color: #C0392B; font-weight: 600;">¥{{ Number(record.price) }}</span>
@@ -40,7 +40,7 @@
             <a-tag v-for="b in record.benefits" :key="b" style="margin-bottom: 4px;">{{ b }}</a-tag>
           </template>
           <template v-if="column.dataIndex === 'status'">
-            <a-tag :color="record.status === 'ON_SHELF' ? 'green' : 'default'">{{ statusLabels[record.status] }}</a-tag>
+            <a-tag :color="memberCardProductStatusColor(record.status)">{{ memberCardProductStatusLabel(record.status) }}</a-tag>
           </template>
           <template v-if="column.dataIndex === 'action'">
             <a-space>
@@ -121,6 +121,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { useDictStore } from '@/stores/dict'
+import { memberCardProductStatusColor, memberCardProductStatusLabel, memberCardTypeColor, memberCardTypeLabel } from '@fullyu/shared'
 import { adminListProducts, createProduct, updateProduct, setProductStatus } from '@/api/member'
 
 const dictStore = useDictStore()
@@ -129,10 +130,6 @@ const cardTypeOptions = computed(() => dictStore.getItems('member_card_type'))
 const loading = ref(false)
 const saving = ref(false)
 const filterStatus = ref('')
-
-const typeLabels: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
-const typeColors: Record<string, string> = { MONTHLY: 'blue', QUARTERLY: 'purple', YEARLY: 'gold' }
-const statusLabels: Record<string, string> = { ON_SHELF: '已上架', OFF_SHELF: '已下架' }
 
 const columns = [
   { title: '商品', dataIndex: 'name', width: 220 },

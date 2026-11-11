@@ -319,6 +319,7 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { adminListUsers } from '@/api/user'
 import { adminListCourses } from '@/api/course'
+import { voucherStatusColor, voucherStatusLabel } from '@fullyu/shared'
 
 const loading = ref(false)
 const route = useRoute()
@@ -339,15 +340,12 @@ const batches = ref<any[]>([])
 const userOptions = ref<{ label: string; value: string }[]>([])
 const courseOptions = ref<{ label: string; value: string }[]>([])
 
-const statusLabelMap: Record<string, string> = { UNUSED: '未使用', USED: '已使用', EXPIRED: '已过期', REVOKED: '已作废' }
-const statusColorMap: Record<string, string> = { UNUSED: 'blue', USED: 'green', EXPIRED: 'default', REVOKED: 'red' }
-
 /** 码券未兑换时单独展示「未兑换」，与已归属用户的未使用券区分 */
 function displayStatus(record: any) {
   if (record.redeemCode && !record.userId && record.status === 'UNUSED') {
     return { label: '未兑换', color: 'gold' }
   }
-  return { label: statusLabelMap[record.status] || record.status, color: statusColorMap[record.status] || 'default' }
+  return { label: voucherStatusLabel(record.status) || record.status, color: voucherStatusColor(record.status) || 'default' }
 }
 
 function formatCode(code: string) {

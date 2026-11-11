@@ -196,6 +196,7 @@ import {
   auditCommunity, setCommunityStatus, deleteCommunity,
 } from '@/api/community'
 import { uploadFile } from '@/api/upload'
+import { communityStatusColor, communityStatusLabel } from '@fullyu/shared'
 
 const CATEGORIES = ['疗愈', '瑜伽', '身心成长', '手作', '健身']
 const TAG_OPTIONS = ['良好健康', '优质教育', '责任消费', '身心疗愈', '身体疗愈', '复愈特色', '职业成长', '轻户外', '正念', '共修', '打卡']
@@ -220,10 +221,10 @@ const columns = [
 ]
 
 function statusText(s: string) {
-  return s === 'PENDING' ? '待审核' : s === 'APPROVED' ? '已通过' : '已驳回'
+  return communityStatusLabel(s) || s
 }
 function statusColor(s: string) {
-  return s === 'PENDING' ? 'orange' : s === 'APPROVED' ? 'green' : 'red'
+  return communityStatusColor(s) || 'default'
 }
 
 async function loadList() {

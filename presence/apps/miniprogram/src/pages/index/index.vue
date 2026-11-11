@@ -123,6 +123,7 @@ import { getActiveCard, type MemberCard } from '@/api/member'
 import { loadBrandMember, type BrandMemberData } from '@/api/brandMember'
 import { fetchNextCourse } from '@/api/order'
 import { updateTabBarLanguage, tr, isEnglish } from '@/locale'
+import { coursePhaseLabel } from '@fullyu/shared'
 import { cityLabel, cityOptionsFromVenues, filterCourseList, normalizeCity, venueIdsForCity } from '@/utils/presence-view'
 import { cacheFresh, homeCache } from '@/utils/home-cache'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
@@ -363,16 +364,8 @@ function difficultyLabel(value: string) {
   const item = difficultyOptions.value.find(option => option.value === value)
   return item?.label || value
 }
-const PHASE_LABELS: Record<string, [string, string]> = {
-  ENROLL_UPCOMING: ['报名未开始', 'Enrollment soon'],
-  ENROLLING: ['报名中', 'Enrolling'],
-  ENROLL_CLOSED: ['报名截止', 'Enrollment closed'],
-  LATE_ENROLLING: ['补报名中', 'Late enrollment'],
-  ONGOING: ['进行中', 'In progress'],
-}
 function phaseLabel(course: any) {
-  const item = PHASE_LABELS[course?.phase]
-  return item ? tr(item[0], item[1]) : ''
+  return coursePhaseLabel(course?.phase, isEnglish() ? 'en' : 'zh')
 }
 function formatDate(value: string) {
   const date = new Date(value)

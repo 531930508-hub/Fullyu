@@ -95,6 +95,7 @@ import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { listTasks, createTask, updateTask, cancelTask } from '@/api/task'
 import { listTrainers } from '@/api/trainer'
+import { taskStatusLabel } from '@fullyu/shared'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -104,7 +105,6 @@ const tasks = ref<any[]>([])
 const trainerOptions = ref<any[]>([])
 
 const scopeLabelMap: Record<string, string> = { ALL: '全员', SPECIFIC: '指定导师' }
-const statusLabelMap: Record<string, string> = { PUBLISHED: '进行中', COMPLETED: '已完成', CANCELLED: '已取消' }
 
 const columns = [
   { title: '任务', dataIndex: 'name', width: 250 },
@@ -121,7 +121,7 @@ function mapTask(t: any) {
   return {
     ...t,
     scopeLabel: scopeLabelMap[t.scope] || t.scope,
-    statusLabel: statusLabelMap[t.status] || t.status,
+    statusLabel: taskStatusLabel(t.status) || t.status,
     claimed,
     progress: total > 0 ? Math.round((claimed / total) * 100) : 0,
   }

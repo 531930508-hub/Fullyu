@@ -49,6 +49,7 @@ import PresenceIcon from '@/components/PresenceIcon.vue'
 import PageState from '@/components/PageState.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
 import { brandShareMessage, brandShareTimeline } from '@/utils/share'
+import { orderStatusLabel } from '@fullyu/shared'
 
 const userStore = useUserStore()
 const capsule = readCapsuleLayout()
@@ -87,11 +88,9 @@ function orderTypeLabel(type: string) {
   return labels[type] || (isEnglish() ? 'Booking' : '预约')
 }
 function statusText(status: string, orderType: string) {
+  // 课程订单已支付后对用户是「待上课」，候补订单仍是「已支付」；其余状态走共享口径
   if (status === 'PAID') return orderType === 'WAITLIST' ? tr('已支付', 'Paid') : tr('待上课', 'Upcoming')
-  const labels = isEnglish()
-    ? { COMPLETED: 'Completed', CANCELLED: 'Cancelled', REFUNDING: 'Refunding', REFUNDED: 'Refunded' }
-    : { COMPLETED: '已完成', CANCELLED: '已取消', REFUNDING: '退款中', REFUNDED: '已退款' }
-  return (labels as Record<string, string>)[status] || tr('待支付', 'Payment due')
+  return orderStatusLabel(status, isEnglish() ? 'en' : 'zh') || tr('未知状态', 'Unknown')
 }
 function mapOrder(o: OrderItem) {
   const course = o.course || {}

@@ -123,6 +123,7 @@
 import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { overview, revenueTrend, charts } from '@/api/analytics'
+import { memberCardTypeLabel } from '@fullyu/shared'
 
 const timeRange = ref('month')
 const loading = ref(false)
@@ -141,9 +142,8 @@ const trainerRatings = ref<{ name: string; value: number; count: number }[]>([])
 const userGrowthData = ref<{ label: string; value: number; percent: number }[]>([])
 const memberDistribution = ref<{ type: string; count: number }[]>([])
 
-const CARD_TYPE_LABEL: Record<string, string> = { MONTHLY: '月卡', QUARTERLY: '季卡', YEARLY: '年卡' }
 function cardTypeLabel(type: string) {
-  return CARD_TYPE_LABEL[type] || type
+  return memberCardTypeLabel(type) || type
 }
 function courseBarWidth(value: number) {
   const max = Math.max(1, ...coursePopularity.value.map((c) => c.value))
