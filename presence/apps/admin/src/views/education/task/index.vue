@@ -94,7 +94,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { listTasks, createTask, updateTask, cancelTask } from '@/api/task'
-import { listTrainers } from '@/api/trainer'
+import { listTrainerOptions } from '@/api/trainer'
 import { taskStatusLabel } from '@fullyu/shared'
 
 const loading = ref(false)
@@ -151,7 +151,7 @@ async function loadTasks() {
 
 async function loadTrainers() {
   try {
-    const data: any = await listTrainers()
+    const data: any = await listTrainerOptions()
     trainerOptions.value = (Array.isArray(data) ? data : []).map((t: any) => ({ value: t.id, label: t.displayName }))
   } catch { /* 忽略 */ }
 }

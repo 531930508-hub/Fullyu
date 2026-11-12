@@ -646,7 +646,7 @@ import dayjs from 'dayjs'
 import ImageCropper from '@/components/ImageCropper.vue'
 import { adminListCourses, getCourse, createCourse, updateCourse, setCourseStatus, deleteCourse, savePriceTiers, saveMemberDiscounts, setEnrollmentWindow } from '@/api/course'
 import { listCourseWaitlist, promoteWaitlistEntry, cancelWaitlistEntry } from '@/api/waitlist'
-import { listTrainers } from '@/api/trainer'
+import { listTrainerOptions } from '@/api/trainer'
 import { listVenues } from '@/api/venue'
 import { courseReviews as fetchCourseReviews } from '@/api/review'
 import { courseRoster } from '@/api/checkin'
@@ -830,7 +830,7 @@ function onSearchChange(e: any) {
 
 async function loadOptions() {
   try {
-    const [ts, vs]: any = await Promise.all([listTrainers(), listVenues()])
+    const [ts, vs]: any = await Promise.all([listTrainerOptions(), listVenues()])
     trainerOptions.value = Array.isArray(ts) ? ts : []
     venueOptions.value = Array.isArray(vs) ? vs : []
   } catch (e: any) {

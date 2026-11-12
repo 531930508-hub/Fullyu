@@ -131,6 +131,40 @@
               </template>
             </a-table>
           </a-tab-pane>
+          <a-tab-pane key="portal" tab="门户账号">
+            <a-alert
+              type="info"
+              show-icon
+              message="导师用手机号 + 密码登录导师门户，查看课程、学员名单并提交课程提案。"
+              style="margin-bottom: 16px"
+            />
+            <a-form layout="vertical">
+              <a-form-item label="登录手机号">
+                <a-input :value="currentTrainer.user?.phone || '未绑定手机号'" disabled />
+              </a-form-item>
+              <a-form-item label="重置登录密码">
+                <a-input-group compact style="display: flex">
+                  <a-input v-model:value="portalPassword" placeholder="至少 6 位" style="flex: 1" />
+                  <a-button @click="portalPassword = genPortalPassword()">随机生成</a-button>
+                </a-input-group>
+                <div class="muted" style="margin-top: 4px; font-size: 12px">重置后请把新密码交给导师，本人下次登录需自行改密。</div>
+              </a-form-item>
+              <a-button v-perm="'trainer:update'" type="primary" danger :loading="portalResetting" @click="resetPortalPassword">
+                重置密码
+              </a-button>
+            </a-form>
+            <a-alert
+              v-if="portalResult"
+              type="success"
+              show-icon
+              style="margin-top: 16px"
+              :message="`密码已重置为：${portalResult}`"
+            >
+              <template #description>
+                <a-button type="link" size="small" style="padding: 0" @click="copyPortalPassword">复制密码</a-button>
+              </template>
+            </a-alert>
+          </a-tab-pane>
         </a-tabs>
       </template>
     </a-drawer>
@@ -190,6 +224,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { listTrainers, getTrainer, createTrainer, updateTrainer, adjustTrainerSeeds } from '@/api/trainer'
+import { resetTrainerPortalPassword } from '@/api/trainerPortal'
 import { listTrainerLevels } from '@/api/trainerLevel'
 
 // 导师等级来自后端 trainer-levels 接口
@@ -223,6 +258,44 @@ const levelColors: Record<number, string> = { 1: 'default', 2: 'blue', 3: 'purpl
 const editForm = ref<any>({})
 const addForm = ref({ userId: '', displayName: '', level: 1, seedifyCert: false, specialties: [] as string[], avatar: '', bio: '', certBadge: '' })
 const seedsForm = ref({ amount: null as number | null, reason: '' })
+
+// 门户账号密码重置：只展示一次，关抽屉即清空
+const portalPassword = ref('')
+const portalResetting = ref(false)
+const portalResult = ref('')
+
+function genPortalPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789@#$%&*'
+  const bytes = new Uint32Array(10)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (n) => chars[n % chars.length]).join('')
+}
+
+async function resetPortalPassword() {
+  if (!currentTrainer.value) return
+  if (!portalPassword.value || portalPassword.value.length < 6) {
+    message.warning('新密码至少 6 位')
+    return
+  }
+  portalResetting.value = true
+  portalResult.value = ''
+  try {
+    await resetTrainerPortalPassword(currentTrainer.value.id, portalPassword.value)
+    portalResult.value = portalPassword.value
+    message.success('门户密码已重置')
+  } catch (e: any) {
+    message.error(e?.message || '重置密码失败')
+  } finally {
+    portalResetting.value = false
+  }
+}
+
+function copyPortalPassword() {
+  navigator.clipboard
+    ?.writeText(portalResult.value)
+    .then(() => message.success('已复制'))
+    .catch(() => message.warning('复制失败，请手动选中复制'))
+}
 
 const seedsColumns = [
   { title: '时间', dataIndex: 'createdAt', width: 160 },
@@ -311,6 +384,8 @@ async function openDetail(trainer: any) {
     certBadge: trainer.certBadge || '',
   }
   seedsForm.value = { amount: null, reason: '' }
+  portalPassword.value = ''
+  portalResult.value = ''
   currentTrainer.value = trainer
   try {
     const detail: any = await getTrainer(trainer.id)

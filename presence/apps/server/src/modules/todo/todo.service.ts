@@ -15,6 +15,7 @@ import {
   type ApprovalDetailResult,
   type RefundDetailResult,
   type TodoCounts,
+  type TodoFlowItem,
   type TodoItem,
   type TodoListResult,
 } from '@fullyu/shared'
@@ -63,17 +64,36 @@ export class TodoService {
   async list(admin: AdminContext): Promise<TodoListResult> {
     const can = (code: string) => hasPermission(admin.permissions, code)
 
-    const [approvals, refunds, community, stock] = await Promise.all([
+    const canReviewTrainer = can('trainer:create') || can('trainer:update')
+    const canReviewProposal = can('course:create') || can('course:update')
+
+    const [approvals, refunds, community, stock, trainerApply, courseProposal] = await Promise.all([
       can('flow:todo:view') ? this.loadApprovals(admin) : Promise.resolve([]),
       can('order:view') ? this.loadRefunds(admin) : Promise.resolve([]),
       can('community:view') ? this.loadCommunity() : Promise.resolve([]),
       can('scm:stock:view') ? this.loadStock(admin) : Promise.resolve([]),
+      canReviewTrainer ? this.loadTrainerApplications() : Promise.resolve([]),
+      canReviewProposal ? this.loadCourseProposals() : Promise.resolve([]),
     ])
 
-    const items = [...approvals, ...refunds, ...community, ...stock].sort(
+    const items = [
+      ...approvals,
+      ...refunds,
+      ...community,
+      ...stock,
+      ...trainerApply,
+      ...courseProposal,
+    ].sort(
       (a, b) =>
         Number(b.urgent) - Number(a.urgent) || a.createdAt.localeCompare(b.createdAt),
     )
+
+    const [done, submitted] = can('flow:todo:view')
+      ? await Promise.all([
+          this.approvalService.doneCount(admin),
+          this.approvalService.submittedCount(admin),
+        ])
+      : [0, 0]
 
     const counts: TodoCounts = {
       all: items.length,
@@ -81,6 +101,10 @@ export class TodoService {
       refund: refunds.length,
       community: community.length,
       stock: stock.length,
+      trainerApply: trainerApply.length,
+      courseProposal: courseProposal.length,
+      done,
+      submitted,
     }
 
     return { counts, items, generatedAt: new Date().toISOString() }
@@ -102,7 +126,10 @@ export class TodoService {
       ? await buildOrgScope(this.prisma, admin)
       : null
 
-    const [approval, refund, community, stockBalances] = await Promise.all([
+    const canReviewTrainer = can('trainer:create') || can('trainer:update')
+    const canReviewProposal = can('course:create') || can('course:update')
+
+    const [approval, refund, community, stockBalances, trainerApply, courseProposal] = await Promise.all([
       can('flow:todo:view') ? this.approvalService.todoCount(admin) : 0,
       can('order:view')
         ? this.prisma.order.count({
@@ -123,16 +150,92 @@ export class TodoService {
             select: { qty: true, product: { select: { safetyStock: true } } },
           })
         : [],
+      canReviewTrainer
+        ? this.prisma.trainerProposal.count({ where: { status: 'PENDING' } })
+        : 0,
+      canReviewProposal
+        ? this.prisma.courseProposal.count({ where: { status: { in: ['SUBMITTED', 'REVIEWING'] } } })
+        : 0,
     ])
 
     const stock = stockBalances.filter((b) => isBelowSafety(Number(b.qty), b.product.safetyStock)).length
+    const [done, submitted] = can('flow:todo:view')
+      ? await Promise.all([
+          this.approvalService.doneCount(admin),
+          this.approvalService.submittedCount(admin),
+        ])
+      : [0, 0]
     return {
-      all: approval + refund + community + stock,
+      all: approval + refund + community + stock + trainerApply + courseProposal,
       approval,
       refund,
       community,
       stock,
+      trainerApply,
+      courseProposal,
+      done,
+      submitted,
     }
+  }
+
+  // ===== 流程维度：我的已办 / 我提交的 =====
+
+  /** 我的已办：任一节点上有我的表决记录（不看整单是否结束） */
+  async done(admin: AdminContext): Promise<TodoFlowItem[]> {
+    const can =
+      hasPermission(admin.permissions, 'flow:todo:view') ||
+      hasPermission(admin.permissions, 'flow:instance:view')
+    if (!can) return []
+    return this.toFlowItems(await this.approvalService.myDone(admin), admin.username)
+  }
+
+  /** 我提交的：发起人是我，任何状态都列出来，便于跟进整条流程 */
+  async submitted(admin: AdminContext): Promise<TodoFlowItem[]> {
+    return this.toFlowItems(await this.approvalService.mySubmitted(admin), admin.username)
+  }
+
+  /** 审批实例 DTO → 流程维度条目（补组织名、我的表决结果） */
+  private async toFlowItems(
+    rows: Awaited<ReturnType<ApprovalService['myDone']>>,
+    username: string,
+  ): Promise<TodoFlowItem[]> {
+    if (!rows.length) return []
+
+    const orgIds = Array.from(new Set(rows.map((r) => r.orgId).filter((v): v is string => !!v)))
+    const orgs = orgIds.length
+      ? await this.prisma.organization.findMany({
+          where: { id: { in: orgIds } },
+          select: { id: true, name: true, shortName: true },
+        })
+      : []
+    const orgMap = new Map(orgs.map((o) => [o.id, o.shortName || o.name]))
+
+    return rows.map((row) => {
+      const meta = BIZ_TYPE_META[row.bizType as keyof typeof BIZ_TYPE_META]
+      const node = row.status === 'PENDING' ? row.nodes[row.currentIndex] : undefined
+      const myDecisions = row.nodes
+        .flatMap((n) => n.decisions)
+        .filter((d) => d.approver === username)
+      const last = myDecisions[myDecisions.length - 1]
+      return {
+        id: row.id,
+        bizType: row.bizType,
+        bizLabel: meta?.text || row.bizType,
+        title: meta?.text || '审批单',
+        summary: row.summary,
+        amount: Number(row.amount) || null,
+        requesterName: row.requesterName || row.requester || '系统',
+        orgName: row.orgId ? orgMap.get(row.orgId) || '' : '',
+        flowName: row.flowName,
+        status: row.status,
+        nodeText: node ? `${row.currentIndex + 1}/${row.nodes.length} ${node.name}` : '',
+        createdAt: iso(row.createdAt),
+        finishedAt: row.finishedAt ? iso(row.finishedAt) : null,
+        myAction: last?.action ?? null,
+        myComment: last?.comment ?? '',
+        myDecidedAt: last ? iso(last.createdAt) : null,
+      }
+    })
   }
 
   private async loadApprovals(admin: AdminContext): Promise<TodoItem[]> {
@@ -234,6 +337,81 @@ export class TodoService {
         link: `/sales/orders?focus=${o.id}`,
       }
     })
+  }
+
+  /**
+   * 导师入驻申请：待教务审核。
+   * 审核动作在「导师入驻」页完成，所以这里用 NAVIGATE，而不是在待办抽屉里直接放按钮。
+   */
+  private async loadTrainerApplications(): Promise<TodoItem[]> {
+    const rows = await this.prisma.trainerProposal.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+      take: 100,
+      select: { id: true, form: true, createdAt: true },
+    })
+    if (!rows.length) return []
+    return rows.map((row) => {
+      const form = (row.form || {}) as any
+      const realName = form.realName || '申请人'
+      const specialties: string[] = Array.isArray(form.specialties) ? form.specialties : []
+      return {
+        id: `trainer-apply-${row.id}`,
+        source: 'TRAINER_APPLY',
+        action: 'NAVIGATE',
+        bizType: 'TRAINER_APPLY',
+        bizLabel: '导师入驻',
+        title: `${realName} 申请入驻`,
+        summary: [form.city, specialties.slice(0, 3).join('/'), form.experienceYears ? `${form.experienceYears} 年经验` : '']
+          .filter(Boolean)
+          .join(' · ') || '待教务核对资料',
+        amount: null,
+        requesterName: realName,
+        orgName: '',
+        createdAt: iso(row.createdAt),
+        urgent: false,
+        nodeText: '',
+        detailId: row.id,
+        link: `/education/trainer-applications?focus=${row.id}`,
+      }
+    })
+  }
+
+  /** 课程提案：待受理（SUBMITTED）与审核中（REVIEWING），两类都算教务的待办 */
+  private async loadCourseProposals(): Promise<TodoItem[]> {
+    const rows = await this.prisma.courseProposal.findMany({
+      where: { status: { in: ['SUBMITTED', 'REVIEWING'] } },
+      orderBy: { createdAt: 'asc' },
+      take: 100,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        createdAt: true,
+        durationMinutes: true,
+        totalSessions: true,
+        requestedMaxCapacity: true,
+        trainer: { select: { displayName: true } },
+      },
+    })
+    if (!rows.length) return []
+    return rows.map((row) => ({
+      id: `course-proposal-${row.id}`,
+      source: 'COURSE_PROPOSAL',
+      action: 'NAVIGATE',
+      bizType: 'COURSE_PROPOSAL',
+      bizLabel: '课程提案',
+      title: `《${row.title || '未命名课程'}》课程提案`,
+      summary: `${row.durationMinutes} 分钟 × ${row.totalSessions} 节 · 建议 ${row.requestedMaxCapacity || '-'} 人`,
+      amount: null,
+      requesterName: row.trainer?.displayName || '导师',
+      orgName: '',
+      createdAt: iso(row.createdAt),
+      urgent: false,
+      nodeText: row.status === 'REVIEWING' ? '教务审核中' : '待受理',
+      detailId: row.id,
+      link: `/education/course-proposals?focus=${row.id}`,
+    }))
   }
 
   private async loadCommunity(): Promise<TodoItem[]> {

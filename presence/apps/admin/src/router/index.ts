@@ -47,6 +47,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '导师管理', icon: 'TeamOutlined', module: 'education', perm: ['trainer:view'] },
       },
       {
+        path: 'education/trainer-applications',
+        name: 'TrainerApplications',
+        component: () => import('@/views/education/trainer-application/index.vue'),
+        meta: { title: '导师入驻审核', icon: 'IdcardOutlined', module: 'education', perm: ['trainer:view'] },
+      },
+      {
+        path: 'education/course-proposals',
+        name: 'CourseProposals',
+        component: () => import('@/views/education/course-proposal/index.vue'),
+        meta: { title: '课程提案审核', icon: 'FileDoneOutlined', module: 'education', perm: ['course:view'] },
+      },
+      {
         path: 'education/courses',
         name: 'Courses',
         component: () => import('@/views/education/course/index.vue'),

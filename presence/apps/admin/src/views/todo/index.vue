@@ -3,76 +3,198 @@
     <div class="page-header td-head">
       <div>
         <h2 class="page-title">待办中心</h2>
-        <div class="td-sub">审批、退款跟进、入群审核、库存预警统一在这里处理</div>
+        <div class="td-sub">审批、退款跟进、入群审核、库存预警统一在这里处理；已办与我提交的用来跟进审批流程</div>
       </div>
       <a-space wrap>
-        <a-radio-group v-model:value="sourceTab" button-style="solid" size="small">
+        <a-radio-group
+          v-if="mainTab === 'pending'"
+          v-model:value="sourceTab"
+          button-style="solid"
+          size="small"
+        >
           <a-radio-button value="ALL">全部 {{ counts.all }}</a-radio-button>
           <a-radio-button v-if="canSee.approval" value="APPROVAL">审批 {{ counts.approval }}</a-radio-button>
           <a-radio-button v-if="canSee.refund" value="REFUND">退款 {{ counts.refund }}</a-radio-button>
           <a-radio-button v-if="canSee.community" value="COMMUNITY">社群 {{ counts.community }}</a-radio-button>
           <a-radio-button v-if="canSee.stock" value="STOCK">库存 {{ counts.stock }}</a-radio-button>
+          <a-radio-button v-if="canSee.trainerApply" value="TRAINER_APPLY">导师入驻 {{ counts.trainerApply }}</a-radio-button>
+          <a-radio-button v-if="canSee.courseProposal" value="COURSE_PROPOSAL">课程提案 {{ counts.courseProposal }}</a-radio-button>
         </a-radio-group>
-        <a-button size="small" :loading="loading" @click="load">
+        <a-button size="small" :loading="loading || doneLoading || submittedLoading" @click="reload">
           <template #icon><ReloadOutlined /></template>
           刷新
         </a-button>
       </a-space>
     </div>
 
-    <a-alert
-      v-if="!hasAnySource"
-      type="info"
-      show-icon
-      message="你当前没有审批、订单、社群或库存的处理权限。待办只展示与你权限相关的事项，如需处理请联系管理员开通。"
-    />
-
-    <a-card v-else :loading="loading">
-      <a-empty v-if="!filteredItems.length" description="当前没有待处理事项" />
-      <a-table
-        v-else
-        :data-source="filteredItems"
-        :columns="columns"
-        row-key="id"
-        size="middle"
-        :pagination="{ pageSize: 15, showSizeChanger: false }"
-        :scroll="{ x: 980 }"
-        :custom-row="rowProps"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'source'">
-            <a-tag :color="sourceMeta(record.source).color">
-              {{ sourceMeta(record.source).text }}
-            </a-tag>
-          </template>
-          <template v-else-if="column.key === 'title'">
-            <div class="td-title">{{ record.title }}</div>
-            <div class="td-summary">{{ record.summary }}</div>
-            <div v-if="record.hint" class="td-hint">{{ record.hint }}</div>
-          </template>
-          <template v-else-if="column.key === 'amount'">
-            <span v-if="record.amount != null" class="td-amount">¥{{ money(record.amount) }}</span>
-            <span v-else class="td-muted">—</span>
-          </template>
-          <template v-else-if="column.key === 'people'">
-            <div>{{ record.requesterName || '—' }}</div>
-            <div v-if="record.orgName" class="td-muted">{{ record.orgName }}</div>
-          </template>
-          <template v-else-if="column.key === 'node'">
-            <span v-if="record.nodeText">{{ record.nodeText }}</span>
-            <span v-else class="td-muted">—</span>
-          </template>
-          <template v-else-if="column.key === 'createdAt'">
-            <span class="td-muted">{{ dt(record.createdAt) }}</span>
-          </template>
-          <template v-else-if="column.key === 'action'">
-            <a-button type="link" size="small" @click.stop="handleItem(record)">
-              {{ actionLabel(record) }}
-            </a-button>
-          </template>
+    <a-tabs v-model:activeKey="mainTab" @change="onTabChange">
+      <!-- ===== 我的待办：聚合所有需要我处理的事 ===== -->
+      <a-tab-pane key="pending">
+        <template #tab>
+          我的待办<span v-if="counts.all" class="td-tab-count">{{ counts.all }}</span>
         </template>
-      </a-table>
-    </a-card>
+        <a-alert
+          v-if="!hasAnySource"
+          type="info"
+          show-icon
+          message="你当前没有审批、订单、社群或库存的处理权限。待办只展示与你权限相关的事项，如需处理请联系管理员开通。"
+        />
+        <a-card v-else :loading="loading">
+          <a-empty v-if="!filteredItems.length" description="当前没有待处理事项" />
+          <a-table
+            v-else
+            :data-source="filteredItems"
+            :columns="columns"
+            row-key="id"
+            size="middle"
+            :pagination="{ pageSize: 15, showSizeChanger: false }"
+            :scroll="{ x: 980 }"
+            :custom-row="rowProps"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'source'">
+                <a-tag :color="sourceMeta(record.source).color">
+                  {{ sourceMeta(record.source).text }}
+                </a-tag>
+              </template>
+              <template v-else-if="column.key === 'title'">
+                <div class="td-title">{{ record.title }}</div>
+                <div class="td-summary">{{ record.summary }}</div>
+                <div v-if="record.hint" class="td-hint">{{ record.hint }}</div>
+              </template>
+              <template v-else-if="column.key === 'amount'">
+                <span v-if="record.amount != null" class="td-amount">¥{{ money(record.amount) }}</span>
+                <span v-else class="td-muted">—</span>
+              </template>
+              <template v-else-if="column.key === 'people'">
+                <div>{{ record.requesterName || '—' }}</div>
+                <div v-if="record.orgName" class="td-muted">{{ record.orgName }}</div>
+              </template>
+              <template v-else-if="column.key === 'node'">
+                <span v-if="record.nodeText">{{ record.nodeText }}</span>
+                <span v-else class="td-muted">—</span>
+              </template>
+              <template v-else-if="column.key === 'createdAt'">
+                <span class="td-muted">{{ dt(record.createdAt) }}</span>
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-button type="link" size="small" @click.stop="handleItem(record)">
+                  {{ actionLabel(record) }}
+                </a-button>
+              </template>
+            </template>
+          </a-table>
+        </a-card>
+      </a-tab-pane>
+
+      <!-- ===== 我的已办：我表决过的审批单，看整单后续是否走完 ===== -->
+      <a-tab-pane key="done">
+        <template #tab>
+          我的已办<span v-if="counts.done" class="td-tab-count">{{ counts.done }}</span>
+        </template>
+        <a-card :loading="doneLoading">
+          <a-empty v-if="!doneItems.length" description="还没有我处理过的审批" />
+          <a-table
+            v-else
+            :data-source="doneItems"
+            :columns="doneColumns"
+            row-key="id"
+            size="middle"
+            :pagination="{ pageSize: 15, showSizeChanger: false }"
+            :scroll="{ x: 1100 }"
+            :custom-row="flowRowProps"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'type'">
+                <a-tag color="blue">{{ record.bizLabel }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'title'">
+                <div class="td-title">{{ record.title }}</div>
+                <div class="td-summary">{{ record.summary }}</div>
+                <div class="td-hint">{{ record.id }}</div>
+              </template>
+              <template v-else-if="column.key === 'amount'">
+                <span v-if="record.amount != null" class="td-amount">¥{{ money(record.amount) }}</span>
+                <span v-else class="td-muted">—</span>
+              </template>
+              <template v-else-if="column.key === 'people'">
+                <div>{{ record.requesterName || '—' }}</div>
+                <div v-if="record.orgName" class="td-muted">{{ record.orgName }}</div>
+              </template>
+              <template v-else-if="column.key === 'myAction'">
+                <a-tag :color="record.myAction === 'APPROVE' ? 'green' : 'red'">
+                  {{ record.myAction === 'APPROVE' ? '已同意' : '已驳回' }}
+                </a-tag>
+                <div v-if="record.myDecidedAt" class="td-hint">{{ dt(record.myDecidedAt) }}</div>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="instanceStatusMeta(record.status).color">
+                  {{ instanceStatusMeta(record.status).text }}
+                </a-tag>
+                <div v-if="record.nodeText" class="td-hint">{{ record.nodeText }}</div>
+              </template>
+              <template v-else-if="column.key === 'createdAt'">
+                <span class="td-muted">{{ dt(record.createdAt) }}</span>
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-button type="link" size="small" @click.stop="openApproval(record.id)">查看</a-button>
+              </template>
+            </template>
+          </a-table>
+        </a-card>
+      </a-tab-pane>
+
+      <!-- ===== 我提交的：我发起的单，任何状态都能跟进 ===== -->
+      <a-tab-pane key="submitted">
+        <template #tab>
+          我提交的<span v-if="counts.submitted" class="td-tab-count">{{ counts.submitted }}</span>
+        </template>
+        <a-card :loading="submittedLoading">
+          <a-empty v-if="!submittedItems.length" description="还没有我发起过的审批" />
+          <a-table
+            v-else
+            :data-source="submittedItems"
+            :columns="submittedColumns"
+            row-key="id"
+            size="middle"
+            :pagination="{ pageSize: 15, showSizeChanger: false }"
+            :scroll="{ x: 1040 }"
+            :custom-row="flowRowProps"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'type'">
+                <a-tag color="blue">{{ record.bizLabel }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'title'">
+                <div class="td-title">{{ record.title }}</div>
+                <div class="td-summary">{{ record.summary }}</div>
+                <div class="td-hint">{{ record.id }}</div>
+              </template>
+              <template v-else-if="column.key === 'amount'">
+                <span v-if="record.amount != null" class="td-amount">¥{{ money(record.amount) }}</span>
+                <span v-else class="td-muted">—</span>
+              </template>
+              <template v-else-if="column.key === 'people'">
+                <div>{{ record.requesterName || '—' }}</div>
+                <div v-if="record.orgName" class="td-muted">{{ record.orgName }}</div>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="instanceStatusMeta(record.status).color">
+                  {{ instanceStatusMeta(record.status).text }}
+                </a-tag>
+                <div v-if="record.nodeText" class="td-hint">{{ record.nodeText }}</div>
+              </template>
+              <template v-else-if="column.key === 'createdAt'">
+                <span class="td-muted">{{ dt(record.createdAt) }}</span>
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-button type="link" size="small" @click.stop="openApproval(record.id)">跟进</a-button>
+              </template>
+            </template>
+          </a-table>
+        </a-card>
+      </a-tab-pane>
+    </a-tabs>
 
     <!-- ===== 审批详情 ===== -->
     <a-drawer
@@ -299,6 +421,7 @@ import {
   type ApprovalDetailResult,
   type RefundDetailResult,
   type TodoCounts,
+  type TodoFlowItem,
   type TodoItem,
   type TodoSource,
 } from '@fullyu/shared'
@@ -307,6 +430,8 @@ import {
   cancelTodo,
   getTodoApproval,
   getTodoRefund,
+  listDoneTodos,
+  listSubmittedTodos,
   listTodos,
   rejectTodo,
 } from '@/api/todo'
@@ -321,14 +446,35 @@ const auth = useAuthStore()
 
 const loading = ref(false)
 const items = ref<TodoItem[]>([])
-const counts = ref<TodoCounts>({ all: 0, approval: 0, refund: 0, community: 0, stock: 0 })
+const counts = ref<TodoCounts>({
+  all: 0,
+  approval: 0,
+  refund: 0,
+  community: 0,
+  stock: 0,
+  trainerApply: 0,
+  courseProposal: 0,
+  done: 0,
+  submitted: 0,
+})
 const sourceTab = ref<'ALL' | TodoSource>('ALL')
+
+/** 顶层三页签：待办（要我做）/ 已办（我做过）/ 我提交的（我发起的） */
+const mainTab = ref<'pending' | 'done' | 'submitted'>('pending')
+const doneItems = ref<TodoFlowItem[]>([])
+const submittedItems = ref<TodoFlowItem[]>([])
+const doneLoading = ref(false)
+const submittedLoading = ref(false)
+const doneLoaded = ref(false)
+const submittedLoaded = ref(false)
 
 const canSee = computed(() => ({
   approval: auth.hasPerm('flow:todo:view'),
   refund: auth.hasPerm('order:view'),
   community: auth.hasPerm('community:view'),
   stock: auth.hasPerm('scm:stock:view'),
+  trainerApply: auth.hasPerm('trainer:view'),
+  courseProposal: auth.hasPerm('course:view'),
 }))
 const hasAnySource = computed(() => Object.values(canSee.value).some(Boolean))
 const canManageCommunity = computed(() => auth.hasPerm('community:manage'))
@@ -345,6 +491,29 @@ const columns = [
   { title: '当前节点', key: 'node', width: 150 },
   { title: '时间', key: 'createdAt', width: 140 },
   { title: '操作', key: 'action', width: 90 },
+]
+
+/** 已办/我提交的共用前半段：类型、事项、金额、发起人 */
+const flowBaseColumns = [
+  { title: '类型', key: 'type', width: 90 },
+  { title: '事项', key: 'title', width: 320 },
+  { title: '金额', key: 'amount', width: 110 },
+  { title: '发起人 / 组织', key: 'people', width: 150 },
+]
+
+const doneColumns = [
+  ...flowBaseColumns,
+  { title: '我的处理', key: 'myAction', width: 130 },
+  { title: '整单状态', key: 'status', width: 150 },
+  { title: '提交时间', key: 'createdAt', width: 150 },
+  { title: '操作', key: 'action', width: 80 },
+]
+
+const submittedColumns = [
+  ...flowBaseColumns,
+  { title: '审批状态', key: 'status', width: 160 },
+  { title: '提交时间', key: 'createdAt', width: 150 },
+  { title: '操作', key: 'action', width: 80 },
 ]
 
 const itemColumns = [
@@ -369,10 +538,16 @@ function rowProps(record: TodoItem) {
   return { onClick: () => handleItem(record), style: 'cursor:pointer' }
 }
 
+function flowRowProps(record: TodoFlowItem) {
+  return { onClick: () => openApproval(record.id), style: 'cursor:pointer' }
+}
+
 function actionLabel(item: TodoItem) {
   if (item.source === 'APPROVAL') return auth.hasPerm('flow:todo:approve') ? '去审批' : '查看'
   if (item.source === 'REFUND') return '去跟进'
   if (item.source === 'COMMUNITY') return canManageCommunity.value ? '去审核' : '查看'
+  if (item.source === 'TRAINER_APPLY') return auth.hasPerm('trainer:create') ? '去审核' : '查看'
+  if (item.source === 'COURSE_PROPOSAL') return auth.hasPerm('course:update') ? '去处理' : '查看'
   return '去补货'
 }
 
@@ -388,6 +563,69 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+/* ===== 已办 / 我提交的 ===== */
+const canSeeFlow = computed(() => canSee.value.approval || auth.hasPerm('flow:instance:view'))
+
+async function loadDone() {
+  if (!canSeeFlow.value) {
+    doneItems.value = []
+    doneLoaded.value = true
+    return
+  }
+  doneLoading.value = true
+  try {
+    const data = await listDoneTodos()
+    doneItems.value = data.items || []
+    doneLoaded.value = true
+  } catch {
+    // 拦截器已提示
+  } finally {
+    doneLoading.value = false
+  }
+}
+
+async function loadSubmitted() {
+  submittedLoading.value = true
+  try {
+    const data = await listSubmittedTodos()
+    submittedItems.value = data.items || []
+    submittedLoaded.value = true
+  } catch {
+    // 拦截器已提示
+  } finally {
+    submittedLoading.value = false
+  }
+}
+
+function onTabChange(key: string | number) {
+  if (key === 'done' && !doneLoaded.value) void loadDone()
+  if (key === 'submitted' && !submittedLoaded.value) void loadSubmitted()
+}
+
+/** 顶栏刷新：只刷当前页签，顺带同步页签角标 */
+async function reload() {
+  if (mainTab.value === 'done') {
+    await loadDone()
+    await load()
+    return
+  }
+  if (mainTab.value === 'submitted') {
+    await loadSubmitted()
+    await load()
+    return
+  }
+  await load()
+  if (doneLoaded.value) await loadDone()
+  if (submittedLoaded.value) await loadSubmitted()
+}
+
+/** 表决/撤销之后：待办计数、已打开过的流程页签都要同步 */
+async function refreshAfterChange() {
+  await load()
+  if (doneLoaded.value || mainTab.value === 'done') await loadDone()
+  if (submittedLoaded.value || mainTab.value === 'submitted') await loadSubmitted()
 }
 
 /** 工作台/侧边栏带 focus 参数进来时，直接打开对应详情 */
@@ -432,6 +670,11 @@ const reviewForm = reactive({ approved: true, note: '' })
 async function handleItem(item: TodoItem) {
   if (item.source === 'STOCK') {
     router.push(item.link || '/scm/stock')
+    return
+  }
+  if (item.source === 'TRAINER_APPLY' || item.source === 'COURSE_PROPOSAL') {
+    // 门户单据在各自的审核页里处理，待办只负责把 focus 带过去
+    router.push(item.link || '/todo')
     return
   }
   if (item.source === 'REFUND') {
@@ -495,7 +738,7 @@ async function decide(action: 'APPROVE' | 'REJECT') {
     message.success(action === 'APPROVE' ? '已同意' : '已驳回')
     approvalOpen.value = false
     window.dispatchEvent(new CustomEvent('todo-updated'))
-    await load()
+    await refreshAfterChange()
   } catch {
     // 拦截器已提示
   } finally {
@@ -512,7 +755,7 @@ async function cancelCurrent() {
     message.success('已撤销申请')
     approvalOpen.value = false
     window.dispatchEvent(new CustomEvent('todo-updated'))
-    await load()
+    await refreshAfterChange()
   } catch {
     // 拦截器已提示
   } finally {
@@ -531,7 +774,7 @@ async function submitReview() {
     message.success(reviewForm.approved ? '已通过入群申请' : '已驳回入群申请')
     reviewOpen.value = false
     window.dispatchEvent(new CustomEvent('todo-updated'))
-    await load()
+    await refreshAfterChange()
   } catch {
     // 拦截器已提示
   } finally {
@@ -553,6 +796,18 @@ onMounted(load)
   align-items: flex-start;
   gap: 12px;
   flex-wrap: wrap;
+}
+.td-tab-count {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #f3e3d9;
+  color: #a4553a;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
 }
 .td-sub {
   margin-top: 4px;

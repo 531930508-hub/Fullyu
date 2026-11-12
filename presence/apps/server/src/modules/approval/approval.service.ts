@@ -202,6 +202,44 @@ export class ApprovalService {
     return list.length
   }
 
+  /**
+   * 我的已办：任一节点上有我的表决记录的单。
+   *
+   * 不看整单状态——我同意完、单子还在等下一级领导时，这张单也应出现在已办里，
+   * 否则「我处理过什么」会凭空消失一批。
+   */
+  async myDone(admin: AdminContext) {
+    const rows = await this.prisma.approvalInstance.findMany({
+      where: { nodes: { some: { decisions: { some: { approver: admin.username } } } } },
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+      include: instanceInclude,
+    })
+    return rows.map((row) => this.toDto(row))
+  }
+
+  /** 我的已办条数（侧边栏/页签角标用，不构造 DTO） */
+  async doneCount(admin: AdminContext): Promise<number> {
+    return this.prisma.approvalInstance.count({
+      where: { nodes: { some: { decisions: { some: { approver: admin.username } } } } },
+    })
+  }
+
+  /** 我提交的：发起人是我，任何状态都要看到，便于跟进进度 */
+  async mySubmitted(admin: AdminContext) {
+    const rows = await this.prisma.approvalInstance.findMany({
+      where: { requester: admin.username },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: instanceInclude,
+    })
+    return rows.map((row) => this.toDto(row))
+  }
+
+  async submittedCount(admin: AdminContext): Promise<number> {
+    return this.prisma.approvalInstance.count({ where: { requester: admin.username } })
+  }
+
   /** 业务单据关联的审批进度，采购单/支出单详情页画时间轴用 */
   async byBiz(bizType: ApprovalBizType, bizId: string) {
     if (!bizId) return null

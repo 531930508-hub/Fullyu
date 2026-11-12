@@ -91,6 +91,42 @@
     {
       "path": "pages/legal/index",
       "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-portal/login/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-portal/apply/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-portal/home/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-portal/courses/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-portal/roster/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-portal/proposals/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-portal/proposal-edit/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-portal/proposal-detail/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-portal/profile/index",
+      "style": { "navigationStyle": "custom" }
     }
   ],
   "globalStyle": {

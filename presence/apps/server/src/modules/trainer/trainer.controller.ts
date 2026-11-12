@@ -10,9 +10,23 @@ export class TrainerController {
   constructor(private readonly trainerService: TrainerService) {}
 
   @Get()
-  @ApiOperation({ summary: '导师列表' })
-  async list(@Query('keyword') keyword?: string, @Query('level') level?: number, @Query('status') status?: string) {
-    return this.trainerService.list({ keyword, level, status })
+  @ApiOperation({ summary: '导师列表（公开，仅对外资料）' })
+  async list(@Query('keyword') keyword?: string, @Query('level') level?: number) {
+    return this.trainerService.list({ keyword, level })
+  }
+
+  @Get('admin/list')
+  @AdminAuth('trainer:view')
+  @ApiOperation({ summary: '导师列表（后台，含内部字段）' })
+  async adminList(@Query('keyword') keyword?: string, @Query('level') level?: number, @Query('status') status?: string) {
+    return this.trainerService.adminList({ keyword, level, status })
+  }
+
+  @Get('admin/detail/:id')
+  @AdminAuth('trainer:view')
+  @ApiOperation({ summary: '导师详情（后台，含内部字段）' })
+  async adminDetail(@Param('id') id: string) {
+    return this.trainerService.adminDetail(id)
   }
 
   @Get('me/workspace')

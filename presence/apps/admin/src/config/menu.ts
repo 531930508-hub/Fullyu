@@ -49,6 +49,8 @@ export const MENU_CONFIG: MenuItem[] = [
     icon: 'ReadOutlined',
     children: [
       { key: 'trainers', title: '导师管理', path: '/education/trainers', perm: ['trainer:view'] },
+      { key: 'trainer-applications', title: '导师入驻审核', path: '/education/trainer-applications', perm: ['trainer:view'] },
+      { key: 'course-proposals', title: '课程提案审核', path: '/education/course-proposals', perm: ['course:view'] },
       { key: 'courses', title: '课程管理', path: '/education/courses', perm: ['course:view'] },
       { key: 'checkin', title: '课程签到', path: '/education/checkin', perm: ['checkin:view'] },
       { key: 'reviews', title: '课程评价', path: '/education/reviews', perm: ['review:view'] },
