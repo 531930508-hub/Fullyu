@@ -10,12 +10,47 @@ export class TrainerService {
    *  keyword: 模糊匹配 displayName 或 specialties 中的技能关键字
    *  status: 按在职状态筛选
    */
-  async list(query: { keyword?: string; level?: number; status?: string }) {
+  /**
+   * 对外公开字段白名单（小程序/H5 无需登录即可访问）。
+   * 手机号、时薪、积分、在职状态等内部字段一律不得出现在公开接口中。
+   */
+  private readonly publicFields = {
+    id: true,
+    displayName: true,
+    avatar: true,
+    level: true,
+    specialties: true,
+    headline: true,
+    city: true,
+    bio: true,
+    certBadge: true,
+    seedifyCert: true,
+  } as const
+
+  /** 导师列表（公开）：仅对外资料，只有在职导师会被列出 */
+  async list(query: { keyword?: string; level?: number }) {
+    const where: any = { status: 'ACTIVE' }
+    if (query.level) where.level = Number(query.level)
+    if (query.keyword) {
+      // 同时搜索姓名和擅长课程（JSON string 内模糊匹配）
+      where.OR = [
+        { displayName: { contains: query.keyword } },
+        { specialties: { string_contains: query.keyword } },
+      ]
+    }
+    return this.prisma.trainerProfile.findMany({
+      where,
+      select: this.publicFields,
+      orderBy: { level: 'desc' },
+    })
+  }
+
+  /** 导师列表（后台）：含手机号、时薪、积分等内部字段 */
+  async adminList(query: { keyword?: string; level?: number; status?: string }) {
     const where: any = {}
     if (query.level) where.level = Number(query.level)
     if (query.status) where.status = query.status
     if (query.keyword) {
-      // 同时搜索姓名和擅长课程（JSON string 内模糊匹配）
       where.OR = [
         { displayName: { contains: query.keyword } },
         { specialties: { string_contains: query.keyword } },
@@ -28,10 +63,11 @@ export class TrainerService {
     })
   }
 
+  /** 导师详情（公开）：对外资料 + 数据统计，不含任何内部字段 */
   async detail(id: string) {
     const trainer = await this.prisma.trainerProfile.findUnique({
       where: { id },
-      include: { user: true, seedsRecords: { orderBy: { createdAt: 'desc' }, take: 50 } },
+      select: this.publicFields,
     })
     if (!trainer) throw new BusinessException('导师不存在', 4040)
 
@@ -72,6 +108,39 @@ export class TrainerService {
         totalCourses: ids.length,
       },
       upcomingCourses,
+    }
+  }
+
+  /** 导师详情（后台）：含手机号、时薪、积分流水等内部字段 */
+  async adminDetail(id: string) {
+    const trainer = await this.prisma.trainerProfile.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, phone: true, nickname: true, avatar: true, isTrainer: true } },
+        seedsRecords: { orderBy: { createdAt: 'desc' }, take: 50 },
+      },
+    })
+    if (!trainer) throw new BusinessException('导师不存在', 4040)
+
+    const [courseCount, studentGroups, reviewAgg] = await Promise.all([
+      this.prisma.course.count({ where: { trainerId: id } }),
+      this.prisma.order.groupBy({
+        by: ['userId'],
+        where: {
+          orderType: 'COURSE',
+          course: { trainerId: id },
+          status: { in: ['PAID', 'COMPLETED'] },
+        },
+      }),
+      this.prisma.review.aggregate({ where: { course: { trainerId: id } }, _avg: { rating: true } }),
+    ])
+    return {
+      ...trainer,
+      stats: {
+        totalStudents: studentGroups.length,
+        totalCourses: courseCount,
+        rating: reviewAgg._avg.rating ? Number(reviewAgg._avg.rating.toFixed(1)) : 0,
+      },
     }
   }
 

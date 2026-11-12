@@ -123,7 +123,7 @@ import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import { listSettlements, settle, adjustSettlement, batchAdjustSettlements } from '@/api/settlement'
-import { listTrainers } from '@/api/trainer'
+import { listTrainerOptions } from '@/api/trainer'
 import { adminListCourses } from '@/api/course'
 
 const loading = ref(false)
@@ -176,7 +176,7 @@ async function loadSettlements() {
 
 async function loadRefs() {
   try {
-    const t = await listTrainers()
+    const t = await listTrainerOptions()
     trainers.value = Array.isArray(t) ? t : (t?.list || [])
   } catch (e) {}
   try {

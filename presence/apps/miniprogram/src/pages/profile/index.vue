@@ -56,6 +56,8 @@
         <button class="menu-item" @tap="toggleView"><PresenceIcon name="user" :size="38" /><text class="menu-text">{{ tr('当前视角', 'Current view') }}</text><text class="menu-extra">{{ activeView === 'trainer' ? tr('导师视角', 'Trainer view') : tr('课程视角', 'Student view') }}</text><PresenceIcon name="arrow" :size="26" /></button>
         <button class="menu-item" @tap="goCommunityMine"><PresenceIcon name="users" :size="38" /><text class="menu-text">{{ tr('经营我的社群', 'Manage my community') }}</text><PresenceIcon name="arrow" :size="26" /></button>
         <button class="menu-item" @tap="goTrainerWorkspace"><PresenceIcon name="chart" :size="38" /><text class="menu-text">{{ t('profile.trainerWorkspace') }}</text><text class="role-label">{{ tr('导师', 'Trainer') }}</text><PresenceIcon name="arrow" :size="26" /></button>
+        <!-- 导师门户是独立账号体系（教务发的手机号 + 密码），入口单独放，避免和学员登录混淆 -->
+        <button class="menu-item" @tap="goTrainerPortal"><PresenceIcon name="calendar" :size="38" /><text class="menu-text">{{ tr('导师门户', 'Trainer portal') }}</text><text class="menu-extra">{{ portalSignedIn ? tr('已登录', 'Signed in') : tr('排课与名单', 'Schedule & roster') }}</text><PresenceIcon name="arrow" :size="26" /></button>
       </view>
       <view class="menu-group">
         <button class="menu-item" @tap="toggleLang"><PresenceIcon name="edit" :size="38" /><text class="menu-text">{{ t('profile.language') }}</text><text class="menu-extra">{{ language === 'zh' ? '中文' : 'English' }}</text><PresenceIcon name="arrow" :size="26" /></button>
@@ -125,6 +127,7 @@ import { useUserStore } from '@/stores/user'
 import { t, tr, isEnglish, updateTabBarLanguage } from '@/locale'
 import { readCapsuleLayout } from '@/utils/capsule'
 import { consumeShareJump } from '@/utils/share'
+import { getTrainerToken } from '@/utils/trainer-request'
 import { getPoints } from '@/api/user'
 import { getActiveCard, type MemberCard } from '@/api/member'
 import { loadBrandMember, claimGiftCode, peekPendingGift, takePendingGift, type BrandMemberData } from '@/api/brandMember'
@@ -156,6 +159,8 @@ const loadError = ref(false)
 const loggingIn = ref(false)
 const loginPhone = ref('')
 const loginError = ref('')
+// 门户令牌与学员登录分开存；onShow 里刷新，退出门户后入口文案会恢复
+const portalSignedIn = ref(false)
 const sheet = ref<'' | 'signin' | 'login' | 'contact' | 'about'>('')
 const sheetTitle = computed(() => sheet.value === 'signin' ? tr('会员登录', 'Member sign-in') : sheet.value === 'login' ? tr('手机号登录', 'Phone login') : sheet.value === 'contact' ? tr('联系客服', 'Contact support') : tr('关于在场', 'About Presence'))
 /** 登录前协议同意：不默认勾选（合规要求）；未勾选时点登录在协议区下方给行内提示 */
@@ -322,6 +327,8 @@ function goPage(page: string) { openAccountPage(page, true) }
 function goBrandMember() { if (requireLogin()) uni.navigateTo({ url: '/pages/brand-member/index' }) }
 function goCommunityMine() { openAccountPage('community-mine', false) }
 function goTrainerWorkspace() { if (isTrainer.value) openAccountPage('trainer-workspace', false) }
+// 无门户令牌时由门户首页统一跳登录页，这里不做前置判断
+function goTrainerPortal() { uni.navigateTo({ url: '/pages/trainer-portal/home/index' }) }
 function toggleView() {
   if (!isTrainer.value || !requireLogin()) return
   const next = activeView.value === 'trainer' ? 'student' : 'trainer'
@@ -366,6 +373,7 @@ function confirmLogout() {
 }
 onShow(() => {
   loadUserData()
+  portalSignedIn.value = !!getTrainerToken()
   if (!isLoggedIn.value && !giftLoginPrompted && peekPendingGift()) {
     giftLoginPrompted = true
     uni.showToast({ title: tr('登录后自动领取会员码', 'Sign in to receive your member code'), icon: 'none' })

@@ -26,6 +26,22 @@ export class TodoController {
     return this.todoService.counts(req.user)
   }
 
+  /** 我的已办：我表决过的审批单，按最近推进排序 */
+  @Get('done')
+  @AdminAuth()
+  @ApiOperation({ summary: '我的已办（审批流程）' })
+  async done(@Request() req: any) {
+    return { items: await this.todoService.done(req.user) }
+  }
+
+  /** 我提交的：我发起的审批单，任何状态都可跟进 */
+  @Get('submitted')
+  @AdminAuth()
+  @ApiOperation({ summary: '我提交的审批单（审批流程）' })
+  async submitted(@Request() req: any) {
+    return { items: await this.todoService.submitted(req.user) }
+  }
+
   /**
    * 审批详情：审批人可能只有 flow:todo:view，没有 flow:instance:view，
    * 因此不能复用 /approvals/instances/:id。访问范围由 service 判定。

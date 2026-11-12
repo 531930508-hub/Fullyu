@@ -3,12 +3,23 @@ import type {
   ApprovalDetailResult,
   RefundDetailResult,
   TodoCounts,
+  TodoFlowItem,
   TodoListResult,
 } from '@fullyu/shared'
 
 /** 统一待办列表（后端按权限裁剪来源） */
 export function listTodos() {
   return get<TodoListResult>('/todos')
+}
+
+/** 我的已办：我表决过的审批单 */
+export function listDoneTodos() {
+  return get<{ items: TodoFlowItem[] }>('/todos/done')
+}
+
+/** 我提交的：我发起的审批单（任何状态） */
+export function listSubmittedTodos() {
+  return get<{ items: TodoFlowItem[] }>('/todos/submitted')
 }
 
 /** 侧边栏红点：只数条数 */

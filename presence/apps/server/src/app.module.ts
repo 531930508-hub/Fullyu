@@ -12,6 +12,7 @@ import { WaitlistModule } from './modules/waitlist/waitlist.module'
 import { MemberModule } from './modules/member/member.module'
 import { HealthModule } from './modules/health/health.module'
 import { TrainerModule } from './modules/trainer/trainer.module'
+import { TrainerPortalModule } from './modules/trainer-portal/trainer-portal.module'
 import { VenueModule } from './modules/venue/venue.module'
 import { VoucherModule } from './modules/voucher/voucher.module'
 import { TaskModule } from './modules/task/task.module'
@@ -90,6 +91,7 @@ if (SCHEDULER_DISABLED) {
     MemberModule,
     HealthModule,
     TrainerModule,
+    TrainerPortalModule,
     VenueModule,
     VoucherModule,
     TaskModule,

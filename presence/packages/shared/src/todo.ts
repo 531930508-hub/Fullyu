@@ -12,13 +12,21 @@
  * 前端只认 TodoSource 与 action，不再按来源自己猜路由。
  */
 
-export type TodoSource = 'APPROVAL' | 'REFUND' | 'COMMUNITY' | 'STOCK'
+export type TodoSource =
+  | 'APPROVAL'
+  | 'REFUND'
+  | 'COMMUNITY'
+  | 'STOCK'
+  | 'TRAINER_APPLY'
+  | 'COURSE_PROPOSAL'
 
 export const TODO_SOURCE_META: Record<TodoSource, { text: string; color: string }> = {
   APPROVAL: { text: '审批', color: 'blue' },
   REFUND: { text: '退款', color: 'volcano' },
   COMMUNITY: { text: '社群', color: 'green' },
   STOCK: { text: '库存', color: 'gold' },
+  TRAINER_APPLY: { text: '导师入驻', color: 'purple' },
+  COURSE_PROPOSAL: { text: '课程提案', color: 'cyan' },
 }
 
 /**
@@ -63,6 +71,14 @@ export interface TodoCounts {
   refund: number
   community: number
   stock: number
+  /** 待审核的导师入驻申请 */
+  trainerApply: number
+  /** 待教务处理的课程提案 */
+  courseProposal: number
+  /** 我处理过的审批单条数（我的已办） */
+  done: number
+  /** 我发起的审批单条数（我提交的） */
+  submitted: number
 }
 
 export interface TodoListResult {
@@ -70,6 +86,39 @@ export interface TodoListResult {
   items: TodoItem[]
   /** 服务端生成时间，前端用于提示数据新鲜度 */
   generatedAt: string
+}
+
+/**
+ * 流程维度的待办条目：我的已办 / 我提交的。
+ *
+ * 与 TodoItem 的区别是这两页签只回答「这张单现在走到哪了」，
+ * 不承载处理动作（已办不能再改，提交人只能撤销），所以字段以进度为主。
+ */
+export type TodoFlowStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
+
+export interface TodoFlowItem {
+  /** 审批实例 id */
+  id: string
+  bizType: string
+  /** 业务类型中文名 */
+  bizLabel: string
+  /** 事项标题（如「采购单审批」） */
+  title: string
+  summary: string
+  /** 金额（元）；无金额为 null */
+  amount: number | null
+  requesterName: string
+  orgName: string
+  flowName: string
+  status: TodoFlowStatus
+  /** 当前节点文案；已结束的单为空串 */
+  nodeText: string
+  createdAt: string
+  finishedAt: string | null
+  /** 我的表决结果；我提交的页签里为空 */
+  myAction: 'APPROVE' | 'REJECT' | null
+  myComment: string
+  myDecidedAt: string | null
 }
 
 /** 审批详情里的通用信息行 */
@@ -183,3 +232,11 @@ export interface RefundDetailResult {
   link: string
 }
 
+export const ORDER_STATUS_LABELS: Record<string, string> = {
+  PENDING_PAYMENT: '待支付',
+  PAID: '已支付',
+  COMPLETED: '已完成',
+  CANCELLED: '已取消',
+  REFUNDING: '退款中',
+  REFUNDED: '已退款',
+}
