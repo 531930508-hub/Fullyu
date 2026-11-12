@@ -3,7 +3,7 @@
 # 通过后把前端静态产物同步到 ECS 的 nginx 目录，并更新后端 PM2 进程。
 # 实际部署必须显式开启：Settings → Variables 增加 ENABLE_DEPLOY=true。
 #
-# 线上真实拓扑（非 docker，测试环境 120.55.36.3 = test-zaichang.fullyu.cn）：
+# 线上真实拓扑（非 docker，120.55.36.3 = presence.fullyu.cn；旧名 test-zaichang 已于 2026-11-13 下线）：
 #   - 后端：PM2 进程 fullyu-api，源码在 SERVER_PATH（默认 /root/fullyu），在 ECS 上 tsc 编译
 #   - 后台静态：nginx 根 ADMIN_DIST_PATH（默认 /opt/fullyu/apps/admin/dist，:8080）
 #   - H5 静态：nginx 根 H5_DIST_PATH（默认 /opt/fullyu/apps/miniprogram/dist/build/h5，docker-proxy :8101）

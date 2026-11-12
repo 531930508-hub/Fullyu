@@ -200,7 +200,7 @@ E2 证据（测试环境，2026-11-08）：
 - CRM：用 `sx-teahour` / `zc-presence` / `ql-mall-test` 三把真实密钥分别签名探测 `GET /api/v1/brand-member/products`，均 `200`，返回 `FY_MONTH` / `FY_ANNUAL`；后台 `https://mall-test.fullyu.cn/crm-admin/`（推荐）与 `https://mall-test.fullyu.cn/crm-api/admin/` 均返回 `200`，页面脚本含品牌会员、品牌卡、业务卡与愈行之旅入口。两条入口的 `config.js` 都推导为 `/crm-api/api`；`/crm-admin/` 登录表单渲染正常、错误口令命中 `/crm-api/api/auth/login` 返回 401，登录后的页面渲染未在浏览器内用真实账号复验（同版本 UI 已在本机走查）。
 - 轻疗：`https://mall-test.fullyu.cn/api/brandMember/products` 返回 `200` 且产品来自 CRM；`/brandMember/me` 未登录返回“请先登录”。后端 `mall-admin-1.0-SNAPSHOT.jar`、H5 已替换并重启。
 - 时叙：`https://teahour.fullyu.cn/api/health` `200`；`/api/customer/brand-member/products` 未登录 `401`；服务端、后台 `dist`、H5 `/mp/` 均已更新。H5 首次构建漏了 `VITE_BASE=/mp/` 与 `VITE_API_BASE`，已按 `/mp/` 基路径重新构建并给 `/mp/` 加 `Cache-Control: no-cache`；浏览器实测首页正常、品牌页请求命中 `https://teahour.fullyu.cn/api` 并返回 401。
-- 在场：`https://test-zaichang.fullyu.cn/api/v1/health` `200`；`/api/v1/member/brand/products` 未登录 `401`；PM2 `fullyu-api` 在线。
+- 在场：`https://presence.fullyu.cn/api/v1/health` `200`；`/api/v1/member/brand/products` 未登录 `401`；PM2 `fullyu-api` 在线。（旧名 `test-zaichang` 已于 2026-11-13 下线）
 - 轻疗 H5：首次把不完整的 10KB uni-app H5 覆盖到 `/opt/fullyu-mall-test/web`，已先回滚到 `web-20261108-before-brand.tgz`，再用 HBuilderX 内置 Node 重建（1.8MB、含品牌页 chunk）并部署；浏览器实测首页与品牌页正常，品牌页请求命中 `https://mall-test.fullyu.cn/api/brandMember/*`。
 - 三端小程序 `mp-weixin` 生产包已上传开发版：时叙 `1.0.24`（872.9 KB）、在场 `1.0.1`（743.9 KB）、轻疗 `1.0.8`（1002.2 KB）；appid 分别为 `wxd9e4e4568d1bc8bb`、`wxa7572dea26f5f4e4`、`wxeb4e8a99b7eeebf8`（轻疗以 `project.config.json` 为准，`manifest.json` 的 `wxaadd305c8114034a` 是旧值）。上传账号需有开发者权限；体验版切换与提审仍需在公众平台手动操作。
 
