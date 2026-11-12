@@ -7,8 +7,10 @@
  */
 
 // 后端基础地址：mp-weixin 需完整域名并在小程序后台配置合法域名；H5 可走相对路径
-// 小程序真机/体验版只允许 HTTPS 合法域名，统一走测试服务器域名
-let baseUrl = 'https://test-zaichang.fullyu.cn/api/v1'
+// 正式域名以 docs/deploy/domains.tsv 为准：在场 = presence.fullyu.cn（不是"去掉 test- 前缀"）。
+// 发布前必须先在小程序后台（appid wxa7572dea26f5f4e4）把 presence.fullyu.cn 加入 request 合法域名，
+// 且旧域名 test-zaichang 要等新版本全量后再从白名单移除——老版本仍在用它。
+let baseUrl = 'https://presence.fullyu.cn/api/v1'
 // #ifdef H5
 baseUrl = '/api/v1'
 // #endif

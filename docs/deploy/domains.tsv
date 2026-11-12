@@ -1,0 +1,29 @@
+# 域名唯一事实源（Single Source of Truth）
+#
+# 规则：
+#   1. 任何域名的新增 / 改名 / 下线，必须先改本文件，再动 DNS、nginx、代码、小程序后台。
+#   2. 正式名 = 上线后对外宣传和写进代码的那一个；别名 = 过渡期保留的旧名，只能 301 或做兼容透传。
+#   3. 代码或 nginx 里出现本表没有的 *.fullyu.cn，scripts/check-domains.sh 会直接失败。
+#   4. "未建" 表示方案已定但尚未落地，不得提前写进代码。
+#   5. 域名不做"去前缀/加前缀"之类的推断——test-zaichang 的正式名是 presence，不是 zaichang。
+#
+# 列：业务 <TAB> 正式名 <TAB> 别名(逗号分隔) <TAB> 服务器IP <TAB> nginx文件 <TAB> 端口与路径 <TAB> 状态 <TAB> 备注
+# 状态取值：已上线 / 在用待定 / 待确认 / 未建 / 已下线
+#
+业务	正式名	别名	服务器IP	nginx文件	端口与路径	状态	备注
+在场 / Full愈 主应用	presence.fullyu.cn	test-zaichang.fullyu.cn	120.55.36.3	/etc/nginx/conf.d/test-zaichang.conf	/api/→127.0.0.1:3000；/→127.0.0.1:8101	已上线	旧名仅保留 /api/ 直连（老小程序 + 汇付回调），其余 301 → presence
+在场 测试	test-presence.fullyu.cn		未建	—	13000	未建	按方案 §5 建测试环境时落地
+时叙 后台	teahour.fullyu.cn		121.40.119.57	/etc/nginx/sites-enabled/teahour-teahour.fullyu.cn.conf	/api/→127.0.0.1:18787；/→/opt/teahour/app/apps/admin/dist	已上线	/api/health 显示 integrations 为 mock（staging 模式），非门店营业态
+时叙 营业台	test-shixu.fullyu.cn		120.55.36.3	/etc/nginx/conf.d/test-shixu.conf	/cashier /super /build /admin → 8200-8204	在用待定	teahour.fullyu.cn 上没有 /cashier 等路由，不能直接整体 301；正式名待定
+时叙 测试	test-teahour.fullyu.cn		未建	—	28787	未建	
+轻疗	cityretreat.fullyu.cn	manage.fullytherapy.com	8.133.6.18	/etc/nginx/conf.d/cityretreat.conf	→127.0.0.1:9929	已上线	过渡期两个名字并存，老后台书签未换完
+轻疗 测试	test-cityretreat.fullyu.cn	mall-test.fullyu.cn	未建	mall-test 现为 /etc/nginx/nginx.conf 内联块	→19929	待确认	mall-test 现指 121.40.119.57；CRM 搬 crm.fullyu.cn 后再启用新名
+会员卡	vip.fullyu.cn	test-vip.fullyu.cn	121.40.119.57	/etc/nginx/conf.d/test-vip.conf	→8100 / 8101	未建	vip.fullyu.cn 未建；当前只有 test-vip 在跑（容器 vip-web-main-test-8101）	
+官网	fullyu.cn	www.fullyu.cn	120.55.36.3	/etc/nginx/conf.d/fullyu-cn-site.conf	静态站点	已上线	8.133 另有同 server_name（fullyu-cn.conf，微信短链），属遗留
+测试机	test-fully.fullyu.cn		8.133.6.18	/etc/nginx/conf.d/test-fully.conf	—	待确认	
+待确认	test-fql.fullyu.cn		120.55.36.3	/etc/nginx/conf.d/test-fql.conf	—	待确认	来源不明，未动
+CRM	crm.fullyu.cn		未建	—	8898	未建	方案 §3 规划
+CRM 测试	test-crm.fullyu.cn		未建	—	18898	未建	方案 §1.3 的写法
+CRM 测试（写法冲突）	crm-test.fullyu.cn		未建	—	—	待确认	仅出现在 crm/docs 与 shixu/docs；与上面 test-crm 是同一个环境的两种写法，需你定其一
+已下线	zaichang.fullyu.cn		120.55.36.3（曾）	—	—	已下线	2026-11-12 由"去 test- 前缀"推断误建，11-13 已删 DNS；方案中从无此名
+已下线	shixu.fullyu.cn		120.55.36.3（曾）	—	—	已下线	同上，误建后已删；时叙正式名是 teahour.fullyu.cn
