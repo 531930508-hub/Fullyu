@@ -22,7 +22,7 @@
 官网	fullyu.cn	www.fullyu.cn	120.55.36.3	/etc/nginx/conf.d/fullyu-cn-site.conf	静态站点	已上线	8.133 另有同 server_name（fullyu-cn.conf，微信短链），属遗留
 测试机	test-fully.fullyu.cn		8.133.6.18	/etc/nginx/conf.d/test-fully.conf	—	待确认	
 待确认	test-fql.fullyu.cn		120.55.36.3	/etc/nginx/conf.d/test-fql.conf	—	待确认	来源不明，未动
-CRM	crm.fullyu.cn		未建	—	8898	未建	方案 §3 规划
+CRM	crm.fullyu.cn		121.40.119.57	/etc/nginx/sites-enabled/crm.fullyu.cn.conf	/api/→127.0.0.1:8898；/→8898(管理员)；/game/→/opt/fullyu-crm/apps/game/	已上线	2026-11-13 从 47.111 迁入本机（原经 SSH 隧道 8899），systemd 单元 fullyu-crm.service，库为 SQLite /opt/fullyu-crm/data/crm.db
 CRM 测试	test-crm.fullyu.cn		未建	—	18898	未建	方案 §1.3 的写法
 CRM 测试（写法冲突）	crm-test.fullyu.cn		未建	—	—	待确认	仅出现在 crm/docs 与 shixu/docs；与上面 test-crm 是同一个环境的两种写法，需你定其一
 已下线	zaichang.fullyu.cn		120.55.36.3（曾）	—	—	已下线	2026-11-12 由"去 test- 前缀"推断误建，11-13 已删 DNS；方案中从无此名
