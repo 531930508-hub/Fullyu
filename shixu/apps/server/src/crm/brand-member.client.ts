@@ -25,6 +25,8 @@ export type BrandCardView = {
   remainingDays?: number;
   soldBy?: string;
   soldByName?: string;
+  /** 时叙每杯立减（分），CRM 卡版本权益下发；未配置为 0。 */
+  discountPerCupCents?: number;
 };
 
 export type BrandNotice = {

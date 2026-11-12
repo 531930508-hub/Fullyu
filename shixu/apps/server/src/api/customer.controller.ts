@@ -14,6 +14,7 @@ import { CouponsService } from '../coupons/coupons.service';
 import { OrdersService } from '../orders/orders.service';
 import { HardwareService } from '../hardware/hardware.module';
 import { mapPublicOrder } from '../common/mappers';
+import { MembershipService } from '../crm/membership.service';
 
 const itemSchema = z.object({
   productId: z.string().min(1),
@@ -62,7 +63,8 @@ export class CustomerController {
     private readonly hardware: HardwareService,
     private readonly auth: AuthService,
     private readonly coupons: CouponsService,
-    private readonly content: ContentService
+    private readonly content: ContentService,
+    private readonly membership: MembershipService
   ) {}
 
   /** 首页小程序码缓存：微信生成结果长期有效，24 小时内直接复用。 */
@@ -134,7 +136,7 @@ export class CustomerController {
       home: await this.content.publicHome(),
       hardware: {
         payment: this.hardware.payment.mode,
-        member: this.hardware.member.mode,
+        member: this.membership.sourceLabel,
         printer: this.hardware.printer.mode,
         teaMachine: this.hardware.teaMachine.mode
       }

@@ -30,10 +30,6 @@ export class HardwareService {
     return this.integrations.platform;
   }
 
-  get member() {
-    return this.integrations.member;
-  }
-
   get wechat() {
     return this.integrations.wechat;
   }

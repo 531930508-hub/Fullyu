@@ -888,7 +888,9 @@ export class BrandMemberService {
           : remainingDays(card.validUntil, now),
       soldBy: toExternalBusiness(card.soldBy) || card.soldBy,
       soldByName: card.soldByName,
-      source: card.source
+      source: card.source,
+      // 时叙门店折扣的唯一来源：业务端只缓存这个值，不自己写死金额。
+      discountPerCupCents: perksOf(card.perksJson).sx.discountPerCupCents
     };
   }
 }

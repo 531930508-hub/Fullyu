@@ -17,6 +17,7 @@ import { CatalogService } from '../catalog/catalog.service';
 import { AdminService } from '../admin/admin.service';
 import { HardwareService } from '../hardware/hardware.module';
 import { AuthService } from '../auth/auth.service';
+import { MembershipService } from '../crm/membership.service';
 
 const itemSchema = z.object({
   productId: z.string().min(1),
@@ -37,7 +38,8 @@ export class StoreController {
     private readonly catalog: CatalogService,
     private readonly admin: AdminService,
     private readonly hardware: HardwareService,
-    private readonly auth: AuthService
+    private readonly auth: AuthService,
+    private readonly membership: MembershipService
   ) {}
 
   private async ensureOrderAccess(staff: StaffContext, orderId: string) {
@@ -82,7 +84,7 @@ export class StoreController {
       retail: await this.catalog.retailAvailability(),
       hardware: {
         payment: this.hardware.payment.mode,
-        member: this.hardware.member.mode,
+        member: this.membership.sourceLabel,
         printer: this.hardware.printer.mode,
         teaMachine: this.hardware.teaMachine.mode
       }

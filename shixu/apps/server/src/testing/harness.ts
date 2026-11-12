@@ -1,10 +1,19 @@
 /**
- * 集成测试脚手架：复制模板库 → 启动 Nest 应用 → 提供带鉴权的请求助手。
- * 模板库由 test/global-setup.ts 生成；每个 spec 文件使用独立副本，测试之间互不污染。
+ * 集成测试脚手架：克隆模板库 → 启动 Nest 应用 → 提供带鉴权的请求助手。
+ * 模板由 test/global-setup.ts 在 MySQL 里建好并 dump；每个 spec 克隆成独立库，测试之间互不污染。
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {
+  createDatabase,
+  databaseUrl,
+  dropDatabase,
+  importDump,
+  mysqlBase,
+  testDatabaseName,
+  type MysqlBase
+} from './mysql-db';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { json, urlencoded } from 'express';
@@ -30,7 +39,8 @@ export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 export type Harness = {
   app: INestApplication;
   prisma: PrismaService;
-  dbFile: string;
+  /** 本 spec 独占的 MySQL 库名，排查数据时直接用它连库。 */
+  database: string;
   api: (method: HttpMethod, url: string, token?: string | null, body?: unknown) => request.Test;
   login: (username?: string, password?: string) => Promise<string>;
   customer: (name?: string) => Promise<{ token: string; id: string; memberCode: string; phone: string }>;
@@ -39,36 +49,48 @@ export type Harness = {
 
 let seq = 0;
 
-/** 读取 globalSetup 写入的模板指针（每次 jest 运行一份独立模板，互不覆盖）。 */
-async function locateTemplate(): Promise<string> {
+type Template = MysqlBase & { dump: string };
+
+/** 读取 globalSetup 写入的模板指针（每次 jest 运行一份独立 dump，互不覆盖）。 */
+async function locateTemplate(): Promise<Template> {
   const root = path.join(os.tmpdir(), 'teahour-jest');
   const pointer = path.join(root, 'template.path');
   const started = Date.now();
   for (;;) {
     try {
-      const fromPointer = fs.readFileSync(pointer, 'utf8').trim();
-      if (fromPointer && fs.existsSync(fromPointer)) return fromPointer;
+      const raw = fs.readFileSync(pointer, 'utf8').trim();
+      const parsed = raw.startsWith('{') ? (JSON.parse(raw) as Template) : null;
+      if (parsed && parsed.dump && fs.existsSync(parsed.dump)) return parsed;
     } catch {
       // 指针尚未落盘，继续等待
     }
-    const legacy = path.join(root, 'template.db');
-    if (fs.existsSync(legacy)) return legacy;
     if (Date.now() - started > 10000) {
-      throw new Error('测试模板库不存在，请通过 pnpm --filter @teahour/server test 运行（globalSetup 会生成）');
+      throw new Error(
+        '测试模板库不存在，请通过 pnpm --filter @teahour/server test 运行（globalSetup 会在 MySQL 里生成）'
+      );
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
 
 export async function createHarness(): Promise<Harness> {
-  const template = await locateTemplate();
-  const dbFile = path.join(
-    os.tmpdir(),
-    'teahour-jest',
-    `run-${process.pid}-${Date.now()}-${(seq += 1)}.db`
-  );
-  fs.copyFileSync(template, dbFile);
-  process.env.DATABASE_URL = `file:${dbFile}`;
+  const found = await locateTemplate();
+  const template: Template = found.user ? found : { ...mysqlBase(), dump: found.dump };
+  const base: MysqlBase = {
+    host: template.host,
+    port: template.port,
+    user: template.user,
+    password: template.password
+  };
+  const database = testDatabaseName('run', `${Date.now()}_${(seq += 1)}`);
+  createDatabase(base, database);
+  try {
+    importDump(base, database, template.dump);
+  } catch (error) {
+    dropDatabase(base, database);
+    throw error;
+  }
+  process.env.DATABASE_URL = databaseUrl(base, database);
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication();
@@ -133,18 +155,16 @@ export async function createHarness(): Promise<Harness> {
   return {
     app,
     prisma,
-    dbFile,
+    database,
     api,
     login,
     customer,
     close: async () => {
       await app.close();
-      for (const suffix of ['', '-journal', '-wal', '-shm']) {
-        try {
-          fs.rmSync(`${dbFile}${suffix}`, { force: true });
-        } catch {
-          // 忽略清理失败
-        }
+      try {
+        dropDatabase(base, database);
+      } catch {
+        // 忽略清理失败：残留库下次会被手动清掉，不影响本次结论
       }
     }
   };

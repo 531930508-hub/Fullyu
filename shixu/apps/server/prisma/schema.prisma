@@ -229,6 +229,10 @@ model Customer {
   // 会员身份为权威数据：standard | annual；memberUntil 为空表示长期有效。
   memberTier     String   @default("standard") @map("member_tier")
   memberUntil    DateTime? @map("member_until")
+  // 会籍缓存：以 CRM 品牌卡为准。这里只存最近一次同步结果，供门店离线/CRM 抖动时继续打折。
+  discountPerCupCents Int      @default(0) @map("discount_per_cup_cents")
+  crmCardState        String?  @map("crm_card_state")
+  memberSyncedAt      DateTime? @map("member_synced_at")
   createdAt  DateTime @default(now()) @map("created_at")
 
   orders  Order[]

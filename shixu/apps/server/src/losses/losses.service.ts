@@ -351,8 +351,7 @@ export class LossesService {
       printer,
       machines,
       payment,
-      platform: { mode: this.hardware.platform.mode },
-      member: { mode: this.hardware.member.mode }
+      platform: { mode: this.hardware.platform.mode }
     };
   }
 }

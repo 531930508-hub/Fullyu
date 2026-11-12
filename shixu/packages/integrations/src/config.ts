@@ -16,7 +16,7 @@ const DEFAULT_HUIFU_DIR = '/etc/teahour/huifu';
 
 const DEFAULT_HUIFU_NOTIFY = 'https://teahour.fullyu.cn/api/hooks/payment/huifu-payment';
 
-const CHANNEL_KEYS: ExternalChannelKey[] = ['printer', 'teaMachine', 'payment', 'platform', 'member', 'wechat'];
+const CHANNEL_KEYS: ExternalChannelKey[] = ['printer', 'teaMachine', 'payment', 'platform', 'wechat'];
 
 const trim = (value: string | undefined): string | undefined => {
   const text = value?.trim();

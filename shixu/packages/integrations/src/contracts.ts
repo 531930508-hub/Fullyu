@@ -177,19 +177,6 @@ export interface PlatformConnector {
   acknowledge(externalId: string): Promise<boolean>;
 }
 
-export type MemberBenefit = {
-  code: string;
-  tier: 'annual' | 'guest';
-  discountPerCupCents: number;
-  name?: string;
-};
-
-export interface MemberProvider {
-  readonly name: string;
-  readonly mode: string;
-  verify(code: string): Promise<MemberBenefit | null>;
-}
-
 /** 小程序登录态：真实实现为 wx.login code → auth.code2Session。 */
 export type MiniProgramSession = {
   openId: string;
@@ -377,7 +364,6 @@ export type IntegrationKey =
   | 'teaMachine'
   | 'payment'
   | 'platform'
-  | 'member'
   | 'wechat'
   | 'avatar'
   | 'profileSync';
@@ -387,7 +373,6 @@ export type Integrations = {
   teaMachine: TeaMachineAdapter;
   payment: PaymentGateway;
   platform: PlatformConnector;
-  member: MemberProvider;
   wechat: MiniProgramAuthProvider;
   avatar: AvatarStorageProvider;
   profileSync: ProfileSyncProvider;
@@ -402,7 +387,7 @@ export type Integrations = {
 export type IntegrationsMode = 'mock' | 'live' | 'disabled';
 
 /** 可按渠道独立配置模式的外部通道；avatar/profileSync 是本地能力，跟随整体配置。 */
-export type ExternalChannelKey = 'printer' | 'teaMachine' | 'payment' | 'platform' | 'member' | 'wechat';
+export type ExternalChannelKey = 'printer' | 'teaMachine' | 'payment' | 'platform' | 'wechat';
 
 export type IntegrationsConfig = {
   /** 全局模式，也是未单独配置的渠道的默认模式。 */

@@ -46,7 +46,8 @@ describe('门店、菜单与库存', () => {
     expect(res.body.categories).toHaveLength(8);
     expect(res.body.hardware).toEqual({
       payment: 'mock',
-      member: 'mock',
+      // 会籍不再是适配器：未接 CRM 时如实返回 local。
+      member: 'local',
       printer: 'mock',
       teaMachine: 'mock'
     });

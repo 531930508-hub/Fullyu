@@ -20,7 +20,8 @@ export type Db = PrismaService | Prisma.TransactionClient;
 
 export type GiftRow = { title: string; desc: string; valueCents: number };
 export type PresencePerks = { prioritySeat: boolean; tierPrice: boolean; invitesPerMonth: number };
-export type CardPerks = { presence: PresencePerks };
+export type SxPerks = { discountPerCupCents: number };
+export type CardPerks = { presence: PresencePerks; sx: SxPerks };
 
 export const randomCode = (length = 8): string => {
   let out = '';
@@ -93,12 +94,18 @@ export const perksOf = (raw: string | null | undefined): CardPerks => {
     source.presence && typeof source.presence === 'object'
       ? (source.presence as Record<string, unknown>)
       : {};
+  const sxSource = source.sx && typeof source.sx === 'object' ? (source.sx as Record<string, unknown>) : {};
   const invites = Number(presence.invitesPerMonth);
+  const perCup = Number(sxSource.discountPerCupCents);
   return {
     presence: {
       prioritySeat: presence.prioritySeat === true,
       tierPrice: presence.tierPrice === true,
       invitesPerMonth: Number.isInteger(invites) && invites >= 0 && invites <= 20 ? invites : 0
+    },
+    // 时叙每杯立减（分）：门店结账与小程序下单都按这个值算，未配置即 0。
+    sx: {
+      discountPerCupCents: Number.isInteger(perCup) && perCup >= 0 && perCup <= 10_000 ? perCup : 0
     }
   };
 };
@@ -126,17 +133,24 @@ export const validateGifts = (value: unknown): string => {
 export const validatePerks = (value: unknown): string => {
   if (value === undefined || value === null) return JSON.stringify(perksOf('{}'));
   if (typeof value !== 'object') throw badRequest('perks 必须是对象');
-  const presence = ((value as Record<string, unknown>).presence || {}) as Record<string, unknown>;
+  const root = value as Record<string, unknown>;
+  const presence = (root.presence || {}) as Record<string, unknown>;
   const invites = Number(presence.invitesPerMonth ?? 0);
   if (!Number.isInteger(invites) || invites < 0 || invites > 20) {
     throw badRequest('每月邀请名额需为 0–20 的整数');
+  }
+  const sx = (root.sx || {}) as Record<string, unknown>;
+  const perCup = Number(sx.discountPerCupCents ?? 0);
+  if (!Number.isInteger(perCup) || perCup < 0 || perCup > 10_000) {
+    throw badRequest('时叙每杯立减需为 0–10000 分的整数');
   }
   return JSON.stringify({
     presence: {
       prioritySeat: presence.prioritySeat === true,
       tierPrice: presence.tierPrice === true,
       invitesPerMonth: invites
-    }
+    },
+    sx: { discountPerCupCents: perCup }
   });
 };
 

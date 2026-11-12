@@ -11,6 +11,7 @@ import { logAction } from '../common/logs';
 import { mapCustomer, mapStaffSummary } from '../common/mappers';
 import { LoginAttemptLimiter } from './login-attempts';
 import { loginRateLimit } from '../config/config';
+import { MembershipService } from '../crm/membership.service';
 import { CrmClient, type CrmIdentity } from '../crm/crm.client';
 
 export type CustomerSessionInput = {
@@ -41,7 +42,8 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly staffService: StaffService,
     private readonly hardware: HardwareService,
-    private readonly crm: CrmClient
+    private readonly crm: CrmClient,
+    private readonly membership: MembershipService
   ) {}
 
   async login(username: string, password: string, sourceIp = 'unknown') {
@@ -283,8 +285,9 @@ export class AuthService {
   async memberBenefitByCode(code: string) {
     const normalized = String(code || '').trim().toUpperCase();
     if (!normalized) return null;
-    const row = await this.prisma.customer.findUnique({ where: { memberCode: normalized } });
-    if (!row) return null;
+    const found = await this.prisma.customer.findUnique({ where: { memberCode: normalized } });
+    if (!found) return null;
+    const row = await this.membership.refreshIfStale(found);
     const discountPerCupCents = annualDiscountCents(row);
     return {
       code: row.memberCode,
@@ -359,9 +362,11 @@ export class AuthService {
    * 未开启 CRM 时沿用本地只读字段；开启后调用失败必须报错，绝不静默回退本地 0 分。
    */
   private async customerView(customer: CrmCustomer): Promise<ReturnType<typeof customerPayload>> {
-    if (!this.crm.enabled) return customerPayload(customer);
-    const member = await this.crm.resolve(this.crmIdentity(customer));
-    return customerPayload(customer, member.balance);
+    // 会籍以 CRM 品牌卡为准：视图前先按新鲜度同步一次缓存，CRM 抖动时沿用旧缓存。
+    const fresh = await this.membership.refreshIfStale(customer);
+    if (!this.crm.enabled) return customerPayload(fresh);
+    const member = await this.crm.resolve(this.crmIdentity(fresh));
+    return customerPayload(fresh, member.balance);
   }
 
   /** 只传业务端本地标识与档案字段；会员号由 CRM 生成，业务端不持有。 */
@@ -437,17 +442,19 @@ function normalizeBirthday(value: string | null): Date | null {
 }
 
 /** 年卡会员每杯减免（分）；会员身份与有效期以数据库为准，由服务端统一核验。 */
-export const ANNUAL_DISCOUNT_PER_CUP_CENTS = 200;
-
-/** 只有未过期的年卡会员享受每杯立减；普通会员与过期年卡一律 0。 */
+/**
+ * 只有未过期的年卡会员享受每杯立减；普通会员与过期年卡一律 0。
+ * 金额来自 CRM 卡权益（经 MembershipService 写入缓存），本文件不再写死面额。
+ */
 export function annualDiscountCents(customer: {
   memberTier?: string | null;
   memberUntil?: Date | null;
+  discountPerCupCents?: number | null;
 }): number {
   const active =
     customer.memberTier === 'annual' &&
     (!customer.memberUntil || customer.memberUntil.getTime() > Date.now());
-  return active ? ANNUAL_DISCOUNT_PER_CUP_CENTS : 0;
+  return active ? Math.max(0, customer.discountPerCupCents ?? 0) : 0;
 }
 
 export function customerPayload(
@@ -462,6 +469,7 @@ export function customerPayload(
     birthday?: Date | null;
     memberTier?: string | null;
     memberUntil?: Date | null;
+    discountPerCupCents?: number | null;
   },
   /** 会员中心余额；传入时以它为准，用于替换业务端本地只读积分。 */
   pointsOverride?: number
