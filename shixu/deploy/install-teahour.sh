@@ -87,11 +87,17 @@ chmod -R g+rX,o+rX "$APP_DIR"
 
 log "写入运行配置（已存在则不覆盖，避免轮换密钥）"
 if [[ ! -f "$ETC_DIR/api.env" ]]; then
+  # 库密码沿用 DB_PASSWORD，未提供则生成一次；同时确保库与账号存在（root socket 认证）。
+  DB_PASSWORD="${DB_PASSWORD:-$(openssl rand -hex 16)}"
+  mysql -e "CREATE DATABASE IF NOT EXISTS teahour CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+            CREATE USER IF NOT EXISTS 'teahour'@'127.0.0.1' IDENTIFIED BY '${DB_PASSWORD}';
+            ALTER USER 'teahour'@'127.0.0.1' IDENTIFIED BY '${DB_PASSWORD}';
+            GRANT ALL PRIVILEGES ON teahour.* TO 'teahour'@'127.0.0.1'; FLUSH PRIVILEGES;"
   JWT="$(openssl rand -base64 48 | tr -d '\n')"
   cat > "$ETC_DIR/api.env" <<EOF
 NODE_ENV=staging
 PORT=${PORT}
-DATABASE_URL=file:${DATA_DIR}/teahour.db
+DATABASE_URL="mysql://teahour:${DB_PASSWORD}@127.0.0.1:3306/teahour?connection_limit=10"
 UPLOAD_ROOT=${DATA_DIR}/uploads
 ASSET_BASE_URL=https://${DOMAIN}
 JWT_SECRET=${JWT}
@@ -109,7 +115,9 @@ set +a
 
 log "数据库迁移"
 DB_EXISTED=0
-[[ -s "$DATA_DIR/teahour.db" ]] && DB_EXISTED=1
+if mysql -N -e "select count(*) from information_schema.tables where table_schema='teahour' and table_name='counters'" 2>/dev/null | grep -qx 1; then
+  DB_EXISTED=1
+fi
 pnpm --filter @teahour/server db:deploy
 
 if [[ $DB_EXISTED -eq 0 ]]; then
@@ -325,7 +333,7 @@ cat <<EOF
 - 初始账号：13800000001 – 13800000006，密码见 ${ETC_DIR}/initial-admin.txt（root 600）
 - 服务：systemctl status teahour-api
 - 日志：journalctl -u teahour-api -f
-- 数据：${DATA_DIR}/teahour.db、${DATA_DIR}/uploads
+- 数据：MySQL 库 teahour、${DATA_DIR}/uploads
 
 未接入：真实支付、打印、会员、外卖平台、在场接口（INTEGRATIONS_MODE=mock）。
 未改动同机已有站点；如现有 Nginx 已有 443 配置，请把证书补到 ${SITE_CONF}。

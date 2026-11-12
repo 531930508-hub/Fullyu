@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -22,7 +22,7 @@ model Counter {
 
 model Setting {
   key       String   @id
-  valueJson String   @map("value_json")
+ valueJson String @db.Text @map("value_json")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("settings")
@@ -59,16 +59,16 @@ model Store {
   name          String
   nameEn        String   @map("name_en")
   short         String
-  address       String
-  addressEn     String   @map("address_en")
+ address String @db.Text
+ addressEn String @db.Text @map("address_en")
   lat           Float
   lng           Float
   open          Boolean  @default(true)
   retailPickup  Boolean  @default(true) @map("retail_pickup")
   hours         String
   printerStatus String   @default("online") @map("printer_status")
-  channelsJson  String   @map("channels_json")
-  positionsJson String   @map("positions_json")
+ channelsJson String @db.Text @map("channels_json")
+ positionsJson String @db.Text @map("positions_json")
   waitMinutes   Int      @default(8) @map("wait_minutes")
 
   stock           Stock[]
@@ -100,15 +100,15 @@ model Product {
   costCents       Int      @map("cost_cents")
   doseG           Float    @map("dose_g")
   status          String // draft | published | archived
-  tempsJson       String   @map("temps_json")
+ tempsJson String @db.Text @map("temps_json")
   ice             Boolean  @default(true)
   memberEligible  Boolean  @default(true) @map("member_eligible")
-  descZh          String   @default("") @map("desc_zh")
-  descEn          String   @default("") @map("desc_en")
-  specZh          String   @default("") @map("spec_zh")
-  specEn          String   @default("") @map("spec_en")
-  tagZh           String   @default("") @map("tag_zh")
-  tagEn           String   @default("") @map("tag_en")
+ descZh String @db.VarChar(2000) @default("") @map("desc_zh")
+ descEn String @db.VarChar(2000) @default("") @map("desc_en")
+ specZh String @db.VarChar(2000) @default("") @map("spec_zh")
+ specEn String @db.VarChar(2000) @default("") @map("spec_en")
+ tagZh String @db.VarChar(2000) @default("") @map("tag_zh")
+ tagEn String @db.VarChar(2000) @default("") @map("tag_en")
   unitZh          String   @default("") @map("unit_zh")
   unitEn          String   @default("") @map("unit_en")
   // 后台上传的商品图（相对 uploads 的 key）；为空时小程序回退到内置系列插画。
@@ -159,10 +159,10 @@ model Mapping {
 model Role {
   id          String  @id
   name        String
-  description String
+ description String @db.Text
   scope       String // ALL | STORES
   builtin     Boolean @default(false)
-  permsJson   String  @map("perms_json")
+ permsJson String @db.Text @map("perms_json")
 
   userRoles UserRole[]
 
@@ -251,7 +251,7 @@ model Coupon {
   validFrom     DateTime @map("valid_from")
   validTo       DateTime @map("valid_to")
   active        Boolean  @default(true)
-  note          String   @default("")
+ note String @db.VarChar(2000) @default("")
   createdBy     String?  @map("created_by")
   createdAt     DateTime @default(now()) @map("created_at")
 
@@ -300,7 +300,7 @@ model Order {
   pickupStoreId String?   @map("pickup_store_id")
   printStatus   String    @default("pending") @map("print_status")
   parentOrderId String?   @map("parent_order_id")
-  note          String    @default("")
+ note String @db.VarChar(2000) @default("")
   customerId    String?   @map("customer_id")
   ownerKind     String    @default("customer") @map("owner_kind")
   createdBy     String?   @map("created_by")
@@ -391,7 +391,7 @@ model Expense {
   category    String
   amountCents Int       @map("amount_cents")
   at          String // YYYY-MM-DD 发生日期
-  memo        String    @default("")
+ memo String @db.VarChar(2000) @default("")
   source      String // manual | import | seed
   batchId     String?   @map("batch_id")
   // 源行唯一键（导入批次+行号+内容指纹）：数据库层防重复导入；手工录入为空。
@@ -414,13 +414,13 @@ model Loss {
   qty          Float
   unit         String
   amountCents  Int       @map("amount_cents")
-  reason       String
-  note         String    @default("")
+ reason String @db.Text
+ note String @db.VarChar(2000) @default("")
   status       String // pending | approved | rejected
   reportedBy   String?   @map("reported_by")
   decidedBy    String?   @map("decided_by")
   decidedAt    DateTime? @map("decided_at")
-  decisionNote String    @default("") @map("decision_note")
+ decisionNote String @db.VarChar(2000) @default("") @map("decision_note")
   approvalId   String?   @map("approval_id")
   at           DateTime
 
@@ -441,12 +441,12 @@ model Approval {
   amountCents Int       @map("amount_cents")
   storeId     String?   @map("store_id")
   orderId     String?   @map("order_id")
-  summary     String
-  payloadJson String    @map("payload_json")
+ summary String @db.Text
+ payloadJson String @db.Text @map("payload_json")
   requestedBy String?   @map("requested_by")
   decidedBy   String?   @map("decided_by")
-  comment     String    @default("")
-  resultNote  String    @default("") @map("result_note")
+ comment String @db.VarChar(2000) @default("")
+ resultNote String @db.VarChar(2000) @default("") @map("result_note")
   createdAt   DateTime  @map("created_at")
   decidedAt   DateTime? @map("decided_at")
 
@@ -459,7 +459,7 @@ model Log {
   actorId   String?  @map("actor_id")
   actorName String?  @map("actor_name")
   action    String
-  detail    String   @default("")
+ detail String @db.VarChar(2000) @default("")
   type      String   @default("")
   storeId   String?  @map("store_id")
   orderId   String?  @map("order_id")
@@ -475,12 +475,12 @@ model PrintJob {
   kind        String
   // 稳定业务键：同一订单的自动出票任务只允许存在一条，重复回调不会重复入队。
   businessKey String   @unique @map("business_key")
-  payloadJson String   @map("payload_json")
+ payloadJson String @db.Text @map("payload_json")
   status      String // queued | processing | printed | failed
   // 处理租约：领取时写入，超时未回写可安全恢复。
   claimedAt   DateTime? @map("claimed_at")
   attempts    Int      @default(0)
-  lastError   String?  @map("last_error")
+ lastError String? @db.Text @map("last_error")
   createdAt   DateTime @map("created_at")
   updatedAt   DateTime @map("updated_at")
 
@@ -501,8 +501,8 @@ model PaymentIntent {
   amountCents  Int      @map("amount_cents")
   method       String?
   providerRef  String?  @map("provider_ref")
-  failReason   String?  @map("fail_reason")
-  responseJson String?  @map("response_json") // 终态响应快照，用于幂等重放
+ failReason String? @db.Text @map("fail_reason")
+ responseJson String? @db.Text @map("response_json") // 终态响应快照，用于幂等重放
   createdAt    DateTime @map("created_at")
   updatedAt    DateTime @map("updated_at")
 
@@ -517,13 +517,13 @@ model RefundIntent {
   orderId     String   @map("order_id")
   status      String // occupied | processing | succeeded | failed | released | unknown
   amountCents Int      @map("amount_cents")
-  linesJson   String   @map("lines_json") // 占用的行明细 [{itemId, qty, amountCents, costCents}]
+ linesJson String @db.Text @map("lines_json") // 占用的行明细 [{itemId, qty, amountCents, costCents}]
   approvalId  String?  @map("approval_id")
   requestedBy String?  @map("requested_by")
   decidedBy   String?  @map("decided_by")
-  reason      String   @default("")
+ reason String @db.VarChar(2000) @default("")
   providerRef String?  @map("provider_ref")
-  failReason  String?  @map("fail_reason")
+ failReason String? @db.Text @map("fail_reason")
   createdAt   DateTime @map("created_at")
   updatedAt   DateTime @map("updated_at")
 
@@ -533,7 +533,7 @@ model RefundIntent {
 
 model IdempotencyKey {
   key         String   @id
-  responseJson String  @map("response_json")
+ responseJson String @db.Text @map("response_json")
   createdAt   DateTime @map("created_at")
 
   @@map("idempotency_keys")
