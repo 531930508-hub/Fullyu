@@ -244,7 +244,7 @@
                   placeholder="选择审批人"
                   style="width: 100%"
                   show-search
-                  option-filter-prop="label"
+                  :filter-option="filterApprover"
                   :options="approverOptions"
                 />
               </a-col>
@@ -349,7 +349,13 @@ const router = useRouter()
 function goTodo(instanceId: string) {
   router.push({ path: '/todos', query: { focus: `approval-${instanceId}` } })
 }
-const { approverOptions, load: loadApprovers, approverLabel, approverLabels } = useApprovers()
+const {
+  approverOptions,
+  load: loadApprovers,
+  approverLabel,
+  approverLabels,
+  filterApprover,
+} = useApprovers()
 
 /** 节点里存的审批人就是登录名（手机号），与当前登录人同一套标识 */
 const me = computed(() => auth.username)
@@ -645,9 +651,10 @@ function onTabChange(key: string) {
 }
 
 onMounted(async () => {
-  // 名册用于把节点里的手机号翻成姓名，也供流程配置选审批人
+  // 名册用于把节点里的手机号翻成姓名，也供流程配置选审批人。
+  // 必须 force：刚在「系统用户」里加的人要能立刻选到，不能吃模块缓存的旧名单。
   try {
-    const list = await loadApprovers()
+    const list = await loadApprovers(true)
     if (!list.length) message.warning('暂无可选审批人，请先在「系统用户」中添加人员')
   } catch (e: any) {
     message.error(e?.message || '加载审批人列表失败')

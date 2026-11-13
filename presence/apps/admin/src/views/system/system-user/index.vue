@@ -115,6 +115,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { listAdmins, createAdmin, updateAdmin, listRoles } from '@/api/rbac'
+import { invalidateApprovers } from '@/composables/useApprovers'
 import { listOrgOptions } from '@/api/org'
 import { roleLabel } from '@/utils/role'
 import {
@@ -251,6 +252,8 @@ async function submit() {
       message.success('系统用户已创建')
     }
     modalVisible.value = false
+    // 人员有变动，审批人名册（审批中心选人）必须失效，否则新人要整页刷新才出现
+    invalidateApprovers()
     load()
   } catch (e: any) {
     message.error(e?.message || '保存失败')
@@ -263,6 +266,7 @@ async function toggleActive(record: any) {
   try {
     await updateAdmin(record.id, { isActive: !record.isActive })
     message.success(record.isActive ? '已停用' : '已启用')
+    invalidateApprovers()
     load()
   } catch (e: any) {
     message.error(e?.message || '操作失败')

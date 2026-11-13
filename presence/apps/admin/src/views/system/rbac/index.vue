@@ -178,6 +178,7 @@ import {
 import type { AdminRow, PermTreeNode, RoleRow } from '@/api/rbac'
 import { roleLabel, roleDesc } from '@/utils/role'
 import { useAuthStore } from '@/stores/auth'
+import { invalidateApprovers } from '@/composables/useApprovers'
 import type { DataScope } from '@fullyu/shared'
 
 const auth = useAuthStore()
@@ -411,6 +412,7 @@ async function handleAddMember() {
     await updateAdmin(admin.id, { roleIds })
     message.success(`${admin.name} 已加入 ${selectedRole.value.name}`)
     showAddMemberModal.value = false
+    invalidateApprovers()
     loadAll()
   } catch (e) {
     // 错误已由拦截器统一提示
@@ -423,6 +425,7 @@ async function removeMember(admin: AdminRow) {
   try {
     await updateAdmin(admin.id, { roleIds })
     message.success(`${admin.name} 已移出 ${selectedRole.value.name}`)
+    invalidateApprovers()
     loadAll()
   } catch (e) {
     // 错误已由拦截器统一提示
