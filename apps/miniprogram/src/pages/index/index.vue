@@ -723,7 +723,7 @@
               </view>
               <text class="brand-entry-title serif">Full愈年卡</text>
               <text class="brand-entry-sub">
-                {{ tt(`一张卡，时叙 / 在场 / 轻疗通用 · ¥${brandPriceText}/年`, `One card for Tea Hours, Presence and Retreat · ¥${brandPriceText}/year`) }}
+                {{ brandPriceLine }}
               </text>
               <view class="brand-entry-foot">
                 <text>{{ tt('了解会员权益', 'See member benefits') }}</text>
@@ -776,7 +776,7 @@
                 </text>
                 <text v-else-if="brandLoading" class="brand-entry-sub">{{ tt('正在读取会员状态…', 'Loading membership…') }}</text>
                 <text v-else class="brand-entry-sub">
-                  {{ tt(`一张卡，时叙 / 在场 / 轻疗通用 · ¥${brandPriceText}/年`, `One card for Tea Hours, Presence and Retreat · ¥${brandPriceText}/year`) }}
+                  {{ brandPriceLine }}
                 </text>
                 <view class="brand-entry-foot">
                   <text>{{ brandActive ? tt('进入会员中心', 'Member center') : tt('开通年卡', 'Join annual') }}</text>
@@ -1388,10 +1388,10 @@ import { isPickupOrder, isReadyPickup, pickupOrders, pickupTarget, readyFirst } 
 import { distanceKm, formatDistance } from '@/lib/geo';
 import { POSTER_HEIGHT, POSTER_WIDTH, drawSharePoster, logoSrcCandidates } from '@/lib/sharePoster';
 import {
-  CARD_PRODUCTS as BRAND_CARD_PRODUCTS,
   claimGiftCode,
   formatDate as formatBrandDate,
   loadBrandMember,
+  loadBrandProducts,
   peekPendingGift,
   takePendingGift
 } from '@/lib/brandMember';
@@ -1572,9 +1572,8 @@ const profileSub = computed(() => {
  */
 const brandMember = ref(null);
 const brandLoading = ref(false);
-const brandAnnualPrice = ref(
-  (BRAND_CARD_PRODUCTS.find((item) => item.code === 'FY_ANNUAL') || {}).priceCents || 29900
-);
+// 价格只从 CRM 产品目录读取；未登录或目录不可用时宁可不显示金额。
+const brandAnnualPrice = ref(null);
 const brandState = computed(
   () => (brandMember.value && brandMember.value.card && brandMember.value.card.state) || 'NONE'
 );
@@ -1585,15 +1584,31 @@ const brandPoints = computed(() => (brandMember.value && brandMember.value.point
 const brandDice = computed(() => (brandMember.value && brandMember.value.dice && brandMember.value.dice.balance) || 0);
 const brandPending = computed(() => (brandMember.value && brandMember.value.prizes && brandMember.value.prizes.pending) || 0);
 const brandPriceText = computed(() => String(Math.round(brandAnnualPrice.value / 100)));
+const brandPriceLine = computed(() =>
+  brandAnnualPrice.value == null
+    ? tt('一张卡，时叙 / 在场 / 轻疗通用', 'One card for Tea Hours, Presence and Retreat')
+    : tt(
+        `一张卡，时叙 / 在场 / 轻疗通用 · ¥${brandPriceText.value}/年`,
+        `One card for Tea Hours, Presence and Retreat · ¥${brandPriceText.value}/year`
+      )
+);
 
 async function loadBrand() {
   if (!state.customer) {
     brandMember.value = null;
+    // 未登录也展示 CRM 当前目录价；目录不可用时保持不显示金额。
+    const rows = await loadBrandProducts();
+    const listed = rows.find((item) => item.code === 'FY_ANNUAL');
+    brandAnnualPrice.value = listed && Number.isFinite(listed.priceCents) ? listed.priceCents : null;
     return;
   }
   brandLoading.value = true;
   try {
     brandMember.value = await loadBrandMember();
+    const annual = (brandMember.value.products || []).find((item) => item.code === 'FY_ANNUAL');
+    if (annual && Number.isFinite(annual.priceCents)) {
+      brandAnnualPrice.value = annual.priceCents;
+    }
   } catch (error) {
     brandMember.value = null;
   } finally {

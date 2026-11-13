@@ -22,8 +22,8 @@
     <view class="bmc-foot" :class="{ 'is-warn': expiring }">
       <view class="bmc-cell bmc-saved" role="button" @click="onSaved">
         <text class="bmc-lab">{{ active ? tt('本年已省', 'Saved this year') : tt('开卡', 'Join') }}</text>
-        <text class="bmc-amt serif">¥{{ active ? formatYuan(savedCents) : formatYuan(annualPrice) }}</text>
-        <text class="bmc-more">{{ active ? tt('明细 ›', 'Details ›') : tt('起 ›', 'from ›') }}</text>
+        <text class="bmc-amt serif">{{ active ? `¥${formatYuan(savedCents)}` : (annualPrice == null ? '—' : `¥${formatYuan(annualPrice)}`) }}</text>
+        <text class="bmc-more">{{ active ? tt('明细 ›', 'Details ›') : (annualPrice == null ? '' : tt('起 ›', 'from ›')) }}</text>
       </view>
       <view class="bmc-cell bmc-toggle" role="button" @click="open = !open">
         <text>{{ active ? (expiring ? tt('去续费', 'Renew') : tt('权益与续费', 'Benefits & renewal')) : tt('查看权益', 'See benefits') }}</text>
@@ -34,15 +34,17 @@
     <!-- 展开区：往下长，把下面的内容推下去 -->
     <view class="bmc-drawer">
       <view class="bmc-drawer-in">
-        <text class="bmc-dhead">{{ tt('全平台权益 · 全门店可用', 'Platform-wide benefits · all locations') }}</text>
-        <view v-for="item in benefitRows" :key="item.business + item.title" class="bmc-ben">
-          <text class="bmc-brand">{{ brandName(item.business) }}</text>
-          <view class="bmc-ben-body">
-            <text class="bmc-ben-t">{{ item.title }}</text>
-            <text v-if="item.desc" class="bmc-ben-d">{{ item.desc }}</text>
+        <template v-if="benefitRows.length">
+          <text class="bmc-dhead">{{ tt('全平台权益 · 全门店可用', 'Platform-wide benefits · all locations') }}</text>
+          <view v-for="item in benefitRows" :key="item.business + item.title" class="bmc-ben">
+            <text class="bmc-brand">{{ brandName(item.business) }}</text>
+            <view class="bmc-ben-body">
+              <text class="bmc-ben-t">{{ item.title }}</text>
+              <text v-if="item.desc" class="bmc-ben-d">{{ item.desc }}</text>
+            </view>
+            <text v-if="item.business === homeBusiness" class="bmc-here">{{ tt('本店', 'Here') }}</text>
           </view>
-          <text v-if="item.business === homeBusiness" class="bmc-here">{{ tt('本店', 'Here') }}</text>
-        </view>
+        </template>
 
         <button hover-class="none" class="bmc-renew" @click="$emit('purchase')">
           {{ active ? tt('续费', 'Renew') : tt('开通 Full愈会员卡', 'Join Full Yuk member card') }}
@@ -63,7 +65,7 @@
 
 <script setup>
 import { computed, ref } from 'vue';
-import { CARD_PRODUCTS, cardStateLabel, formatDate, formatYuan } from '@/lib/brandMember';
+import { cardStateLabel, formatDate, formatYuan } from '@/lib/brandMember';
 import { useLocale } from '@/lib/useLocale';
 
 const props = defineProps({
@@ -110,21 +112,15 @@ const validLine = computed(() => {
   return tt(`至 ${until} 到期${tail} · 全门店可用`, `Valid until ${until}${tail} · all locations`);
 });
 
+// 年卡价格只认 CRM 产品目录；读不到就显示「—」，不用本地价格补位。
 const annualPrice = computed(() => {
   const rows = (props.data && props.data.products) || [];
   const hit = rows.find((item) => item.code === 'FY_ANNUAL');
-  return (hit || CARD_PRODUCTS[1] || { priceCents: 29900 }).priceCents;
+  return hit && Number.isFinite(hit.priceCents) ? hit.priceCents : null;
 });
 
-const benefitRows = computed(() => {
-  const rows = (props.data && props.data.benefits) || [];
-  if (rows.length) return rows;
-  return [
-    { business: 'teahour', title: '会员茶饮权益', desc: '具体内容以门店公示为准' },
-    { business: 'retreat', title: '项目会员价', desc: '提前一天预约享会员价，当日另计' },
-    { business: 'presence', title: '优先排位与课程阶梯价', desc: '热门课程优先排位' }
-  ];
-});
+// 权益标题与说明只展示 CRM 返回内容；为空时不编造权益条目。
+const benefitRows = computed(() => (props.data && props.data.benefits) || []);
 
 function brandName(business) {
   return BRAND_LABEL[business] || '全平台';

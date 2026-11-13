@@ -6,8 +6,7 @@
         <AppIcon name="chevronLeft" :size="20" />
       </button>
       <text class="bm-nav-title">{{ tt('Full愈会员卡', 'Full Yuk member card') }}</text>
-      <text v-if="isMock" class="bm-dev">{{ tt('合成数据', 'Mock data') }}</text>
-      <view v-else class="bm-nav-tail" />
+      <view class="bm-nav-tail" />
     </view>
 
     <scroll-view scroll-y class="bm-scroll">
@@ -209,10 +208,9 @@
         <view class="bm-confirm-row"><text>{{ tt('包含', 'Includes') }}</text><text>{{ tt('全平台会员价 · 愈行之旅', 'Member prices · Healing Journey') }}</text></view>
         <view class="bm-confirm-row"><text>{{ tt('卡类型', 'Card type') }}</text><text>{{ tt('服务权益卡（非储值，不可提现）', 'Service benefit card (not stored value, not withdrawable)') }}</text></view>
         <view class="bm-confirm-row"><text>{{ tt('收款方', 'Payee') }}</text><text>{{ tt('时叙（本小程序）', '时叙 (this mini program)') }}</text></view>
-        <view v-if="isMock" class="bm-mock-note">{{ tt(`本地联调：不会发起真实扣款，${active ? '续费' : '开通'}只更新本页状态。`, 'Local mock: no real charge is made; this only updates the page state.') }}</view>
-        <view v-else class="bm-mock-note">{{ tt('线上支付接入中，本页暂不会发起扣款；已购卡权益与愈行之旅不受影响。', 'Online payment is being connected; no charge is made here. Existing card benefits are unaffected.') }}</view>
-        <button hover-class="none" class="bm-btn primary full" :disabled="paying" @click="confirmPurchase">
-          {{ paying ? tt('处理中…', 'Processing…') : active ? tt('确认续费', 'Confirm renewal') : tt('确认开通', 'Confirm and join') }}
+        <view class="bm-mock-note">{{ tt('线上支付接入中，本页暂不会发起扣款；已购卡权益与愈行之旅不受影响。', 'Online payment is being connected; no charge is made here. Existing card benefits are unaffected.') }}</view>
+        <button hover-class="none" class="bm-btn primary full" @click="confirmPurchase">
+          {{ active ? tt('确认续费', 'Confirm renewal') : tt('确认开通', 'Confirm and join') }}
         </button>
         <button hover-class="none" class="bm-text-btn" @click="closePurchase">{{ tt('再想想', 'Not now') }}</button>
       </view>
@@ -295,16 +293,10 @@ import AppIcon from '@/components/AppIcon.vue';
 import BottomSheet from '@/components/BottomSheet.vue';
 import MemberCard from '@/components/MemberCard.vue';
 import {
-  CARD_PRODUCTS,
   formatDate,
   formatYuan,
-  isMock,
-  issueBrandCard,
   loadBrandMember,
-  purchaseMode,
-  quoteBrandCard,
   requestGameTicket,
-  setMockCardState,
   claimGiftCode,
   parseGiftScene,
   stashPendingGift,
@@ -321,26 +313,16 @@ const loading = ref(true);
 const error = ref('');
 const data = ref(null);
 const purchaseOpen = ref(false);
-const paying = ref(false);
 const openingGame = ref(false);
 const selectedCode = ref('FY_ANNUAL');
 const detailOpen = ref(false);
 
-// 价格只展示 CRM 当前生效的产品版本；目录读取失败时回落到内置展示值，
-// 但真正的金额仍以服务端报价为准。
+// 价格只展示 CRM 当前生效的产品版本；目录读取失败时保持空态，
+// 不用本地价目表补位，也不在前端预期金额。
 const products = computed(() => {
   const rows = data.value && data.value.products;
-  return Array.isArray(rows) && rows.length ? rows : CARD_PRODUCTS;
+  return Array.isArray(rows) ? rows : [];
 });
-const annual = computed(
-  () => products.value.find((item) => item.code === 'FY_ANNUAL') || CARD_PRODUCTS[1]
-);
-const month = computed(
-  () => products.value.find((item) => item.code === 'FY_MONTH') || CARD_PRODUCTS[0]
-);
-const selectedProduct = computed(
-  () => products.value.find((item) => item.code === selectedCode.value) || annual.value
-);
 const active = computed(() => {
   const state = data.value && data.value.card && data.value.card.state;
   return state === 'ACTIVE' || state === 'EXPIRING' || state === 'PENDING';
@@ -451,14 +433,6 @@ async function load() {
     const system = uni.getSystemInfoSync();
     statusBarHeight.value = (system && system.statusBarHeight) || 20;
     data.value = await loadBrandMember();
-    // 本地联调：允许用缓存把身份页切到未开通态，方便核对开通前后两套视觉。
-    if (isMock) {
-      const forced = uni.getStorageSync('fy.brand.mockCard');
-      if (forced === 'NONE' || forced === 'ACTIVE') {
-        data.value = setMockCardState(forced);
-        uni.removeStorageSync('fy.brand.mockCard');
-      }
-    }
   } catch (err) {
     error.value = tt('请稍后重试，会员状态不会被误判为未开通。', 'Please try again shortly; your card will not be treated as inactive.');
   } finally {
@@ -578,38 +552,22 @@ function closeDetail() {
 }
 
 function openPurchase(code) {
+  // 没有读到 CRM 产品目录时不展示可购买的时长，避免用本地价目表补位。
+  if (!products.value.length) {
+    uni.showToast({ title: tt('会员产品暂时没读到，请稍后再试', 'Membership plans are unavailable — please try again'), icon: 'none' });
+    return;
+  }
   selectedCode.value = code;
   purchaseOpen.value = true;
 }
 
 function closePurchase() {
-  if (paying.value) return;
   purchaseOpen.value = false;
 }
 
-async function confirmPurchase() {
-  if (paying.value) return;
-  if (purchaseMode !== 'mock') {
-    // 支付通道接入前不进入扣款流程，也不允许跳过后台直接开卡。
-    uni.showToast({ title: tt('线上支付接入中，暂不能在此开通', 'Online payment is not connected yet'), icon: 'none' });
-    return;
-  }
-  paying.value = true;
-  try {
-    const quote = await quoteBrandCard(selectedProduct.value.code);
-    await issueBrandCard({
-      quote,
-      orderRef: `teahour:brand-card:${Date.now()}`,
-      paidCents: quote.priceCents
-    });
-    purchaseOpen.value = false;
-    await load();
-    uni.showToast({ title: tt('已开通（本地联调）', 'Card opened (local mock)'), icon: 'none' });
-  } catch (err) {
-    uni.showToast({ title: (err && err.message) || tt('开通失败，请稍后重试', 'Could not open the card — please try again'), icon: 'none' });
-  } finally {
-    paying.value = false;
-  }
+function confirmPurchase() {
+  // 支付通道接入前不进入扣款流程，也不允许跳过后台直接开卡。
+  uni.showToast({ title: tt('线上支付接入中，暂不能在此开通', 'Online payment is not connected yet'), icon: 'none' });
 }
 
 async function openGame() {

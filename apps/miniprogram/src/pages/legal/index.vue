@@ -329,7 +329,7 @@ const DOCS = {
         {
           h: '一、卡的性质',
           p: [
-            'Full愈年卡（¥299 / 365 天）与月卡（¥45 / 30 天）是在有效期内享受时叙、在场、轻疗会员权益的服务权益卡，不是储值卡。卡内不含可消费本金，不产生余额，不可提现、转账、代付或找零。'
+            'Full愈年卡与月卡（价格与时长以购买页展示为准）是在有效期内享受时叙、在场、轻疗会员权益的服务权益卡，不是储值卡。卡内不含可消费本金，不产生余额，不可提现、转账、代付或找零。'
           ]
         },
         {
@@ -407,7 +407,7 @@ const DOCS = {
         {
           h: '1. What the card is',
           p: [
-            'The Full Yu annual card (¥299 / 365 days) and monthly card (¥45 / 30 days) are service-benefit cards for member pricing at Teahour, Presence and Retreat during the term. They are not stored-value cards: there is no spendable principal or balance, and no cash withdrawal, transfer, payment on behalf of others or change.'
+            'The Full Yu annual card and monthly card (price and term as shown on the purchase page) are service-benefit cards for member pricing at Teahour, Presence and Retreat during the term. They are not stored-value cards: there is no spendable principal or balance, and no cash withdrawal, transfer, payment on behalf of others or change.'
           ]
         },
         {
