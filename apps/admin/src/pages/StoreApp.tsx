@@ -6,7 +6,7 @@ import { useStaffAuth } from '../lib/auth';
 import { StaffShell } from '../components/StaffShell';
 import { CameraScanButton, CameraScanner } from '../components/CameraScanner';
 import { visibleNav } from '../lib/nav';
-import { Icon } from '../components/Icons';
+import { Icon, type IconName } from '../components/Icons';
 import {
   Badge,
   Drawer,
@@ -34,7 +34,7 @@ import {
   minutesAgo,
   timeText
 } from '../lib/format';
-import type { Loss, Order, Product, StockItem, Store } from '../lib/types';
+import type { DeviceStatus, Loss, Order, Product, StockItem, Store } from '../lib/types';
 import { ICE_OPTIONS, changeLineTemp, resolveLineOptions } from '../lib/lineOptions';
 import { memberCodeFromScan, pickupCodeFromScan } from '../lib/scan';
 import { classifyScanGunKey, isPlausibleGunCode, normalizeGunCode } from '../lib/scanGun';
@@ -2625,30 +2625,33 @@ function DevicesSection({ store }: { store: Store }) {
   if (data.loading && !data.data) return <Spinner label="正在读取设备" />;
   if (data.error) return <InlineError message={data.error} />;
   const devices = data.data!.devices;
-  const cards = [
-    { ...devices.printer, name: '云标签打印机', icon: 'printer' as const },
-    { ...devices.payment, name: '支付网关', icon: 'card' as const },
-    ...devices.machines.map((machine, index) => ({
-      ...machine,
-      name: `泡茶机 ${index + 1}`,
-      icon: 'cup' as const
-    }))
+  // 扫码器走蓝牙 HID 键盘模式，iPad 配对即用，不经过服务端接入，因此只做说明、不参与「待接入」统计。
+  const cards: Array<DeviceStatus & { name: string; icon: IconName }> = [
+    { ...devices.printer, name: '云标签打印机', icon: 'printer' },
+    { ...devices.payment, name: '支付网关', icon: 'card' },
+    {
+      name: '扫码器',
+      icon: 'scan',
+      mode: 'hid',
+      detail: '新大陆 FR42-BT，蓝牙 HID 键盘模式；iPad 系统设置里配对即可扫码出餐。'
+    }
   ];
   // mode 是适配层返回的驱动标识，这里翻译成门店能看懂的接入状态。
   const modeLabel = (mode?: string) => {
+    if (mode === 'hid') return '免接入';
     if (mode === 'local') return '本地';
     if (mode === 'noop') return '未启用';
     if (!mode || mode === 'mock') return '未接入';
     return mode.toUpperCase();
   };
-  const pendingCount = cards.filter((card) => !card.mode || card.mode === 'mock').length;
+  const pendingCount = cards.filter((card) => card.mode !== 'hid' && (!card.mode || card.mode === 'mock')).length;
 
   return (
     <>
       <PageHead
         eyebrow="Devices & adapters"
         title="本店设备"
-        description="云打印、泡茶机、支付网关、平台订单与会员系统均通过适配层接入，按门店单独配置并启用。"
+        description="云打印与支付网关通过适配层接入；扫码器用蓝牙 HID 直连 iPad，泡茶机由厂商软件单独控制，都不进后台管理。"
         actions={<Badge tone={pendingCount ? 'warn' : 'ok'}>{pendingCount ? `${pendingCount} 项待接入` : '全部已接入'}</Badge>}
       />
       <Panel title="设备状态" description="接入新设备只需实现同一套适配接口，业务流程无需改动。">
@@ -2675,7 +2678,7 @@ function DevicesSection({ store }: { store: Store }) {
         <Panel title="接口边界" description="以下能力由适配层统一定义，配置对应驱动后即可启用。">
           <div className="stack">
             <div className="notice"><Icon name="printer" size={15} /><span><strong>云标签打印</strong>：杯贴与订单标签。驱动负责把杯号、商品、温度、冰量映射到厂商模板。</span></div>
-            <div className="notice"><Icon name="cup" size={15} /><span><strong>泡茶机</strong>：设备状态与冲泡命令。设备调度不进入下单主流程，避免下单被设备阻塞。</span></div>
+            <div className="notice"><Icon name="scan" size={15} /><span><strong>扫码器</strong>：蓝牙 HID 键盘模式，iPad 配对即用，等同于键盘输入；营业台开启「扫码枪常驻」后即可直接出餐，无需服务端接入。</span></div>
             <div className="notice"><Icon name="card" size={15} /><span><strong>支付网关</strong>：下单收款与退款。微信、支付宝等通道共用同一支付引用与退款幂等键。</span></div>
             <div className="notice"><Icon name="bag" size={15} /><span><strong>外卖平台 / 会员</strong>：平台拉单回执与会员权益校验。未配置通道时，对应操作在门店侧不可用。</span></div>
           </div>
