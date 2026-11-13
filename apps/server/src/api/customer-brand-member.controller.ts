@@ -14,6 +14,22 @@ const quoteSchema = z.object({
 
 const purchaseSchema = quoteSchema;
 
+/**
+ * 产品目录只含公开售价与时长，登录前的首页也要展示 CRM 当前价，
+ * 因此单独开放为只读；任何写操作仍必须经过顾客身份校验。
+ */
+@Controller('brand-member')
+export class PublicBrandMemberController {
+  constructor(private readonly brand: BrandMemberClient) {}
+
+  @Get('products')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  products() {
+    return this.brand.products();
+  }
+}
+
 const giftSchema = z.object({
   code: z
     .string()

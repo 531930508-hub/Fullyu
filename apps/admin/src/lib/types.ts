@@ -325,7 +325,6 @@ export type DevicePayload = {
   machines: Array<DeviceStatus & { id: string; kind: string }>;
   payment: DeviceStatus;
   platform: { mode: string };
-  member: { mode: string };
 };
 
 export type Mapping = {

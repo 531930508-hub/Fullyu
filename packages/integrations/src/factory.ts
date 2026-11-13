@@ -1,7 +1,6 @@
 import type { ExternalChannelKey, Integrations, IntegrationsConfig } from './contracts';
 import {
   DisabledLabelPrinter,
-  DisabledMemberProvider,
   DisabledMiniProgramAuth,
   DisabledPaymentGateway,
   DisabledPlatformConnector,
@@ -10,7 +9,6 @@ import {
 import {
   LocalAvatarStorage,
   MockLabelPrinter,
-  MockMemberProvider,
   MockMiniProgramAuth,
   MockPaymentGateway,
   MockPlatformConnector,
@@ -65,7 +63,6 @@ export function createIntegrations(config: IntegrationsConfig): Integrations {
     teaMachine: pick('teaMachine', () => new MockTeaMachine(), () => new DisabledTeaMachine()),
     payment: pick('payment', () => new MockPaymentGateway(), () => new DisabledPaymentGateway()),
     platform: pick('platform', () => new MockPlatformConnector(), () => new DisabledPlatformConnector()),
-    member: pick('member', () => new MockMemberProvider(), () => new DisabledMemberProvider()),
     wechat: pick('wechat', () => new MockMiniProgramAuth({ appId: config.wechat.appId }), () => new DisabledMiniProgramAuth()),
     avatar: local('avatar', () => new LocalAvatarStorage({ root: config.upload.root, assetUrl: config.upload.assetUrl })),
     profileSync: local('profileSync', () => new NoopProfileSync())
@@ -81,7 +78,6 @@ export function describeIntegrations(
     teaMachine: { name: integrations.teaMachine.name, mode: integrations.teaMachine.mode },
     payment: { name: integrations.payment.name, mode: integrations.payment.mode },
     platform: { name: integrations.platform.name, mode: integrations.platform.mode },
-    member: { name: integrations.member.name, mode: integrations.member.mode },
     wechat: { name: integrations.wechat.name, mode: integrations.wechat.mode },
     avatar: { name: integrations.avatar.name, mode: integrations.avatar.mode },
     profileSync: { name: integrations.profileSync.name, mode: integrations.profileSync.mode }

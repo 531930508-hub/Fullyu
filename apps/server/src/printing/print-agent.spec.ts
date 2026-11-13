@@ -58,19 +58,20 @@ describe('门店打印代理（芯烨 XP-420B / agent 模式）', () => {
   };
 
   beforeAll(async () => {
-    process.env.INTEGRATIONS_PRINTER_MODE = 'live';
-    process.env.PRINTER_DRIVER = 'agent';
-    process.env.PRINT_AGENT_TOKENS = JSON.stringify({ sh: TOKEN_SH, 'bj-east': TOKEN_BJ });
-    process.env.TEAHOUR_SERVICE_PHONE = 'TEL 021-5466 8899';
-    h = await createHarness();
+    // 只有这个用例组需要真实驱动：打印机走 agent（live），令牌与电话由用例自己给，
+    // 不依赖本机 .env；harness 的默认 mock 配置在 options.env 之后应用。
+    h = await createHarness({
+      env: {
+        INTEGRATIONS_PRINTER_MODE: 'live',
+        PRINTER_DRIVER: 'agent',
+        PRINT_AGENT_TOKENS: JSON.stringify({ sh: TOKEN_SH, 'bj-east': TOKEN_BJ }),
+        TEAHOUR_SERVICE_PHONE: 'TEL 021-5466 8899'
+      }
+    });
     printing = h.app.get(PrintingService);
   });
 
   afterAll(async () => {
-    delete process.env.INTEGRATIONS_PRINTER_MODE;
-    delete process.env.PRINTER_DRIVER;
-    delete process.env.PRINT_AGENT_TOKENS;
-    delete process.env.TEAHOUR_SERVICE_PHONE;
     await h.close();
   });
 

@@ -2,7 +2,6 @@ import type {
   AvatarStorageProvider,
   IntegrationsConfig,
   LabelPrinter,
-  MemberProvider,
   MiniProgramAuthProvider,
   PaymentGateway,
   PlatformConnector,
@@ -27,7 +26,6 @@ export type LiveProviderFactories = {
   teaMachine: (ctx: LiveContext) => TeaMachineAdapter;
   payment: (ctx: LiveContext) => PaymentGateway;
   platform: (ctx: LiveContext) => PlatformConnector;
-  member: (ctx: LiveContext) => MemberProvider;
   wechat: (ctx: LiveContext) => MiniProgramAuthProvider;
   avatar: (ctx: LiveContext) => AvatarStorageProvider;
   profileSync: (ctx: LiveContext) => ProfileSyncProvider;

@@ -9,10 +9,10 @@ export class HealthController {
   @Get('health')
   health() {
     const integrations = describeIntegrations(this.hardware.integrations);
-    // 只统计对外渠道（支付/打印/泡茶机/平台/会员/微信），头像与资料同步属于内部能力。
+    // 只统计对外硬件/渠道（支付/打印/泡茶机/外卖平台/微信）；会员在 CRM，不属于适配层。
     const modes = [
       ...new Set(
-        (['payment', 'printer', 'teaMachine', 'platform', 'member', 'wechat'] as const).map(
+        (['payment', 'printer', 'teaMachine', 'platform', 'wechat'] as const).map(
           (key) => integrations[key].mode
         )
       )
@@ -23,7 +23,7 @@ export class HealthController {
       // 对外接口当前整体模式：mock 表示全部为内置实现，未连接真实服务商。
       hardware: modes.length === 1 ? modes[0] : 'mixed',
       integrations,
-      note: '支付、打印、泡茶机、平台与会员均由适配层承接，未接入的渠道不会产生真实扣款或设备动作'
+      note: '支付、打印、泡茶机与外卖平台由适配层承接，未接入的渠道不会产生真实扣款或设备动作；会员以 CRM 卡为准'
     };
   }
 }

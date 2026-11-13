@@ -6,7 +6,7 @@
 # - 代码与运行时在 /opt/teahour，业务数据在 /var/lib/teahour，不写进代码目录；
 # - 后端只监听 127.0.0.1:18787，由 Nginx 反代；
 # - 只新增自己的 Nginx vhost 与 systemd 单元，不修改、不重启其它服务；
-# - NODE_ENV=staging + INTEGRATIONS_MODE=mock：不接真实支付/打印/会员/平台。
+# - NODE_ENV=staging + INTEGRATIONS_MODE=mock：不接真实支付/打印/平台；会员由 CRM 承接。
 set -Eeuo pipefail
 umask 027
 
@@ -327,6 +327,6 @@ cat <<EOF
 - 日志：journalctl -u teahour-api -f
 - 数据：${DATA_DIR}/teahour.db、${DATA_DIR}/uploads
 
-未接入：真实支付、打印、会员、外卖平台、在场接口（INTEGRATIONS_MODE=mock）。
+未接入：真实支付、打印、外卖平台、在场接口（INTEGRATIONS_MODE=mock）；会员以 CRM 卡为准，不走适配层。
 未改动同机已有站点；如现有 Nginx 已有 443 配置，请把证书补到 ${SITE_CONF}。
 EOF

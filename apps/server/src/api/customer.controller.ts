@@ -134,7 +134,6 @@ export class CustomerController {
       home: await this.content.publicHome(),
       hardware: {
         payment: this.hardware.payment.mode,
-        member: this.hardware.member.mode,
         printer: this.hardware.printer.mode,
         teaMachine: this.hardware.teaMachine.mode
       }

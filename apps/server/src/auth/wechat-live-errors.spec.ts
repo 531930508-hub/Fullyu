@@ -23,7 +23,7 @@ function service(fetchImpl: typeof fetch) {
   });
   return new AuthService({} as never, {} as never, {} as never, { wechat } as never, {} as never, {
     perCupCents: async () => 200
-  } as never);
+  } as never, { refresh: async (customer: unknown) => customer } as never);
 }
 
 async function failure(promise: Promise<unknown>): Promise<ApiError> {

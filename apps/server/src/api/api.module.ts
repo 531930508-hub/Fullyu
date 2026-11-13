@@ -9,7 +9,7 @@ import { FinanceModule } from '../finance/finance.module';
 import { LossesModule } from '../losses/losses.module';
 import { OrdersModule } from '../orders/orders.module';
 import { AdminController } from './admin.controller';
-import { CustomerBrandMemberController } from './customer-brand-member.controller';
+import { CustomerBrandMemberController, PublicBrandMemberController } from './customer-brand-member.controller';
 import { CustomerController } from './customer.controller';
 import { HealthController } from './health.controller';
 import { CrmWebhookController } from './crm-webhook.controller';
@@ -33,6 +33,7 @@ import { StoreController } from './store.controller';
     AdminController,
     CustomerController,
     CustomerBrandMemberController,
+    PublicBrandMemberController,
     StoreController,
     PrintAgentController,
     HealthController,

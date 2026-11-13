@@ -82,7 +82,6 @@ export class StoreController {
       retail: await this.catalog.retailAvailability(),
       hardware: {
         payment: this.hardware.payment.mode,
-        member: this.hardware.member.mode,
         printer: this.hardware.printer.mode,
         teaMachine: this.hardware.teaMachine.mode
       }

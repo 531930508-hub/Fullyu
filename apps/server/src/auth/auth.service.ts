@@ -13,6 +13,7 @@ import { LoginAttemptLimiter } from './login-attempts';
 import { loginRateLimit } from '../config/config';
 import { CrmClient, type CrmIdentity } from '../crm/crm.client';
 import { BrandPerksService, DEFAULT_PER_CUP_CENTS } from '../crm/brand-perks.service';
+import { MembershipService } from '../crm/membership.service';
 
 export type CustomerSessionInput = {
   memberCode?: string;
@@ -43,7 +44,8 @@ export class AuthService {
     private readonly staffService: StaffService,
     private readonly hardware: HardwareService,
     private readonly crm: CrmClient,
-    private readonly perkRates: BrandPerksService
+    private readonly perkRates: BrandPerksService,
+    private readonly membership: MembershipService
   ) {}
 
   async login(username: string, password: string, sourceIp = 'unknown') {
@@ -280,13 +282,15 @@ export class AuthService {
 
   /**
    * 按会员码查询权益。门店代点扫的是顾客码，必须回到库内会籍判定，
-   * 不能再由适配层（尤其是 mock）凭空授予年卡折扣。
+   * 不能再由适配层（尤其是 mock）凭空授予年卡折扣；
+   * 判定前先按 CRM 品牌卡刷新会籍快照，本地只做 5 分钟缓存。
    */
   async memberBenefitByCode(code: string) {
     const normalized = String(code || '').trim().toUpperCase();
     if (!normalized) return null;
-    const row = await this.prisma.customer.findUnique({ where: { memberCode: normalized } });
-    if (!row) return null;
+    const found = await this.prisma.customer.findUnique({ where: { memberCode: normalized } });
+    if (!found) return null;
+    const row = await this.membership.refresh(found);
     const discountPerCupCents = await this.annualDiscountFor(row);
     return {
       code: row.memberCode,
@@ -358,12 +362,14 @@ export class AuthService {
   /**
    * 顾客对外视图：积分以 CRM 为唯一账本。
    * 未开启 CRM 时沿用本地只读字段；开启后调用失败必须报错，绝不静默回退本地 0 分。
+   * 会籍（memberTier/memberUntil）先按 CRM 品牌卡刷新，本地只做 5 分钟缓存。
    */
   private async customerView(customer: CrmCustomer): Promise<ReturnType<typeof customerPayload>> {
+    const fresh = await this.membership.refresh(customer);
     const perCupCents = await this.perkRates.perCupCents();
-    if (!this.crm.enabled) return customerPayload(customer, undefined, perCupCents);
-    const member = await this.crm.resolve(this.crmIdentity(customer));
-    return customerPayload(customer, member.balance, perCupCents);
+    if (!this.crm.enabled) return customerPayload(fresh, undefined, perCupCents);
+    const member = await this.crm.resolve(this.crmIdentity(fresh));
+    return customerPayload(fresh, member.balance, perCupCents);
   }
 
   /**

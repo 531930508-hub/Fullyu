@@ -16,7 +16,7 @@ const DEFAULT_HUIFU_DIR = '/etc/teahour/huifu';
 
 const DEFAULT_HUIFU_NOTIFY = 'https://teahour.fullyu.cn/api/hooks/payment/huifu-payment';
 
-const CHANNEL_KEYS: ExternalChannelKey[] = ['printer', 'teaMachine', 'payment', 'platform', 'member', 'wechat'];
+const CHANNEL_KEYS: ExternalChannelKey[] = ['printer', 'teaMachine', 'payment', 'platform', 'wechat'];
 
 const trim = (value: string | undefined): string | undefined => {
   const text = value?.trim();
@@ -72,7 +72,7 @@ const parsePrinterDriver = (value: string | undefined): 'feie' | 'agent' => {
  * - INTEGRATIONS_MODE：mock（开发默认）| live | disabled（生产默认）
  * - INTEGRATIONS_<CHANNEL>_MODE：按渠道覆盖，如 INTEGRATIONS_PAYMENT_MODE=live
  * - 生产环境未显式配置时默认 disabled，且禁止 mock——mock 只属于本地开发，
- *   不允许在生产里冒充支付/打印/会员等真实能力。
+ *   不允许在生产里冒充支付/打印/平台等真实能力。
  * - WECHAT_APPID / WECHAT_APPSECRET / WECHAT_MCHID：小程序与微信支付凭证
  * - INTEGRATIONS_ENV：部署环境标识（如 staging / prod-sh），仅用于展示
  */

@@ -227,8 +227,12 @@ model Customer {
   // 顾客会话版本：安全整改时整体 +1，旧的会员码会话令牌一次性作废。
   sessionVersion Int      @default(1) @map("session_version")
   // 会员身份为权威数据：standard | annual；memberUntil 为空表示长期有效。
+  // 会籍以 CRM 品牌卡为准：memberTier/memberUntil 是 CRM 卡状态的本地快照，crmCardState 存原始卡状态，
+  // memberSyncedAt 记录快照时间，用于 5 分钟 TTL，避免每次请求都打 CRM。
   memberTier     String   @default("standard") @map("member_tier")
   memberUntil    DateTime? @map("member_until")
+  crmCardState   String?  @map("crm_card_state")
+  memberSyncedAt DateTime? @map("member_synced_at")
   createdAt  DateTime @default(now()) @map("created_at")
 
   orders  Order[]

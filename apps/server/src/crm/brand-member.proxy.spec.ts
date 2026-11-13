@@ -48,6 +48,12 @@ describe('顾客品牌会员代理', () => {
     expect(fake.requests).toHaveLength(0);
   });
 
+  it('未登录也能读取公开产品目录，价格只来自 CRM', async () => {
+    const res = await h.api('get', '/brand-member/products');
+    expect(res.status).toBe(200);
+    expect(res.body.products[1]).toMatchObject({ code: 'FY_ANNUAL', priceCents: 29900 });
+  });
+
   it('身份页使用登录顾客的本地 id，不把手机号或密钥带到前端', async () => {
     const customer = await h.customer('品牌会员茶客');
     const res = await h.api('get', '/customer/brand-member/me', customer.token);

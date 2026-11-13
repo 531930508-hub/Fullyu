@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 将时叙小程序切到真实微信登录（jscode2session + getuserphonenumber）。
-# 只改登录能力：支付、打印、会员、平台仍保持 mock，不会产生真实扣款。
+# 只改登录能力：支付、打印、平台仍保持 mock，不会产生真实扣款；会员由 CRM 承接。
 #
 # 用法（root，服务器上执行）：
 #   bash enable-wechat-live.sh /root/teahour-deploy/.wechat-appsecret   # 从 600 权限文件读取

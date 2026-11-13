@@ -27,6 +27,22 @@ export const ACCOUNTS = {
 
 export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
+/**
+ * 用例的对接配置默认值。
+ * Prisma 客户端在 import 阶段就把 apps/server/.env 读进 process.env，本机的打印/支付配置
+ * 会顺着漏进用例（曾导致打印机是 live、打印队列用例全红）。所以由 harness 统一钉住
+ * 「测试环境 = mock」，需要真实驱动的用例通过 options.env 显式覆盖。
+ */
+const TEST_INTEGRATIONS_ENV: Record<string, string> = {
+  INTEGRATIONS_MODE: 'mock',
+  INTEGRATIONS_PRINTER_MODE: 'mock'
+};
+
+export type HarnessOptions = {
+  /** 覆盖测试环境变量，例如打印代理用例把 printer 切到 agent（live）。 */
+  env?: Record<string, string>;
+};
+
 export type Harness = {
   app: INestApplication;
   prisma: PrismaService;
@@ -60,7 +76,7 @@ async function locateTemplate(): Promise<string> {
   }
 }
 
-export async function createHarness(): Promise<Harness> {
+export async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   const template = await locateTemplate();
   const dbFile = path.join(
     os.tmpdir(),
@@ -69,6 +85,7 @@ export async function createHarness(): Promise<Harness> {
   );
   fs.copyFileSync(template, dbFile);
   process.env.DATABASE_URL = `file:${dbFile}`;
+  Object.assign(process.env, TEST_INTEGRATIONS_ENV, options.env);
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication();
