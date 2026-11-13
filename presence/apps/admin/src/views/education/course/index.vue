@@ -2,10 +2,14 @@
   <div class="page-container">
     <!-- 列表模式 -->
     <template v-if="currentView === 'list'">
-      <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-        <h2 class="page-title">课程管理</h2>
-        <a-space>
-          <a-input-search placeholder="搜索课程名称" style="width: 200px" v-model:value="searchText" allow-clear @search="loadCourses" @change="onSearchChange" />
+      <!-- 标题独占一行，筛选独占一行：原来七个控件挤在一行，窄屏会被压扁 -->
+      <div class="page-header" style="margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <h2 class="page-title" style="margin: 0;">课程管理</h2>
+          <a-button v-perm="'course:create'" type="primary" @click="openCreate">+ 创建课程</a-button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px;">
+          <a-input-search placeholder="搜索课程名称" style="width: 220px" v-model:value="searchText" allow-clear @search="loadCourses" @change="onSearchChange" />
           <a-range-picker v-model:value="dateRange" style="width: 240px" :placeholder="['开课起', '开课止']" @change="onDateRangeChange" />
           <a-radio-group v-model:value="datePreset" @change="onDatePresetChange">
             <a-radio-button value="today">今天</a-radio-button>
@@ -13,7 +17,7 @@
             <a-radio-button value="week">本周</a-radio-button>
             <a-radio-button value="all">全部</a-radio-button>
           </a-radio-group>
-          <a-select v-model:value="filterStatus" style="width: 130px" placeholder="数据状态" @change="loadCourses">
+          <a-select v-model:value="filterStatus" style="width: 140px" placeholder="数据状态" @change="loadCourses">
             <a-select-option value="">全部数据状态</a-select-option>
             <a-select-option value="PUBLISHED">已发布</a-select-option>
             <a-select-option value="DRAFT">草稿</a-select-option>
@@ -30,8 +34,7 @@
             <a-select-option value="ONGOING">进行中</a-select-option>
             <a-select-option value="ENDED">已结束</a-select-option>
           </a-select>
-          <a-button v-perm="'course:create'" type="primary" @click="openCreate">+ 创建课程</a-button>
-        </a-space>
+        </div>
       </div>
 
       <!-- 课程统计 -->

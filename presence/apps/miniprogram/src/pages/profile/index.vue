@@ -59,6 +59,11 @@
         <!-- 导师门户是独立账号体系（教务发的手机号 + 密码），入口单独放，避免和学员登录混淆 -->
         <button class="menu-item" @tap="goTrainerPortal"><PresenceIcon name="calendar" :size="38" /><text class="menu-text">{{ tr('导师门户', 'Trainer portal') }}</text><text class="menu-extra">{{ portalSignedIn ? tr('已登录', 'Signed in') : tr('排课与名单', 'Schedule & roster') }}</text><PresenceIcon name="arrow" :size="26" /></button>
       </view>
+      <!-- 还没成为导师的人也要找得到入口：申请入驻是公开表单，不需要先登录 -->
+      <view v-if="!isTrainer" class="menu-group">
+        <button class="menu-item" @tap="goTrainerApply"><PresenceIcon name="calendar" :size="38" /><text class="menu-text">{{ tr('成为导师', 'Become a trainer') }}</text><text class="menu-extra">{{ tr('入驻申请', 'Apply') }}</text><PresenceIcon name="arrow" :size="26" /></button>
+        <button class="menu-item" @tap="goTrainerPortal"><PresenceIcon name="lock" :size="38" /><text class="menu-text">{{ tr('导师门户登录', 'Trainer portal sign-in') }}</text><text class="menu-extra">{{ tr('排课与名单', 'Schedule & roster') }}</text><PresenceIcon name="arrow" :size="26" /></button>
+      </view>
       <view class="menu-group">
         <button class="menu-item" @tap="toggleLang"><PresenceIcon name="edit" :size="38" /><text class="menu-text">{{ t('profile.language') }}</text><text class="menu-extra">{{ language === 'zh' ? '中文' : 'English' }}</text><PresenceIcon name="arrow" :size="26" /></button>
         <button class="menu-item" @tap="contactService"><PresenceIcon name="phone" :size="38" /><text class="menu-text">{{ t('profile.contactService') }}</text><text class="menu-extra">09:00–21:00</text><PresenceIcon name="arrow" :size="26" /></button>
@@ -329,6 +334,7 @@ function goCommunityMine() { openAccountPage('community-mine', false) }
 function goTrainerWorkspace() { if (isTrainer.value) openAccountPage('trainer-workspace', false) }
 // 无门户令牌时由门户首页统一跳登录页，这里不做前置判断
 function goTrainerPortal() { uni.navigateTo({ url: '/pages/trainer-portal/home/index' }) }
+function goTrainerApply() { uni.navigateTo({ url: '/pages/trainer-portal/apply/index' }) }
 function toggleView() {
   if (!isTrainer.value || !requireLogin()) return
   const next = activeView.value === 'trainer' ? 'student' : 'trainer'

@@ -5,8 +5,9 @@
 #
 # 线上真实拓扑（非 docker，120.55.36.3 = presence.fullyu.cn；旧名 test-zaichang 已于 2026-11-13 下线）：
 #   - 后端：PM2 进程 fullyu-api，源码在 SERVER_PATH（默认 /root/fullyu），在 ECS 上 tsc 编译
-#   - 后台静态：nginx 根 ADMIN_DIST_PATH（默认 /opt/fullyu/apps/admin/dist，:8080）
-#   - H5 静态：nginx 根 H5_DIST_PATH（默认 /opt/fullyu/apps/miniprogram/dist/build/h5，docker-proxy :8101）
+#   - 后台静态：nginx 根 ADMIN_DIST_PATH（默认 /opt/fullyu/apps/admin/dist）
+#     · presence.fullyu.cn/ 与 :8080 两个入口都直读该目录（2026-11-13 起 presence 不再 proxy 到 8101 容器）
+#   - H5 静态：nginx 根 H5_DIST_PATH（默认 /opt/fullyu/apps/miniprogram/dist/build/h5，仅 80 端口 default server）
 #   ECS 内存有限，无法构建前端，故前端产物在 runner 构建后 scp 上去。
 #
 # 需在仓库 Settings → Secrets 配置：
