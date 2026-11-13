@@ -561,7 +561,11 @@ export class BrandCardPaymentService implements OnModuleInit, OnModuleDestroy {
         ...(quoteExpired ? { quoteExpiresAt: new Date(0) } : {})
       }
     });
-    const retryHint = `${Math.round(delayMs / 1000)} 秒后自动重试`;
+    // 重试由每分钟的巡检驱动：间隔短于一轮巡检就如实说「下一轮」，别写 5 秒骗自己。
+    const retryHint =
+      delayMs <= ISSUE_SWEEP_MS
+        ? `下一轮巡检（≤${ISSUE_SWEEP_MS / 1000} 秒）自动重试`
+        : `${Math.round(delayMs / 60_000)} 分钟后自动重试`;
     await logAction(this.prisma, {
       actorName: 'CRM',
       action: '会员卡已付款但开卡未确认',
