@@ -542,3 +542,52 @@ model IdempotencyKey {
 
   @@map("idempotency_keys")
 }
+
+// ========== 品牌会员卡（Full愈年卡/月卡）购卡 ==========
+
+/// 会员卡订单：小程序自助购卡的本地账本，也是渠道商户单号（MB-…）的持有者。
+///
+/// 设计要点：
+/// - id 即渠道 order_id，回调/查询只按它找回本单，不信任回调里的门店、金额以外信息；
+/// - 金额只取下单时 CRM 服务端报价（quoteId + priceCents），客户端传价一律忽略；
+/// - 收款走门店同一条 JSAPI 渠道（store_id=brand 走服务商主商户号），资金落到品牌账户；
+/// - 收款与开卡分开记账：pay_status 回答「钱到没到」，issue_status 回答「卡开没开」；
+/// - 钱到了但开卡没确认（issue_status=unknown）由后台按退避自动重试，直到 CRM 确认开卡：
+///   开卡带稳定 orderRef + 幂等键，CRM 按单号去重，重放只会拿回同一张卡，不会重复扣费或续期。
+model BrandCardOrder {
+  id             String    @id
+  customerId     String    @map("customer_id")
+  productCode    String    @map("product_code")
+  productName    String    @default("") @map("product_name")
+  amountCents    Int       @map("amount_cents")
+  storeId        String    @default("brand") @map("store_id")
+  // CRM 报价凭证：开卡时原样回传，CRM 据它锁定当时价格与时长。
+  quoteId        String    @map("quote_id")
+  quoteExpiresAt DateTime? @map("quote_expires_at")
+  // pending | paid | failed | closed
+  payStatus      String    @default("pending") @map("pay_status")
+  // idle=未开卡；issued=CRM 已确认开卡；unknown=钱已到但开卡结果未确认（后台按 issueNextAt 自动重试）
+  issueStatus    String    @default("idle") @map("issue_status")
+  // 开卡失败重试账目：已试次数决定退避间隔；issueNextAt 为空表示可以立刻重试。
+  issueAttempts  Int       @default(0) @map("issue_attempts")
+  issueNextAt    DateTime? @map("issue_next_at")
+  payMethod      String    @default("wechat") @map("pay_method")
+  providerRef    String?   @map("provider_ref")
+  failReason     String?   @map("fail_reason")
+  paidAt         DateTime? @map("paid_at")
+  crmCardId      String?   @map("crm_card_id")
+  cardState      String?   @map("card_state")
+  cardValidFrom  DateTime? @map("card_valid_from")
+  cardValidUntil DateTime? @map("card_valid_until")
+  issueError     String?   @map("issue_error")
+  // 未支付单复用：缓存最近一次预下单参数，重复点击不再新建订单或重复下单到渠道。
+  prepayJson     String?   @map("prepay_json")
+  prepayAt       DateTime? @map("prepay_at")
+  createdAt      DateTime  @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([customerId, createdAt])
+  @@index([payStatus])
+  @@index([issueStatus, issueNextAt])
+  @@map("brand_card_orders")
+}

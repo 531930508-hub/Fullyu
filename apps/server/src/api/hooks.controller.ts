@@ -1,6 +1,7 @@
 import { Body, Controller, HttpCode, Param, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { badRequest, notFound, notImplemented } from '../common/errors';
+import { BrandCardPaymentService, isBrandCardOrderRef } from '../crm/brand-card-payment.service';
 import { HardwareService } from '../hardware/hardware.module';
 import { OrdersService } from '../orders/orders.service';
 
@@ -13,12 +14,14 @@ type RawBodyRequest = Request & { rawBody?: string };
  * 这里只做三件事：把原始请求交给渠道实现、用业务规则核对金额/商户后落账、按渠道要求应答。
  *
  * 回调地址按渠道实现名拼接：POST /api/hooks/payment/{provider.name}
+ * 单号前缀决定落账方：MB-… 是会员卡单，其余是茶饮/零售订单。
  */
 @Controller('hooks')
 export class HooksController {
   constructor(
     private readonly hardware: HardwareService,
-    private readonly orders: OrdersService
+    private readonly orders: OrdersService,
+    private readonly cardPayments: BrandCardPaymentService
   ) {}
 
   @Post('payment/:provider')
@@ -63,6 +66,22 @@ export class HooksController {
     }
 
     if (!result.reference) return ack || { ok: true, applied: false };
+
+    // 会员卡单：落账 + 向 CRM 开卡，与茶饮订单互不干扰。
+    if (isBrandCardOrderRef(result.reference)) {
+      const outcome = await this.cardPayments.settle({
+        reference: result.reference,
+        providerRef: result.providerRef,
+        amountCents: result.amountCents,
+        merchantId: result.merchantId,
+        status: result.status || 'paid',
+        error: result.error,
+        paidAt: result.paidAt
+      });
+      if (ack) return ack;
+      return { ok: true, kind: 'member-card', applied: outcome === 'applied' || outcome === 'duplicate', status: outcome };
+    }
+
     const outcome = await this.orders.settlePaymentCallback({
       reference: result.reference,
       providerRef: result.providerRef,

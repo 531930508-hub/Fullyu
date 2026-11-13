@@ -1,6 +1,7 @@
 import { createHarness, type Harness } from '../testing/harness';
 import { startFakeBrandCrm, type FakeBrandCrm } from '../testing/brand-crm-fake';
 import { BrandOrderReporter } from './brand-order.reporter';
+import { BrandCardPaymentService } from './brand-card-payment.service';
 
 const ENV_KEYS = [
   'CRM_ENABLED',
@@ -92,15 +93,53 @@ describe('顾客品牌会员代理', () => {
     expect(body).not.toHaveProperty('priceCents');
   });
 
-  it('支付通道未接入时明确拒绝开通，不调用 CRM 开卡', async () => {
+  it('没有微信支付身份的顾客不能发起购卡，也不会惊动 CRM 开卡', async () => {
     const customer = await h.customer('购买茶客');
     const before = fake.requests.length;
     const res = await h.api('post', '/customer/brand-member/purchase', customer.token, {
       productCode: 'FY_ANNUAL'
     });
-    expect(res.status).toBe(501);
-    expect(res.body.error).toBe('PAYMENT_NOT_ENABLED');
+    expect(res.status).toBe(400);
     expect(fake.requests.length).toBe(before);
+    expect(await h.prisma.brandCardOrder.count({ where: { customerId: customer.id } })).toBe(0);
+  });
+
+  it('支付通道为模拟时只建待付单：不扣款、不调 CRM 开卡', async () => {
+    const customer = await h.customer('模拟支付茶客');
+    await h.prisma.customer.update({ where: { id: customer.id }, data: { openId: `o-mock-${customer.id}` } });
+    const res = await h.api('post', '/customer/brand-member/purchase', customer.token, {
+      productCode: 'FY_ANNUAL'
+    });
+    expect(res.status).toBe(201);
+    // 金额来自 CRM 报价，预下单走模拟渠道。
+    expect(res.body.order).toMatchObject({ amountCents: 29900, payStatus: 'pending', issueStatus: 'idle' });
+    expect(res.body.prepayMode).toBe('mock');
+    // 没收到钱就绝不调开卡：CRM 侧不应出现 issue 请求。
+    expect(fake.requests.some((item) => item.path.startsWith('/api/v1/brand-member/issue'))).toBe(false);
+  });
+
+  it('钱到账后按报价开卡：开卡请求带商户单号与实付金额，卡号记回本地单', async () => {
+    const customer = await h.customer('开卡茶客');
+    await h.prisma.customer.update({ where: { id: customer.id }, data: { openId: `o-issue-${customer.id}` } });
+    const purchase = await h.api('post', '/customer/brand-member/purchase', customer.token, {
+      productCode: 'FY_ANNUAL'
+    });
+    const orderId = purchase.body.order.id as string;
+
+    const outcome = await h.app.get(BrandCardPaymentService).settle({
+      reference: orderId,
+      providerRef: 'HF-ISSUE-1',
+      amountCents: 29900,
+      status: 'paid'
+    });
+    expect(outcome).toBe('applied');
+
+    const issue = fake.requests.filter((item) => item.path.startsWith('/api/v1/brand-member/issue')).pop();
+    expect(issue?.signatureOk).toBe(true);
+    expect(JSON.parse(issue!.body)).toMatchObject({ orderRef: orderId, paidCents: 29900 });
+
+    const row = await h.prisma.brandCardOrder.findUnique({ where: { id: orderId } });
+    expect(row).toMatchObject({ payStatus: 'paid', issueStatus: 'issued', crmCardId: 'MBC-TEST-1' });
   });
 
   it('愈行之旅票据由服务端换取；无有效卡时不伪造可玩', async () => {

@@ -1,11 +1,12 @@
-import { Body, Controller, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import type { Request } from 'express';
 import { z } from 'zod';
-import { ApiError } from '../common/errors';
 import { parseInput } from '../common/zod';
 import { CustomerGuard } from '../auth/customer.guard';
 import { Customer } from '../auth/decorators';
 import type { CustomerContext } from '../common/auth.types';
+import { BrandCardPaymentService } from '../crm/brand-card-payment.service';
 import { BrandMemberClient } from '../crm/brand-member.client';
 
 const quoteSchema = z.object({
@@ -48,12 +49,15 @@ const feedbackSchema = z.object({
  *
  * 小程序只访问本服务：签名密钥留在服务端，会员身份固定取当前登录顾客，
  * 前端无法通过改 localUserId、金额或积分伪造他人身份与权益。
- * 支付通道接入前，购买入口明确返回未开通，不跳过扣款直接开卡。
+ * 购卡走真实支付：服务端按 CRM 报价建单 → JSAPI 预下单 → 验签回调落账后向 CRM 开卡。
  */
 @Controller('customer/brand-member')
 @UseGuards(CustomerGuard)
 export class CustomerBrandMemberController {
-  constructor(private readonly brand: BrandMemberClient) {}
+  constructor(
+    private readonly brand: BrandMemberClient,
+    private readonly cardPayments: BrandCardPaymentService
+  ) {}
 
   @Get('me')
   me(@Customer() customer: CustomerContext) {
@@ -76,19 +80,38 @@ export class CustomerBrandMemberController {
   }
 
   /**
-   * 购卡支付：时叙现有支付链路只覆盖茶饮/零售订单，品牌卡订单与回调尚未接入。
-   * 此处如实返回未开通，避免出现「点一下就开通」的假支付；接入真实支付后
-   * 由服务端在验签回调里调用 CRM 开卡。
+   * 购卡支付：金额取服务端向 CRM 的实时报价，客户端只给 productCode。
+   * 返回 wx.requestPayment 参数与 prepayMode；订单在验签回调落账后才开卡。
    */
   @Post('purchase')
   @HttpCode(201)
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
-  purchase(@Body() body: unknown) {
-    parseInput(purchaseSchema, body ?? {});
-    throw new ApiError(501, '会员卡支付通道尚未接入，暂不能在时叙开通', {
-      code: 'PAYMENT_NOT_ENABLED'
+  purchase(@Body() body: unknown, @Customer() customer: CustomerContext, @Req() req: Request) {
+    const input = parseInput(purchaseSchema, body ?? {});
+    return this.cardPayments.purchase({
+      customerId: customer.id,
+      productCode: input.productCode,
+      clientIp: req.ip
     });
+  }
+
+  /** 最近一张会员卡订单：顾客支付后轮询它收敛状态（待支付时会顺手向渠道查询一次）。 */
+  @Get('orders/latest')
+  latestOrder(@Customer() customer: CustomerContext) {
+    return this.cardPayments.latestOrder(customer.id).then((order) => ({ order }));
+  }
+
+  @Get('orders/:id')
+  order(@Param('id') id: string, @Customer() customer: CustomerContext) {
+    return this.cardPayments.getOrder(customer.id, id).then((order) => ({ order }));
+  }
+
+  /** 顾客放弃支付：关闭待支付单，未扣款。 */
+  @Post('orders/:id/close')
+  @HttpCode(200)
+  close(@Param('id') id: string, @Customer() customer: CustomerContext) {
+    return this.cardPayments.closePending(customer.id, id).then((order) => ({ order }));
   }
 
   /** 愈行之旅：服务端换一次性票据，小程序用 web-view 打开 CRM 托管的游戏。 */

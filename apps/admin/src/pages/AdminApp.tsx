@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError, type RangeQuery } from '../lib/api';
 import { useApi, useStoredJsonState, useStoredState } from '../lib/hooks';
@@ -3940,6 +3940,26 @@ function StaffPage() {
   );
 }
 
+const STAFF_FIELD_LABELS: Record<string, string> = {
+  name: '姓名',
+  username: '登录账号',
+  password: '密码',
+  roleIds: '角色',
+  storeIds: '门店范围',
+  allStores: '门店范围',
+  active: '账号状态'
+};
+
+/** 把服务端的校验明细（details）拼成“字段：原因”，不再只显示泛化提示。 */
+function staffErrorMessage(err: ApiError) {
+  const details = Array.isArray(err.details) ? (err.details as Array<{ path?: string; message?: string }>) : [];
+  const lines = details
+    .filter((item) => item && typeof item.message === 'string' && /[\u4e00-\u9fa5]/.test(item.message))
+    .map((item) => `${STAFF_FIELD_LABELS[item.path || ''] || '参数'}：${item.message}`);
+  if (!lines.length) return err.message;
+  return Array.from(new Set(lines)).join('；');
+}
+
 function StaffDrawer({
   editing,
   roles,
@@ -3964,11 +3984,15 @@ function StaffDrawer({
   const [active, setActive] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showErrors, setShowErrors] = useState(false);
+  const hydrated = useRef(false);
 
   useEffect(() => {
     if (!editing) return;
     setError(null);
     setBusy(false);
+    setShowErrors(false);
+    hydrated.current = false;
     if (editing === 'new') {
       setName('');
       setUsername('');
@@ -3988,22 +4012,54 @@ function StaffDrawer({
     setActive(editing.active);
   }, [editing]);
 
+  // 角色 / 门店是异步加载的：抽屉先打开、数据后到时默认值为空，保存会被服务端拦成
+  // “请至少选择一个角色 / 请选择授权门店”。数据到位后补一次默认值，且只在用户尚未选择时补。
+  useEffect(() => {
+    if (!isNew || hydrated.current) return;
+    if (!roles.length || !stores.length) return;
+    hydrated.current = true;
+    setRoleIds((list) =>
+      list.length ? list : ([roles.find((role) => role.id === 'r-staff')?.id || roles[0]?.id].filter(Boolean) as string[])
+    );
+    setStoreIds((list) => (list.length ? list : stores.slice(0, 1).map((store) => store.id)));
+  }, [isNew, roles, stores]);
+
   const toggle = (list: string[], value: string) =>
     list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 
+  // 先在前端拦一遍：服务端只能给出笼统的“参数格式不正确”，用户不知道改哪一项。
+  const issues: Array<{ field: 'name' | 'username' | 'password' | 'roles' | 'stores'; message: string }> = [];
+  if (!name.trim()) issues.push({ field: 'name', message: '请填写姓名' });
+  if (name.trim().length > 30) issues.push({ field: 'name', message: '姓名最多 30 个字' });
+  if (isNew && !/^\d{6,20}$/.test(username.trim())) {
+    issues.push({ field: 'username', message: '登录账号需为 6–20 位数字手机号' });
+  }
+  if (isNew && password.length < 8) issues.push({ field: 'password', message: '初始密码至少 8 位' });
+  if (!isNew && password && password.length < 8) issues.push({ field: 'password', message: '密码至少 8 位，留空表示不修改' });
+  if (password.length > 72) issues.push({ field: 'password', message: '密码最多 72 位' });
+  if (!roleIds.length) issues.push({ field: 'roles', message: '请至少选择一个角色' });
+  if (!allStores && !storeIds.length) issues.push({ field: 'stores', message: '请至少选择一个门店，或开启全部门店' });
+  const fieldError = (field: 'name' | 'username' | 'password' | 'roles' | 'stores') =>
+    showErrors ? issues.find((issue) => issue.field === field)?.message || null : null;
+
   const save = async () => {
+    setShowErrors(true);
+    if (issues.length) {
+      setError(null);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const body: Record<string, unknown> = {
-        name,
+        name: name.trim(),
         roleIds,
         allStores,
         storeIds: allStores ? [] : storeIds,
         active
       };
       if (isNew) {
-        body.username = username;
+        body.username = username.trim();
         body.password = password;
         await api.adminCreateStaff(body);
       } else if (member) {
@@ -4012,7 +4068,7 @@ function StaffDrawer({
       }
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : '保存失败');
+      setError(err instanceof ApiError ? staffErrorMessage(err) : '保存失败');
     } finally {
       setBusy(false);
     }
@@ -4030,17 +4086,17 @@ function StaffDrawer({
           <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
             取消
           </button>
-          <button type="button" className="btn btn-primary" disabled={busy || !name.trim()} onClick={save}>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={save}>
             {busy ? '保存中…' : '保存账号'}
           </button>
         </>
       }
     >
       <div className="form-grid">
-        <Field label="姓名">
+        <Field label="姓名" error={fieldError('name')}>
           <input value={name} maxLength={30} onChange={(event) => setName(event.target.value)} />
         </Field>
-        <Field label="登录账号" hint={isNew ? '6–20 位数字手机号' : '登录名创建后不可修改'}>
+        <Field label="登录账号" hint={isNew ? '6–20 位数字手机号' : '登录名创建后不可修改'} error={fieldError('username')}>
           <input
             value={username}
             maxLength={20}
@@ -4048,7 +4104,11 @@ function StaffDrawer({
             onChange={(event) => setUsername(event.target.value.replace(/\D/g, ''))}
           />
         </Field>
-        <Field label={isNew ? '初始密码' : '重置密码'} hint="至少 8 位；编辑时留空表示不修改。">
+        <Field
+          label={isNew ? '初始密码' : '重置密码'}
+          hint="至少 8 位；编辑时留空表示不修改。"
+          error={fieldError('password')}
+        >
           <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" />
         </Field>
         <Field label="账号状态">
@@ -4072,6 +4132,8 @@ function StaffDrawer({
               </label>
             ))}
           </div>
+          {!roles.length ? <span className="field-hint">角色列表未加载完成，请稍后重试或刷新页面。</span> : null}
+          {fieldError('roles') ? <span className="field-error">{fieldError('roles')}</span> : null}
         </div>
         <div className="span-2">
           <Field label="门店范围">
@@ -4094,6 +4156,10 @@ function StaffDrawer({
               ))}
             </div>
           ) : null}
+          {!allStores && !stores.length ? (
+            <span className="field-hint">门店列表未加载完成，请稍后重试或刷新页面。</span>
+          ) : null}
+          {fieldError('stores') ? <span className="field-error">{fieldError('stores')}</span> : null}
         </div>
       </div>
       <InlineError message={error} />

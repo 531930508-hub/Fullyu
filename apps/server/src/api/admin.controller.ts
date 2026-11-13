@@ -100,19 +100,22 @@ const seatQrSchema = z.object({
 });
 
 const staffCreateSchema = z.object({
-  name: z.string().min(1).max(30),
-  username: z.string().min(6).max(20),
-  password: z.string().min(8).max(72),
-  roleIds: z.array(z.string()).min(1),
+  name: z.string().trim().min(1, '请填写姓名').max(30, '姓名最多 30 个字'),
+  username: z
+    .string()
+    .trim()
+    .regex(/^\d{6,20}$/, '登录账号需为 6–20 位数字手机号'),
+  password: z.string().min(8, '初始密码至少 8 位').max(72, '密码最多 72 位'),
+  roleIds: z.array(z.string()).min(1, '请至少选择一个角色'),
   storeIds: z.array(z.string()).optional(),
   allStores: z.boolean().optional(),
   active: z.boolean().optional()
 });
 
 const staffUpdateSchema = z.object({
-  name: z.string().min(1).max(30),
-  password: z.string().min(8).max(72).optional(),
-  roleIds: z.array(z.string()).min(1),
+  name: z.string().trim().min(1, '请填写姓名').max(30, '姓名最多 30 个字'),
+  password: z.string().min(8, '密码至少 8 位').max(72, '密码最多 72 位').optional(),
+  roleIds: z.array(z.string()).min(1, '请至少选择一个角色'),
   storeIds: z.array(z.string()).optional(),
   allStores: z.boolean().optional(),
   active: z.boolean().optional()

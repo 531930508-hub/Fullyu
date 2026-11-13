@@ -82,6 +82,64 @@ export function loadStories() {
   return request('/customer/brand-member/stories');
 }
 
+/**
+ * 购卡下单：只提交产品编码，金额由服务端按 CRM 实时报价决定；
+ * 返回值含 wx.requestPayment 参数与 prepayMode（是否真实扣款）。
+ */
+export function purchaseCard(productCode) {
+  return request('/customer/brand-member/purchase', {
+    method: 'POST',
+    data: { productCode: String(productCode || '') }
+  });
+}
+
+/** 最近一张会员卡订单：支付后轮询它收敛状态，服务端会顺手向渠道查一次。 */
+export function latestCardOrder() {
+  return request('/customer/brand-member/orders/latest');
+}
+
+/** 单张会员卡订单（轮询用，避免被顾客随后新建的单顶掉）。 */
+export function loadCardOrder(orderId) {
+  return request(`/customer/brand-member/orders/${encodeURIComponent(orderId)}`);
+}
+
+/** 顾客放弃支付：关闭本单，未扣款。若其实已付款，迟到回调仍会开卡。 */
+export function closeCardOrder(orderId) {
+  return request(`/customer/brand-member/orders/${encodeURIComponent(orderId)}/close`, {
+    method: 'POST'
+  });
+}
+
+/**
+ * 支付完成后服务端确认。
+ * 渠道异步通知可能晚于 wx.requestPayment 返回，这里只轮询服务端状态；
+ * 回调没到之前不本地假定成功，也不会因为「开卡中」就提示已开通。
+ *
+ * 「已付款、开卡没确认」不再直接放弃：服务端会按退避自动重开，而每次轮询本身
+ * 也会推它一把，所以这里继续多等几轮，把自动重试的结果等回来（约 12 秒）。
+ */
+export async function confirmCardOrder(orderId, attempts = 13) {
+  let last = null;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const result = await loadCardOrder(orderId);
+      const order = result && result.order;
+      if (order) {
+        last = order;
+        if (order.issueStatus === 'issued') return order;
+        // 钱没到而单已失败/关闭，等下去也不会变：如实返回，由页面说明。
+        if (order.payStatus === 'failed' || order.payStatus === 'closed') return order;
+      }
+    } catch (error) {
+      // 网络抖动继续等下一轮；最终未确认由调用方如实提示。
+    }
+    if (i < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    }
+  }
+  return last;
+}
+
 export function voucherStatusLabel(status) {
   return (
     { ISSUED: '待领取', REDEEMED: '已领取', VOID: '已作废', EXPIRED: '已过期' }[status] || '待领取'

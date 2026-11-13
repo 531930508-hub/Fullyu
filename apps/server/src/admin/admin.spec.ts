@@ -65,6 +65,38 @@ describe('账号、角色、门店配置与操作记录', () => {
       roleIds: ['r-region']
     });
     expect(noStore.status).toBe(400);
+    expect(noStore.body.message).toContain('门店');
+
+    // 校验失败要指明是哪一项：泛化的“请求参数不完整或格式不正确”会让后台用户无从下手。
+    const shortName = await h.api('post', '/admin/staff', superToken, {
+      name: '短账号',
+      username: '12345',
+      password: '12345678',
+      roleIds: ['r-region'],
+      storeIds: ['bj']
+    });
+    expect(shortName.status).toBe(400);
+    expect(shortName.body.message).toContain('6–20 位数字');
+
+    const shortPassword = await h.api('post', '/admin/staff', superToken, {
+      name: '短密码',
+      username: '13900000012',
+      password: '1234567',
+      roleIds: ['r-region'],
+      storeIds: ['bj']
+    });
+    expect(shortPassword.status).toBe(400);
+    expect(shortPassword.body.message).toContain('密码至少 8 位');
+
+    const noRole = await h.api('post', '/admin/staff', superToken, {
+      name: '无角色',
+      username: '13900000013',
+      password: '12345678',
+      roleIds: [],
+      storeIds: ['bj']
+    });
+    expect(noRole.status).toBe(400);
+    expect(noRole.body.message).toContain('角色');
 
     const created = await h.api('post', '/admin/staff', superToken, {
       name: '北京店长',
