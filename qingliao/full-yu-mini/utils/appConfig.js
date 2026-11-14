@@ -20,8 +20,8 @@ const getEnv = () => {
 // 配置不同环境的API地址
 const configs = {
     develop: 'http://localhost:9929',   // 开发环境
-    trial: 'https://manage.fullytherapy.com/api',    // 体验版环境
-    release: 'https://manage.fullytherapy.com/api'     // 正式环境
+    trial: 'https://cityretreat.fullyu.cn/api',    // 体验版环境
+    release: 'https://cityretreat.fullyu.cn/api'     // 正式环境
 }
 
 // 根据当前环境设置API地址

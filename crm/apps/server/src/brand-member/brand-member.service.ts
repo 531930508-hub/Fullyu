@@ -470,7 +470,7 @@ export class BrandMemberService {
             where: { id: quoteId },
             data: { usedCardId: card.id }
           });
-          // 年卡实物礼：按版本配置发提货券，任意门店人工核销一次。
+          // 大会员卡实物礼：按版本配置发提货券，任意门店人工核销一次。
           const vouchers = await issuePickupVouchers(tx, card, version?.giftsJson);
           await audit(tx, {
             actor: {

@@ -24,20 +24,20 @@ describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
     await h.close();
   });
 
-  it('种子：年卡/月卡各一版，年卡价格与权益、积分口径正确', async () => {
+  it('种子：大会员/月会员各一版，大会员价格与权益、积分口径正确', async () => {
     const res = await h.api('get', '/brand-cards', admin);
     expect(res.status).toBe(200);
     const annual = res.body.products.find((p: { code: string }) => p.code === 'FY_ANNUAL');
-    expect(annual.name).toBe('Full愈年卡');
+    expect(annual.name).toBe('Full愈大会员');
     expect(annual.currentVersion).toBe(1);
-    expect(annual.current.priceCents).toBe(29900);
+    expect(annual.current.priceCents).toBe(36500);
     expect(annual.current.validDays).toBe(365);
     expect(annual.current.benefits).toHaveLength(3);
     expect(annual.current.pointsSpend.ql).toBe('1_point_1_yuan');
     expect(annual.current.pointsSpend.sx).toBe('display_only');
     const month = res.body.products.find((p: { code: string }) => p.code === 'FY_MONTH');
-    expect(month.current.priceCents).toBe(4500);
-    expect(month.current.validDays).toBe(30);
+    expect(month.current.priceCents).toBe(9900);
+    expect(month.current.validDays).toBe(90);
   });
 
   it('业务卡目录：在场畅练卡只读、不可在 CRM 售卖；内部键与对外键同时返回', async () => {
@@ -73,7 +73,7 @@ describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
 
     const before = await h.api('get', '/brand-cards/FY_ANNUAL', admin);
     expect(before.body.currentVersion).toBe(1);
-    expect(before.body.current.priceCents).toBe(29900);
+    expect(before.body.current.priceCents).toBe(36500);
 
     const activated = await h.api('post', '/brand-cards/FY_ANNUAL/versions/2/activate', ops);
     expect(activated.status).toBe(201);
@@ -95,7 +95,7 @@ describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
 
   it('版本校验：价格/天数/权益/积分模式非法均 400，客服不能建版本', async () => {
     const base = {
-      priceCents: 29900,
+      priceCents: 36500,
       validDays: 365,
       benefits: BENEFITS,
       pointsSpend: { ql: '1_point_1_yuan' }

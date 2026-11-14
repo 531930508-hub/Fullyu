@@ -53,16 +53,16 @@
 
 ## 6. 种子
 
-- `FY_MONTH`：Full愈月卡，¥45 / 30 天，v1 生效。
-- `FY_ANNUAL`：Full愈年卡，¥299 / 365 天，v1 生效，三条权益；积分在轻疗端单独展示，会员卡页不重复呈现。
-- 业务目录：`zc / PRESENCE_PASS / 在场畅练卡`（只读、不可 CRM 售卖）、`ql / RETREAT_LEGACY_CARD / 轻疗历史年卡`。
+- `FY_MONTH`：Full愈月会员，¥99 / 90 天，v1 生效。
+- `FY_ANNUAL`：Full愈大会员，¥365 / 365 天，v1 生效，三条权益；积分在轻疗端单独展示，会员卡页不重复呈现。
+- 业务目录：`zc / PRESENCE_PASS / 在场畅练卡`（只读、不可 CRM 售卖）、`ql / RETREAT_LEGACY_CARD / 轻疗历史会员卡`。
 
 ## 7. E1 证据（2026-11-08）
 
 - `pnpm test`：23/23 通过；1B 新增 6 个用例覆盖种子、目录只读、版本状态机、校验、产品创建、目录更新与权限。
 - `pnpm --filter @fullyu/crm-server lint`：通过。
 - `pnpm build:server`：通过。
-- 本地启动冒烟：读取年卡 29900 分 / 365 天 / 3 条权益；在场畅练卡 `readOnly=true, sellableInCrm=false, businessKey=presence`；客服建版本 403；月卡草稿 v2 → 激活 201（旧版 ARCHIVED）→ 重复激活 409；审计 1 条。冒烟后重新 seed。
+- 本地启动冒烟：读取大会员 36500 分 / 365 天 / 3 条权益；在场畅练卡 `readOnly=true, sellableInCrm=false, businessKey=presence`；客服建版本 403；月会员草稿 v2 → 激活 201（旧版 ARCHIVED）→ 重复激活 409；审计 1 条。冒烟后重新 seed。
 - 未测：真实 MySQL、并发激活压测、1C 签名接口、三端联调、后台页面。
 
 ## 8. 下一步（1C）

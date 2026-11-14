@@ -28,7 +28,7 @@ export type VersionInput = {
   pointsSpend?: Record<string, string>;
   gameEnabled?: boolean;
   note?: string;
-  /** 付费年卡附带的实物礼（仅发提货券，到店核销） */
+  /** 付费大会员卡附带的实物礼（仅发提货券，到店核销） */
   gifts?: unknown;
   /** 跨业务特权配置，如在场优先排位/阶梯价/每月邀请数 */
   perks?: unknown;

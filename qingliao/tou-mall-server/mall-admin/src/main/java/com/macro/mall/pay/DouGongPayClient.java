@@ -54,7 +54,7 @@ public class DouGongPayClient implements IPayClient {
 
 
 //    private static String baseNotifyUrl = "https://proxy.sanliu.top/admin/open/dgpay/refund/notify?orderId=";
-    private static String baseNotifyUrl = "https://fullytherapy.com/admin/open/dgpay/refund/notify";
+    private static String baseNotifyUrl = "https://cityretreat.fullyu.cn/api/admin/open/dgpay/refund/notify";
 
     private static String secretKey = "j;LJFO2MV#asNh;vb";
 
@@ -373,16 +373,11 @@ public class DouGongPayClient implements IPayClient {
     public Map<String, String> genWxPayQrCode(String mchOrderNo) {
         String wpAppId = PayCert.wxWpAppId;
         /*上线时需要修改地址-------------------------------------------------------------------------------------------------------*/
-        String url = String.format("https://manage.fullytherapy.com/wxWapPay/wx.html?orderSn=%s&appId=%s&timestamp=%s",
+        String url = String.format("https://cityretreat.fullyu.cn/wxWapPay/wx.html?orderSn=%s&appId=%s&timestamp=%s",
                 mchOrderNo,
                 wpAppId,
                 System.currentTimeMillis()
         );
-        /*String url = String.format("https://test.fullytherapy.com/wxWapPay/wx.html?orderSn=%s&appId=%s&timestamp=%s",
-                mchOrderNo,
-                wpAppId,
-                System.currentTimeMillis()
-        );*/
         try {
             Map<String, String> retMap = new HashMap<>();
             retMap.put("orderSn", mchOrderNo);

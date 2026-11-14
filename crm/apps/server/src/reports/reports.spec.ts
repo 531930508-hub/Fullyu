@@ -17,7 +17,10 @@ describe('CRM 1D：月度对账只出事实数据', () => {
 
   const month = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 7);
 
-  it('按售卖业务统计年卡、按发行/消耗业务统计积分与骰子', async () => {
+  it('按售卖业务统计大会员卡、按发行/消耗业务统计积分与骰子', async () => {
+    // 种子会员卡的开卡日按“今天”倒推，跨月运行时会落入本月；先移除，保证本用例口径固定。
+    await h.prisma.pickupVoucher.deleteMany({ where: { cardId: 'mbc-seed-lin' } });
+    await h.prisma.memberBrandCard.deleteMany({ where: { id: 'mbc-seed-lin' } });
     const now = new Date();
     const at = new Date(now.getTime() - 3600000);
     await h.prisma.memberBrandCard.createMany({
@@ -27,8 +30,8 @@ describe('CRM 1D：月度对账只出事实数据', () => {
           memberId: 'm-su',
           productCode: 'FY_ANNUAL',
           version: 1,
-          productName: 'Full愈年卡',
-          priceCents: 29900,
+          productName: 'Full愈大会员',
+          priceCents: 36500,
           validDays: 365,
           validFrom: at,
           validUntil: new Date(at.getTime() + 364 * 86400000),
@@ -36,7 +39,7 @@ describe('CRM 1D：月度对账只出事实数据', () => {
           soldBy: 'sx',
           soldByName: '时叙',
           orderRef: 'TH-REPORT-CARD-1',
-          paidCents: 29900,
+          paidCents: 36500,
           paidAt: at
         },
         {
@@ -44,8 +47,8 @@ describe('CRM 1D：月度对账只出事实数据', () => {
           memberId: 'm-lin',
           productCode: 'FY_MONTH',
           version: 1,
-          productName: 'Full愈月卡',
-          priceCents: 4500,
+          productName: 'Full愈月会员',
+          priceCents: 9900,
           validDays: 30,
           validFrom: at,
           validUntil: new Date(at.getTime() + 29 * 86400000),
@@ -53,7 +56,7 @@ describe('CRM 1D：月度对账只出事实数据', () => {
           soldBy: 'zc',
           soldByName: '在场',
           orderRef: 'ZC-REPORT-CARD-1',
-          paidCents: 4500,
+          paidCents: 9900,
           paidAt: at
         }
       ]
@@ -101,7 +104,7 @@ describe('CRM 1D：月度对账只出事实数据', () => {
     expect(res.body.month).toBe(month);
     expect(res.body.factsOnly).toBe(true);
     expect(res.body.cards.sold.teahour.count).toBe(1);
-    expect(res.body.cards.sold.teahour.grossCents).toBe(29900);
+    expect(res.body.cards.sold.teahour.grossCents).toBe(36500);
     expect(res.body.cards.sold.retreat.count).toBe(0);
     expect(res.body.cards.sold.presence.count).toBe(1);
     expect(res.body.cards.refunded.presence).toBe(1);

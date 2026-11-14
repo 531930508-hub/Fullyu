@@ -1197,7 +1197,7 @@ export class ProgramService {
     }
   }
 
-  /** 赠送/附赠卡的权益快照取年卡现行版本；年卡下架时退回任一在售版本。 */
+  /** 赠送/附赠卡的权益快照取大会员卡现行版本；大会员卡下架时退回任一在售版本。 */
   private async annualTemplate(tx: Prisma.TransactionClient) {
     const annual = await tx.brandCardProduct.findUnique({ where: { code: 'FY_ANNUAL' } });
     let version =

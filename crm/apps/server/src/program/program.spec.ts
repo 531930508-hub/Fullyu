@@ -310,7 +310,7 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     expect(missing.status).toBe(404);
   });
 
-  it('付费开年卡自动发提货券；7 天内退款扣除已领实物礼价值', async () => {
+  it('付费开大会员卡自动发提货券；7 天内退款扣除已领实物礼价值', async () => {
     const quote = await signed('post', '/v1/brand-member/quote', {
       key: 'zc-test',
       body: { business: 'presence', localUserId: 'local-m-zc-new2', productCode: 'FY_ANNUAL' }
@@ -319,7 +319,7 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     const orderRef = 'presence:order:annual-gift';
     const issued = await signed('post', '/v1/brand-member/issue', {
       key: 'zc-test',
-      body: { quoteId: quote.body.quoteId, orderRef, paidCents: 29900, paidAt: new Date().toISOString() }
+      body: { quoteId: quote.body.quoteId, orderRef, paidCents: 36500, paidAt: new Date().toISOString() }
     });
     expect(issued.status).toBe(201);
     expect(issued.body.vouchers.length).toBeGreaterThan(0);
@@ -332,7 +332,7 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
       key: 'zc-test'
     });
     expect(preview.body.window).toBe('WITHIN_7D');
-    expect(preview.body.refundableCents).toBe(29900 - first.valueCents);
+    expect(preview.body.refundableCents).toBe(36500 - first.valueCents);
 
     const refund = await signed('post', '/v1/brand-member/refund', {
       key: 'zc-test',
@@ -619,8 +619,8 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
           memberId: id,
           productCode: 'FY_ANNUAL',
           version: 1,
-          productName: 'Full愈年卡',
-          priceCents: 29900,
+          productName: 'Full愈大会员',
+          priceCents: 36500,
           validDays: 200,
           validFrom: new Date(`${from}T00:00:00+08:00`),
           validUntil: new Date(`${until}T00:00:00+08:00`),
@@ -628,7 +628,7 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
           soldBy: 'sx',
           soldByName: '时叙',
           orderRef: `paid-test:${id}`,
-          paidCents: 29900,
+          paidCents: 36500,
           paidAt: new Date(),
           source: 'PAID'
         }

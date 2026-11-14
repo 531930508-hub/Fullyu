@@ -4,7 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
     <title>Full愈·轻疗</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto+Sans+SC:100,300,400,500,700,900">
+    <!-- 字体必须非阻塞加载：fonts.googleapis.com 在国内不可达，写成普通 <link rel="stylesheet">
+         会让浏览器一直等这个样式表，整页白屏十几到几十秒，刷新第二次才出内容（2026-11-12 实测）。
+         preload + onload 切换 rel 的写法不阻塞渲染；拿不到字体时自动回落系统字体。 -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css?family=Noto+Sans+SC:100,300,400,500,700,900" onload="this.onload=null;this.rel='stylesheet'">
     <link rel="shortcut icon" href="/static/favicon.png" type="image/x-icon" />
     <!-- <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script> -->
     <!-- Google tag (gtag.js) -->

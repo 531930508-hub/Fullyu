@@ -54,7 +54,7 @@ export const CRM_PERMISSIONS = [
   { code: 'crm:role:edit', name: '维护角色权限' },
   { code: 'crm:gift:edit', name: '维护赠送会员码' },
   { code: 'crm:gift:approve', name: '审批超默认天数的会员码' },
-  { code: 'crm:voucher:redeem', name: '核销年卡实物礼券' },
+  { code: 'crm:voucher:redeem', name: '核销大会员卡实物礼券' },
   { code: 'crm:feedback:handle', name: '处理意见反馈与会员故事' },
   { code: 'crm:refund:force', name: '协商退款（强制退卡）' }
 ] as const;

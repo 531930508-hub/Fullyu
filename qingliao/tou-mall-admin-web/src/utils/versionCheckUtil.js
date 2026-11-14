@@ -9,7 +9,7 @@ export default {
         let vm = this
         if (vm.isRun) {
             axios({
-                url: 'https://manage.fullytherapy.com/static/version.json',
+                url: 'https://cityretreat.fullyu.cn/static/version.json',
                 method: 'get',
             }).then(res => {
                 let obj = res.data || {}
@@ -41,7 +41,10 @@ export default {
     },
     start() {
         let host = window.location.host
-        if (!host.includes('manage.fullytherapy.com')) {
+        // 过渡期两个域名并存：老后台书签仍走 manage.fullytherapy.com。
+        // 老域名摘除（301 生效）后，把第二项删掉即可。
+        const allowedHosts = ['cityretreat.fullyu.cn', 'manage.fullytherapy.com']
+        if (!allowedHosts.some(h => host.includes(h))) {
             return
         }
         this.isRun = true

@@ -133,7 +133,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     expect(replay.body.error).toBe('REPLAYED');
   });
 
-  it('me 返回脱敏身份、年卡、积分、权益与一次性游戏票据', async () => {
+  it('me 返回脱敏身份、大会员卡、积分、权益与一次性游戏票据', async () => {
     const res = await me('sx-test', 'teahour', 'local-m-lin');
     expect(res.status).toBe(200);
     expect(res.body.member.memberNo).toBe('FY-2602-008812');
@@ -142,8 +142,8 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
 
     expect(res.body.card.state).toBe('ACTIVE');
     expect(res.body.card.productCode).toBe('FY_ANNUAL');
-    expect(res.body.card.productName).toBe('Full愈年卡');
-    expect(res.body.card.priceCents).toBe(29900);
+    expect(res.body.card.productName).toBe('Full愈大会员');
+    expect(res.body.card.priceCents).toBe(36500);
     expect(res.body.card.soldBy).toBe('retreat');
     expect(res.body.card.soldByName).toBe('轻疗');
     expect(res.body.card.remainingDays).toBeGreaterThan(300);
@@ -223,7 +223,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     expect(res.status).toBe(200);
     expect(res.body.products).toHaveLength(2);
     const annual = res.body.products.find((p: { code: string }) => p.code === 'FY_ANNUAL');
-    expect(annual).toMatchObject({ name: 'Full愈年卡', priceCents: 29900, validDays: 365 });
+    expect(annual).toMatchObject({ name: 'Full愈大会员', priceCents: 36500, validDays: 365 });
     expect(annual.benefits).toHaveLength(3);
     expect(annual.pointsSpend.presence).toBe('display_only');
     expect(annual.gameEnabled).toBe(true);
@@ -258,13 +258,16 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
       body: { business: 'presence', localUserId: 'local-m-su', productCode: 'FY_ANNUAL' }
     });
     expect(quote.status).toBe(201);
-    expect(quote.body.priceCents).toBe(29900);
+    expect(quote.body.priceCents).toBe(36500);
     expect(quote.body.validDays).toBe(365);
     const expiresIn = new Date(quote.body.expiresAt).getTime() - Date.now();
     expect(expiresIn).toBeGreaterThan(25 * 60 * 1000);
     expect(expiresIn).toBeLessThanOrEqual(31 * 60 * 1000);
 
-    const paidAt = '2026-11-08T10:42:00+08:00';
+    // 卡期按开卡日推算，不写死日期，避免真实时钟跨天后断言漂移。
+    const paidAtDate = new Date(Date.now() - 5 * 86_400_000);
+    const paidAt = paidAtDate.toISOString();
+    const shanghaiDay = (d: Date) => new Date(d.getTime() + 8 * 3600000).toISOString().slice(0, 10);
     const mismatch = await signed('post', '/v1/brand-member/issue', {
       key: 'zc-test',
       headers: { 'Idempotency-Key': 'idem-zc-1' },
@@ -276,7 +279,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     const body = {
       quoteId: quote.body.quoteId,
       orderRef: 'presence:order:1',
-      paidCents: 29900,
+      paidCents: 36500,
       paidAt
     };
     const issued = await signed('post', '/v1/brand-member/issue', {
@@ -289,9 +292,10 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     expect(issued.body.card.productCode).toBe('FY_ANNUAL');
     expect(issued.body.card.soldBy).toBe('presence');
     expect(issued.body.card.soldByName).toBe('在场');
-    expect(issued.body.card.validFrom).toBe('2026-11-08');
-    expect(issued.body.card.validUntil).toBe('2027-11-07');
-    expect(issued.body.card.remainingDays).toBeGreaterThan(360);
+    expect(issued.body.card.validFrom).toBe(shanghaiDay(paidAtDate));
+    expect(issued.body.card.validUntil).toBe(shanghaiDay(new Date(paidAtDate.getTime() + 364 * 86_400_000)));
+    expect(issued.body.card.remainingDays).toBeGreaterThan(355);
+    expect(issued.body.card.remainingDays).toBeLessThanOrEqual(360);
 
     const replay = await signed('post', '/v1/brand-member/issue', {
       key: 'zc-test',
@@ -333,7 +337,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
       body: {
         quoteId: quote.body.quoteId,
         orderRef: 'teahour:order:renew-1',
-        paidCents: 4500,
+        paidCents: 9900,
         paidAt: '2026-11-08T10:30:00+08:00'
       }
     });
@@ -367,7 +371,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
       body: {
         quoteId: quote.body.quoteId,
         orderRef: 'retreat:order:late',
-        paidCents: 4500,
+        paidCents: 9900,
         paidAt: new Date().toISOString()
       }
     });
@@ -385,7 +389,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     const paidAt = new Date().toISOString();
     const issued = await signed('post', '/v1/brand-member/issue', {
       key: 'ql-test',
-      body: { quoteId: quote.body.quoteId, orderRef, paidCents: 4500, paidAt }
+      body: { quoteId: quote.body.quoteId, orderRef, paidCents: 9900, paidAt }
     });
     expect(issued.status).toBe(201);
     const cardId = issued.body.card.cardId as string;
@@ -393,14 +397,14 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     const over = await signed('post', '/v1/brand-member/refund', {
       key: 'ql-test',
       headers: { 'Idempotency-Key': 'idem-refund-over' },
-      body: { orderRef, refundCents: 4600, refundType: 'WITHIN_7D', refundedAt: paidAt }
+      body: { orderRef, refundCents: 10000, refundType: 'WITHIN_7D', refundedAt: paidAt }
     });
     expect(over.status).toBe(400);
 
     const body = {
       orderRef,
       cardId,
-      refundCents: 4500,
+      refundCents: 9900,
       refundType: 'WITHIN_7D',
       reason: '7 天内无理由退卡',
       refundedAt: paidAt
@@ -415,7 +419,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     expect(refunded.body.card.state).toBe('REFUNDED');
     expect(refunded.body.refund).toMatchObject({
       refundType: 'WITHIN_7D',
-      refundCents: 4500,
+      refundCents: 9900,
       reason: '7 天内无理由退卡'
     });
     expect(refunded.body.replayed).toBe(false);
@@ -432,7 +436,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
 
     const crossBusiness = await signed('post', '/v1/brand-member/refund', {
       key: 'zc-test',
-      body: { orderRef, refundCents: 4500, refundType: 'WITHIN_7D', refundedAt: paidAt }
+      body: { orderRef, refundCents: 9900, refundType: 'WITHIN_7D', refundedAt: paidAt }
     });
     expect(crossBusiness.status).toBe(404);
 
@@ -454,7 +458,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     const orderRef = 'presence:order:refund-prorated';
     const issued = await signed('post', '/v1/brand-member/issue', {
       key: 'zc-test',
-      body: { quoteId: quote.body.quoteId, orderRef, paidCents: 4500, paidAt: new Date().toISOString() }
+      body: { quoteId: quote.body.quoteId, orderRef, paidCents: 9900, paidAt: new Date().toISOString() }
     });
     expect(issued.status).toBe(201);
     const cardId = issued.body.card.cardId as string;
@@ -482,16 +486,16 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     expect(preview.body).toMatchObject({
       window: 'AFTER_7D',
       refundType: 'AFTER_7D',
-      paidCents: 4500,
+      paidCents: 9900,
       savedCents: 1000,
-      refundableCents: 3500,
+      refundableCents: 8900,
       allowed: true
     });
 
     const now = new Date().toISOString();
     const fullAmount = await signed('post', '/v1/brand-member/refund', {
       key: 'zc-test',
-      body: { orderRef, refundCents: 4500, refundType: 'WITHIN_7D', refundedAt: now }
+      body: { orderRef, refundCents: 9900, refundType: 'WITHIN_7D', refundedAt: now }
     });
     expect(fullAmount.status).toBe(409);
     expect(fullAmount.body.error).toBe('REFUND_AMOUNT_MISMATCH');
@@ -499,11 +503,11 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     const refund = await signed('post', '/v1/brand-member/refund', {
       key: 'zc-test',
       headers: { 'Idempotency-Key': 'idem-refund-prorated' },
-      body: { orderRef, refundCents: 3500, refundType: 'PRORATED', refundedAt: now }
+      body: { orderRef, refundCents: 8900, refundType: 'PRORATED', refundedAt: now }
     });
     expect(refund.status).toBe(201);
     expect(refund.body.card.state).toBe('REFUNDED');
-    expect(refund.body.refund.refundCents).toBe(3500);
+    expect(refund.body.refund.refundCents).toBe(8900);
     expect(refund.body.refund.refundType).toBe('AFTER_7D');
 
     const differentAmount = await signed('post', '/v1/brand-member/refund', {
@@ -522,7 +526,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     const orderRef = 'retreat:order:refund-blocked';
     const issued = await signed('post', '/v1/brand-member/issue', {
       key: 'ql-test',
-      body: { quoteId: quote.body.quoteId, orderRef, paidCents: 4500, paidAt: new Date().toISOString() }
+      body: { quoteId: quote.body.quoteId, orderRef, paidCents: 9900, paidAt: new Date().toISOString() }
     });
     expect(issued.status).toBe(201);
     const cardId = issued.body.card.cardId as string;
@@ -537,7 +541,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
         business: 'ql',
         orderRef: 'QL-SAVED-1',
         paidCents: 39800,
-        savedCents: 6000,
+        savedCents: 12000,
         cardId,
         occurredAt: new Date()
       }
@@ -549,7 +553,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     expect(preview.body.allowed).toBe(false);
     expect(preview.body.reasonCode).toBe('REFUND_NOT_ALLOWED');
     expect(preview.body.message).toContain('享受的优惠已超出，不能退款');
-    expect(preview.body.message).toContain('¥60');
+    expect(preview.body.message).toContain('¥120');
 
     const blocked = await signed('post', '/v1/brand-member/refund', {
       key: 'ql-test',

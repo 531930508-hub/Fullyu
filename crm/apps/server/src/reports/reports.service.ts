@@ -12,7 +12,7 @@ const emptyBusinessMap = (): Record<string, number> =>
   Object.fromEntries(BUSINESSES.map((item) => [toExternalBusiness(item.key)!, 0]));
 
 /**
- * 月度对账只出事实数据：年卡按售卖业务、积分按发行/消耗业务、骰子按发放/消耗。
+ * 月度对账只出事实数据：大会员卡按售卖业务、积分按发行/消耗业务、骰子按发放/消耗。
  * 系统不生成结算凭证，不推断分摊比例；业务核销明细未接入时省下金额返回 0。
  */
 @Injectable()
@@ -98,7 +98,7 @@ export class ReportsService {
       points: { issued, consumed, adjusted },
       dice: { issued: diceIssued, rolled, refunded: refundedDice },
       savedCents: 0,
-      usageNote: '业务核销明细未接入，年卡已享优惠暂不统计；本报表仅为事实数据，不生成结算凭证',
+      usageNote: '业务核销明细未接入，大会员卡已享优惠暂不统计；本报表仅为事实数据，不生成结算凭证',
       factsOnly: true,
       generatedAt: new Date().toISOString()
     };

@@ -2,7 +2,7 @@
   "name": "fullyu-crm",
   "version": "0.1.0",
   "private": true,
-  "description": "Full愈 CRM 中台（会员、积分、年卡唯一账本）",
+  "description": "Full愈 CRM 中台（会员、积分、会员卡唯一账本）",
   "scripts": {
     "dev:server": "pnpm --filter @fullyu/crm-shared build && pnpm --filter @fullyu/crm-server dev",
     "build": "pnpm -r build",

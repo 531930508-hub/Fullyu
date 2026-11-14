@@ -81,8 +81,8 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
         memberId: input.memberId,
         productCode: 'FY_MONTH',
         version: 1,
-        productName: 'Full愈月卡',
-        priceCents: 4500,
+        productName: 'Full愈月会员',
+        priceCents: 9900,
         validDays: 30,
         validFrom: paidAt,
         validUntil: new Date(paidAt.getTime() + 29 * 86_400_000),
@@ -93,7 +93,7 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
         soldBy: 'ql',
         soldByName: '轻疗',
         orderRef: input.orderRef,
-        paidCents: input.paidCents ?? 4500,
+        paidCents: input.paidCents ?? 9900,
         paidAt,
         source: 'PAID'
       }
@@ -160,7 +160,7 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
       memberId: 'm-cd-man',
       productCode: 'FY_ANNUAL',
       mode: 'MANUAL',
-      paidCents: 29900,
+      paidCents: 36500,
       soldBy: 'ql',
       orderRef: orderRef('CRM-MAN'),
       note: '门店收银台线下购买'
@@ -168,7 +168,7 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
     expect(created.status).toBe(201);
     const cardId = created.body.card.cardId as string;
     expect(created.body.card.source).toBe('MANUAL');
-    expect(created.body.card.paidCents).toBe(29900);
+    expect(created.body.card.paidCents).toBe(36500);
     expect(created.body.vouchers).toHaveLength(2);
     expect(created.body.vouchers.every((row: { status: string }) => row.status === 'ISSUED')).toBe(true);
 
@@ -186,7 +186,7 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
     const detail = await h.api('get', `/issued-cards/${cardId}`, admin);
     expect(detail.status).toBe(200);
     expect(detail.body.quote.allowed).toBe(true);
-    expect(detail.body.quote.paidCents).toBe(29900);
+    expect(detail.body.quote.paidCents).toBe(36500);
     // 手工卡不走轻疗查询
     expect(retreat.order).not.toHaveBeenCalled();
 
@@ -210,12 +210,12 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
   });
 
   it('轻疗线上卡规则退款：先调轻疗原路退回，金额以轻疗实退为准', async () => {
-    const cardId = await seedPaidCard({ memberId: 'm-cd-ql', orderRef: 'QL-CARD-RULE-1', paidCents: 4500 });
-    retreat.order.mockResolvedValue({ orderSn: 'QL-CARD-RULE-1', state: 1, paidCents: 4500 });
+    const cardId = await seedPaidCard({ memberId: 'm-cd-ql', orderRef: 'QL-CARD-RULE-1', paidCents: 9900 });
+    retreat.order.mockResolvedValue({ orderSn: 'QL-CARD-RULE-1', state: 1, paidCents: 9900 });
     retreat.refund.mockResolvedValue({
       orderSn: 'QL-CARD-RULE-1',
       state: 3,
-      refundCents: 4500,
+      refundCents: 9900,
       refundType: 'WITHIN_7D'
     });
 
@@ -223,20 +223,20 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
     expect(res.status).toBe(200);
     expect(res.body.amountMismatch).toBe(false);
     expect(retreat.refund).toHaveBeenCalledWith(
-      expect.objectContaining({ orderSn: 'QL-CARD-RULE-1', refundCents: 4500, refundType: 'WITHIN_7D' })
+      expect.objectContaining({ orderSn: 'QL-CARD-RULE-1', refundCents: 9900, refundType: 'WITHIN_7D' })
     );
 
     const saved = await h.prisma.memberBrandCard.findUniqueOrThrow({ where: { id: cardId } });
     expect(saved.state).toBe('REFUNDED');
-    expect(saved.refundCents).toBe(4500);
+    expect(saved.refundCents).toBe(9900);
     expect(saved.refundType).toBe('WITHIN_7D');
   });
 
   it('协商退款：超过实付被拒绝；轻疗卡按协商金额原路退回', async () => {
-    const cardId = await seedPaidCard({ memberId: 'm-cd-neg', orderRef: 'QL-CARD-NEG-1', paidCents: 4500 });
+    const cardId = await seedPaidCard({ memberId: 'm-cd-neg', orderRef: 'QL-CARD-NEG-1', paidCents: 9900 });
     const tooMuch = await h.api('post', `/issued-cards/${cardId}/refund`, finance, {
       kind: 'NEGOTIATED',
-      refundCents: 5000,
+      refundCents: 10000,
       reason: '客户协商退款'
     });
     expect(tooMuch.status).toBe(400);
@@ -256,7 +256,7 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
   });
 
   it('同步退款：轻疗未退不能同步，已退可补记 CRM；手工卡不适用', async () => {
-    const cardId = await seedPaidCard({ memberId: 'm-cd-sync', orderRef: 'QL-CARD-SYNC-1', paidCents: 4500 });
+    const cardId = await seedPaidCard({ memberId: 'm-cd-sync', orderRef: 'QL-CARD-SYNC-1', paidCents: 9900 });
     retreat.order.mockResolvedValue({ orderSn: 'QL-CARD-SYNC-1', state: 1, refundCents: 0 });
     const early = await h.api('post', `/issued-cards/${cardId}/refund`, finance, { kind: 'SYNC' });
     expect(early.status).toBe(409);
@@ -265,7 +265,7 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
     retreat.order.mockResolvedValue({
       orderSn: 'QL-CARD-SYNC-1',
       state: 3,
-      refundCents: 4500,
+      refundCents: 9900,
       refundType: 'NEGOTIATED'
     });
     const synced = await h.api('post', `/issued-cards/${cardId}/refund`, finance, { kind: 'SYNC' });
@@ -273,14 +273,14 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
     expect(retreat.refund).not.toHaveBeenCalled();
     const saved = await h.prisma.memberBrandCard.findUniqueOrThrow({ where: { id: cardId } });
     expect(saved.state).toBe('REFUNDED');
-    expect(saved.refundCents).toBe(4500);
+    expect(saved.refundCents).toBe(9900);
     expect(saved.refundType).toBe('NEGOTIATED');
 
     const manual = await h.api('post', '/issued-cards', admin, {
       memberId: 'm-cd-sync',
       productCode: 'FY_MONTH',
       mode: 'MANUAL',
-      paidCents: 4500,
+      paidCents: 9900,
       soldBy: 'ql',
       orderRef: orderRef('CRM-MAN-SYNC')
     });
@@ -293,7 +293,7 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
   });
 
   it('重试开卡/撤销：只对轻疗线上卡开放并留审计', async () => {
-    const cardId = await seedPaidCard({ memberId: 'm-cd-retry', orderRef: 'QL-CARD-RETRY-1', paidCents: 4500 });
+    const cardId = await seedPaidCard({ memberId: 'm-cd-retry', orderRef: 'QL-CARD-RETRY-1', paidCents: 9900 });
     retreat.retry.mockResolvedValue({ orderSn: 'QL-CARD-RETRY-1', replayed: false });
     const res = await h.api('post', `/issued-cards/${cardId}/retry`, admin, { kind: 'SETTLE' });
     expect(res.status).toBe(200);
@@ -338,7 +338,7 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
     retreat.order.mockResolvedValue({
       orderSn: 'seed:annual',
       state: 1,
-      paidCents: 29900,
+      paidCents: 36500,
       refundState: 'NONE',
       crmRefunded: null
     });

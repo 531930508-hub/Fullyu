@@ -41,13 +41,13 @@ pnpm dev:server                                # 先编 shared，再 tsx watch
 |---|---|
 | `packages/shared/src/index.ts` | 业务枚举与对外键映射、14 个权限点、四角色模板、500 分免审阈值、积分为期 |
 | `apps/server/prisma/schema.prisma` | 员工与角色、会员与身份、积分批次/流水、调整单、审计、幂等键、大会员卡产品/版本、会员卡期/报价、nonce、游戏状态/票据/骰子账本/礼物、规则版本、outbox、业务同步状态 |
-| `apps/server/prisma/seed.ts` | 合成账号与会员；年卡/月卡；林小满生效年卡与骰子；积分与骰子 CURRENT 规则；`SEED_PASSWORD` 仅用于本地/测试 |
+| `apps/server/prisma/seed.ts` | 合成账号与会员；大会员/月会员；林小满生效大会员与骰子；积分与骰子 CURRENT 规则；`SEED_PASSWORD` 仅用于本地/测试 |
 | `apps/server/src/auth` | 登录（bcrypt + JWT）、`/auth/me`、员工守卫、权限守卫 |
 | `apps/server/src/members` | 列表检索、档案（含明文手机号、品牌卡与骰子摘要）、资料修改（乐观锁） |
 | `apps/server/src/points` | 账本（批次/流水）、单笔与批量调整、审批状态机 |
 | `apps/server/src/cards` | 大会员卡产品/版本状态机、业务会员卡目录（只读归属不可改） |
 | `apps/server/src/game` | 愈行之旅：骰子领取/退款、掷骰与礼物、规则版本（未来生效、撤销） |
-| `apps/server/src/reports` | 月度对账：年卡售卖/退款、积分发行/消耗、骰子发放/消耗，只出事实数据 |
+| `apps/server/src/reports` | 月度对账：大会员售卖/退款、积分发行/消耗、骰子发放/消耗，只出事实数据 |
 | `apps/server/src/sync` | outbox 投递、HMAC webhook、重试退避、同步滞后、异常队列 |
 | `apps/server/src/roles` | 角色权限读取与在线调整；CRM 管理员受保护 |
 | `apps/server/src/audit` | 审计查询（`crm:audit:view`） |
@@ -116,12 +116,15 @@ pnpm dev:server                                # 先编 shared，再 tsx watch
 |---|---|
 | `POST /external/members/resolve` | 按本地用户 id + unionId + 手机号解析/创建；返回会员号与余额 |
 | `GET /external/members/:localUserId` | 查本业务用户 |
+| `PATCH /external/members/:localUserId/profile` | 改会员资料（`name` / `gender` / `birthday` / `avatarUrl`），必须带 `baseVersion`，版本不符 409 `PROFILE_CONFLICT` |
 | `POST /external/members/import` | ≤500 条批量导入，逐条幂等，返回新建/绑定/已存在/失败 |
 | `POST /external/members/birthdays` | ≤200 个本地用户 id 批量查生日，仅返回本业务已同步身份（`YYYY-MM-DD` 或 null） |
 | `POST /external/points/earn` | 加分，`points>0`，带 `reason` 与 `ref` |
 | `POST /external/points/consume` | 扣分，余额不足 422，按到期最早优先 |
 
-身份匹配：本业务身份 → unionId（存在身份上）→ 手机号；unionId 与手机号命中不同会员时 409 `IDENTITY_CONFLICT`，不自动合并；外部只补空缺资料，不覆盖 CRM 已有值。
+身份匹配：本业务身份 → unionId（存在身份上）→ 手机号；unionId 与手机号命中不同会员时 409 `IDENTITY_CONFLICT`，不自动合并；`resolve` 只补空缺资料，不覆盖 CRM 已有值。
+
+会员资料是跨端唯一主档：`GET /members/:localUserId` 与 `resolve` 都返回 `name / gender / birthday / avatarUrl / profileVersion`。业务端改资料用 `PATCH .../profile`，请求体只带要改的字段加 `baseVersion`；成功后 CRM 按已绑定身份写 outbox（`member.profile.updated`），payload 形如 `{topic, memberNo, version, name, gender, birthday, avatarUrl, identities:[{business, localUserId}]}`，业务端按 `version` 判新旧，旧版本直接丢弃。头像统一存 http(s) URL。
 
 ### 品牌会员契约（`X-Fy-*`）
 
@@ -136,7 +139,7 @@ timestamp\nnonce\nMETHOD\n/api/v1/brand-member/...（含查询串）\nsha256hex(
 | 方法与路径 | 说明 |
 |---|---|
 | `GET /v1/brand-member/me?business=&localUserId=` | 身份（脱敏手机号）、品牌卡期、积分、骰子、权益、游戏 URL；续费未生效时附 `pendingCard` |
-| `GET /v1/brand-member/products` | 当前生效的月卡/年卡、价格、天数、权益、积分模式 |
+| `GET /v1/brand-member/products` | 当前生效的月会员/大会员、价格、天数、权益、积分模式 |
 | `POST /v1/brand-member/quote` | 报价 30 分钟有效；金额与版本由 CRM 决定 |
 | `POST /v1/brand-member/issue` | 支付后开卡；`paidCents` 必须等于报价，`orderRef` 幂等；续费接在旧卡结束后一天 |
 | `POST /v1/brand-member/game/ticket` | 有效品牌卡换 5 分钟一次性票据；库里只存哈希 |
@@ -168,7 +171,7 @@ timestamp\nnonce\nMETHOD\n/api/v1/brand-member/...（含查询串）\nsha256hex(
 
 - `pnpm test`：**55/55 通过**（Jest 29 + supertest，每个 spec 复制独立 SQLite 模板库）。覆盖会员/积分/审计、大会员卡与业务卡、`x-crm-*` 与 `X-Fy-*` 契约、骰子/规则/礼物、月度对账、outbox 投递与重试、角色权限即时生效；含“审批人不能是发起人”、重复领取 409、无卡 403、月上限、余额不足整单回滚等负向用例。
 - `pnpm lint`：server 与 shared 无类型错误；`pnpm build:server` 通过。
-- 管理后台（同源 `/admin/`，合成账号）：登录、概览、会员检索与档案、≤500 直接入账、>500 待审批、发起人自审 403、财务审批后入账、规则待生效版本创建与撤销、年卡草稿版本创建与激活（旧版归档）、业务卡目录编辑、同步即时投递、角色权限保存均实测通过；页面无控制台错误。后台只调用服务端 API，权限负向由服务端返回。
+- 管理后台（同源 `/admin/`，合成账号）：登录、概览、会员检索与档案、≤500 直接入账、>500 待审批、发起人自审 403、财务审批后入账、规则待生效版本创建与撤销、大会员草稿版本创建与激活（旧版归档）、业务卡目录编辑、同步即时投递、角色权限保存均实测通过；页面无控制台错误。后台只调用服务端 API，权限负向由服务端返回。
 - 启动冒烟：`node dist/main.js`（`/api/health` 200、`/admin/` 200、`/` 302 到 `/admin/`）；登录、会员检索、同键重放、>500 待审、财务审批入账均已实测。
 - 1C/1D 契约冒烟：真实 HMAC 调用 `me`、产品、报价/开卡、游戏票据、掷骰、得骰/退款；同 nonce 409 `REPLAYED`、金额不符 409 `AMOUNT_MISMATCH`、无卡 403，均实测。冒烟与 UI 联调后已重新 seed 恢复干净状态。
 - 未测：真实 MySQL、并发压测、真实支付回调、三端真机联调、部署环境与监控。后台 UI 是功能 E1，不是视觉验收；截图视觉检查需在可用浏览器窗口下单独进行。

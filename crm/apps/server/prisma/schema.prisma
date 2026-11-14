@@ -208,7 +208,7 @@ model BrandCardVersion {
   benefitsJson    String    @default("[]") @map("benefits_json")
   pointsSpendJson String    @default("{}") @map("points_spend_json")
   gameEnabled     Boolean   @default(true) @map("game_enabled")
-  // 开通即送的实物礼：[{title, desc, valueCents}]；只配在年卡上，月卡/赠送卡不发。
+  // 开通即送的实物礼：[{title, desc, valueCents}]；只配在大会员卡上，月会员卡/赠送卡不发。
   giftsJson       String    @default("[]") @map("gifts_json")
   // 业态专属权益开关：{presence:{prioritySeat, tierPrice, invitesPerMonth}}
   perksJson       String    @default("{}") @map("perks_json")
@@ -498,7 +498,7 @@ model MemberOrder {
   @@map("member_orders")
 }
 
-// 年卡实物礼提货券：任意门店出示，店员人工核销一次即失效。
+// 大会员卡实物礼提货券：任意门店出示，店员人工核销一次即失效。
 model PickupVoucher {
   id             String    @id
   code           String    @unique

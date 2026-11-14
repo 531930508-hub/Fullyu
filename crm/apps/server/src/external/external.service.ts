@@ -8,6 +8,8 @@ import { badRequest, conflict, notFound } from '../common/errors';
 import { newId } from '../common/ids';
 import { runIdempotent } from '../common/idempotency';
 import { normalizePhone } from '../common/phone';
+import { enqueueProfileUpdated } from '../common/member-events';
+import { parseProfilePatch } from '../members/profile-patch';
 import type { ExternalContext } from './external.guard';
 
 export type ResolveInput = {
@@ -57,9 +59,7 @@ export class ExternalService {
     const data = this.normalizeResolve(input);
     const result = await this.resolveOne(data, context.business, true);
     return {
-      memberId: result.member.id,
-      memberNo: result.member.memberNo,
-      name: result.member.name,
+      ...this.profileView(result.member),
       balance: await this.points.balance(result.member.id),
       created: result.created,
       bound: result.bound
@@ -74,11 +74,63 @@ export class ExternalService {
     });
     if (!identity) throw notFound('该本地用户尚未同步到 CRM');
     return {
-      memberId: identity.member.id,
-      memberNo: identity.member.memberNo,
-      name: identity.member.name,
-      status: identity.member.status,
+      ...this.profileView(identity.member),
       balance: await this.points.balance(identity.member.id)
+    };
+  }
+
+  /**
+   * 业务端修改会员资料：资料是跨端唯一主档，改动按版本号做乐观锁，
+   * 成功后就地写 outbox，把最新资料推给该会员已绑定的所有业务。
+   */
+  async updateProfile(
+    localUserId: string,
+    input: { baseVersion?: unknown; name?: unknown; gender?: unknown; birthday?: unknown; avatarUrl?: unknown },
+    context: ExternalContext
+  ) {
+    this.assertLocalId(localUserId);
+    const identity = await this.prisma.memberIdentity.findUnique({
+      where: { business_localUserId: { business: context.business, localUserId } },
+      include: { member: true }
+    });
+    if (!identity) throw notFound('该本地用户尚未同步到 CRM');
+    const member = identity.member;
+    if (member.status !== 'ACTIVE') throw badRequest('该会员不是有效状态，不能修改资料');
+    const baseVersion = input?.baseVersion;
+    if (!Number.isInteger(baseVersion)) throw badRequest('缺少资料版本');
+    const data = parseProfilePatch(input);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // 条件更新代替先查后写，两个并发同版本请求只有一个能成功
+      const patched = await tx.member.updateMany({
+        where: { id: member.id, profileVersion: baseVersion as number },
+        data: { ...data, profileVersion: { increment: 1 } }
+      });
+      if (patched.count === 0) throw conflict('资料已被其他人修改，请刷新后重试', { code: 'PROFILE_CONFLICT' });
+      const next = await tx.member.findUniqueOrThrow({ where: { id: member.id } });
+      const identities = await tx.memberIdentity.findMany({ where: { memberId: member.id } });
+      await enqueueProfileUpdated(tx, next, identities, 'external');
+      return next;
+    });
+    await audit(this.prisma, {
+      actor: actorOf(context.business, context),
+      action: '外部修改会员资料',
+      target: member.memberNo,
+      detail: `v${member.profileVersion}→v${updated.profileVersion}`
+    });
+    return this.profileView(updated);
+  }
+
+  private profileView(member: Member) {
+    return {
+      memberId: member.id,
+      memberNo: member.memberNo,
+      name: member.name,
+      status: member.status,
+      gender: member.gender,
+      birthday: member.birthday ? shanghaiDate(member.birthday) : null,
+      avatarUrl: member.avatarUrl,
+      profileVersion: member.profileVersion
     };
   }
 

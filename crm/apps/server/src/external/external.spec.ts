@@ -10,7 +10,7 @@ const SECRETS = {
 
 process.env.CRM_EXT_KEYS = JSON.stringify(SECRETS);
 
-type Method = 'get' | 'post';
+type Method = 'get' | 'post' | 'patch';
 
 describe('CRM 1C：业务端签名接口、身份与积分', () => {
   let h: Harness;
@@ -285,5 +285,64 @@ describe('CRM 1C：业务端签名接口、身份与积分', () => {
     expect(detail.body.balance).toBe(70);
     expect(sum._sum.remaining).toBe(70);
     expect(detail.body.ledger[0].balanceAfter).toBe(70);
+  });
+
+  it('外部改资料：版本不符 409，成功后按已绑定身份推 member.profile.updated', async () => {
+    const created = await signed('post', '/external/members/resolve', {
+      body: { localUserId: 'ql-u-profile', phone: '13700007777', name: '旧名字', gender: 1 }
+    });
+    expect(created.status).toBe(200);
+
+    const read = await signed('get', '/external/members/ql-u-profile');
+    expect(read.body.profileVersion).toBeGreaterThanOrEqual(1);
+
+    // 另一个业务绑定同一会员，验证资料改动会推给所有身份
+    const bound = await signed('post', '/external/members/resolve', {
+      key: 'sx-test',
+      body: { localUserId: 'sx-u-profile', phone: '13700007777' }
+    });
+    expect(bound.body.memberId).toBe(read.body.memberId);
+
+    const stale = await signed('patch', '/external/members/ql-u-profile/profile', {
+      body: { baseVersion: read.body.profileVersion - 1, name: '不该生效' }
+    });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error).toBe('PROFILE_CONFLICT');
+
+    const updated = await signed('patch', '/external/members/ql-u-profile/profile', {
+      body: {
+        baseVersion: read.body.profileVersion,
+        name: '林小满',
+        gender: 2,
+        birthday: '1990-02-03',
+        avatarUrl: 'https://oss.example.com/avatar/1.png'
+      }
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body).toMatchObject({
+      name: '林小满',
+      gender: 2,
+      birthday: '1990-02-03',
+      avatarUrl: 'https://oss.example.com/avatar/1.png',
+      profileVersion: read.body.profileVersion + 1
+    });
+
+    const events = await h.prisma.outboxEvent.findMany({
+      where: { memberId: read.body.memberId, topic: 'member.profile.updated' }
+    });
+    expect(events.map((event) => event.business).sort()).toEqual(['ql', 'sx']);
+    const payload = JSON.parse(events[0].payloadJson);
+    expect(payload.version).toBe(read.body.profileVersion + 1);
+    expect(payload.identities).toEqual(
+      expect.arrayContaining([
+        { business: 'ql', localUserId: 'ql-u-profile' },
+        { business: 'sx', localUserId: 'sx-u-profile' }
+      ])
+    );
+
+    const invalid = await signed('patch', '/external/members/ql-u-profile/profile', {
+      body: { baseVersion: updated.body.profileVersion, avatarUrl: 'not-a-url' }
+    });
+    expect(invalid.status).toBe(400);
   });
 });

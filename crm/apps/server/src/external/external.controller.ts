@@ -1,6 +1,14 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ExternalGuard, type ExternalRequest } from './external.guard';
 import { ExternalService, type PointChangeInput, type ResolveInput } from './external.service';
+
+export type ProfileUpdateInput = {
+  baseVersion?: unknown;
+  name?: unknown;
+  gender?: unknown;
+  birthday?: unknown;
+  avatarUrl?: unknown;
+};
 
 /**
  * 业务端（时叙 / 轻疗 / 在场）调用入口。
@@ -20,6 +28,15 @@ export class ExternalController {
   @Get('members/:localUserId')
   get(@Param('localUserId') localUserId: string, @Req() req: ExternalRequest) {
     return this.external.getByLocalUser(localUserId, req.external!);
+  }
+
+  @Patch('members/:localUserId/profile')
+  updateProfile(
+    @Param('localUserId') localUserId: string,
+    @Body() body: ProfileUpdateInput,
+    @Req() req: ExternalRequest
+  ) {
+    return this.external.updateProfile(localUserId, body || {}, req.external!);
   }
 
   @Post('members/birthdays')

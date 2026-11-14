@@ -4,6 +4,8 @@ import { businessName, toExternalBusiness } from '@fullyu/crm-shared';
 import { PrismaService } from '../common/prisma.service';
 import { badRequest, conflict, notFound } from '../common/errors';
 import { audit } from '../common/audit';
+import { enqueueProfileUpdated } from '../common/member-events';
+import { parseProfilePatch } from './profile-patch';
 import { GameService } from '../game/game.service';
 import type { StaffContext } from '../common/auth.types';
 import { phoneSearchTerms } from '../common/phone';
@@ -172,39 +174,17 @@ export class MembersService {
     if (row.profileVersion !== input.baseVersion) {
       throw conflict('资料已被其他人修改，请刷新后重试');
     }
-    const data: Prisma.MemberUpdateInput = {};
-    if (input.name !== undefined) {
-      const name = input.name.trim();
-      if (name.length < 1 || name.length > 20) throw badRequest('姓名须为 1–20 个字符');
-      data.name = name;
-    }
-    if (input.gender !== undefined) {
-      if (input.gender !== null && input.gender !== 1 && input.gender !== 2) {
-        throw badRequest('性别只能是 1、2 或空');
-      }
-      data.gender = input.gender;
-    }
-    if (input.birthday !== undefined) {
-      if (input.birthday === null) {
-        data.birthday = null;
-      } else {
-        const date = new Date(`${input.birthday}T00:00:00+08:00`);
-        if (Number.isNaN(date.getTime())) throw badRequest('生日格式应为 YYYY-MM-DD');
-        if (date.getTime() > Date.now()) throw badRequest('生日不能晚于今天');
-        data.birthday = date;
-      }
-    }
-    if (input.avatarUrl !== undefined) {
-      if (input.avatarUrl && !/^https?:\/\//.test(input.avatarUrl)) {
-        throw badRequest('头像地址必须是 http(s) URL');
-      }
-      data.avatarUrl = input.avatarUrl || null;
-    }
-    if (!Object.keys(data).length) throw badRequest('没有需要修改的字段');
+    const data = parseProfilePatch(input);
 
-    const updated = await this.prisma.member.update({
-      where: { id },
-      data: { ...data, profileVersion: { increment: 1 } }
+    // 主档改动要落到各业务端，所以和 outbox 同一事务写
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.member.update({
+        where: { id },
+        data: { ...data, profileVersion: { increment: 1 } }
+      });
+      const identities = await tx.memberIdentity.findMany({ where: { memberId: id } });
+      await enqueueProfileUpdated(tx, next, identities, 'staff');
+      return next;
     });
     await audit(this.prisma, {
       actor,

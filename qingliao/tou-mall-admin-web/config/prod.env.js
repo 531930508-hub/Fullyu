@@ -3,5 +3,5 @@
 // 避免测试后台误连生产接口。
 module.exports = {
   NODE_ENV: '"production"',
-  BASE_API: JSON.stringify(process.env.BASE_API || 'https://manage.fullytherapy.com/api')
+  BASE_API: JSON.stringify(process.env.BASE_API || 'https://cityretreat.fullyu.cn/api')
 }
