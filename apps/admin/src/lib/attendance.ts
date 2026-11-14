@@ -117,6 +117,39 @@ export function shiftText(startMin: number, endMin: number): string {
   return `${shiftClock(startMin)}–${shiftClock(endMin)}`;
 }
 
+/** 日期字符串按 UTC 运算：班表只关心「哪一天」，不受设备时区与夏令时影响。 */
+export function addDaysText(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day) + days * 86_400_000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-${pad(next.getUTCDate())}`;
+}
+
+/** 周一为一周的第一天，与后端 `weekStartOf` 同一口径。 */
+export function weekStartText(date: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const dow = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // 0 = 周日
+  return addDaysText(date, -((dow + 6) % 7));
+}
+
+const WEEKDAY_TEXT = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+/** 'YYYY-MM-DD' → 「周四」。 */
+export function weekdayText(date: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+  return WEEKDAY_TEXT[new Date(Date.UTC(year, month - 1, day)).getUTCDay()] || '';
+}
+
+/** 「09:00」→ 540。24:00 合法（班表按「到 24:00」结束）；格式不对返回 null。 */
+export function clockToMinutes(value: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 24 || minutes > 59 || (hours === 24 && minutes !== 0)) return null;
+  return hours * 60 + minutes;
+}
+
 /** 计划 vs 实际的结论文案：只用于提示，不用于任何计算。 */
 export const SHIFT_STATE_LABEL: Record<string, string> = {
   planned: '未开始',

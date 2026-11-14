@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  addDaysText,
+  clockToMinutes,
   currentPosition,
   elapsedText,
   minutesText,
   shanghaiWallClock,
-  wallClockToMs
+  wallClockToMs,
+  weekdayText,
+  weekStartText
 } from './attendance';
 
 afterEach(() => {
@@ -86,5 +90,42 @@ describe('定位', () => {
       }
     });
     await expect(currentPosition()).rejects.toThrow(/定位权限被拒绝/);
+  });
+});
+
+describe('班表日期', () => {
+  it('加减天数跨月、跨年都按日历走', () => {
+    expect(addDaysText('2026-11-14', 1)).toBe('2026-11-15');
+    expect(addDaysText('2026-11-30', 1)).toBe('2026-12-01');
+    expect(addDaysText('2026-12-31', 1)).toBe('2027-01-01');
+    expect(addDaysText('2026-03-01', -1)).toBe('2026-02-28');
+  });
+
+  it('周一是一周的第一天：周日要归到上一周，与后端 weekStartOf 一致', () => {
+    expect(weekStartText('2026-11-14')).toBe('2026-11-09'); // 周六
+    expect(weekStartText('2026-11-09')).toBe('2026-11-09'); // 周一当天
+    expect(weekStartText('2026-11-15')).toBe('2026-11-09'); // 周日不另起一周
+  });
+
+  it('表头星期文案跟着日期走', () => {
+    expect(weekdayText('2026-11-09')).toBe('周一');
+    expect(weekdayText('2026-11-15')).toBe('周日');
+  });
+});
+
+describe('班次时间换算', () => {
+  it('HH:mm 换成当天分钟数', () => {
+    expect(clockToMinutes('09:00')).toBe(540);
+    expect(clockToMinutes('9:05')).toBe(545);
+    expect(clockToMinutes('00:00')).toBe(0);
+    // 24:00 是「当天结束」，班表里合法
+    expect(clockToMinutes('24:00')).toBe(1440);
+  });
+
+  it('非法值返回 null，交给界面提示而不是猜一个时间', () => {
+    expect(clockToMinutes('')).toBeNull();
+    expect(clockToMinutes('24:30')).toBeNull();
+    expect(clockToMinutes('25:00')).toBeNull();
+    expect(clockToMinutes('09:60')).toBeNull();
   });
 });

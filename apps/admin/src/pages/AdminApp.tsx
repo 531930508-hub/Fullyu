@@ -38,7 +38,20 @@ import {
   percent,
   todayText
 } from '../lib/format';
-import { SESSION_LABEL, elapsedText, minutesText as durationText, sessionTone } from '../lib/attendance';
+import {
+  SESSION_LABEL,
+  SHIFT_STATE_LABEL,
+  addDaysText,
+  clockToMinutes,
+  elapsedText,
+  minutesText as durationText,
+  sessionTone,
+  shiftClock,
+  shiftStateTone,
+  shiftText,
+  weekdayText,
+  weekStartText
+} from '../lib/attendance';
 import { HOME_IMAGE_HEIGHT, HOME_IMAGE_WIDTH, MAX_UPLOAD_BYTES, prepareHomeImage, prepareProductImage } from '../lib/image';
 import type {
   Approval,
@@ -67,6 +80,7 @@ import type {
   ProfitReport,
   Role,
   Series,
+  ShiftCell,
   StaffRow,
   Store,
   WorkSettlement
@@ -80,6 +94,7 @@ type Section =
   | 'profit'
   | 'expenses'
   | 'approvals'
+  | 'schedule'
   | 'attendance'
   | 'settlements'
   | 'losses'
@@ -98,6 +113,7 @@ const SECTION_TITLE: Record<Section, string> = {
   profit: '门店利润',
   expenses: '运营费用',
   approvals: '审批中心',
+  schedule: '排班表',
   attendance: '在店看板',
   settlements: '劳务结算',
   losses: '报损与损耗',
@@ -118,6 +134,7 @@ const SECTION_PERM: Record<Section, string> = {
   profit: 'dashboard:profit',
   expenses: 'finance:view',
   approvals: 'approval:view',
+  schedule: 'attendance:view',
   attendance: 'attendance:view',
   settlements: 'attendance:settle',
   losses: 'loss:view',
@@ -137,6 +154,7 @@ const SECTION_ORDER: Section[] = [
   'profit',
   'expenses',
   'approvals',
+  'schedule',
   'attendance',
   'settlements',
   'losses',
@@ -320,6 +338,7 @@ export function AdminApp() {
       {allowed && section === 'profit' ? <ProfitPage /> : null}
       {allowed && section === 'expenses' ? <ExpensesPage /> : null}
       {allowed && section === 'approvals' ? <ApprovalsPage onChanged={refreshApprovalCount} /> : null}
+      {allowed && section === 'schedule' ? <SchedulePage /> : null}
       {allowed && section === 'attendance' ? <AttendancePage /> : null}
       {allowed && section === 'settlements' ? <SettlementsPage /> : null}
       {allowed && section === 'losses' ? <LossesPage /> : null}
@@ -1693,6 +1712,445 @@ function RefundRulePanel() {
   );
 }
 
+/* ------------------------------- 排班表 ------------------------------- */
+
+/** 30 分钟一档的选择项；已有班次不在整点半上时补进去，避免打开就丢值。 */
+function timeOptions(from: number, to: number, extra: number[] = []) {
+  const values = new Set<number>();
+  for (let minute = from; minute <= to; minute += 30) values.add(minute);
+  for (const minute of extra) if (minute >= from && minute <= to) values.add(minute);
+  return [...values].sort((a, b) => a - b);
+}
+
+/**
+ * 排班表：人 × 天的一格一段，点格子改。
+ *
+ * 故意不做「模板/批量复制」：门店一周只有几十格，逐格改反而不会错；
+ * 班表也不参与打卡校验，它只在看板上提示计划 vs 实际，工资仍按实际工时结算。
+ */
+function SchedulePage() {
+  const { can } = useStaffAuth();
+  const notify = useToast();
+  const confirm = useConfirm();
+  const canManage = can('attendance:manage');
+
+  const [storeId, setStoreId] = useState('');
+  const [anchor, setAnchor] = useState(() => weekStartText(todayText()));
+  const [editing, setEditing] = useState<{ userId: string; name: string; cell: ShiftCell } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const from = anchor;
+  const to = addDaysText(anchor, 6);
+  const query = useApi(() => api.attendanceShifts({ storeId: storeId || undefined, from, to }), [storeId, from, to]);
+
+  if (query.loading && !query.data) return <Spinner label="正在读取班表" />;
+  if (query.error && !query.data) return <InlineError message={query.error} />;
+  const data = query.data;
+  if (!data) return null;
+
+  const currentWeek = weekStartText(data.today);
+  const earliest = addDaysText(data.today, -data.limits.pastEditDays);
+  const latest = addDaysText(data.today, data.limits.futureEditDays);
+  const canEditDay = (day: string) => canManage && day >= earliest && day <= latest;
+  const weekTag =
+    from === currentWeek ? '本周' : from === addDaysText(currentWeek, 7) ? '下周' : from === addDaysText(currentWeek, -7) ? '上周' : '';
+  // 短时只在「往天」成立，直接数格子，不额外让服务端算一个只用于文案的数字。
+  const shortDays = data.rows.reduce(
+    (sum, row) => sum + row.cells.filter((cell) => cell.state === 'short').length,
+    0
+  );
+
+  const openEditor = (userId: string, name: string, cell: ShiftCell) => {
+    setSaveError(null);
+    setEditing({ userId, name, cell });
+  };
+
+  const saveShift = async (start: string, end: string, note: string) => {
+    if (!editing) return;
+    const startMin = clockToMinutes(start);
+    const endMin = clockToMinutes(end);
+    if (startMin == null || endMin == null) {
+      setSaveError('请选择开始和结束时间');
+      return;
+    }
+    if (endMin <= startMin) {
+      setSaveError('结束时间要晚于开始时间（跨零点请拆成两天）');
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await api.attendanceSaveShift({
+        storeId: data.storeId,
+        userId: editing.userId,
+        businessDate: editing.cell.businessDate,
+        startMin,
+        endMin,
+        note
+      });
+      setEditing(null);
+      notify(`${editing.name} ${editing.cell.businessDate} 的班次已保存`);
+      await query.reload({ silent: true });
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : '保存失败，请稍后重试');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearShift = async () => {
+    if (!editing) return;
+    const ok = await confirm({
+      title: '清空这一天的班',
+      message: `${editing.name} · ${editing.cell.businessDate} 的计划会删除；已经记录的实际工时不受影响。`,
+      confirmText: '清空',
+      tone: 'danger'
+    });
+    if (!ok) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await api.attendanceClearShift({
+        storeId: data.storeId,
+        userId: editing.userId,
+        businessDate: editing.cell.businessDate
+      });
+      setEditing(null);
+      notify('已清空这一天的班');
+      await query.reload({ silent: true });
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : '清空失败，请稍后重试');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cellView = (name: string, userId: string, cell: ShiftCell) => {
+    const editable = canEditDay(cell.businessDate);
+    const reason = !canManage
+      ? '当前账号只能查看班表'
+      : editable
+        ? ''
+        : `只能修改 ${earliest} 之后、${latest} 之前的班`;
+    const stateText =
+      cell.shift && (cell.state === 'done' || cell.state === 'short' || cell.state === 'absent')
+        ? SHIFT_STATE_LABEL[cell.state]
+        : '';
+    const body = (
+      <>
+        {cell.shift ? (
+          <span className="mono">{shiftText(cell.shift.startMin, cell.shift.endMin)}</span>
+        ) : (
+          <span className="shift-empty">{canManage ? '＋' : '—'}</span>
+        )}
+        {stateText ? <small className={`shift-state tone-${shiftStateTone(cell.state)}`}>{stateText}</small> : null}
+      </>
+    );
+    if (!editable) {
+      return (
+        <div className="shift-cell is-static" title={reason}>
+          {body}
+        </div>
+      );
+    }
+    return (
+      <button
+        type="button"
+        className="shift-cell"
+        title={cell.shift ? '点击修改这一天的班' : '点击排班'}
+        aria-label={
+          cell.shift
+            ? `${name} ${cell.businessDate} ${shiftText(cell.shift.startMin, cell.shift.endMin)}，点击修改`
+            : `${name} ${cell.businessDate} 未排班，点击排班`
+        }
+        onClick={() => openEditor(userId, name, cell)}
+      >
+        {body}
+      </button>
+    );
+  };
+
+  return (
+    <>
+      <PageHead
+        eyebrow="品牌总部 · 门店"
+        title="排班表"
+        description="按门店排「几点该来」。周一起算，一次改一格；班表只作计划 vs 实际的对照，不拦打卡、不参与工资计算。"
+        actions={
+          <div className="row-gap">
+            <select
+              value={storeId || data.storeId}
+              onChange={(event) => setStoreId(event.target.value)}
+              aria-label="门店"
+            >
+              {data.stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAnchor(addDaysText(from, -7))}>
+              上一周
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAnchor(currentWeek)}>
+              本周
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAnchor(addDaysText(from, 7))}>
+              下一周
+            </button>
+          </div>
+        }
+        meta={
+          <>
+            <span>
+              {data.storeName} · {from} — {to}
+            </span>
+            {weekTag ? <Badge tone="accent">{weekTag}</Badge> : null}
+            <span>
+              {canManage ? `可修改 ${earliest} 起、${latest} 前的班` : '只读：修改班表需要「维护计划班次」权限'}
+            </span>
+          </>
+        }
+      />
+
+      <div className="stat-grid">
+        <Stat
+          label="计划工时"
+          value={durationText(data.summary.plannedMinutes)}
+          hint={`${data.summary.people} 人排了班`}
+          icon="calendar"
+        />
+        <Stat
+          label="已记实际工时"
+          value={durationText(data.summary.actualMinutes)}
+          hint="只算已闭合的计时时段"
+          icon="clock"
+        />
+        <Stat
+          label="缺勤天数"
+          value={data.summary.absentDays}
+          hint={
+            data.summary.absentDays
+              ? `往天排了班却没计时，先确认是否请假${shortDays ? ` · ${shortDays} 天短时` : ''}`
+              : shortDays
+                ? `往天都来了 · ${shortDays} 天短时`
+                : '往天没有排了班却没来的情况'
+          }
+          tone={data.summary.absentDays ? 'soft' : 'plain'}
+          icon="alert"
+        />
+        <Stat
+          label="计划人天"
+          value={data.summary.plannedMinutes ? `${Math.round((data.summary.plannedMinutes / 480) * 10) / 10}` : '—'}
+          hint="按 8 小时一天折算，只用于估人力"
+          icon="users"
+        />
+      </div>
+
+      <Panel
+        title="一周班表"
+        description={canManage ? '点任意格子填时间，再点一次就是改。同一个人同一天只排一段。' : '当前账号可查看班表。'}
+        flush
+      >
+        {query.error ? <InlineError message={`${query.error}（展示的是最近一次成功读取的班表）`} /> : null}
+        {!data.rows.length ? (
+          <EmptyState
+            icon="users"
+            title="这家店还没有可排班的员工"
+            description="先到「账号管理」把员工挂到这家店，再回来排班。"
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl shift-grid">
+              <thead>
+                <tr>
+                  <th className="shift-name">员工</th>
+                  {data.days.map((day) => (
+                    <th key={day} className={`shift-day ${day === data.today ? 'is-today' : ''}`}>
+                      <span>{weekdayText(day)}</span>
+                      <small>
+                        {day.slice(5)}
+                        {day === data.today ? ' · 今天' : ''}
+                      </small>
+                    </th>
+                  ))}
+                  <th className="num">计划合计</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((row) => (
+                  <tr key={row.userId}>
+                    <td className="shift-name">
+                      <strong>{row.name}</strong>
+                      <small className="sub-cell">
+                        {row.plannedMinutes ? `计划 ${durationText(row.plannedMinutes)}` : '未排班'}
+                      </small>
+                    </td>
+                    {row.cells.map((cell) => (
+                      <td key={cell.businessDate} className={cell.businessDate === data.today ? 'is-today' : ''}>
+                        {cellView(row.name, row.userId, cell)}
+                      </td>
+                    ))}
+                    <td className="num">{row.plannedMinutes ? durationText(row.plannedMinutes) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <div className="notice">
+        <Icon name="info" size={15} />
+        <span>
+          班表是「计划」，只用来对照：迟到、早走、临时来帮忙都不会被拦，缺勤/短时也只在看板上提示。
+          工资按实际计时结算，月底出工时结算单时不会用到这一页。
+        </span>
+      </div>
+
+      <ShiftEditor
+        open={Boolean(editing)}
+        storeName={data.storeName}
+        editing={editing}
+        saving={saving}
+        error={saveError}
+        onClose={() => setEditing(null)}
+        onSave={saveShift}
+        onClear={clearShift}
+      />
+    </>
+  );
+}
+
+/** 单格编辑器：只改这一人这一天的开始/结束与备注。 */
+function ShiftEditor({
+  open,
+  storeName,
+  editing,
+  saving,
+  error,
+  onClose,
+  onSave,
+  onClear
+}: {
+  open: boolean;
+  storeName: string;
+  editing: { userId: string; name: string; cell: ShiftCell } | null;
+  saving: boolean;
+  error: string | null;
+  onClose: () => void;
+  onSave: (start: string, end: string, note: string) => void;
+  onClear: () => void;
+}) {
+  const [start, setStart] = useState('09:00');
+  const [end, setEnd] = useState('18:00');
+  const [note, setNote] = useState('');
+
+  const shift = editing?.cell.shift || null;
+  const startExtra = shift ? shift.startMin : null;
+  const endExtra = shift ? shift.endMin : null;
+
+  useEffect(() => {
+    if (!open || !editing) return;
+    setStart(editing.cell.shift ? shiftClock(editing.cell.shift.startMin) : '09:00');
+    setEnd(editing.cell.shift ? shiftClock(editing.cell.shift.endMin) : '18:00');
+    setNote(editing.cell.shift?.note || '');
+  }, [open, editing]);
+
+  if (!editing) return null;
+  const cell = editing.cell;
+  const startMin = clockToMinutes(start);
+  const endMin = clockToMinutes(end);
+  const planMinutes = startMin != null && endMin != null && endMin > startMin ? endMin - startMin : 0;
+  const presets: Array<{ label: string; start: string; end: string }> = [
+    { label: '早班 09:00–18:00', start: '09:00', end: '18:00' },
+    { label: '晚班 12:00–21:00', start: '12:00', end: '21:00' },
+    { label: '半天 10:00–14:00', start: '10:00', end: '14:00' }
+  ];
+
+  return (
+    <Modal
+      open={open}
+      title={`排班 · ${editing.name}`}
+      description={`${cell.businessDate} ${weekdayText(cell.businessDate)} · ${storeName}｜同一个人同一天只排一段`}
+      onClose={onClose}
+      footer={
+        <>
+          {cell.shift ? (
+            <button type="button" className="btn btn-ghost" onClick={onClear} disabled={saving}>
+              清空这一天
+            </button>
+          ) : null}
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
+            取消
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => onSave(start, end, note)}
+            disabled={saving || !planMinutes}
+          >
+            {saving ? '保存中…' : '保存班次'}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid">
+        <Field label="开始时间">
+          <select value={start} onChange={(event) => setStart(event.target.value)} aria-label="开始时间">
+            {timeOptions(0, 1439, startExtra == null ? [] : [startExtra]).map((minute) => (
+              <option key={minute} value={shiftClock(minute)}>
+                {shiftClock(minute)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="结束时间" hint="跨零点请拆成两天，各排一段。">
+          <select value={end} onChange={(event) => setEnd(event.target.value)} aria-label="结束时间">
+            {timeOptions(30, 1440, endExtra == null ? [] : [endExtra]).map((minute) => (
+              <option key={minute} value={shiftClock(minute)}>
+                {shiftClock(minute)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="备注（可选）" className="span-2" hint="如「早班」「临时顶班」，只给排班的人看。">
+          <input
+            value={note}
+            maxLength={80}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="例如：早班 / 顶班"
+          />
+        </Field>
+      </div>
+
+      <div className="row-gap shift-presets">
+        {presets.map((preset) => (
+          <button
+            key={preset.label}
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              setStart(preset.start);
+              setEnd(preset.end);
+            }}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="shift-plan-preview">
+        这段计划 {planMinutes ? durationText(planMinutes) : '—'}
+        {cell.actualMinutes ? ` · 当天已记 ${durationText(cell.actualMinutes)}` : ''}
+      </div>
+
+      {error ? <InlineError message={error} /> : null}
+    </Modal>
+  );
+}
+
 /* ------------------------------- losses ------------------------------- */
 
 /* ------------------------------ 在店看板 ------------------------------ */
@@ -1750,7 +2208,16 @@ function AttendancePage() {
           hint={`统计范围：${data.storeName}`}
           icon="users"
         />
-        <Stat label="已计入工时" value={durationText(data.summary.totalMinutes)} hint={`${data.summary.peopleCount} 人有记录`} icon="clock" />
+        <Stat
+          label="已计入工时"
+          value={durationText(data.summary.totalMinutes)}
+          hint={
+            data.summary.plannedMinutes
+              ? `计划 ${durationText(data.summary.plannedMinutes)} · ${data.summary.peopleCount} 人`
+              : `${data.summary.peopleCount} 人有记录`
+          }
+          icon="clock"
+        />
         <Stat
           label="进行中"
           value={durationText(data.summary.liveMinutes)}
@@ -1846,7 +2313,40 @@ function AttendancePage() {
         )}
       </Panel>
 
-      <Panel title={`按人汇总 · ${data.date}`} description="同一人当天多段会累加；跨店时括号里注明门店。" flush>
+      {data.notClocked.length ? (
+        <Panel
+          title="排了班没打卡"
+          description="这一天在班表里有计划，却一条计时记录都没有。先确认是不是请假或临时调店，别直接当缺勤。"
+          flush
+        >
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>员工</th>
+                  <th>门店</th>
+                  <th className="num">计划工时</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.notClocked.map((row) => (
+                  <tr key={row.userId}>
+                    <td>{row.name}</td>
+                    <td className="tiny muted">{row.storeNames.join('、') || '—'}</td>
+                    <td className="num">{durationText(row.plannedMinutes)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      ) : null}
+
+      <Panel
+        title={`按人汇总 · ${data.date}`}
+        description="同一人当天多段会累加；「计划」来自班表，只作对照，工资按实际工时结算。"
+        flush
+      >
         {!data.rows.length ? (
           <EmptyState icon="users" title="这一天没有在店记录" description="换一天或换门店看看。" />
         ) : (
@@ -1857,6 +2357,7 @@ function AttendancePage() {
                   <th>员工</th>
                   <th>门店</th>
                   <th className="num">段数</th>
+                  <th className="num">计划</th>
                   <th className="num">已计入</th>
                   <th className="num">进行中</th>
                   <th className="num">未闭合</th>
@@ -1868,6 +2369,7 @@ function AttendancePage() {
                     <td>{row.name}</td>
                     <td className="tiny muted">{row.storeNames.join('、') || '—'}</td>
                     <td className="num">{row.sessions.length}</td>
+                    <td className="num muted">{row.plannedMinutes ? durationText(row.plannedMinutes) : '—'}</td>
                     <td className="num">{durationText(row.minutes)}</td>
                     <td className="num muted">{row.liveMinutes ? durationText(row.liveMinutes) : '—'}</td>
                     <td className="num">

@@ -43,6 +43,8 @@ export const OPS_NAV: OpsNavItem[] = [
   { key: 'admin/finance', label: '财务流水', icon: 'coin', perm: 'finance:view', group: '经营分析' },
   { key: 'admin/profit', label: '门店利润', icon: 'sliders', perm: 'dashboard:profit', group: '经营分析' },
   { key: 'admin/expenses', label: '运营费用', icon: 'receipt', perm: 'finance:view', group: '经营分析' },
+  // 排班在在店看板之前：先排「几点该来」，再看「今天谁在」。
+  { key: 'admin/schedule', label: '排班表', icon: 'calendar', perm: 'attendance:view', group: '运营管理' },
   { key: 'admin/attendance', label: '在店看板', icon: 'users', perm: 'attendance:view', group: '运营管理' },
   // 结算紧跟在店看板之后：看板看「今天谁在」，结算看「这个月该结多少」。
   { key: 'admin/settlements', label: '劳务结算', icon: 'coin', perm: 'attendance:settle', group: '运营管理' },
