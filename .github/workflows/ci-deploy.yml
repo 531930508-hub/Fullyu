@@ -210,6 +210,19 @@ jobs:
             if ! pnpm --filter @fullyu/server exec prisma db push --schema=prisma/schema.prisma; then
               echo "::warning::prisma db push 未执行成功（测试库 schema 漂移，疑似需 DROP 遗留表/列），已跳过；请人工核对后再对齐 schema"
             fi
+            # 缺列/缺表兜底：db push 被跳过时，代码可能引用 DB 里不存在的列 → 运行期 500。
+            # 2026-11-15 事故：orders.card_type 缺失，登录后拉订单全部 500，而部署显示成功。
+            # 只拦 additive 缺口（ADD COLUMN / CREATE TABLE），历史遗留的 DROP 漂移不拦。
+            export DATABASE_URL="$(grep '^DATABASE_URL' apps/server/.env.local | sed 's/^DATABASE_URL=//; s/^"//; s/"$//')"
+            drift_sql="$(pnpm --filter @fullyu/server exec prisma migrate diff \
+              --from-url "$DATABASE_URL" \
+              --to-schema-datamodel prisma/schema.prisma --script 2>/dev/null || true)"
+            missing="$(printf '%s\n' "$drift_sql" | grep -E 'ADD COLUMN|CREATE TABLE' || true)"
+            if [ -n "$missing" ]; then
+              echo "::error::数据库缺少代码需要的列/表，部署中止（否则运行期会 500）："
+              printf '%s\n' "$missing"
+              exit 1
+            fi
             cd apps/server
             npx tsc --project tsconfig.json
             # PM2 进程 cwd 已是 $SERVER_PATH/apps/server，重启即可；进程不存在时按该 cwd 拉起
