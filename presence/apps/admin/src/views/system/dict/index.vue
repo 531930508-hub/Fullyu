@@ -8,7 +8,7 @@
     </div>
 
     <a-alert
-      message="全系统涉及到的可选值列表（如导师标签、课程分类、性别、会员卡类型等）统一在此配置，无需修改代码。修改后即时生效。"
+      message="全系统涉及到的可选值列表（如导师标签、课程分类、性别等）统一在此配置，无需修改代码。修改后即时生效。"
       type="info" show-icon style="margin-bottom: 16px" />
 
     <a-row :gutter="16">
@@ -57,6 +57,9 @@
                 <a-tag v-if="record.color" :color="record.color">{{ record.label }}</a-tag>
                 <span v-else>{{ record.label }}</span>
               </template>
+              <template v-if="column.dataIndex === 'labelEn'">
+                <span :style="{ color: record.labelEn ? undefined : '#bbb' }">{{ record.labelEn || '—' }}</span>
+              </template>
               <template v-if="column.dataIndex === 'enabled'">
                 <a-switch :checked="record.enabled" size="small" @change="(v: boolean) => toggleItem(record, v)" />
               </template>
@@ -82,6 +85,9 @@
         </a-form-item>
         <a-form-item label="显示名称（label）" required>
           <a-input v-model:value="itemForm.label" placeholder="如 男" />
+        </a-form-item>
+        <a-form-item label="英文显示名称（可选，小程序英文界面用）">
+          <a-input v-model:value="itemForm.labelEn" placeholder="如 Male；留空则英文界面显示中文名称" />
         </a-form-item>
         <a-form-item label="颜色标记（可选）">
           <a-select v-model:value="itemForm.color" allow-clear placeholder="用于标签颜色">
@@ -137,10 +143,11 @@ const colorOptions = ['default', 'blue', 'green', 'purple', 'gold', 'red', 'oran
 
 const itemColumns = [
   { title: '显示名称', dataIndex: 'label', width: 160 },
-  { title: '选项值', dataIndex: 'value', width: 160 },
-  { title: '排序', dataIndex: 'sort', width: 80 },
-  { title: '启用', dataIndex: 'enabled', width: 80 },
-  { title: '操作', dataIndex: 'action', width: 120 },
+  { title: '英文名称', dataIndex: 'labelEn', width: 150 },
+  { title: '选项值', dataIndex: 'value', width: 140 },
+  { title: '排序', dataIndex: 'sort', width: 70 },
+  { title: '启用', dataIndex: 'enabled', width: 70 },
+  { title: '操作', dataIndex: 'action', width: 110 },
 ]
 
 /** 将当前值集的全量选项保存到后端（覆盖式） */
@@ -153,12 +160,12 @@ async function persistItems(items: DictItem[]) {
 // ===== 选项增删改 =====
 const itemModalVisible = ref(false)
 const editingItem = ref<DictItem | null>(null)
-const itemForm = ref<DictItem>({ value: '', label: '', color: undefined, enabled: true, sort: 1 })
+const itemForm = ref<DictItem>({ value: '', label: '', labelEn: '', color: undefined, enabled: true, sort: 1 })
 
 function openAddItem() {
   editingItem.value = null
   const maxSort = Math.max(0, ...(currentSet.value?.items.map((i: DictItem) => i.sort) || [0]))
-  itemForm.value = { value: '', label: '', color: undefined, enabled: true, sort: maxSort + 1 }
+  itemForm.value = { value: '', label: '', labelEn: '', color: undefined, enabled: true, sort: maxSort + 1 }
   itemModalVisible.value = true
 }
 

@@ -867,6 +867,8 @@ model DictItem {
   setId   String  @map("set_id")
   value   String
   label   String
+  /// 英文展示文案；为空时小程序英文界面回退 label
+  labelEn String? @map("label_en")
   color   String?
   enabled Boolean @default(true)
   sort    Int     @default(0)

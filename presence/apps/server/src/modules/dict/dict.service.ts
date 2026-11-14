@@ -45,7 +45,7 @@ export class DictService {
   /** 覆盖式保存某值集的全部选项 */
   async saveItems(
     setId: string,
-    items: { value: string; label: string; color?: string; enabled?: boolean; sort?: number }[],
+    items: { value: string; label: string; labelEn?: string; color?: string; enabled?: boolean; sort?: number }[],
   ) {
     return this.prisma.$transaction(async (tx) => {
       await tx.dictItem.deleteMany({ where: { setId } })
@@ -55,6 +55,7 @@ export class DictService {
             setId,
             value: i.value,
             label: i.label,
+            labelEn: i.labelEn || null,
             color: i.color,
             enabled: i.enabled ?? true,
             sort: i.sort ?? idx + 1,

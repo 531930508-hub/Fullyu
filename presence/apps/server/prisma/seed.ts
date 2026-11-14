@@ -93,7 +93,7 @@ const DICT_SETS: {
   code: string
   name: string
   desc?: string
-  items: { value: string; label: string; color?: string }[]
+  items: { value: string; label: string; labelEn?: string; color?: string }[]
 }[] = [
   {
     code: 'course_type',
@@ -125,6 +125,38 @@ const DICT_SETS: {
       { value: '120', label: '120分钟' },
       { value: '180', label: '180分钟' },
       { value: '360', label: '360分钟（全天）' },
+    ],
+  },
+  {
+    // 社群分类：小程序创建社群与广场筛选、后台社群编辑共用这一份
+    code: 'community_category',
+    name: '社群分类',
+    desc: '主理人创建社群时的分类选项，同时作为社群广场的筛选项（「全部」由前端自动补，不入值集）',
+    items: [
+      { value: '疗愈', label: '疗愈', labelEn: 'Healing' },
+      { value: '瑜伽', label: '瑜伽', labelEn: 'Yoga' },
+      { value: '身心成长', label: '身心成长', labelEn: 'Mind-body growth' },
+      { value: '手作', label: '手作', labelEn: 'Craft' },
+      { value: '健身', label: '健身', labelEn: 'Fitness' },
+    ],
+  },
+  {
+    // 社群标签：value 即中文名称，改了 label 不影响已发布社群的数据匹配
+    code: 'community_tag',
+    name: '社群标签',
+    desc: '主理人创建社群时最多选 3 个，后台最多 4 个；同时用于广场卡片与详情页展示',
+    items: [
+      { value: '良好健康', label: '良好健康', labelEn: 'Good health' },
+      { value: '优质教育', label: '优质教育', labelEn: 'Quality education' },
+      { value: '责任消费', label: '责任消费', labelEn: 'Responsible consumption' },
+      { value: '身心疗愈', label: '身心疗愈', labelEn: 'Mind-body healing' },
+      { value: '身体疗愈', label: '身体疗愈', labelEn: 'Body healing' },
+      { value: '复愈特色', label: '复愈特色', labelEn: 'Recovery practice' },
+      { value: '职业成长', label: '职业成长', labelEn: 'Career growth' },
+      { value: '轻户外', label: '轻户外', labelEn: 'Light outdoor' },
+      { value: '正念', label: '正念', labelEn: 'Mindfulness' },
+      { value: '共修', label: '共修', labelEn: 'Group practice' },
+      { value: '打卡', label: '打卡', labelEn: 'Check-in' },
     ],
   },
 ]
@@ -387,8 +419,8 @@ async function main() {
       const item = set.items[i]
       await prisma.dictItem.upsert({
         where: { setId_value: { setId: dictSet.id, value: item.value } },
-        update: { label: item.label, color: item.color, sort: i },
-        create: { setId: dictSet.id, value: item.value, label: item.label, color: item.color, sort: i },
+        update: { label: item.label, labelEn: item.labelEn, color: item.color, sort: i },
+        create: { setId: dictSet.id, value: item.value, label: item.label, labelEn: item.labelEn, color: item.color, sort: i },
       })
     }
   }

@@ -2,11 +2,15 @@
 import { onLaunch } from '@dcloudio/uni-app'
 import { useUserStore } from './stores/user'
 import { updateTabBarLanguage } from './locale'
+import { hydrateDicts, warmupDicts } from './utils/dict'
 
 onLaunch(() => {
   const userStore = useUserStore()
   userStore.initFromStorage()
   updateTabBarLanguage()
+  // 值集（分类/标签等）先吃本地缓存再后台刷新，页面文案不再写死
+  hydrateDicts()
+  warmupDicts()
 })
 </script>
 

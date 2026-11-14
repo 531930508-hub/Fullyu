@@ -213,8 +213,6 @@ export interface ShareResolveResult {
   imageUrl?: string
 }
 
-export const COMMUNITY_CATEGORIES = ['全部', '疗愈', '瑜伽', '身心成长', '手作', '健身']
-
 /** 《Full愈 社群代结算服务协议》版本号；必须与后端 SETTLEMENT_AGREEMENT_VERSION 保持一致 */
 export const SETTLEMENT_AGREEMENT_VERSION = 'v1.0-2026-10-29'
 /** 平台服务费比例（订阅制社群年费），与协议文本保持一致 */

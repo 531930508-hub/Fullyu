@@ -20,7 +20,7 @@
       <scroll-view scroll-x class="category-scroll" :show-scrollbar="false">
         <view class="category-options">
           <button v-for="cat in categories" :key="cat" class="option" :class="{ selected: currentCat === cat }" @tap="currentCat = cat">
-            {{ categoryLabel(cat) }}<view v-if="currentCat === cat" class="selected-mark"><PresenceIcon name="check" :size="18" color="#f5f6ed" /></view>
+            {{ communityCategoryLabel(cat) }}<view v-if="currentCat === cat" class="selected-mark"><PresenceIcon name="check" :size="18" color="#f5f6ed" /></view>
           </button>
         </view>
       </scroll-view>
@@ -58,9 +58,10 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { onShow, onUnload, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
-import { COMMUNITY_CATEGORIES, fetchCommunities, fetchMine, type Community, type CommunitySort } from '@/api/skool'
-import { tr, isEnglish } from '@/locale'
-import { communityTagLabel } from '@/utils/community-labels'
+import { fetchCommunities, fetchMine, type Community, type CommunitySort } from '@/api/skool'
+import { tr } from '@/locale'
+import { communityCategoryLabel, communityTagLabel } from '@/utils/community-labels'
+import { loadDict, DICT_COMMUNITY_CATEGORY, type DictItem } from '@/utils/dict'
 import { readCapsuleLayout } from '@/utils/capsule'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
@@ -71,11 +72,21 @@ import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 const capsule = readCapsuleLayout()
 const statusBarHeight = capsule.statusBarHeight
 const headerTop = capsule.headerTop
-const categories = COMMUNITY_CATEGORIES
-const CATEGORY_EN: Record<string, string> = {
-  全部: 'All', 疗愈: 'Healing', 瑜伽: 'Yoga', 身心成长: 'Mind-body growth', 手作: 'Craft', 健身: 'Fitness',
+/** 筛选项「全部」是前端哨兵值，不入值集 */
+const ALL_CATEGORY = '全部'
+const categoryItems = ref<DictItem[]>([])
+const categories = computed(() => [ALL_CATEGORY, ...categoryItems.value.map((i) => i.value)])
+/** 分类来自后台值集；接口失败时保留上次缓存（App 启动已 hydrate），至少还有「全部」 */
+async function loadCategories() {
+  try {
+    categoryItems.value = await loadDict(DICT_COMMUNITY_CATEGORY)
+    if (currentCat.value !== ALL_CATEGORY && !categoryItems.value.some((i) => i.value === currentCat.value)) {
+      currentCat.value = ALL_CATEGORY
+    }
+  } catch {
+    // 静默：筛选条退化为仅「全部」，不影响列表浏览
+  }
 }
-function categoryLabel(value: string) { return isEnglish() ? (CATEGORY_EN[value] || value) : value }
 const sorts = computed<{ label: string; value: CommunitySort }[]>(() => [
   { label: tr('推荐', 'Recommended'), value: 'recommend' },
   { label: tr('最新', 'Newest'), value: 'newest' },
@@ -131,7 +142,7 @@ function feeLabel(fee: number) {
   return fee === 0 ? tr('免费', 'Free') : tr(`¥${(fee / 100).toFixed(2)}/年`, `¥${(fee / 100).toFixed(2)}/year`)
 }
 watch([currentCat, currentSort], load)
-onShow(() => { load(); loadMemberships() })
+onShow(() => { loadCategories(); load(); loadMemberships() })
 onUnload(() => { requestId++ })
 function goBack() { uni.navigateBack({ fail: () => uni.switchTab({ url: '/pages/index/index' }) }) }
 function goDetail(id: string) { uni.navigateTo({ url: `/pages/community-detail/index?id=${encodeURIComponent(id)}` }) }

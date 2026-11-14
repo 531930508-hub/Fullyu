@@ -189,17 +189,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   adminListCommunities, createCommunity, updateCommunity,
   auditCommunity, setCommunityStatus, deleteCommunity,
 } from '@/api/community'
 import { uploadFile } from '@/api/upload'
+import { useDictStore } from '@/stores/dict'
 import { communityStatusColor, communityStatusLabel } from '@fullyu/shared'
 
-const CATEGORIES = ['疗愈', '瑜伽', '身心成长', '手作', '健身']
-const TAG_OPTIONS = ['良好健康', '优质教育', '责任消费', '身心疗愈', '身体疗愈', '复愈特色', '职业成长', '轻户外', '正念', '共修', '打卡']
+const dictStore = useDictStore()
+
+/** 分类 / 标签选项统一取「值集管理」，不在前端写死 */
+const CATEGORIES = computed(() => dictStore.getItems('community_category').map((i) => i.value))
+const TAG_OPTIONS = computed(() => dictStore.getItems('community_tag').map((i) => i.value))
 const INTEREST_OPTIONS = ['正念', '瑜伽', '冥想', '呼吸练习', '颂钵', '手作', '阅读', '轻户外', '睡眠', '饮食', '情绪', '体态']
 
 const loading = ref(false)
@@ -243,11 +247,16 @@ const drawerVisible = ref(false)
 const isEdit = ref(false)
 const editingId = ref('')
 
+/** 新建时的默认分类：值集里的第一项，值集为空时留空由必填校验兜底 */
+function defaultCategory() {
+  return CATEGORIES.value[0] || ''
+}
+
 function emptyForm() {
   return {
     name: '',
     slogan: '',
-    category: '疗愈',
+    category: defaultCategory(),
     feeYuan: 0,
     coverUrl: '',
     coverFallback: 'linear-gradient(135deg, #6D5934 0%, #A78E70 100%)',
@@ -279,7 +288,7 @@ function openEdit(record: any) {
   form.value = {
     name: record.name,
     slogan: record.slogan || '',
-    category: record.category || '疗愈',
+    category: record.category || defaultCategory(),
     feeYuan: (record.yearlyFee ?? 0) / 100,
     coverUrl: record.coverUrl || '',
     coverFallback: record.coverFallback || '',
@@ -411,7 +420,11 @@ async function onRemove(record: any) {
   }
 }
 
-onMounted(loadList)
+onMounted(async () => {
+  // 先保证分类/标签选项就绪，再拉列表，避免编辑弹窗拿到空下拉
+  await dictStore.load()
+  loadList()
+})
 </script>
 
 <style scoped>

@@ -9,13 +9,24 @@ const { parse, compileScript, compileTemplate } = require('vue/compiler-sfc')
 const pages = ['community-list', 'community-detail', 'community-mine', 'community-create', 'community-workspace']
 const read = name => fs.readFileSync(path.join(__dirname, 'src/pages', name, 'index.vue'), 'utf8')
 const categories = ['全部', '疗愈', '瑜伽', '身心成长', '手作', '健身']
+const tagOptions = ['良好健康', '优质教育', '责任消费', '身心疗愈', '身体疗愈', '复愈特色', '职业成长', '轻户外', '正念', '共修', '打卡']
+const dict = {
+  DICT_COMMUNITY_CATEGORY: 'community_category',
+  DICT_COMMUNITY_TAG: 'community_tag',
+  dictItems: () => [],
+  dictItemText: item => item.label,
+  dictText: (_code, value) => value,
+  loadDict: async code => (code === 'community_category' ? categories.filter(c => c !== '全部') : tagOptions)
+    .map(value => ({ value, label: value })),
+  hydrateDicts: () => {},
+  warmupDicts: () => {},
+}
 const community = (extra = {}) => ({ id: 'real-id', name: '真实社群', slogan: '一起练习', category: '疗愈', cover: '', owner: { name: '主理人', title: '', avatar: '' }, memberCount: 8, activeToday: 2, yearlyFee: 0, tags: [], description: '真实介绍', ...extra })
 function mount(name, overrides = {}, token = 'token') {
   const hooks = { load: [], show: [], unload: [] }
   const calls = { toast: [], navigate: [], submit: [], join: [] }
   const api = {
-    COMMUNITY_CATEGORIES: categories,
-    // Only to execute the pre-v2 source for the initial red run.
+    // 分类/标签改成后台值集后，页面只依赖 @/utils/dict，这里给出同口径的测试值集
     LEVEL_REWARDS: [], POINTS_USES: [], LEADERBOARD: [], WORKSPACE_STATS: {},
     fetchCommunities: async () => [], fetchMine: async () => ({ joined: [], managed: [] }),
     fetchCommunity: async () => community(), fetchMembership: async () => ({ joined: false, managed: false }),
@@ -42,10 +53,29 @@ function mount(name, overrides = {}, token = 'token') {
     },
     require: id => {
       if (id === 'vue') return vue
-      if (id === '@dcloudio/uni-app') return { onLoad: fn => hooks.load.push(fn), onShow: fn => hooks.show.push(fn), onUnload: fn => hooks.unload.push(fn) }
+      if (id === '@dcloudio/uni-app') return {
+        onLoad: fn => hooks.load.push(fn), onShow: fn => hooks.show.push(fn), onUnload: fn => hooks.unload.push(fn),
+        onHide: () => {}, onReady: () => {},
+        onShareAppMessage: () => {}, onShareTimeline: () => {},
+      }
       if (id === '@/api/skool') return api
       if (id.includes('locale')) return { t: key => key, tr: zh => zh, isEnglish: () => false }
       if (id.includes('utils/capsule')) return { readCapsuleLayout: () => ({ statusBarHeight: 0, headerTop: 16, capsuleRight: 0, navBarHeight: 44, hasCapsule: false }) }
+      if (id.includes('utils/dict')) return dict
+      if (id.includes('utils/share')) return {
+        brandShareMessage: title => ({ title }),
+        brandShareTimeline: title => ({ title }),
+        shareTargetPath: (type, id) => `/pages/share/index?type=${type}&id=${id}`,
+        normalizeScene: raw => raw,
+        rememberShareJump: () => {},
+        peekShareJump: () => '',
+        consumeShareJump: () => '',
+        goLoginFor: () => {},
+        buildQrUrl: scene => scene,
+        buildH5SceneUrl: scene => scene,
+        safeShareTitle: (title, fallback) => title || fallback,
+        BRAND_SHARE_IMAGE: '',
+      }
       if (id.includes('utils/wechat')) return { payOrder: async () => {} }
       if (id.endsWith('.vue')) return {}
       throw new Error(`Unexpected import ${id}`)
@@ -212,7 +242,8 @@ test('创建分3步校验，付费必须为有效的元金额', () => {
   for (const fee of ['', '0', '-1', 'Infinity', '1.001', 'abc']) {
     p.form.value.feeYuan = fee; p.nextStep(); assert.equal(p.step.value, 2, fee)
   }
-  p.form.value.feeYuan = '299.99'; p.nextStep(); assert.equal(p.step.value, 3)
+  p.form.value.feeYuan = '299.99'; p.nextStep(); assert.equal(p.step.value, 2)
+  p.form.value.settlementAgreed = true; p.nextStep(); assert.equal(p.step.value, 3)
   p.previousStep(); assert.equal(p.step.value, 2)
   assert.equal(p.form.value.name, '夜读')
 })
@@ -222,7 +253,7 @@ test('创建提交仅支持字段，金额元转分，API成功才显示成功',
   const p = h.page
   assert.ok(p.submitted, '使用真实提交结果状态')
   p.form.value.name = ' 夜读 '; p.form.value.slogan = ' 睡前共读 '; p.form.value.description = ' 介绍 '
-  p.form.value.feeMode = 'paid'; p.form.value.feeYuan = '299.99'; p.step.value = 3
+  p.form.value.feeMode = 'paid'; p.form.value.feeYuan = '299.99'; p.form.value.settlementAgreed = true; p.step.value = 3
   await p.onSubmit()
   assert.equal(p.submitted.value, false); assert.ok(p.submitError.value)
   let payload
@@ -231,7 +262,7 @@ test('创建提交仅支持字段，金额元转分，API成功才显示成功',
   assert.equal(p.submitted.value, true)
   assert.equal(payload.yearlyFee, 29999)
   assert.equal(payload.name, '夜读')
-  assert.deepEqual(Object.keys(payload).sort(), ['category', 'description', 'name', 'slogan', 'tags', 'yearlyFee'])
+  assert.deepEqual(Object.keys(payload).sort(), ['category', 'description', 'name', 'settlementAgreed', 'slogan', 'tags', 'yearlyFee'])
 })
 
 test('创建缺少有效回执不报成功，重复提交只发一次', async () => {
@@ -327,4 +358,20 @@ test('详情局部接口失败可单独重试，游客不请求会员关系', as
   h.api.fetchPosts = async () => []
   await h.page.loadSection('feed')
   assert.equal(h.page.sectionErrors.value.feed, '')
+})
+
+test('分类/标签改为后台值集驱动，下线选项不再通过校验', async () => {
+  const create = mount('community-create')
+  await create.page.loadOptions()
+  assert.deepEqual(Array.from(create.page.categoryItems.value, c => c.value), categories.filter(c => c !== '全部'))
+  assert.deepEqual(Array.from(create.page.tagItems.value, t => t.value), tagOptions)
+  assert.equal(create.page.form.value.category, '疗愈', '默认选中值集第一项')
+  create.page.form.value.name = '夜读'; create.page.form.value.slogan = '共读'
+  assert.equal(create.page.validateBasic(), '')
+  create.page.form.value.category = '已下线分类'
+  assert.ok(create.page.validateBasic(), '不在值集里的分类不能提交')
+
+  const list = mount('community-list')
+  await list.page.loadCategories()
+  assert.deepEqual(Array.from(list.page.categories.value), categories, '筛选条 = 全部 + 值集选项一字不差')
 })

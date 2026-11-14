@@ -30,11 +30,12 @@
           </view>
           <text class="field-title">{{ tr('分类', 'Category') }}</text>
           <view class="options">
-            <button v-for="cat in categories" :key="cat" class="option" :class="{ selected: form.category === cat }" @tap="form.category = cat">{{ categoryLabel(cat) }}<view v-if="form.category === cat" class="selected-mark"><PresenceIcon name="check" :size="18" color="#f5f6ed" /></view></button>
+            <button v-for="cat in categoryItems" :key="cat.value" class="option" :class="{ selected: form.category === cat.value }" @tap="form.category = cat.value">{{ dictItemText(cat) }}<view v-if="form.category === cat.value" class="selected-mark"><PresenceIcon name="check" :size="18" color="#f5f6ed" /></view></button>
           </view>
+          <text v-if="!categoryItems.length" class="muted">{{ tr('分类选项加载失败，请返回重进或稍后重试。', 'Failed to load categories. Please go back and try again.') }}</text>
           <view class="field-heading"><text class="field-title">{{ tr('标签', 'Tags') }}</text><text class="muted">{{ tr(`最多 3 个 · 已选 ${form.tags.length}`, `Up to 3 · ${form.tags.length} selected`) }}</text></view>
           <view class="options">
-            <button v-for="tag in TAG_OPTIONS" :key="tag" class="option" :class="{ selected: form.tags.includes(tag) }" @tap="onTag(tag)">{{ communityTagLabel(tag) }}<view v-if="form.tags.includes(tag)" class="selected-mark"><PresenceIcon name="check" :size="18" color="#f5f6ed" /></view></button>
+            <button v-for="tag in tagItems" :key="tag.value" class="option" :class="{ selected: form.tags.includes(tag.value) }" @tap="onTag(tag.value)">{{ dictItemText(tag) }}<view v-if="form.tags.includes(tag.value)" class="selected-mark"><PresenceIcon name="check" :size="18" color="#f5f6ed" /></view></button>
           </view>
         </view>
         <view v-else-if="step === 2" class="step-content">
@@ -62,7 +63,7 @@
           <text class="field-title first-title">{{ tr('预览', 'Preview') }}</text>
           <view class="preview-card">
             <BrandCover :label="form.name" height="224rpx" icon="leaf" />
-            <view class="preview-body"><text class="preview-name serif">{{ form.name.trim() }}</text><text class="muted block">{{ form.slogan.trim() }}</text><view class="preview-footer"><view class="tags"><text class="tag">{{ categoryLabel(form.category) }}</text><text v-for="tag in form.tags" :key="tag" class="tag">{{ communityTagLabel(tag) }}</text></view><text class="preview-fee">{{ previewFee }}</text></view><text v-if="form.description.trim()" class="long-text">{{ form.description.trim() }}</text></view>
+            <view class="preview-body"><text class="preview-name serif">{{ form.name.trim() }}</text><text class="muted block">{{ form.slogan.trim() }}</text><view class="preview-footer"><view class="tags"><text class="tag">{{ communityCategoryLabel(form.category) }}</text><text v-for="tag in form.tags" :key="tag" class="tag">{{ communityTagLabel(tag) }}</text></view><text class="preview-fee">{{ previewFee }}</text></view><text v-if="form.description.trim()" class="long-text">{{ form.description.trim() }}</text></view>
           </view>
         </view>
         <text v-if="validationError" class="error-text">{{ validationError }}</text>
@@ -89,9 +90,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { COMMUNITY_CATEGORIES, submitCommunity, SETTLEMENT_AGREEMENT_VERSION } from '@/api/skool'
+import { submitCommunity, SETTLEMENT_AGREEMENT_VERSION } from '@/api/skool'
 import { tr, isEnglish } from '@/locale'
-import { communityTagLabel } from '@/utils/community-labels'
+import { communityCategoryLabel, communityTagLabel } from '@/utils/community-labels'
+import { dictItemText, loadDict, DICT_COMMUNITY_CATEGORY, DICT_COMMUNITY_TAG, type DictItem } from '@/utils/dict'
 import { readCapsuleLayout } from '@/utils/capsule'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
@@ -103,16 +105,28 @@ const capsule = readCapsuleLayout()
 const statusBarHeight = capsule.statusBarHeight
 const headerTop = capsule.headerTop
 const guest = ref(!uni.getStorageSync('token'))
-onShow(() => { guest.value = !uni.getStorageSync('token') })
-const categories = COMMUNITY_CATEGORIES.filter(category => category !== '全部')
-const TAG_OPTIONS = ['SDG 3 良好健康', 'SDG 4 优质教育', 'SDG 12 责任消费', '身心疗愈', '身体疗愈', '复愈特色', '职业成长', '轻户外']
-const CATEGORY_EN: Record<string, string> = {
-  全部: 'All', 疗愈: 'Healing', 瑜伽: 'Yoga', 身心成长: 'Mind-body growth', 手作: 'Craft', 健身: 'Fitness',
+/** 分类 / 标签选项来自后台值集，前端不再写死 */
+const categoryItems = ref<DictItem[]>([])
+const tagItems = ref<DictItem[]>([])
+async function loadOptions() {
+  try {
+    const [cats, tags] = await Promise.all([
+      loadDict(DICT_COMMUNITY_CATEGORY),
+      loadDict(DICT_COMMUNITY_TAG),
+    ])
+    categoryItems.value = cats
+    tagItems.value = tags
+    const values = cats.map((c) => c.value)
+    // 当前选择已被运营下线时，回落到第一个分类
+    if (!values.includes(form.value.category)) form.value.category = values[0] || ''
+  } catch {
+    // 拉取失败保留上次缓存；两者都为空时页面给出提示，提交前仍会校验分类
+  }
 }
-function categoryLabel(value: string) { return isEnglish() ? (CATEGORY_EN[value] || value) : value }
+onShow(() => { guest.value = !uni.getStorageSync('token'); loadOptions() })
 const stepLabels = computed(() => [tr('基本信息', 'Basics'), tr('收费与介绍', 'Pricing & intro'), tr('预览提交', 'Review & submit')])
 const step = ref(1)
-const form = ref({ name: '', slogan: '', category: '疗愈', tags: [] as string[], feeMode: 'free' as 'free' | 'paid', feeYuan: '', description: '', settlementAgreed: false })
+const form = ref({ name: '', slogan: '', category: '', tags: [] as string[], feeMode: 'free' as 'free' | 'paid', feeYuan: '', description: '', settlementAgreed: false })
 const validationError = ref('')
 const submitError = ref('')
 const submitting = ref(false)
@@ -186,7 +200,10 @@ function onTag(tag: string) {
 }
 function validateBasic() {
   if (!form.value.name.trim() || !form.value.slogan.trim()) return tr('请填写社群名称与一句话定位。', 'Please enter a community name and a one-line description.')
-  if (!categories.includes(form.value.category)) return tr('请选择社群分类。', 'Please choose a community category.')
+  // 值集未加载成功时不拦提交，分类交给服务端默认值兜底
+  if (categoryItems.value.length && !categoryItems.value.some((c) => c.value === form.value.category)) {
+    return tr('请选择社群分类。', 'Please choose a community category.')
+  }
   return ''
 }
 function validateFee() {

@@ -7,6 +7,8 @@ export interface DictItem {
   id?: string
   value: string
   label: string
+  /** 英文展示文案（小程序英文界面用），为空时回退 label */
+  labelEn?: string
   /** 可选的颜色标记（用于标签展示） */
   color?: string
   /** 是否启用 */
@@ -48,6 +50,7 @@ export const useDictStore = defineStore('dict', () => {
         id: i.id,
         value: i.value,
         label: i.label,
+        labelEn: i.labelEn,
         color: i.color,
         enabled: i.enabled,
         sort: i.sort,

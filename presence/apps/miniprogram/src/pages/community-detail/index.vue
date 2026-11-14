@@ -378,7 +378,7 @@
             <view class="grow">
               <text class="post-name">{{ item.name }}<text v-if="item.current" class="muted"> · {{ tr('当前', 'Current') }}</text></text>
               <text v-if="item.slogan" class="muted block">{{ item.slogan }}</text>
-              <text class="muted block">{{ communityTagLabel(item.category) }} · {{ tr(`${item.memberCount} 位成员`, `${item.memberCount} members`) }}</text>
+              <text class="muted block">{{ communityCategoryLabel(item.category) }} · {{ tr(`${item.memberCount} 位成员`, `${item.memberCount} members`) }}</text>
             </view>
             <PresenceIcon v-if="!item.current" name="arrow" :size="26" />
           </button>
@@ -400,7 +400,7 @@ import {
 } from '@/api/skool'
 import { payOrder } from '@/utils/wechat'
 import { tr, isEnglish } from '@/locale'
-import { communityTagLabel } from '@/utils/community-labels'
+import { communityCategoryLabel, communityTagLabel } from '@/utils/community-labels'
 import { readCapsuleLayout } from '@/utils/capsule'
 import { goLoginFor, type ShareTargetOption } from '@/utils/share'
 import PresenceIcon from '@/components/PresenceIcon.vue'
