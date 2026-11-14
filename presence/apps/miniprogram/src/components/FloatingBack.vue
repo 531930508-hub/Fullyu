@@ -18,7 +18,7 @@ const props = withDefaults(defineProps<{ fallback?: string; disabled?: boolean }
 const layout = readCapsuleLayout()
 const topOffset = layout.statusBarHeight + (layout.hasCapsule ? 8 : 16)
 
-const TAB_PAGES = ['/pages/index/index', '/pages/my-courses/index', '/pages/member/index', '/pages/profile/index']
+const TAB_PAGES = ['/pages/index/index', '/pages/my-courses/index', '/pages/brand-member/index', '/pages/profile/index']
 
 function goBack() {
   if (props.disabled) return

@@ -161,7 +161,7 @@ describe('综合：报名 / 候补 / 退款六大场景', () => {
     const member = await seeder.user()
     const member2 = await seeder.user()
     // 2026-11-08 起候补优先排位随会员权益改挂品牌会员（CRM prioritySeat），
-    // 不再由本地畅练卡直接判定；这里直接给两位会员品牌权益，模拟 CRM 返回。
+    // 会员价由品牌会员权益决定；这里直接给两位会员品牌权益，模拟 CRM 返回。
     const brandMembers = new Set([member.id, member2.id])
     jest.spyOn(ctx.pricing, 'brandStatus').mockImplementation(async (userId: string) =>
       brandMembers.has(userId)

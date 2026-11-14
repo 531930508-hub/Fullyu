@@ -15,7 +15,6 @@ export class UserService {
     const user = await this.prisma.user.findUnique({
       where: { id },
       include: {
-        memberCards: { where: { status: { not: 'EXPIRED' } } },
         trainerProfile: true,
       },
     })
@@ -44,9 +43,6 @@ export class UserService {
       where,
       orderBy: { createdAt: 'desc' },
       take: 200,
-      include: {
-        memberCards: { where: { status: 'ACTIVE' }, orderBy: { endDate: 'desc' }, take: 1 },
-      },
     })
   }
 

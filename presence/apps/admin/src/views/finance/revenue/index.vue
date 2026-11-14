@@ -373,7 +373,7 @@ const syncingAll = ref(false)
 /** 抽取结果如实回报：skipped 是没有场馆归属的订单，不能悄悄丢掉 */
 function reportSync(res: Awaited<ReturnType<typeof syncRevenueSource>>) {
   const tips = [`${res.month} 归集 ${res.orgCount} 家门店、${res.orderCount} 笔订单，合计 ¥${money(res.amount)}`]
-  if (res.skipped) tips.push(`${res.skipped} 笔订单无场馆归属（多为会员卡），未计入任何门店`)
+  if (res.skipped) tips.push(`${res.skipped} 笔订单无场馆归属（多为已下线的畅练卡存量单），未计入任何门店`)
   message.success(tips.join('；'))
 }
 

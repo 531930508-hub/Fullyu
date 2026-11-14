@@ -193,8 +193,14 @@ jobs:
             [ -f apps/server/.env.local ] || { echo "apps/server/.env.local missing"; exit 1; }
             ts=$(date +%Y%m%d-%H%M%S)
             [ -d apps/server/dist ] && tar -czf "/tmp/server-dist.bak-$ts.tar.gz" -C apps/server/dist .
+            # 源码包是覆盖解包：先删旧源码目录，避免已下线的文件/路由继续残留
+            rm -rf apps/server/src apps/server/prisma packages/shared/src
             tar -xzf /tmp/fullyu-ci/server-src.tar.gz -C "$SERVER_PATH"
             rm -f /tmp/fullyu-ci/server-src.tar.gz
+            # 清掉增量编译缓存和旧产物：tsbuildinfo 会把“源码包覆盖但 mtime 未变”误判为无需重编，
+            # 导致 dist 缺文件（本次畅练卡下线就有整批路由/服务文件被删除，必须干净重建）
+            rm -f apps/server/tsconfig.tsbuildinfo packages/shared/tsconfig.tsbuildinfo
+            rm -rf apps/server/dist packages/shared/dist
             export PATH="/root/.local/node/bin:$PATH"
             pnpm --filter @fullyu/shared build
             pnpm --filter @fullyu/server db:generate

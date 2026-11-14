@@ -212,7 +212,6 @@ export class Seeder {
   /**
    * 创建课程（默认已发布、开启候补）。
    * @param opts.tiers 阶梯价 [{seatFrom,seatTo,price}]
-   * @param opts.memberDiscounts 会员折扣 [{cardType,discountPercent}]
    * @param opts.refundRules 退款规则 [{hoursFrom,hoursTo,refundPercent}]
    * @param opts.startInHours 距开课小时数（用于退款规则命中），默认 240（10 天后）
    * @param opts.venueId 指定场地（不传则新建一个，用于场地冲突用例）
@@ -238,7 +237,6 @@ export class Seeder {
     startTime?: string
     endTime?: string
     tiers?: { seatFrom: number; seatTo: number; price: number }[]
-    memberDiscounts?: { cardType: 'MONTHLY' | 'QUARTERLY' | 'YEARLY'; discountPercent: number }[]
     refundRules?: { hoursFrom: number; hoursTo: number | null; refundPercent: number }[]
   } = {}) {
     const trainer = await this.trainer()
@@ -293,13 +291,6 @@ export class Seeder {
         })
       }
     }
-    if (opts.memberDiscounts?.length) {
-      for (const d of opts.memberDiscounts) {
-        await this.prisma.courseMemberDiscount.create({
-          data: { courseId: course.id, cardType: d.cardType, discountPercent: d.discountPercent },
-        })
-      }
-    }
     return this.prisma.course.findUnique({ where: { id: course.id }, include: { priceTiers: true } })
   }
 
@@ -326,19 +317,6 @@ export class Seeder {
     })
   }
 
-  async memberCard(userId: string, type: 'MONTHLY' | 'QUARTERLY' | 'YEARLY' = 'YEARLY') {
-    const now = new Date()
-    return this.prisma.memberCard.create({
-      data: {
-        userId,
-        type,
-        status: 'ACTIVE',
-        startDate: now,
-        endDate: new Date(now.getTime() + 365 * 24 * 3600 * 1000),
-      },
-    })
-  }
-
   async addPoints(userId: string, amount: number) {
     return this.prisma.pointsRecord.create({
       data: { userId, amount, balance: amount, type: 'ADMIN_ADJUST', reason: '测试充值' },
@@ -354,8 +332,6 @@ export class Seeder {
     await this.prisma.order.deleteMany({ where: { userId: { in: this.userIds } } })
     await this.prisma.pointsRecord.deleteMany({ where: { userId: { in: this.userIds } } })
     await this.prisma.voucher.deleteMany({ where: { userId: { in: this.userIds } } })
-    await this.prisma.memberCard.deleteMany({ where: { userId: { in: this.userIds } } })
-    await this.prisma.courseMemberDiscount.deleteMany({ where: { courseId: { in: this.courseIds } } })
     await this.prisma.coursePriceTier.deleteMany({ where: { courseId: { in: this.courseIds } } })
     await this.prisma.course.deleteMany({ where: { id: { in: this.courseIds } } })
     await this.prisma.trainerProfile.deleteMany({ where: { id: { in: this.trainerIds } } })

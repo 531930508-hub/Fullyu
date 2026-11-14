@@ -12,7 +12,6 @@ import {
 export interface TimeDiscountInput {
   name: string
   orgIds?: string[]
-  cardTypes?: string[]
   weekdays?: number[]
   timeRanges?: TimeDiscountRange[]
   validFrom?: string | null
@@ -86,7 +85,6 @@ export class TimeDiscountService {
     return {
       name: input.name.trim(),
       orgIds: json(input.orgIds ?? []),
-      cardTypes: json(input.cardTypes ?? []),
       weekdays: json(input.weekdays ?? []),
       timeRanges: json(input.timeRanges ?? []),
       validFrom: input.validFrom ? new Date(input.validFrom) : null,

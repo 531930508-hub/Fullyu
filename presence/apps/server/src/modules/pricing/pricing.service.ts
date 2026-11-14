@@ -5,7 +5,7 @@ import {
   brandPriceUnknown,
   type BrandPerkStatus,
 } from '../../common/crm/brand-perks.service'
-import { Prisma, MemberCardType } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import {
   pickTimeDiscountRule,
   type TimeDiscountFixedPrice,
@@ -17,14 +17,14 @@ import {
 export interface PriceQuote {
   position: number
   basePrice: number
-  memberCardType: MemberCardType | null
+  memberCardType: string | null
   discountPercent: number | null
   discountAmount: number
   priceAfterDiscount: number
 }
 
 export interface MemberDiscountResult {
-  cardType: MemberCardType | null
+  cardType: string | null
   discountPercent: number | null
   /** 单位与入参 basePrice 一致（课程链路为「分」） */
   discountAmount: number
@@ -49,10 +49,11 @@ export interface MemberDiscountOptions {
 }
 
 /**
- * 品牌会员按年卡口径套用既有会员价规则（时段折扣 cardTypes / 课程会员折扣 cardType）。
+ * 品牌会员按年卡口径套用既有会员价规则（时段折扣 cardTypes）。
  * 会议只说「把优惠逻辑落到品牌会员上」，没有单独的品牌会员价表，先复用 YEARLY 配置，见决策文档。
+ * 本仓已无畅练卡，此值仅作为品牌会员位折扣的卡类型口径使用。
  */
-export const BRAND_MEMBER_PRICE_CARD_TYPE: MemberCardType = 'YEARLY'
+export const BRAND_MEMBER_PRICE_CARD_TYPE = 'YEARLY'
 
 /**
  * 定价服务：阶梯价按报名顺序区间锁价 + 会员折扣计算。
@@ -133,7 +134,6 @@ export class PricingService {
     appointmentStart: Date,
     options: MemberDiscountOptions = {},
   ): Promise<MemberDiscountResult> {
-    const now = new Date()
     const none: MemberDiscountResult = {
       cardType: null,
       discountPercent: null,
@@ -142,22 +142,8 @@ export class PricingService {
       timeDiscount: null,
       memberSource: null,
     }
-    const card = await this.prisma.memberCard.findFirst({
-      where: { userId, status: 'ACTIVE', endDate: { gt: now } },
-      orderBy: { endDate: 'desc' },
-    })
-    // 0) 畅练卡：有效期内 0 元报课。基础价照常记入 originalPrice，抵扣额 = 全额，便于成本分摊。
-    if (card) {
-      return {
-        cardType: card.type,
-        discountPercent: 0,
-        discountAmount: Math.max(0, basePrice),
-        hitTimeRuleId: null,
-        timeDiscount: null,
-        memberSource: 'PASS',
-      }
-    }
 
+    // 本仓已无畅练卡：会员优惠只有「品牌会员价」一条链路（CRM 权益 tierPrice）。
     const brand = options.brand ?? (await this.brandStatus(userId))
     if (brand.unknown) {
       if (options.strict) throw brandPriceUnknown()
@@ -176,7 +162,7 @@ export class PricingService {
       id: r.id,
       name: r.name,
       orgIds: jsonArray<string>(r.orgIds),
-      cardTypes: jsonArray<string>(r.cardTypes),
+      cardTypes: [], // 规则表已随畅练卡移除 cardTypes 列；空数组 = 不限卡类型（品牌会员一律命中）
       priority: r.priority,
       weekdays: jsonArray<number>(r.weekdays),
       timeRanges: jsonArray<TimeDiscountRange>(r.timeRanges),
@@ -221,22 +207,8 @@ export class PricingService {
       }
     }
 
-    // 2) 回退：课程 × 卡类型固定折扣（原有逻辑）
-    const discount = await this.prisma.courseMemberDiscount.findUnique({
-      where: { courseId_cardType: { courseId, cardType: priceCardType } },
-    })
-    if (!discount) {
-      return { ...none, memberSource: 'BRAND' }
-    }
-    const discountAmount = Math.max(0, Math.round(basePrice * (1 - discount.discountPercent / 100)))
-    return {
-      cardType: null,
-      discountPercent: discount.discountPercent,
-      discountAmount,
-      hitTimeRuleId: null,
-      timeDiscount: null,
-      memberSource: 'BRAND',
-    }
+    // 2) 未命中时段规则 → 品牌会员在本课程无额外优惠（课程 × 卡类型固定折扣表已随畅练卡体系移除）
+    return { ...none, memberSource: 'BRAND' }
   }
 
   /**

@@ -10,9 +10,8 @@ export class CheckinService {
     private readonly crm: CrmClient,
   ) {}
 
-  /** 某课程报名学员 + 签到状态 + 报名日期 + 有效会员卡 */
+  /** 某课程报名学员 + 签到状态 + 报名日期 */
   async courseRoster(courseId: string) {
-    const now = new Date()
     const [orders, checkIns] = await Promise.all([
       this.prisma.order.findMany({
         where: { courseId, orderType: 'COURSE', status: { in: ['PAID', 'COMPLETED'] } },
@@ -23,23 +22,12 @@ export class CheckinService {
     ])
     const checkedUserIds = new Set(checkIns.map((c) => c.userId))
     const userIds = orders.map((o) => o.userId)
-    const [cards, birthdays] = await Promise.all([
-      userIds.length
-        ? this.prisma.memberCard.findMany({
-            where: { userId: { in: userIds }, status: 'ACTIVE', endDate: { gt: now } },
-            select: { userId: true, type: true },
-            orderBy: { endDate: 'desc' },
-          })
-        : [],
-      this.crm.getBirthdays(userIds),
-    ])
-    const cardMap = new Map(cards.map((c) => [c.userId, c.type]))
+    const birthdays = await this.crm.getBirthdays(userIds)
     return orders.map((o) => ({
       orderId: o.id,
       user: { ...o.user, birthday: birthdays.get(o.userId) ?? null },
       checkedIn: checkedUserIds.has(o.userId),
       enrolledAt: o.createdAt,
-      cardType: cardMap.get(o.userId) ?? null,
     }))
   }
 

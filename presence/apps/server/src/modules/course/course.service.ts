@@ -144,7 +144,6 @@ export class CourseService {
         trainer: true,
         venue: true,
         priceTiers: true,
-        memberDiscounts: true,
       },
     })
     return course ? decorateCourseLifecycle(course) : null
@@ -615,7 +614,7 @@ export class CourseService {
   /**
    * 删除课程（硬删）
    * 业务规则：仅允许删除「草稿」状态且无任何报名/候补记录的课程。
-   * 草稿理论上不会产生订单/候补/场地占用，但仍做双保险校验并在事务内清理关联配置（阶梯价/会员折扣/场地占用）。
+   * 草稿理论上不会产生订单/候补/场地占用，但仍做双保险校验并在事务内清理关联配置（阶梯价/场地占用）。
    */
   async remove(id: string) {
     const course = await this.prisma.course.findUnique({ where: { id } })
@@ -632,7 +631,6 @@ export class CourseService {
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.coursePriceTier.deleteMany({ where: { courseId: id } })
-      await tx.courseMemberDiscount.deleteMany({ where: { courseId: id } })
       await tx.venueReservation.deleteMany({ where: { courseId: id } })
       await tx.course.delete({ where: { id } })
     })
@@ -678,24 +676,6 @@ export class CourseService {
         })
       }
       return tx.coursePriceTier.findMany({ where: { courseId }, orderBy: { seatFrom: 'asc' } })
-    })
-  }
-
-  /**
-   * 覆盖式保存课程会员折扣
-   */
-  async saveMemberDiscounts(
-    courseId: string,
-    discounts: { cardType: 'MONTHLY' | 'QUARTERLY' | 'YEARLY'; discountPercent: number }[],
-  ) {
-    return this.prisma.$transaction(async (tx) => {
-      await tx.courseMemberDiscount.deleteMany({ where: { courseId } })
-      if (discounts.length) {
-        await tx.courseMemberDiscount.createMany({
-          data: discounts.map((d) => ({ courseId, cardType: d.cardType, discountPercent: d.discountPercent })),
-        })
-      }
-      return tx.courseMemberDiscount.findMany({ where: { courseId } })
     })
   }
 }

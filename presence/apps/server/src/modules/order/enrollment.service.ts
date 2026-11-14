@@ -201,7 +201,7 @@ export class EnrollmentService {
             actualPaid,
             status: 'PENDING_PAYMENT',
             voucherId: voucherId,
-            cardType: member.cardType ?? undefined,
+            memberCardType: member.cardType ?? undefined,
             hitTimeRuleId: member.hitTimeRuleId ?? undefined,
           },
         })

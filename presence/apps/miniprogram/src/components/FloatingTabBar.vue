@@ -16,7 +16,7 @@ const props = defineProps<{ active: 'home' | 'courses' | 'member' | 'profile' }>
 const items = computed(() => [
   { key: 'home', icon: 'home', label: t('tab.home'), url: '/pages/index/index' },
   { key: 'courses', icon: 'calendar', label: t('tab.courses'), url: '/pages/my-courses/index' },
-  { key: 'member', icon: 'card', label: t('tab.member'), url: '/pages/member/index' },
+  { key: 'member', icon: 'card', label: t('tab.member'), url: '/pages/brand-member/index' },
   { key: 'profile', icon: 'user', label: t('tab.profile'), url: '/pages/profile/index' },
 ])
 onMounted(() => {

@@ -15,7 +15,7 @@
     <a-tabs v-model:activeKey="orderType" style="margin-bottom: 16px;" @change="loadOrders">
       <a-tab-pane key="ALL" tab="全部订单" />
       <a-tab-pane key="COURSE" tab="课程订单" />
-      <a-tab-pane key="MEMBER_CARD" tab="会员卡订单" />
+      <a-tab-pane key="MEMBER_CARD" tab="畅练卡订单（历史）" />
       <a-tab-pane key="COMMUNITY" tab="社群订单" />
     </a-tabs>
 
@@ -176,7 +176,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { ORDER_STATUS_OPTIONS, memberCardTypeLabel, orderStatusColor, orderStatusLabel, orderTypeColor, orderTypeLabel } from '@fullyu/shared'
+import { ORDER_STATUS_OPTIONS, orderStatusColor, orderStatusLabel, orderTypeColor, orderTypeLabel } from '@fullyu/shared'
 import {
   adminListOrders,
   forceRefundOrder,
@@ -211,7 +211,7 @@ const columns = [
   { title: '操作', dataIndex: 'action', width: 80 },
 ]
 
-/** 课程/候补/社群订单金额单位为分，会员卡订单单位为元 */
+/** 课程/候补/社群订单金额单位为分，存量畅练卡订单单位为元 */
 function toYuan(o: any, val: any) {
   const n = Number(val || 0)
   return o.orderType === 'MEMBER_CARD' ? n : n / 100
@@ -233,7 +233,7 @@ function mapOrder(o: any) {
     typeLabel: orderTypeLabel(o.orderType) || o.orderType,
     userName: o.user?.nickname || o.user?.phone || '用户',
     itemName: o.orderType === 'MEMBER_CARD'
-      ? (memberCardTypeLabel(o.cardType) || '会员卡')
+      ? '畅练卡（已下线）'
       : o.orderType === 'COMMUNITY'
         ? (o.community?.name || '社群年费')
         : (o.course?.title || '—'),

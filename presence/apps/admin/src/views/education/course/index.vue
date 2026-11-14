@@ -340,26 +340,6 @@
           </div>
           <a-button type="dashed" size="small" @click="addPriceTier">+ 添加价格区间</a-button>
 
-          <a-divider>会员卡折扣（按百分比）</a-divider>
-          <a-alert message="按百分比打折：例如 70% 即按原价的 70%（七折）收费，0% 即免费（¥0），100% 即不打折。" type="info" style="margin-bottom: 16px" show-icon />
-          <a-row :gutter="24">
-            <a-col :span="8">
-              <a-form-item label="年卡会员折扣">
-                <a-input-number v-model:value="form.yearlyDiscount" :min="0" :max="100" :formatter="(v: any) => `${v}%`" :parser="(v: any) => v.replace('%', '')" style="width: 100%" />
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item label="季卡会员折扣">
-                <a-input-number v-model:value="form.quarterlyDiscount" :min="0" :max="100" :formatter="(v: any) => `${v}%`" :parser="(v: any) => v.replace('%', '')" style="width: 100%" />
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item label="月卡会员折扣">
-                <a-input-number v-model:value="form.monthlyDiscount" :min="0" :max="100" :formatter="(v: any) => `${v}%`" :parser="(v: any) => v.replace('%', '')" style="width: 100%" />
-              </a-form-item>
-            </a-col>
-          </a-row>
-
           <a-divider>候补排队（小程序约满后的候补机制）</a-divider>
           <a-form-item>
             <a-switch v-model:checked="form.waitlistEnabled" /> <span style="margin-left: 8px; color: #4B3621;">开启候补排队（类似 12306 候补逻辑）</span>
@@ -469,7 +449,6 @@
           <a-descriptions-item label="阶梯定价" :span="2">
             <span v-for="tier in form.priceTiers" :key="tier.from" style="margin-right: 16px;">第{{ tier.from }}-{{ tier.to }}位: ¥{{ tier.price }}</span>
           </a-descriptions-item>
-          <a-descriptions-item label="会员折扣" :span="2">年卡 {{ form.yearlyDiscount }}% / 季卡 {{ form.quarterlyDiscount }}% / 月卡 {{ form.monthlyDiscount }}%（百分比收费）</a-descriptions-item>
           <a-descriptions-item label="候补排队" :span="2">{{ form.waitlistEnabled ? `已开启（预付候补），会员候补席位 ${form.memberWaitlistSeats} 个 + 普通候补不限量，可候补至开课前 ${form.waitlistDeadlineHours} 小时` : '未开启' }}</a-descriptions-item>
           <a-descriptions-item label="积分奖励">完课 {{ form.seedsReward || 0 }} 积分/人/节 · 评价 {{ form.reviewSeeds || 0 }} 积分/人</a-descriptions-item>
           <a-descriptions-item label="退款政策">
@@ -647,7 +626,7 @@ import { ref, computed, onMounted } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import ImageCropper from '@/components/ImageCropper.vue'
-import { adminListCourses, getCourse, createCourse, updateCourse, setCourseStatus, deleteCourse, savePriceTiers, saveMemberDiscounts, setEnrollmentWindow } from '@/api/course'
+import { adminListCourses, getCourse, createCourse, updateCourse, setCourseStatus, deleteCourse, savePriceTiers, setEnrollmentWindow } from '@/api/course'
 import { listCourseWaitlist, promoteWaitlistEntry, cancelWaitlistEntry } from '@/api/waitlist'
 import { listTrainerOptions } from '@/api/trainer'
 import { listVenues } from '@/api/venue'
@@ -658,7 +637,6 @@ import {
   coursePhaseColor,
   coursePhaseLabel,
   courseStatusLabel,
-  memberCardTypeLabel,
   waitlistStatusColor,
   waitlistStatusLabel,
 } from '@fullyu/shared'
@@ -722,7 +700,6 @@ function createDefaultForm() {
   startDate: null as any, endDate: null as any, venueId: '', materials: [] as string[],
   capacity: 8, minStudents: 3, groupDeadline: null as any,
   priceTiers: [{ from: 1, to: 2, price: 300 }, { from: 3, to: 4, price: 330 }, { from: 5, to: 8, price: 360 }],
-  yearlyDiscount: 70, quarterlyDiscount: 85, monthlyDiscount: 95,
   waitlistEnabled: true, waitlistDeadlineHours: 24, memberWaitlistSeats: 3,
   voucherPolicy: 'ALL', seedsReward: 10, reviewSeeds: 5,
   objectives: '', syllabus: [{ title: '', content: '' }, { title: '', content: '' }, { title: '', content: '' }],
@@ -862,7 +839,6 @@ const studentColumns = [
   { title: '学员', dataIndex: 'name', width: 150 },
   { title: '手机号', dataIndex: 'phone', width: 140 },
   { title: '报名日期', dataIndex: 'enrollDate', width: 120 },
-  { title: '会员卡', dataIndex: 'card', width: 100 },
   { title: '签到状态', dataIndex: 'checkedIn', width: 110 },
 ]
 const courseStudentData = ref<any[]>([])
@@ -876,7 +852,6 @@ async function loadStudents(courseId: string) {
       name: r.user?.nickname || '匿名用户',
       phone: r.user?.phone || '-',
       enrollDate: r.enrolledAt ? dayjs(r.enrolledAt).format('YYYY-MM-DD') : '-',
-      card: memberCardTypeLabel(r.cardType) || '-',
       checkedIn: !!r.checkedIn,
     }))
   } catch (e: any) {
@@ -1096,17 +1071,11 @@ function openCreate() {
   currentView.value = 'create'
 }
 
-/** 保存阶梯价与会员折扣（新建/编辑共用） */
-async function persistTiersAndDiscounts(id: string) {
+/** 保存阶梯价（新建/编辑共用） */
+async function persistTiers(id: string) {
   if (!id) return
   const tiers = form.value.priceTiers.map(t => ({ seatFrom: t.from, seatTo: t.to, price: Math.round((t.price || 0) * 100) }))
-  const discounts = [
-    { cardType: 'YEARLY', discountPercent: form.value.yearlyDiscount },
-    { cardType: 'QUARTERLY', discountPercent: form.value.quarterlyDiscount },
-    { cardType: 'MONTHLY', discountPercent: form.value.monthlyDiscount },
-  ]
   await savePriceTiers(id, tiers)
-  await saveMemberDiscounts(id, discounts)
 }
 
 async function submitCourse(target: 'DRAFT' | 'PUBLISHED') {
@@ -1127,7 +1096,7 @@ async function submitCourse(target: 'DRAFT' | 'PUBLISHED') {
       id = created?.id || null
       editingId.value = id
     }
-    if (id) await persistTiersAndDiscounts(id)
+    if (id) await persistTiers(id)
     // 发布：保存完成后再经状态机置为 PUBLISHED（触发场地可用性/冲突校验与占用登记）
     if (target === 'PUBLISHED' && id) {
       await setCourseStatus(id, 'PUBLISHED')
@@ -1249,13 +1218,10 @@ async function handleCopy(course: any) {
     }
     // 3. 创建副本课程
     const created: any = await createCourse(payload)
-    // 4. 复制阶梯价和会员折扣
+    // 4. 复制阶梯价
     if (created?.id) {
       if (Array.isArray(c.priceTiers) && c.priceTiers.length) {
         await savePriceTiers(created.id, c.priceTiers.map((t: any) => ({ seatFrom: t.seatFrom, seatTo: t.seatTo, price: t.price })))
-      }
-      if (Array.isArray(c.memberDiscounts) && c.memberDiscounts.length) {
-        await saveMemberDiscounts(created.id, c.memberDiscounts.map((d: any) => ({ cardType: d.cardType, discountPercent: d.discountPercent })))
       }
     }
     message.success('课程已复制为草稿，请设置日期后发布')
@@ -1369,7 +1335,7 @@ async function handleDelete(course: any) {
   }
   Modal.confirm({
     title: '确认删除该草稿课程？',
-    content: `将永久删除课程「${course.name}」及其阶梯价/会员折扣配置，操作不可撤销。仅当无人报名/候补时可删除。确认继续？`,
+    content: `将永久删除课程「${course.name}」及其阶梯价配置，操作不可撤销。仅当无人报名/候补时可删除。确认继续？`,
     okText: '确认删除',
     okType: 'danger',
     cancelText: '取消',
@@ -1470,13 +1436,6 @@ async function handleEditCourse() {
     }
     if (Array.isArray(c.priceTiers) && c.priceTiers.length) {
       f.priceTiers = c.priceTiers.map((t: any) => ({ from: t.seatFrom, to: t.seatTo, price: (t.price ?? 0) / 100 }))
-    }
-    if (Array.isArray(c.memberDiscounts)) {
-      for (const d of c.memberDiscounts) {
-        if (d.cardType === 'YEARLY') f.yearlyDiscount = d.discountPercent
-        else if (d.cardType === 'QUARTERLY') f.quarterlyDiscount = d.discountPercent
-        else if (d.cardType === 'MONTHLY') f.monthlyDiscount = d.discountPercent
-      }
     }
     form.value = f
     editingId.value = id

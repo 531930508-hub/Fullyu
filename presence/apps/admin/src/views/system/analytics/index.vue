@@ -13,24 +13,19 @@
 
     <!-- 核心指标 -->
     <a-row :gutter="24" style="margin-bottom: 24px">
-      <a-col :span="6">
+      <a-col :span="8">
         <a-card :loading="loading">
           <a-statistic title="总收入" prefix="¥" :value="stats.totalRevenue" :precision="2" />
         </a-card>
       </a-col>
-      <a-col :span="6">
+      <a-col :span="8">
         <a-card :loading="loading">
           <a-statistic title="本月收入" prefix="¥" :value="stats.monthRevenue" :precision="2" />
         </a-card>
       </a-col>
-      <a-col :span="6">
+      <a-col :span="8">
         <a-card :loading="loading">
           <a-statistic title="用户总数" :value="stats.userCount" />
-        </a-card>
-      </a-col>
-      <a-col :span="6">
-        <a-card :loading="loading">
-          <a-statistic title="活跃会员" :value="stats.activeMemberCount" />
         </a-card>
       </a-col>
     </a-row>
@@ -83,7 +78,7 @@
       </a-col>
     </a-row>
 
-    <!-- 用户增长 / 会员分布 -->
+    <!-- 用户增长 -->
     <a-row :gutter="24" style="margin-bottom: 24px">
       <a-col :span="12">
         <a-card title="用户增长（近30天新增）" :loading="chartsLoading">
@@ -101,20 +96,6 @@
           </div>
         </a-card>
       </a-col>
-      <a-col :span="12">
-        <a-card title="会员分布（有效会员卡）" :loading="chartsLoading">
-          <a-empty v-if="!memberDistribution.length" description="暂无会员卡" />
-          <div v-else class="rank-list">
-            <div v-for="(item, i) in memberDistribution" :key="i" class="rank-item">
-              <div class="rank-name">{{ cardTypeLabel(item.type) }}</div>
-              <div class="rank-bar-wrap">
-                <div class="rank-bar" :style="{ width: memberBarWidth(item.count) + '%' }"></div>
-              </div>
-              <div class="rank-value">{{ item.count }}张</div>
-            </div>
-          </div>
-        </a-card>
-      </a-col>
     </a-row>
   </div>
 </template>
@@ -123,7 +104,6 @@
 import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { overview, revenueTrend, charts } from '@/api/analytics'
-import { memberCardTypeLabel } from '@fullyu/shared'
 
 const timeRange = ref('month')
 const loading = ref(false)
@@ -133,25 +113,16 @@ const stats = ref({
   totalRevenue: 0,
   monthRevenue: 0,
   userCount: 0,
-  activeMemberCount: 0,
 })
 
 const revenueData = ref<{ label: string; value: string; percent: number }[]>([])
 const coursePopularity = ref<{ name: string; value: number; capacity: number }[]>([])
 const trainerRatings = ref<{ name: string; value: number; count: number }[]>([])
 const userGrowthData = ref<{ label: string; value: number; percent: number }[]>([])
-const memberDistribution = ref<{ type: string; count: number }[]>([])
 
-function cardTypeLabel(type: string) {
-  return memberCardTypeLabel(type) || type
-}
 function courseBarWidth(value: number) {
   const max = Math.max(1, ...coursePopularity.value.map((c) => c.value))
   return Math.round((value / max) * 100)
-}
-function memberBarWidth(count: number) {
-  const max = Math.max(1, ...memberDistribution.value.map((c) => c.count))
-  return Math.round((count / max) * 100)
 }
 
 function formatAmount(yuan: number) {
@@ -167,7 +138,6 @@ async function loadData() {
       totalRevenue: (ov.totalRevenue ?? 0) / 100,
       monthRevenue: (ov.monthRevenue ?? 0) / 100,
       userCount: ov.userCount ?? 0,
-      activeMemberCount: ov.activeMemberCount ?? 0,
     }
     const list: { date: string; amount: number }[] = Array.isArray(trend) ? trend : []
     const max = Math.max(1, ...list.map(d => d.amount))
@@ -197,7 +167,6 @@ async function loadCharts() {
     const data: any = await charts()
     coursePopularity.value = Array.isArray(data?.coursePopularity) ? data.coursePopularity : []
     trainerRatings.value = Array.isArray(data?.trainerRatings) ? data.trainerRatings : []
-    memberDistribution.value = Array.isArray(data?.memberDistribution) ? data.memberDistribution : []
     const growth: { date: string; count: number }[] = Array.isArray(data?.userGrowth) ? data.userGrowth : []
     const gmax = Math.max(1, ...growth.map((d) => d.count))
     userGrowthData.value = growth.map((d) => ({

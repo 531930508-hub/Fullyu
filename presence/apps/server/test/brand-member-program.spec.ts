@@ -9,14 +9,13 @@ import {
 } from '../src/modules/member/brand-member.controller'
 import {
   BrandPresenceSync,
-  passIntent,
   refundedCentsOf,
   savedCentsOf,
 } from '../src/modules/member/brand-presence.sync'
 import { startFakeBrandCrm, type FakeBrandCrm } from './mocks/brand-crm-fake'
 
 /**
- * 2026-11-08 会议落地（在场侧）：会员码、反馈、故事、邀请好友、畅练卡附赠品牌会员、订单上报。
+ * 2026-11-08 会议落地（在场侧）：会员码、反馈、故事、邀请好友、订单上报。
  * 只用假 CRM 与内存桩，不连数据库、不连真实 CRM。
  */
 
@@ -63,7 +62,6 @@ describe('在场品牌会员新增接口', () => {
     forget = jest.fn()
     controller = new BrandMemberController(
       client,
-      { activeCard: jest.fn().mockResolvedValue(null) } as any,
       { forget } as any,
       store as any,
       { withLock: (_key: string, fn: () => Promise<unknown>) => fn() } as any,
@@ -217,30 +215,19 @@ describe('BrandPerksService：品牌会员权益缓存', () => {
   })
 })
 
-describe('BrandPresenceSync：畅练卡附赠与订单上报', () => {
+describe('BrandPresenceSync：订单上报', () => {
   const NOW = new Date('2026-11-08T12:00:00+08:00')
   let fake: FakeBrandCrm
   let client: BrandMemberClient
-  let cards: any[]
   let orders: any[]
   let forget: jest.Mock
   let sync: BrandPresenceSync
-
-  const card = (over: Record<string, unknown> = {}) => ({
-    id: 'pass-1',
-    userId: 'u-1',
-    status: 'ACTIVE',
-    startDate: new Date('2026-11-01T10:00:00+08:00'),
-    endDate: new Date('2026-12-01T10:00:00+08:00'),
-    ...over,
-  })
 
   const order = (over: Record<string, unknown> = {}) => ({
     id: 'o-1',
     userId: 'u-1',
     orderType: 'COURSE',
     status: 'PAID',
-    cardType: null,
     actualPaid: 30000, // 课程链路以分存储
     discountAmount: 6000,
     paymentTime: new Date('2026-11-07T09:00:00+08:00'),
@@ -251,11 +238,9 @@ describe('BrandPresenceSync：畅练卡附赠与订单上报', () => {
   beforeEach(async () => {
     fake = await startFakeBrandCrm({ keyId: 'presence-test', secret: 'brand-secret-0123456789' })
     client = new BrandMemberClient(configOf(env(fake.url)))
-    cards = []
     orders = []
     forget = jest.fn()
     const prisma = {
-      memberCard: { findMany: jest.fn(async () => cards) },
       order: { findMany: jest.fn(async () => orders) },
     }
     sync = new BrandPresenceSync(prisma as any, client, { forget } as any)
@@ -265,73 +250,15 @@ describe('BrandPresenceSync：畅练卡附赠与订单上报', () => {
     await fake.close()
   })
 
-  it('passIntent：按上海日期附赠，结束日取最后一个有效日；退款到起始日即撤销', () => {
-    expect(passIntent(card(), NOW)).toEqual({
-      kind: 'bundle',
-      validFrom: '2026-11-01',
-      validUntil: '2026-12-01',
-    })
-    expect(
-      passIntent(card({ endDate: new Date('2026-12-01T00:00:00+08:00') }), NOW),
-    ).toMatchObject({ validUntil: '2026-11-30' })
-    expect(passIntent(card({ endDate: new Date('2026-11-01T10:00:00+08:00') }), NOW)).toEqual({
-      kind: 'revoke',
-    })
-    expect(passIntent(card({ status: 'EXPIRED' }), NOW)).toEqual({ kind: 'revoke' })
-    expect(passIntent(card({ status: 'FROZEN' }), NOW)).toMatchObject({ kind: 'bundle' })
-  })
-
-  it('订单金额：整单退款按实付；部分退款按已到账流水；畅练卡订单不计会员节省', () => {
+  it('订单金额：整单退款按实付；部分退款按已到账流水；会员卡商品订单不计会员节省', () => {
     expect(refundedCentsOf(order({ status: 'REFUNDED' }) as any, 30000)).toBe(30000)
     expect(
       refundedCentsOf(order({ refunds: [{ amountFen: 5000 }, { amountFen: 4000 }] }) as any, 30000),
     ).toBe(9000)
     expect(refundedCentsOf(order({ refunds: [{ amountFen: 99999 }] }) as any, 30000)).toBe(30000)
     expect(savedCentsOf(order() as any)).toBe(6000)
-    expect(savedCentsOf(order({ cardType: 'YEARLY' }) as any)).toBe(0)
-    // 畅练卡商品订单以元存储，且不是会员价订单
+    // 会员卡商品订单以元存储，且不是会员价订单
     expect(savedCentsOf(order({ orderType: 'MEMBER_CARD', discountAmount: 10 }) as any)).toBe(0)
-  })
-
-  it('附赠 → 改期 → 撤销，均幂等；无变化时不重复请求', async () => {
-    cards = [card()]
-    const first = await sync.runOnce(NOW, { passes: true })
-    expect(first).toMatchObject({ bundled: 1, failed: 0 })
-    expect(fake.bundles.get('pass-1')).toMatchObject({
-      localUserId: 'u-1',
-      validFrom: '2026-11-01',
-      validUntil: '2026-12-01',
-      state: 'ACTIVE',
-    })
-    expect(forget).toHaveBeenCalledWith('u-1')
-
-    const before = fake.requests.length
-    expect(await sync.runOnce(NOW, { passes: true })).toMatchObject({ bundled: 0, skipped: 1 })
-    expect(fake.requests.length).toBe(before)
-
-    cards = [card({ endDate: new Date('2027-01-01T10:00:00+08:00') })]
-    expect(await sync.runOnce(NOW, { passes: true })).toMatchObject({ bundled: 1 })
-    expect(fake.bundles.get('pass-1')?.validUntil).toBe('2027-01-01')
-
-    cards = [card({ endDate: card().startDate, status: 'EXPIRED' })]
-    expect(await sync.runOnce(NOW, { passes: true })).toMatchObject({ revoked: 1 })
-    expect(fake.bundles.get('pass-1')?.state).toBe('REFUNDED')
-  })
-
-  it('从未附赠的卡撤销视为完成；档案未同步退避，不阻塞其他卡', async () => {
-    cards = [
-      card({ id: 'never', endDate: card().startDate }),
-      card({ id: 'missing-pass', userId: 'missing' }),
-      card({ id: 'pass-2', userId: 'u-2' }),
-    ]
-    const result = await sync.runOnce(NOW, { passes: true })
-    expect(result).toMatchObject({ bundled: 1, revoked: 0, missing: 1, failed: 0 })
-    expect(fake.bundles.has('pass-2')).toBe(true)
-
-    const count = fake.requests.length
-    await sync.runOnce(new Date(NOW.getTime() + 60_000), { passes: true })
-    // never 已完成、missing 在退避中、pass-2 无变化：都不再请求
-    expect(fake.requests.length).toBe(count)
   })
 
   it('未建档只记 missing，契约错误才记 failed', async () => {
@@ -368,24 +295,12 @@ describe('BrandPresenceSync：畅练卡附赠与订单上报', () => {
     expect(fake.orders.get('o-1')?.refundCents).toBe(30000)
   })
 
-  it('畅练卡同步遇到 CRM 不可用时，本轮不再上报订单', async () => {
-    cards = [card()]
-    orders = [order()]
-    fake.failNext = { status: 500, body: { error: 'INTERNAL' } }
-    const result = await sync.runOnce(NOW, { passes: true, orders: true })
-    expect(result).toMatchObject({ failed: 1, reported: 0 })
-    expect(fake.orders.size).toBe(0)
-  })
-
   it('开关默认开启；显式设为 0 时才停用', async () => {
-    cards = [card()]
     orders = [order()]
-    process.env.BRAND_PASS_BUNDLE_ENABLED = '0'
     process.env.BRAND_ORDER_REPORT_ENABLED = '0'
     const result = await sync.runOnce(NOW)
-    expect(result).toMatchObject({ bundled: 0, reported: 0 })
+    expect(result).toMatchObject({ reported: 0 })
     expect(fake.requests).toHaveLength(0)
-    delete process.env.BRAND_PASS_BUNDLE_ENABLED
     delete process.env.BRAND_ORDER_REPORT_ENABLED
   })
 })
@@ -394,8 +309,7 @@ describe('候补优先排位：品牌会员 prioritySeat', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { WaitlistService } = require('../src/modules/waitlist/waitlist.service')
   const svc = new WaitlistService({}, {}, {}, {}, {})
-  const clientOf = (card: unknown, memberCount: number) => ({
-    memberCard: { findFirst: async () => card },
+  const clientOf = (memberCount: number) => ({
     waitlistEntry: { count: async () => memberCount },
   })
   const brand = (prioritySeat: boolean) => ({
@@ -405,18 +319,15 @@ describe('候补优先排位：品牌会员 prioritySeat', () => {
   const seat = (client: unknown, b?: unknown) =>
     (svc as any).decideSeatType('c1', 'u1', 2, client, b)
 
-  it('无畅练卡但品牌会员有优先排位，会员席未满时进会员席', async () => {
-    await expect(seat(clientOf(null, 0), brand(true))).resolves.toBe('MEMBER')
+  it('品牌会员有优先排位，会员席未满时进会员席', async () => {
+    await expect(seat(clientOf(0), brand(true))).resolves.toBe('MEMBER')
   })
   it('会员席已满时进普通席', async () => {
-    await expect(seat(clientOf(null, 2), brand(true))).resolves.toBe('NORMAL')
+    await expect(seat(clientOf(2), brand(true))).resolves.toBe('NORMAL')
   })
   it('非会员或品牌状态未知时按普通席', async () => {
-    await expect(seat(clientOf(null, 0), brand(false))).resolves.toBe('NORMAL')
-    await expect(seat(clientOf(null, 0), { perks: null, unknown: true })).resolves.toBe('NORMAL')
-    await expect(seat(clientOf(null, 0))).resolves.toBe('NORMAL')
-  })
-  it('只持畅练卡、没有品牌会员权益时不直接占会员席（优先排位已迁到品牌会员）', async () => {
-    await expect(seat(clientOf({ id: 'card' }, 1), undefined)).resolves.toBe('NORMAL')
+    await expect(seat(clientOf(0), brand(false))).resolves.toBe('NORMAL')
+    await expect(seat(clientOf(0), { perks: null, unknown: true })).resolves.toBe('NORMAL')
+    await expect(seat(clientOf(0))).resolves.toBe('NORMAL')
   })
 })

@@ -48,7 +48,7 @@
         <a-card :loading="loading" class="kpi-card">
           <a-statistic title="本月实收" :value="toYuan(dashboard?.cash.totalFen)" :precision="2" prefix="¥" />
           <div class="stat-sub">
-            报课 ¥{{ money(toYuan(dashboard?.cash.courseFen)) }} · 会员卡 ¥{{ money(toYuan(dashboard?.cash.memberCardFen)) }}
+            报课 ¥{{ money(toYuan(dashboard?.cash.courseFen)) }} · 畅练卡（历史） ¥{{ money(toYuan(dashboard?.cash.memberCardFen)) }}
           </div>
           <div class="stat-sub">
             候补 ¥{{ money(toYuan(dashboard?.cash.waitlistFen)) }} · 社群 ¥{{ money(toYuan(dashboard?.cash.communityFen)) }}
@@ -65,7 +65,7 @@
             :value-style="{ color: '#6B463C' }"
           />
           <div class="stat-sub">
-            课程 ¥{{ money(toYuan(dashboard?.revenue.courseFen)) }} · 会员卡 ¥{{ money(toYuan(dashboard?.revenue.memberCardFen)) }}
+            课程 ¥{{ money(toYuan(dashboard?.revenue.courseFen)) }} · 畅练卡（历史） ¥{{ money(toYuan(dashboard?.revenue.memberCardFen)) }}
           </div>
           <div class="stat-sub">
             社群手续费 ¥{{ money(toYuan(dashboard?.revenue.communityFeeFen)) }}
@@ -85,7 +85,7 @@
             :value-style="{ color: '#C08B5C' }"
           />
           <div class="stat-sub">
-            课程 ¥{{ money(toYuan(dashboard?.deferred.courseFen)) }} · 会员卡 ¥{{ money(toYuan(dashboard?.deferred.memberCardFen)) }}
+            课程 ¥{{ money(toYuan(dashboard?.deferred.courseFen)) }} · 畅练卡（历史） ¥{{ money(toYuan(dashboard?.deferred.memberCardFen)) }}
           </div>
           <div class="stat-sub">候补定金 ¥{{ money(toYuan(dashboard?.deferred.waitlistFen)) }} · 尚未确认的收入</div>
         </a-card>
@@ -190,8 +190,8 @@
 
     <a-card :loading="loading">
       <a-tabs v-model:activeKey="activeTab">
-        <!-- 报课与会员卡 -->
-        <a-tab-pane key="courses" tab="报课与会员卡">
+        <!-- 报课与畅练卡（历史） -->
+        <a-tab-pane key="courses" tab="报课与畅练卡（历史）">
           <div class="tab-toolbar">
             <a-input-search
               v-model:value="courseKeyword"
@@ -218,7 +218,7 @@
               </template>
               <template v-else-if="column.key === 'name'">
                 <a-tag :color="record.category === 'MEMBER_CARD' ? 'gold' : 'blue'">
-                  {{ record.category === 'MEMBER_CARD' ? '会员卡' : '课程' }}
+                  {{ record.category === 'MEMBER_CARD' ? '畅练卡（历史）' : '课程' }}
                 </a-tag>
                 {{ record.name }}
               </template>
@@ -422,7 +422,7 @@ const trendColumns = [
   { title: '在场毛利', key: 'profitFen', width: 130 },
 ]
 
-/* ===== 报课与会员卡 ===== */
+/* ===== 报课与畅练卡（历史） ===== */
 
 const courseRows = ref<PresenceCourseRow[]>([])
 const courseTotal = ref(0)
@@ -434,7 +434,7 @@ const courseSummary = ref<Record<string, number>>({})
 
 const courseColumns = [
   { title: '订单号', key: 'orderNo', width: 150 },
-  { title: '课程 / 会员卡', key: 'name', width: 220 },
+  { title: '课程 / 畅练卡', key: 'name', width: 220 },
   { title: '归属组织', key: 'orgName', width: 120 },
   { title: '服务期', key: 'service', width: 200 },
   { title: '本月实收', key: 'monthCashFen', width: 120 },

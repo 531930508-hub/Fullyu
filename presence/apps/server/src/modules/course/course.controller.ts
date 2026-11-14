@@ -123,11 +123,4 @@ export class CourseController {
   async savePriceTiers(@Param('id') id: string, @Body() body: { tiers: any[] }) {
     return this.courseService.savePriceTiers(id, body.tiers ?? [])
   }
-
-  @Put(':id/member-discounts')
-  @AdminAuth('course:update')
-  @ApiOperation({ summary: '保存课程会员折扣' })
-  async saveMemberDiscounts(@Param('id') id: string, @Body() body: { discounts: any[] }) {
-    return this.courseService.saveMemberDiscounts(id, body.discounts ?? [])
-  }
 }

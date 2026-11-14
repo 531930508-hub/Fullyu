@@ -33,7 +33,6 @@ model User {
   updatedAt          DateTime           @updatedAt @map("updated_at")
 
   // Relations
-  memberCards      MemberCard[]
   orders           Order[]
   pointsRecords    PointsRecord[]
   vouchers         Voucher[]
@@ -184,60 +183,6 @@ enum CourseProposalStatus {
   PUBLISHED // 已上架
 }
 
-// ========== 会员卡 ==========
-
-model MemberCard {
-  id        String           @id @default(cuid())
-  userId    String           @map("user_id")
-  type      MemberCardType
-  status    MemberCardStatus @default(ACTIVE)
-  startDate DateTime         @map("start_date")
-  endDate   DateTime         @map("end_date")
-  absences  Int              @default(0) // 当月未出席次数
-  createdAt DateTime         @default(now()) @map("created_at")
-  updatedAt DateTime         @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@map("member_cards")
-}
-
-enum MemberCardType {
-  MONTHLY
-  QUARTERLY
-  YEARLY
-}
-
-enum MemberCardStatus {
-  ACTIVE
-  FROZEN
-  EXPIRED
-}
-
-// 会员卡商品（后台可发布/配置价格）
-model MemberCardProduct {
-  id           String                  @id @default(cuid())
-  type         MemberCardType
-  name         String
-  price        Decimal
-  durationDays Int                     @map("duration_days")
-  description  String?
-  benefits     Json // string[]
-  status       MemberCardProductStatus @default(ON_SHELF)
-  sort         Int                     @default(0)
-  createdAt    DateTime                @default(now()) @map("created_at")
-  updatedAt    DateTime                @updatedAt @map("updated_at")
-
-  orders Order[]
-
-  @@map("member_card_products")
-}
-
-enum MemberCardProductStatus {
-  ON_SHELF
-  OFF_SHELF
-}
-
 // ========== 积分系统 ==========
 
 model PointsRecord {
@@ -342,7 +287,6 @@ model Course {
   reviews         Review[]
   priceTiers      CoursePriceTier[]
   waitlistEntries WaitlistEntry[]
-  memberDiscounts CourseMemberDiscount[]
   reservation     VenueReservation?
 
   @@map("courses")
@@ -381,19 +325,6 @@ model CoursePriceTier {
   @@map("course_price_tiers")
 }
 
-// 课程会员折扣（按卡类型配置折扣百分比）
-model CourseMemberDiscount {
-  id              String         @id @default(cuid())
-  courseId        String         @map("course_id")
-  cardType        MemberCardType @map("card_type")
-  discountPercent Int            @map("discount_percent") // 折扣百分比，如 70 表示 7 折
-
-  course Course @relation(fields: [courseId], references: [id])
-
-  @@unique([courseId, cardType])
-  @@map("course_member_discounts")
-}
-
 // ========== 会员卡分时段折扣 ==========
 
 enum TimeDiscountActionType {
@@ -406,12 +337,11 @@ enum TimeDiscountRuleStatus {
   DISABLED
 }
 
-// 会员卡时段折扣规则（门店/卡类型多选，空=全部；手动优先级 + 门店特异性匹配）
+// 时段折扣规则（门店多选，空=全部；手动优先级 + 门店特异性匹配）
 model MemberTimeDiscountRule {
   id              String                 @id @default(cuid())
   name            String // 规则名（后台识别用，如"周末峰值"）
   orgIds          Json                   @default("[]") @map("org_ids") // string[]；空=全部门店（兜底）
-  cardTypes       Json                   @default("[]") @map("card_types") // MemberCardType[]；空=全部卡类型
   priority        Int                    @default(0) // 越小越优先（同特异性分组内），后台调序
   weekdays        Json                   @default("[]") // number[] [1-7]（1=周一…7=周日）；空=不限
   timeRanges      Json                   @default("[]") @map("time_ranges") // [{start:"HH:mm",end:"HH:mm"}] 含头不含尾；空=全天
@@ -599,9 +529,6 @@ model Order {
   courseId               String?         @map("course_id")
   communityId            String?         @map("community_id")
   orderType              OrderType       @default(COURSE) @map("order_type")
-  memberCardProductId    String?         @map("member_card_product_id")
-  memberCardId           String?         @map("member_card_id") // 支付成功后生成的会员卡ID
-  cardType               MemberCardType? @map("card_type")
   originalPrice          Decimal         @map("original_price")
   discountAmount         Decimal         @default(0) @map("discount_amount")
   pointsDeduction        Decimal         @default(0) @map("points_deduction")
@@ -621,6 +548,9 @@ model Order {
   /// 平台服务费（分）：按实付金额 10% 计提，免年费为 0
   platformFee            Decimal         @default(0) @map("platform_fee")
   hitTimeRuleId          String?         @map("hit_time_rule_id") // 命中的时段折扣规则（对账/排查用）
+  /// 会员价卡类型口径（复用存量 card_type 列；畅练卡下线后不再关联会员卡，
+  /// 品牌会员折扣路径目前写入 null，仅为存量单保留展示口径，避免上线加列）
+  memberCardType         String?         @map("card_type")
   createdAt              DateTime        @default(now()) @map("created_at")
   updatedAt              DateTime        @updatedAt @map("updated_at")
 
@@ -628,7 +558,6 @@ model Order {
   course            Course?            @relation(fields: [courseId], references: [id])
   community         Community?         @relation(fields: [communityId], references: [id])
   voucher           Voucher?           @relation(fields: [voucherId], references: [id])
-  memberCardProduct MemberCardProduct? @relation(fields: [memberCardProductId], references: [id])
   refunds           OrderRefund[]
   waitlistEntry     WaitlistEntry?
 
@@ -2281,6 +2210,7 @@ model PresenceFinanceEntry {
   orderType     String? @map("order_type") @db.VarChar(20)
   courseId      String? @map("course_id")
   courseName    String? @map("course_name")
+  /// 已下线畅练卡的存量流水快照（无外键，仅历史展示）
   memberCardId  String? @map("member_card_id")
   cardName      String? @map("card_name")
   communityId   String? @map("community_id")

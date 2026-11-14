@@ -5,7 +5,7 @@ export interface EnrollQuote {
   courseId: string
   position: number
   basePrice: number
-  memberCardType?: string | null
+  memberSource?: 'BRAND' | null
   discountPercent: number
   discountAmount: number
   priceAfterDiscount: number

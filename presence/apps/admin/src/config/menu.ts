@@ -65,9 +65,6 @@ export const MENU_CONFIG: MenuItem[] = [
     icon: 'ShopOutlined',
     children: [
       { key: 'users', title: '用户管理', path: '/sales/users', perm: ['user:view'] },
-      { key: 'membercards', title: '会员卡管理', path: '/sales/membercards', perm: ['membercard:view'] },
-      { key: 'membercard-products', title: '会员卡商品', path: '/sales/membercard-products', perm: ['membercard:view'] },
-      { key: 'time-discounts', title: '时段折扣', path: '/sales/time-discounts', perm: ['membercard:view'] },
       { key: 'vouchers', title: '代金券与发券', path: '/sales/vouchers', perm: ['voucher:view'] },
       { key: 'orders', title: '订单管理', path: '/sales/orders', perm: ['order:view'] },
     ],

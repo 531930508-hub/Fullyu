@@ -174,7 +174,7 @@ const BENEFITS: BrandBenefit[] = [
   {
     business: 'presence',
     title: '在场 · 优先排位与阶梯价',
-    desc: '热门课程候补优先排位；没有畅练卡时课程享会员阶梯价'
+    desc: '热门课程候补优先排位；课程享会员阶梯价'
   },
   {
     business: 'teahour',
@@ -227,20 +227,6 @@ function annualCard(forceExpiring = false): BrandCardState {
   }
 }
 
-function presencePass(state: 'ACTIVE' | 'EXPIRING' | 'EXPIRED' = 'ACTIVE'): LocalBusinessCard {
-  return {
-    code: 'PRESENCE_PASS',
-    name: '在场畅练卡',
-    planName: '年卡',
-    state,
-    validUntil: '2027-06-30',
-    remainingDays: daysFromNow('2027-06-30'),
-    benefits: ['有效期内报课 0 元', '同期附赠 Full愈 品牌会员'],
-    system: 'presence',
-    readOnly: true
-  }
-}
-
 function nowText() {
   const d = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -252,14 +238,7 @@ function nowText() {
 /** 本地联调状态：开通后写内存，刷新回到初始值。 */
 let mockState = createMockState('ACTIVE')
 
-/**
- * 两张卡状态可独立设置，用于核对「有畅练卡、没品牌卡」这类关键场景。
- * passState 默认 ACTIVE：品牌卡未开通不应把在场畅练卡也显示成未开通。
- */
-export function createMockState(
-  cardState = 'ACTIVE',
-  passState: 'ACTIVE' | 'NONE' = 'ACTIVE'
-): BrandMemberData {
+export function createMockState(cardState = 'ACTIVE'): BrandMemberData {
   const brandOn = cardState !== 'NONE'
   const expiringMock = cardState === 'EXPIRING'
   return {
@@ -305,7 +284,7 @@ export function createMockState(
           {
             id: 'notice-winter',
             title: '冬季会员礼遇',
-            body: '十二月起，会员可优先预约周末小班课；畅练卡附赠的品牌会员同样适用。',
+            body: '十二月起，会员可优先预约周末小班课。',
             pinned: true,
             publishedAt: '2026-11-09'
           }
@@ -327,7 +306,7 @@ export function createMockState(
       : [],
     perks: { presence: { prioritySeat: brandOn, tierPrice: brandOn, invitesPerMonth: brandOn ? 2 : 0 } },
     benefits: BENEFITS.map((item) => ({ ...item })),
-    businessCards: passState === 'NONE' ? [] : [presencePass()],
+    businessCards: [],
     game: { enabled: brandOn, dice: brandOn ? 12 : 0 },
     updatedAt: nowText(),
     stale: false
@@ -404,9 +383,7 @@ export function issueBrandCard(payload: {
         soldBy: BRAND_BUSINESS,
         soldByName: BRAND_BUSINESS_NAME
       },
-      businessCards: mockState.businessCards.length
-        ? mockState.businessCards
-        : [presencePass()],      dice: { ...mockState.dice, balance: mockState.dice.balance || 2 },
+      businessCards: mockState.businessCards,      dice: { ...mockState.dice, balance: mockState.dice.balance || 2 },
       game: { enabled: true, dice: mockState.dice.balance || 2 },
       updatedAt: nowText()
     }
@@ -534,10 +511,9 @@ export function voucherStatusLabel(status?: string) {
 }
 
 export function setMockCardState(
-  state: 'NONE' | 'ACTIVE' | 'EXPIRING',
-  passState: 'NONE' | 'ACTIVE' = 'ACTIVE'
+  state: 'NONE' | 'ACTIVE' | 'EXPIRING'
 ): BrandMemberData {
-  mockState = createMockState(state, passState)
+  mockState = createMockState(state)
   return clone(mockState)
 }
 

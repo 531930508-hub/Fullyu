@@ -345,7 +345,7 @@ const MEMBER_ZH: LegalDoc = {
       p: [
         '权益按业务配置：时叙、在场、轻疗分别提供页面展示的会员价或优惠。具体适用门店、商品、课程或项目与折扣，以开卡时锁定的配置、门店公示和结算页为准。',
         '会员价不与优惠券、积分抵扣、活动价叠加，同一笔消费按对你最有利的一种结算。',
-        '在场畅练卡由在场单独销售与管理：有效期内不限次报课 0 元，并在同一有效期内免费赠送 Full愈 品牌大会员资格。已有品牌会员有效期更晚的，保留原会员；更早的，有效期自动接续到畅练卡截止日。在场的候补优先排位与课程会员阶梯价属于品牌会员权益。上课计价顺序为畅练卡 0 元、品牌会员价、原价，不叠加。'
+        '原畅练卡已停止销售；在场的候补优先排位与课程会员阶梯价属于 Full愈 品牌会员权益，具体以结算页为准。'
       ]
     },
     {
@@ -363,7 +363,7 @@ const MEMBER_ZH: LegalDoc = {
       p: [
         '开通后 7 日内可申请无理由退款，退还实付金额；期间已领取的年卡礼（实物礼）按其标注价值扣除。',
         '超过 7 日的，按实付金额扣除已享会员优惠与已领取年卡礼价值后计算；已享优惠包括会员价差额、积分抵扣、赠品与活动优惠。计算结果为 0 或以下的，不予退款。',
-        '通过会员码兑换、或随畅练卡等其他卡附赠的会员资格未单独付款，不涉及退款；附赠资格随原卡失效。',
+        '通过会员码兑换或随其他卡附赠的会员资格未单独付款，不涉及退款；附赠资格随原卡失效。',
         '退款原路退回，到账时间以支付渠道为准；已开具发票的，需按税务规定办理发票退回或红冲。特殊情况可联系门店伙伴，由工作人员核实后协商处理。'
       ]
     },
@@ -424,7 +424,7 @@ const MEMBER_EN: LegalDoc = {
       p: [
         'Benefits follow each business configuration. Teahour, Presence and Retreat each provide the member price or discount shown in the app. The participating stores, products, classes or services and discounts follow the configuration locked at purchase, in-store notices and the checkout page.',
         'Member prices do not stack with coupons, points or promotions; the single most favourable option applies to each purchase.',
-        'The Presence Pass is sold and managed by Presence: classes cost ¥0 during its term, and it includes Full Yu brand membership for the same term. Priority waitlist seating and member tier prices at Presence are brand-member benefits. Class pricing applies the Pass (¥0) first, then the brand member price, then the list price; they do not stack.'
+        'Presence does not sell a separate class pass. Priority waitlist seating and member tier prices at Presence are Full Yu brand-member benefits; the checkout page prevails.'
       ]
     },
     {
@@ -442,7 +442,7 @@ const MEMBER_EN: LegalDoc = {
       p: [
         'Within 7 days of joining you may request a refund without giving a reason; the amount paid is refunded less the marked value of any annual gifts (physical gifts) already collected.',
         'After 7 days, the refund is the amount paid less member savings already enjoyed and the value of annual gifts collected. Savings include member-price savings, point offsets, gifts and promotional discounts. If the result is 0 or less, no refund is due.',
-        'Membership redeemed with a member code, or included with another card such as the Presence Pass, was not paid for separately and is not refundable; included membership ends with the original card.',
+        'Membership redeemed with a member code or included with another card was not paid for separately and is not refundable; included membership ends with the original card.',
         'Refunds are returned to the original payment method; timing depends on the payment channel. If an invoice has been issued, it must be returned or reversed under tax rules. For special circumstances, talk to our store team, who will verify and work it out with you.'
       ]
     },

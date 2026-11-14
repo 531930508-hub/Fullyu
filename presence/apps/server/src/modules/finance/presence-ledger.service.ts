@@ -31,7 +31,6 @@ type MonthOrder = Prisma.OrderGetPayload<{
   include: {
     course: { include: { venue: { include: { org: true } } } }
     community: true
-    memberCardProduct: true
   }
 }>
 
@@ -377,24 +376,19 @@ export class PresenceLedgerService {
     const entries: EntryDraft[] = []
     const { start: monthStart, end: monthEnd } = cstMonthBounds(month)
 
-    const [eventOrders, courseOrders, memberOrders, settlements] = await Promise.all([
+    const [eventOrders, courseOrders, settlements] = await Promise.all([
       this.fetchMonthEventOrders(monthStart, monthEnd),
       this.fetchRecognitionCourseOrders(monthStart, monthEnd),
-      this.fetchRecognitionMemberOrders(monthStart, monthEnd),
       this.prisma.settlement.findMany({
         where: { settledAt: { lt: monthEnd } },
         orderBy: { settledAt: 'asc' },
       }),
     ])
 
-    // 会员卡服务期来自 member_cards，现金流水也要带上，否则报表里只有一条孤立的收款记录
-    const cardMap = await this.fetchCardMap([...eventOrders, ...memberOrders])
-
     // ---- 1. 收款 / 退款现金流水 + 社群手续费 ----
     for (const order of eventOrders) {
       const category = cashCategoryOf(order.orderType)
-      const card = order.memberCardId ? cardMap.get(order.memberCardId) ?? null : null
-      const base = this.orderSnapshot(order, card)
+      const base = this.orderSnapshot(order)
 
       if (
         order.paymentTime &&
@@ -473,13 +467,9 @@ export class PresenceLedgerService {
       }
     }
 
-    // ---- 2. 课程 / 会员卡逐日确认收入 ----
+    // ---- 2. 课程逐日确认收入 ----
     for (const order of courseOrders) {
-      entries.push(...this.recognitionEntries(order, null, month))
-    }
-    for (const order of memberOrders) {
-      const card = order.memberCardId ? cardMap.get(order.memberCardId) : null
-      entries.push(...this.recognitionEntries(order, card ?? null, month))
+      entries.push(...this.recognitionEntries(order, month))
     }
 
     // ---- 3. 导师结算成本 ----
@@ -500,7 +490,6 @@ export class PresenceLedgerService {
       include: {
         course: { include: { venue: { include: { org: true } } } },
         community: true,
-        memberCardProduct: true,
       },
     })
   }
@@ -531,56 +520,12 @@ export class PresenceLedgerService {
       include: {
         course: { include: { venue: { include: { org: true } } } },
         community: true,
-        memberCardProduct: true,
       },
     })
-  }
-
-  /** 会员卡服务期覆盖本月的已付款订单 */
-  private async fetchRecognitionMemberOrders(
-    monthStart: Date,
-    monthEnd: Date,
-  ): Promise<MonthOrder[]> {
-    const cards = await this.prisma.memberCard.findMany({
-      where: {
-        startDate: { lt: monthEnd },
-        endDate: { gte: monthStart },
-      },
-      select: { id: true },
-    })
-
-    return this.prisma.order.findMany({
-      where: {
-        orderType: 'MEMBER_CARD',
-        paymentTime: { not: null },
-        status: { in: [...PAID_STATUSES] },
-        OR: [
-          ...(cards.length ? [{ memberCardId: { in: cards.map((c) => c.id) } }] : []),
-          // 卡有效期结束后才付款：付款日一次性确认
-          { paymentTime: { gte: monthStart, lt: monthEnd } },
-        ],
-      },
-      include: {
-        course: { include: { venue: { include: { org: true } } } },
-        community: true,
-        memberCardProduct: true,
-      },
-    })
-  }
-
-  private async fetchCardMap(orders: MonthOrder[]) {
-    const ids = [...new Set(orders.map((o) => o.memberCardId).filter(Boolean))] as string[]
-    if (!ids.length) return new Map<string, { startDate: Date; endDate: Date }>()
-    const cards = await this.prisma.memberCard.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, startDate: true, endDate: true },
-    })
-    return new Map(cards.map((c) => [c.id, { startDate: c.startDate, endDate: c.endDate }]))
   }
 
   private orderSnapshot(
     order: MonthOrder,
-    card?: { startDate: Date; endDate: Date } | null,
   ): Omit<EntryDraft, 'dedupeKey' | 'month' | 'entryDate' | 'account' | 'eventType' | 'category' | 'amountFen'> {
     const org = order.course?.venue?.org ?? null
     return {
@@ -589,8 +534,8 @@ export class PresenceLedgerService {
       orderType: order.orderType,
       courseId: order.courseId,
       courseName: order.course?.title ?? null,
-      memberCardId: order.memberCardId,
-      cardName: order.memberCardProduct?.name ?? null,
+      memberCardId: null,
+      cardName: null,
       communityId: order.communityId,
       communityName: order.community?.name ?? null,
       hostUserId: order.community?.ownerUserId ?? null,
@@ -600,8 +545,8 @@ export class PresenceLedgerService {
       trainerName: null,
       orgId: order.course?.venue?.orgId ?? null,
       orgName: org?.name ?? null,
-      serviceStart: order.course ? toDay(order.course.startDate) : card ? toDay(card.startDate) : null,
-      serviceEnd: order.course ? toDay(order.course.endDate) : card ? toDay(card.endDate) : null,
+      serviceStart: order.course ? toDay(order.course.startDate) : null,
+      serviceEnd: order.course ? toDay(order.course.endDate) : null,
       hours: null,
       rate: null,
     }
@@ -621,16 +566,12 @@ export class PresenceLedgerService {
   }
 
   /**
-   * 课程/会员卡逐日确认：
+   * 课程逐日确认：
    * - 毛额按服务期每日分摊；
    * - 发生退款时按净额重算，退款日补一条负数 REVERSAL，之后按净额继续确认；
    * - 已关账月份不动，冲减只落在退款当月。
    */
-  private recognitionEntries(
-    order: MonthOrder,
-    card: { startDate: Date; endDate: Date } | null,
-    month: string,
-  ): EntryDraft[] {
+  private recognitionEntries(order: MonthOrder, month: string): EntryDraft[] {
     if (!order.paymentTime) return []
     if (!(PAID_STATUSES as readonly string[]).includes(order.status)) return []
 
@@ -638,16 +579,8 @@ export class PresenceLedgerService {
     const grossFen = orderAmountToFen(order.orderType, Number(order.actualPaid))
     if (grossFen <= 0) return []
 
-    const serviceStart = card
-      ? toDay(card.startDate)
-      : order.course
-        ? toDay(order.course.startDate)
-        : cstDayOf(order.paymentTime)
-    const serviceEnd = card
-      ? toDay(card.endDate)
-      : order.course
-        ? toDay(order.course.endDate)
-        : cstDayOf(order.paymentTime)
+    const serviceStart = order.course ? toDay(order.course.startDate) : cstDayOf(order.paymentTime)
+    const serviceEnd = order.course ? toDay(order.course.endDate) : cstDayOf(order.paymentTime)
 
     const paymentDay = cstDayOf(order.paymentTime)
     const recognitionStart = maxDay(serviceStart, paymentDay)

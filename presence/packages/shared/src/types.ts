@@ -15,20 +15,6 @@ export enum UserRole {
   TRAINER = 'TRAINER',
 }
 
-/** 会员卡类型 */
-export enum MemberCardType {
-  MONTHLY = 'MONTHLY',     // 月卡
-  QUARTERLY = 'QUARTERLY', // 季卡
-  YEARLY = 'YEARLY',       // 年卡
-}
-
-/** 会员卡状态 */
-export enum MemberCardStatus {
-  ACTIVE = 'ACTIVE',       // 有效
-  FROZEN = 'FROZEN',       // 冻结
-  EXPIRED = 'EXPIRED',     // 过期
-}
-
 /** 用户基础信息 */
 export interface IUser {
   id: string
@@ -81,12 +67,6 @@ export interface IPriceTier {
   price: number      // 该区间价格
 }
 
-/** 课程会员折扣（按卡类型） */
-export interface ICourseMemberDiscount {
-  cardType: MemberCardType
-  discountPercent: number // 折扣百分比，如 70 表示 7 折
-}
-
 /** 退款规则区间 */
 export interface IRefundRule {
   hoursFrom: number    // 距开课小时数下界（含）
@@ -119,7 +99,6 @@ export interface ICourse {
   currentEnrolled: number
   originalPrice: number
   priceTiers?: IPriceTier[]
-  memberDiscounts?: ICourseMemberDiscount[]
   refundRules?: IRefundRule[]
   waitlistEnabled?: boolean
   waitlistDeadlineHours?: number
@@ -146,7 +125,7 @@ export enum OrderStatus {
 export enum OrderType {
   COURSE = 'COURSE',           // 普通课程报名
   WAITLIST = 'WAITLIST',       // 候补报名（预付）
-  MEMBER_CARD = 'MEMBER_CARD', // 会员卡购买
+  MEMBER_CARD = 'MEMBER_CARD', // 畅练卡（已下线，仅用于存量订单展示）
   COMMUNITY = 'COMMUNITY',     // 社群年费
 }
 
@@ -157,9 +136,6 @@ export interface IOrder {
   orderType: OrderType
   courseId?: string
   courseName?: string
-  memberCardProductId?: string
-  memberCardId?: string
-  cardType?: MemberCardType
   originalPrice: number
   discountAmount: number
   pointsDeduction: number
@@ -171,28 +147,6 @@ export interface IOrder {
   cancelReason?: string
   refundAmount?: number
   createdAt: string
-}
-
-// ========== 会员卡商品 ==========
-
-/** 会员卡商品状态 */
-export enum MemberCardProductStatus {
-  ON_SHELF = 'ON_SHELF',   // 上架
-  OFF_SHELF = 'OFF_SHELF', // 下架
-}
-
-/** 会员卡商品 */
-export interface IMemberCardProduct {
-  id: string
-  type: MemberCardType
-  name: string
-  price: number
-  durationDays: number
-  description?: string
-  benefits: string[]
-  status: MemberCardProductStatus
-  sort: number
-  createdAt?: string
 }
 
 // ========== 候补队列（预付 + 双队列） ==========

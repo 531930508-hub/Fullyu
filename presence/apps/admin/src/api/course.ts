@@ -51,6 +51,3 @@ export function savePriceTiers(id: string, tiers: any[]) {
 }
 
 /** 保存课程会员折扣 */
-export function saveMemberDiscounts(id: string, discounts: any[]) {
-  return put(`/courses/${id}/member-discounts`, { discounts })
-}

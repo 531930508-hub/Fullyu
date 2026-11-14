@@ -15,13 +15,11 @@ import { BrandMemberClient } from '../../common/crm/brand-member.client'
 import { BrandPerksService } from '../../common/crm/brand-perks.service'
 import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
-import { MemberService } from './member.service'
 
 /**
  * 品牌会员顾客端接口（在场）。
  *
- * 品牌卡与积分以 CRM 为唯一账本；在场自己的畅练卡是本地权益，
- * 只以只读业务卡的形式合并展示，顾客仍在「在场会员」页办理。
+ * 品牌卡与积分以 CRM 为唯一账本（畅练卡已下线，不再合并本地卡）。
  * 购买/续费需要接入在场支付回调后再调用 CRM issue，本文件不提供绕过支付的入口。
  *
  * 2026-11-08 会议补充：会员码兑换、意见反馈、会员故事、每月邀请好友。
@@ -35,52 +33,6 @@ const DAY_MS = 24 * 60 * 60 * 1000
 /** 好友体验课券有效期（天） */
 export const INVITE_VOUCHER_DAYS = 30
 export const inviteVoucherSource = (code: string) => `在场好友邀请体验课 · ${code}`
-
-const PLAN_NAMES: Record<string, string> = {
-  MONTHLY: '月卡',
-  QUARTERLY: '季卡',
-  YEARLY: '年卡',
-}
-
-interface LocalPassCard {
-  id: string
-  type: string
-  status: string
-  startDate: Date
-  endDate: Date
-  absences: number
-}
-
-const formatDate = (value: Date): string =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(value)
-
-/**
- * 把本地畅练卡转成只读业务卡快照。
- * 只展示有效卡：冻结、过期或缺失时不生成条目，避免顾客误以为课程仍免费。
- */
-function presencePassSnapshot(card: LocalPassCard | null, now: Date) {
-  if (!card || card.status !== 'ACTIVE' || card.endDate.getTime() <= now.getTime()) {
-    return null
-  }
-  const remainingDays = Math.max(
-    1,
-    Math.ceil((card.endDate.getTime() - now.getTime()) / DAY_MS),
-  )
-  return {
-    business: 'presence',
-    code: 'PRESENCE_PASS',
-    name: '在场畅练卡',
-    planName: PLAN_NAMES[card.type] || '畅练卡',
-    state: remainingDays <= 30 ? 'EXPIRING' : 'ACTIVE',
-    validUntil: formatDate(card.endDate),
-    remainingDays,
-    benefits: ['有效期内报课 0 元（不限次）', '免费赠送同期 Full愈 品牌大会员'],
-    system: 'presence',
-    readOnly: true,
-    managePath: '/pages/member/index',
-    priorityNote: '畅练卡只含 0 元报课；候补优先排位与会员阶梯价由随赠品牌大会员提供',
-  }
-}
 
 const recordOf = (body: unknown): Record<string, unknown> =>
   body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
@@ -121,34 +73,16 @@ export function readFeedback(body: unknown): { content: string; allowQuote: bool
 export class BrandMemberController {
   constructor(
     private readonly client: BrandMemberClient,
-    private readonly memberService: MemberService,
     private readonly perks: BrandPerksService,
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {}
 
   @Get('me')
-  @ApiOperation({ summary: '品牌会员身份、积分与在场畅练卡（合并只读）' })
+  @ApiOperation({ summary: '品牌会员身份与积分' })
   async me(@Request() req: any) {
     const userId = req.user.userId
-    const [payload, localCard] = await Promise.all([
-      this.client.me(userId),
-      this.memberService.activeCard(userId) as Promise<LocalPassCard | null>,
-    ])
-    const snapshot = presencePassSnapshot(localCard, new Date())
-    const cards = Array.isArray(payload.businessCards) ? payload.businessCards : []
-    const others = cards.filter(
-      (item) =>
-        !(
-          item &&
-          typeof item === 'object' &&
-          (item as Record<string, unknown>).code === 'PRESENCE_PASS'
-        ),
-    )
-    return {
-      ...payload,
-      businessCards: snapshot ? [...others, snapshot] : others,
-    }
+    return this.client.me(userId)
   }
 
   @Get('products')

@@ -45,10 +45,6 @@
             <span>{{ record.name }}</span>
             <a-tag v-if="record.birthday" color="magenta" style="margin-left: 6px;">{{ record.birthday }}</a-tag>
           </template>
-          <template v-if="column.dataIndex === 'cardType'">
-            <a-tag v-if="record.cardType" :color="memberCardTypeColor(record.cardType)">{{ memberCardTypeLabel(record.cardType) }}</a-tag>
-            <span v-else style="color: #ccc;">-</span>
-          </template>
           <template v-if="column.dataIndex === 'status'">
             <a-tag :color="record.checkedIn ? 'green' : 'default'">{{ record.checkedIn ? '已签到' : '未签到' }}</a-tag>
           </template>
@@ -98,10 +94,6 @@
                   <span>{{ record.name }}</span>
                   <a-tag v-if="record.birthday" color="magenta" style="margin-left: 6px;">{{ record.birthday }}</a-tag>
                 </template>
-                <template v-if="column.dataIndex === 'cardType'">
-                  <a-tag v-if="record.cardType" :color="memberCardTypeColor(record.cardType)">{{ memberCardTypeLabel(record.cardType) }}</a-tag>
-                  <span v-else style="color: #ccc;">-</span>
-                </template>
                 <template v-if="column.dataIndex === 'status'">
                   <a-tag :color="record.checkedIn ? 'green' : 'default'">{{ record.checkedIn ? '已签到' : '未签到' }}</a-tag>
                 </template>
@@ -123,7 +115,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { memberCardTypeColor, memberCardTypeLabel } from '@fullyu/shared'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import { upcomingCheckins, checkinCourses, courseRoster, manualCheckIn, cancelCheckIn } from '@/api/checkin'
@@ -140,7 +131,6 @@ const checkinColumns = [
   { title: '照片', dataIndex: 'photo', width: 70 },
   { title: '姓名', dataIndex: 'name', width: 140 },
   { title: '手机号', dataIndex: 'phone', width: 130 },
-  { title: '会员卡', dataIndex: 'cardType', width: 90 },
   { title: '状态', dataIndex: 'status', width: 90 },
   { title: '操作', dataIndex: 'action', width: 150 },
 ]
@@ -154,7 +144,6 @@ function mapRosterItem(o: any) {
     phone: o.user?.phone || '-',
     photo: o.user?.photo || '',
     birthday: birthdayCountdownLabel(o.user?.birthday),
-    cardType: o.cardType || '',
     checkedIn: o.checkedIn,
   }
 }

@@ -4,21 +4,13 @@
       <h2 class="page-title">用户管理</h2>
       <a-space>
         <a-input-search v-model:value="searchText" placeholder="搜索昵称/手机号" style="width: 220px" @search="loadUsers" />
-        <a-select v-model:value="filterCard" style="width: 130px">
-          <a-select-option value="">全部会员卡</a-select-option>
-          <a-select-option value="MONTHLY">月卡</a-select-option>
-          <a-select-option value="QUARTERLY">季卡</a-select-option>
-          <a-select-option value="YEARLY">年卡</a-select-option>
-          <a-select-option value="NONE">无卡</a-select-option>
-        </a-select>
       </a-space>
     </div>
 
     <!-- 用户统计 -->
     <a-row :gutter="24" style="margin-bottom: 24px">
-      <a-col :span="8"><a-card><a-statistic title="总用户" :value="users.length" /></a-card></a-col>
-      <a-col :span="8"><a-card><a-statistic title="持卡会员" :value="cardHolderCount" :value-style="{ color: '#6B463C' }" /></a-card></a-col>
-      <a-col :span="8"><a-card><a-statistic title="本月新增" :value="newThisMonth" :value-style="{ color: '#27AE60' }" /></a-card></a-col>
+      <a-col :span="12"><a-card><a-statistic title="总用户" :value="users.length" /></a-card></a-col>
+      <a-col :span="12"><a-card><a-statistic title="本月新增" :value="newThisMonth" :value-style="{ color: '#27AE60' }" /></a-card></a-col>
     </a-row>
 
     <a-card>
@@ -32,10 +24,6 @@
                 <div style="color: #999; font-size: 12px;">{{ record.phone }}</div>
               </div>
             </div>
-          </template>
-          <template v-if="column.dataIndex === 'card'">
-            <a-tag v-if="record.cardLabel" :color="record.cardType === 'YEARLY' ? 'gold' : record.cardType === 'QUARTERLY' ? 'blue' : 'green'">{{ record.cardLabel }}</a-tag>
-            <span v-else style="color: #ccc;">-</span>
           </template>
           <template v-if="column.dataIndex === 'action'">
             <a-space>
@@ -53,8 +41,6 @@
         <a-descriptions bordered :column="1" size="small">
           <a-descriptions-item label="昵称">{{ currentUser.name }}</a-descriptions-item>
           <a-descriptions-item label="手机号">{{ currentUser.phone }}</a-descriptions-item>
-          <a-descriptions-item label="会员卡">{{ currentUser.cardLabel || '未开通' }}</a-descriptions-item>
-          <a-descriptions-item label="卡到期">{{ currentUser.cardExpire || '-' }}</a-descriptions-item>
           <a-descriptions-item label="注册时间">{{ currentUser.registerDate }}</a-descriptions-item>
         </a-descriptions>
       </template>
@@ -109,30 +95,23 @@ import dayjs, { Dayjs } from 'dayjs'
 import { adminListUsers } from '@/api/user'
 import { grantVoucher } from '@/api/voucher'
 import { adminListCourses } from '@/api/course'
-import { memberCardTypeLabel } from '@fullyu/shared'
 
 const loading = ref(false)
 const searchText = ref('')
-const filterCard = ref('')
 const users = ref<any[]>([])
 
 const columns = [
   { title: '用户', dataIndex: 'name', width: 220 },
-  { title: '会员卡', dataIndex: 'card', width: 120 },
   { title: '注册时间', dataIndex: 'registerDate', width: 140 },
   { title: '操作', dataIndex: 'action', width: 160 },
 ]
 
 function mapUser(u: any) {
-  const card = u.memberCards && u.memberCards[0]
   return {
     id: u.id,
     name: u.nickname || '用户',
     phone: u.phone,
     avatar: u.avatar,
-    cardType: card?.type || '',
-    cardLabel: card ? memberCardTypeLabel(card.type) : '',
-    cardExpire: card?.endDate ? String(card.endDate).slice(0, 10) : '',
     registerDate: u.createdAt ? String(u.createdAt).slice(0, 10) : '',
   }
 }
@@ -151,19 +130,12 @@ async function loadUsers() {
 
 onMounted(loadUsers)
 
-const cardHolderCount = computed(() => users.value.filter(u => u.cardLabel).length)
 const newThisMonth = computed(() => {
   const start = dayjs().startOf('month')
   return users.value.filter(u => u.registerDate && dayjs(u.registerDate).isAfter(start)).length
 })
 
-const filteredUsers = computed(() => {
-  return users.value.filter(u => {
-    if (filterCard.value === 'NONE' && u.cardType) return false
-    if (['MONTHLY', 'QUARTERLY', 'YEARLY'].includes(filterCard.value) && u.cardType !== filterCard.value) return false
-    return true
-  })
-})
+const filteredUsers = computed(() => users.value)
 
 const detailVisible = ref(false)
 const currentUser = ref<any>(null)

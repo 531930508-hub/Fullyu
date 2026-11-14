@@ -108,7 +108,6 @@
         <view class="summary-box"><text class="subheading">{{ course.title }}</text><view class="kv"><text>{{ tr('场次', 'Session') }}</text><text>{{ formatDate(course.startDate) }} {{ course.startTime }}</text></view><view class="kv"><text>{{ tr('地点', 'Venue') }}</text><text>{{ course.venue?.name || tr('待确认', 'TBC') }}</text></view><view class="kv"><text>{{ tr('人数', 'Attendees') }}</text><text>{{ tr('1 人', '1 person') }}{{ course.type === 'SERIES' ? tr(' · 整个系列', ' · full series') : '' }}</text></view></view>
         <view class="summary-box">
           <view class="kv"><text>{{ tr('当前价格', 'Current price') }}</text><text>¥{{ toYuan(currentQuote.basePrice) }}</text></view>
-          <view v-if="currentQuote.memberCardType" class="kv"><text>{{ tr('会员卡', 'Member card') }}</text><text>{{ cardLabel(currentQuote.memberCardType) }}</text></view>
           <view v-if="slotDiscount" class="slot-discount"><text>{{ slotDiscount.ruleName }}</text><text v-if="slotDiscount.actionType === 'FIXED_BY_DURATION' && slotDiscount.fixedPrice != null" class="secondary">{{ tr('会员时段价', 'Member time-slot price') }} ¥{{ slotDiscount.fixedPrice }}</text><text v-else-if="slotDiscount.discountPercent != null" class="secondary">{{ tr('时段计价比例', 'Time-slot rate') }} {{ slotDiscount.discountPercent }}%</text></view>
           <view v-if="currentQuote.discountAmount" class="kv"><text>{{ currentQuote.discountAmount > 0 ? tr('本次优惠', 'Discount') : tr('本次价格调整', 'Price adjustment') }}</text><text>{{ currentQuote.discountAmount > 0 ? '−' : '+' }}¥{{ toYuan(Math.abs(currentQuote.discountAmount)) }}</text></view>
           <view class="kv total"><text>{{ tr('应付', 'Total') }}</text><text>¥{{ toYuan(currentQuote.priceAfterDiscount) }}</text></view>
@@ -176,7 +175,7 @@ import { useUserStore } from '../../stores/user'
 import { getCourseDetail, fetchSubscribeTemplates } from '@/api/course'
 import { quoteEnroll, previewEnrollQuote, enrollCourse, type EnrollQuote } from '@/api/order'
 import { quoteWaitlist, joinWaitlist, listMyWaitlist, type WaitlistQuote, type WaitlistEntry } from '@/api/waitlist'
-import { getActiveCard } from '@/api/member'
+import { loadBrandMember } from '@/api/brandMember'
 import { payOrder, isOrderPaid, requestSubscribeMessage } from '@/utils/wechat'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
@@ -212,7 +211,6 @@ const myWaitlist = ref<WaitlistEntry | null>(null)
 const memberBenefitOpen = ref(false)
 const isMember = ref(false)
 const previewQuote = ref<BookingQuote | null>(null)
-const CARD_LABELS: Record<string, string> = { YEARLY: '年卡会员', QUARTERLY: '季卡会员', MONTHLY: '月卡会员' }
 const slotDiscount = computed(() => currentQuote.value?.timeDiscount ?? null)
 const syllabus = computed(() => course.value?.syllabus?.length ? course.value.syllabus : course.value?.sessions || [])
 const capacityKnown = computed(() => course.value && Number.isFinite(course.value.currentEnrolled) && Number.isFinite(course.value.maxCapacity) && course.value.maxCapacity > 0)
@@ -277,7 +275,7 @@ const displayPrice = computed(() => {
 const priceCaption = computed(() => {
   const quote = previewQuote.value
   if (quote && quote.courseId === course.value?.id) {
-    return quote.memberCardType
+    return quote.memberSource === 'BRAND'
       ? tr('当前会员价 · 确认报名时重新询价', 'Your member price · re-quoted at booking')
       : tr('当前应付价 · 确认报名时重新询价', 'Your current price · re-quoted at booking')
   }
@@ -356,10 +354,6 @@ function difficultyLabel(v: string) {
     ? { BEGINNER: 'Beginner', INTERMEDIATE: 'Intermediate', ADVANCED: 'Advanced' }
     : { BEGINNER: '入门', INTERMEDIATE: '进阶', ADVANCED: '高级' }
   return (labels as Record<string, string>)[v] || v
-}
-function cardLabel(type: string) {
-  if (!isEnglish()) return CARD_LABELS[type] || type
-  return ({ YEARLY: 'Yearly member', QUARTERLY: 'Quarterly member', MONTHLY: 'Monthly member' } as Record<string, string>)[type] || type
 }
 
 async function loadDetail(id: string) {
@@ -440,7 +434,10 @@ const shareTargets = computed<ShareTargetOption[]>(() => course.value?.id
 onLoad(async (query) => {
   await loadDetail(query?.id || '')
   if (userStore.isLoggedIn) {
-    try { isMember.value = !!(await getActiveCard()) } catch { isMember.value = false }
+    try {
+      const brand = await loadBrandMember()
+      isMember.value = ['ACTIVE', 'EXPIRING', 'PENDING'].includes(brand.card?.state || '')
+    } catch { isMember.value = false }
     await loadMyWaitlist()
   }
 })
@@ -477,17 +474,8 @@ function goBack() { if (getCurrentPages().length > 1) uni.navigateBack(); else u
 function goBookings() { uni.switchTab({ url: '/pages/my-courses/index' }) }
 function goMember() {
   if (busy.value) return
-  // switchTab 会关闭当前课程页，记录回跳目标，会员页给出「返回课程」入口。
-  if (course.value?.id) {
-    uni.setStorageSync('presence_member_return', {
-      type: 'course',
-      id: course.value.id,
-      title: course.value.title || '',
-      at: Date.now(),
-    })
-  }
   closeWaitlist()
-  uni.switchTab({ url: '/pages/member/index' })
+  uni.switchTab({ url: '/pages/brand-member/index' })
 }
 function goTrainer() { const id = course.value?.trainer?.id; if (id) uni.navigateTo({ url: `/pages/trainer-home/index?id=${id}` }) }
 function previewCover() { if (course.value?.coverImage) uni.previewImage({ urls: [course.value.coverImage, ...course.value.gallery], current: course.value.coverImage }) }

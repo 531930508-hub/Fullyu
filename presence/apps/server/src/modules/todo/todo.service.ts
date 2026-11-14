@@ -31,13 +31,13 @@ const itemNameOf = (order: {
   orderType: string
   course?: { title: string } | null
   community?: { name: string } | null
-  memberCardProduct?: { name: string } | null
 }) => {
   if (order.orderType === 'COURSE' || order.orderType === 'WAITLIST') {
     return order.course?.title || '课程'
   }
   if (order.orderType === 'COMMUNITY') return order.community?.name || '社群年费'
-  if (order.orderType === 'MEMBER_CARD') return order.memberCardProduct?.name || '会员卡'
+  // 会员卡产品已下线，历史 MEMBER_CARD 订单只保留下单记录，不再关联产品名
+  if (order.orderType === 'MEMBER_CARD') return '会员卡（已下线）'
   return '订单'
 }
 
@@ -290,7 +290,6 @@ export class TodoService {
         user: { select: { nickname: true, phone: true } },
         course: { select: { title: true, venue: { select: { orgId: true } } } },
         community: { select: { name: true } },
-        memberCardProduct: { select: { name: true } },
       },
     })
     if (!orders.length) return []
@@ -704,7 +703,6 @@ export class TodoService {
         user: { select: { nickname: true, phone: true } },
         course: { select: { title: true } },
         community: { select: { name: true } },
-        memberCardProduct: { select: { name: true } },
       },
     })
     if (!order) return fallback
@@ -760,7 +758,6 @@ export class TodoService {
         user: { select: { nickname: true, phone: true } },
         course: { select: { title: true, venue: { select: { orgId: true } } } },
         community: { select: { name: true } },
-        memberCardProduct: { select: { name: true } },
       },
     })
     if (!order) throw new BusinessException('订单不存在', 4202)

@@ -8,9 +8,6 @@
 import {
   CommunityStatus,
   CourseStatus,
-  MemberCardProductStatus,
-  MemberCardStatus,
-  MemberCardType,
   OrderStatus,
   OrderType,
   TaskClaimStatus,
@@ -60,28 +57,8 @@ export const COURSE_STATUS_META: Record<CourseStatus, StatusMeta> = {
 export const ORDER_TYPE_META: Record<OrderType, StatusMeta> = {
   COURSE: { zh: '课程', en: 'Course', color: 'blue' },
   WAITLIST: { zh: '候补', en: 'Waitlist', color: 'orange' },
-  MEMBER_CARD: { zh: '会员卡', en: 'Member card', color: 'purple' },
+  MEMBER_CARD: { zh: '畅练卡（已下线）', en: 'Pass (retired)', color: 'purple' },
   COMMUNITY: { zh: '社群', en: 'Community', color: 'cyan' },
-}
-
-/** 会员卡类型：与 Prisma MemberCardType 一一对应 */
-export const MEMBER_CARD_TYPE_META: Record<MemberCardType, StatusMeta> = {
-  MONTHLY: { zh: '月卡', en: 'Monthly', color: 'blue' },
-  QUARTERLY: { zh: '季卡', en: 'Quarterly', color: 'purple' },
-  YEARLY: { zh: '年卡', en: 'Yearly', color: 'gold' },
-}
-
-/** 会员卡状态：与 Prisma MemberCardStatus 一一对应 */
-export const MEMBER_CARD_STATUS_META: Record<MemberCardStatus, StatusMeta> = {
-  ACTIVE: { zh: '有效', en: 'Active', color: 'green' },
-  FROZEN: { zh: '冻结', en: 'Frozen', color: 'orange' },
-  EXPIRED: { zh: '过期', en: 'Expired', color: 'default' },
-}
-
-/** 会员卡商品状态：与 Prisma MemberCardProductStatus 一一对应 */
-export const MEMBER_CARD_PRODUCT_STATUS_META: Record<MemberCardProductStatus, StatusMeta> = {
-  ON_SHELF: { zh: '已上架', en: 'On shelf', color: 'green' },
-  OFF_SHELF: { zh: '已下架', en: 'Off shelf', color: 'default' },
 }
 
 /** 代金券状态：与 Prisma VoucherStatus 一一对应 */
@@ -144,18 +121,6 @@ export function orderTypeMeta(type?: string | null): StatusMeta | undefined {
   return pick(ORDER_TYPE_META, type)
 }
 
-export function memberCardTypeMeta(type?: string | null): StatusMeta | undefined {
-  return pick(MEMBER_CARD_TYPE_META, type)
-}
-
-export function memberCardStatusMeta(status?: string | null): StatusMeta | undefined {
-  return pick(MEMBER_CARD_STATUS_META, status)
-}
-
-export function memberCardProductStatusMeta(status?: string | null): StatusMeta | undefined {
-  return pick(MEMBER_CARD_PRODUCT_STATUS_META, status)
-}
-
 export function voucherStatusMeta(status?: string | null): StatusMeta | undefined {
   return pick(VOUCHER_STATUS_META, status)
 }
@@ -194,18 +159,6 @@ export function orderTypeLabel(type?: string | null, language: string = 'zh'): s
   return statusMetaLabel(orderTypeMeta(type), language)
 }
 
-export function memberCardTypeLabel(type?: string | null, language: string = 'zh'): string {
-  return statusMetaLabel(memberCardTypeMeta(type), language)
-}
-
-export function memberCardStatusLabel(status?: string | null, language: string = 'zh'): string {
-  return statusMetaLabel(memberCardStatusMeta(status), language)
-}
-
-export function memberCardProductStatusLabel(status?: string | null, language: string = 'zh'): string {
-  return statusMetaLabel(memberCardProductStatusMeta(status), language)
-}
-
 export function voucherStatusLabel(status?: string | null, language: string = 'zh'): string {
   return statusMetaLabel(voucherStatusMeta(status), language)
 }
@@ -241,18 +194,6 @@ export function courseStatusColor(status?: string | null): string {
 
 export function orderTypeColor(type?: string | null): string {
   return statusMetaColor(orderTypeMeta(type))
-}
-
-export function memberCardTypeColor(type?: string | null): string {
-  return statusMetaColor(memberCardTypeMeta(type))
-}
-
-export function memberCardStatusColor(status?: string | null): string {
-  return statusMetaColor(memberCardStatusMeta(status))
-}
-
-export function memberCardProductStatusColor(status?: string | null): string {
-  return statusMetaColor(memberCardProductStatusMeta(status))
 }
 
 export function voucherStatusColor(status?: string | null): string {

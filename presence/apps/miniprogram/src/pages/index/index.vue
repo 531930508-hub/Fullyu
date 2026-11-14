@@ -41,17 +41,9 @@
         <view v-if="isTrainer" class="view-switch"><button :class="{ active: activeView === 'student' }" @tap="setView('student')">{{ tr('学员视角', 'Student') }}</button><button :class="{ active: activeView === 'trainer' }" @tap="setView('trainer')">{{ tr('导师视角', 'Trainer') }}</button></view>
         <view v-if="!userStore.isLoggedIn" class="guest-card"><view><text class="entry-title">{{ tr('登录，开启你的在场体验', 'Sign in to begin your practice') }}</text><text class="muted">{{ tr('查看预约、会员卡与积分', 'See bookings, membership and points') }}</text></view><button class="btn-primary" @tap="goProfile">{{ tr('去登录', 'Sign in') }}</button></view>
         <view v-else class="entry-grid">
-          <button class="entry-card" @tap="activeView === 'trainer' ? goTrainerWorkspace() : goMember()"><PresenceIcon :name="activeView === 'trainer' ? 'chart' : 'card'" :size="42" /><text class="entry-title">{{ activeView === 'trainer' ? tr('导师工作台', 'Trainer Studio') : activeCard ? tr('我的畅练卡', 'My Pass') : tr('在场畅练卡', 'Presence Pass') }}</text><text class="muted">{{ activeView === 'trainer' ? tr('查看课程与合作记录', 'Classes and collaborations') : activeCard ? tr(`有效至 ${formatFullDate(activeCard.endDate || activeCard.expiresAt)}`, `Valid until ${formatFullDate(activeCard.endDate || activeCard.expiresAt)}`) : tr('有效期内报课 0 元', '¥0 classes during the term') }}</text></button>
+          <button class="entry-card" @tap="activeView === 'trainer' ? goTrainerWorkspace() : goBrand()"><PresenceIcon :name="activeView === 'trainer' ? 'chart' : 'card'" :size="42" /><text class="entry-title">{{ activeView === 'trainer' ? tr('导师工作台', 'Trainer Studio') : brandActive ? tr('我的会员卡', 'My membership') : tr('Full愈年卡', 'Full Yu Annual') }}</text><text class="muted">{{ activeView === 'trainer' ? tr('查看课程与合作记录', 'Classes and collaborations') : brandActive ? tr(`积分 ${brandPoints} · 有效至 ${brandValidUntil}`, `${brandPoints} points · valid until ${brandValidUntil}`) : tr('¥299 / 年 · 三店通用', '¥299 / year · all three stores') }}</text></button>
           <button class="entry-card light" @tap="activeView === 'trainer' ? goCommunityMine() : goBookings()"><PresenceIcon :name="activeView === 'trainer' ? 'users' : 'calendar'" :size="42" /><text class="entry-title">{{ activeView === 'trainer' ? tr('我的社群', 'My communities') : tr('我的预约', 'My bookings') }}</text><text class="muted">{{ activeView === 'trainer' ? tr('与学员保持连接', 'Stay connected with students') : tr('课程安排与待支付订单', 'Schedule and pending orders') }}</text></button>
         </view>
-        <button v-if="userStore.isLoggedIn && activeView !== 'trainer'" class="brand-entry" :class="{ active: brandActive }" @tap="goBrand">
-          <view class="brand-entry-main">
-            <text class="brand-entry-eyebrow latin">FULL YU ANNUAL</text>
-            <text class="brand-entry-title serif">{{ tr('Full愈年卡 · 三店通用', 'Full Yu Annual · all three stores') }}</text>
-            <text class="brand-entry-sub">{{ brandActive ? tr(`积分 ${brandPoints} · 有效至 ${brandValidUntil}`, `${brandPoints} points · valid until ${brandValidUntil}`) : tr('¥299 / 年 · 月卡 ¥45 · 含统一积分', '¥299 / year · ¥45 / month · shared points') }}</text>
-          </view>
-          <view class="brand-entry-cta">{{ brandActive ? tr('进入', 'Open') : tr('开通', 'Join') }}<PresenceIcon name="arrow" :size="24" :color="brandActive ? '#eec76f' : '#683611'" /></view>
-        </button>
       </view>
 
       <template v-if="activeView === 'trainer'">
@@ -120,7 +112,6 @@ import { listVenues, type VenueItem } from '@/api/venue'
 import { fetchCommunities, fetchMine, type Community } from '@/api/skool'
 import { courseTagLabel } from '@/utils/course-labels'
 import { communityCategoryLabel } from '@/utils/community-labels'
-import { getActiveCard, type MemberCard } from '@/api/member'
 import { loadBrandMember, type BrandMemberData } from '@/api/brandMember'
 import { fetchNextCourse } from '@/api/order'
 import { updateTabBarLanguage, tr, isEnglish } from '@/locale'
@@ -329,17 +320,15 @@ async function loadCommunities(force = false) {
   } else managedCommunities.value = []
   communitiesLoading.value = false
 }
-const activeCard = ref<MemberCard | null>(null)
 const brandMember = ref<BrandMemberData | null>(null)
 const brandActive = computed(() => ['ACTIVE', 'EXPIRING', 'PENDING'].includes(brandMember.value?.card?.state || ''))
 const brandPoints = computed(() => brandMember.value?.points?.balance || 0)
 const brandValidUntil = computed(() => brandMember.value?.card?.validUntil || '')
 const nextCourse = ref<any>(null)
 async function loadAccount() {
-  if (!uni.getStorageSync('token')) { activeCard.value = null; brandMember.value = null; nextCourse.value = null; return }
+  if (!uni.getStorageSync('token')) { brandMember.value = null; nextCourse.value = null; return }
   // 账号数据变化频繁，每次进入都静默刷新，但不先清空旧值。
   await Promise.all([
-    getActiveCard().then(card => { activeCard.value = card }).catch(() => {}),
     fetchNextCourse().then(order => { nextCourse.value = order || null }).catch(() => {}),
     loadBrandMember().then(data => { brandMember.value = data }).catch(() => { brandMember.value = null }),
   ])
@@ -374,17 +363,9 @@ function formatDate(value: string) {
   if (isEnglish()) return `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.getMonth()]} ${date.getDate()}`
   return `${date.getMonth() + 1}月${date.getDate()}日`
 }
-function formatFullDate(value?: string) {
-  if (!value) return tr('时间待确认', 'Time TBC')
-  const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return tr('时间待确认', 'Time TBC')
-  if (isEnglish()) return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
 function goDetail(id: string) { uni.navigateTo({ url: `/pages/course-detail/index?id=${id}` }) }
 function previewImage(url: string) { if (url) uni.previewImage({ urls: [url], current: url }) }
 function goProfile() { uni.switchTab({ url: '/pages/profile/index' }) }
-function goMember() { uni.switchTab({ url: '/pages/member/index' }) }
 function goBrand() { uni.navigateTo({ url: '/pages/brand-member/index' }) }
 function goBookings() { uni.switchTab({ url: '/pages/my-courses/index' }) }
 function goTrainerWorkspace() { uni.navigateTo({ url: '/pages/trainer-workspace/index' }) }
@@ -440,17 +421,6 @@ onShareTimeline(() => brandShareTimeline(shareTitle()))
 .entry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20rpx; }
 .entry-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10rpx; width: 100%; margin: 0; padding: 28rpx; border-radius: var(--radius-card); background: var(--c-card-2); text-align: left; line-height: 1.5; }
 .entry-card.light { background: var(--c-card); }
-/* 品牌会员：独立于畅练卡的第二张卡，首页只保留一条入口 */
-.brand-entry { display: flex; align-items: center; gap: 20rpx; width: 100%; margin: 20rpx 0 0; padding: 26rpx 28rpx; border-radius: var(--radius-card); background: var(--c-card); border: 1rpx solid var(--line-soft); text-align: left; line-height: 1.5; color: var(--c-ink); }
-.brand-entry.active { background: linear-gradient(145deg, #4d3a2c 0%, #6b4a35 58%, #7b5a41 100%); border-color: transparent; color: #f7f1e7; box-shadow: 0 14rpx 32rpx rgba(53, 47, 43, .18); }
-.brand-entry-main { flex: 1; min-width: 0; }
-.brand-entry-eyebrow { display: block; font-size: 16rpx; letter-spacing: 3rpx; color: var(--c-brown); }
-.brand-entry.active .brand-entry-eyebrow { color: #e8c58d; }
-.brand-entry-title { display: block; margin-top: 6rpx; font-size: 30rpx; line-height: 1.35; }
-.brand-entry-sub { display: block; margin-top: 4rpx; font-size: 20rpx; color: var(--c-muted); }
-.brand-entry.active .brand-entry-sub { color: rgba(247, 241, 231, .76); }
-.brand-entry-cta { flex: none; display: flex; align-items: center; gap: 2rpx; font-size: 22rpx; color: var(--c-primary); }
-.brand-entry.active .brand-entry-cta { color: #e8c58d; }
 .guest-card { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; background: var(--c-card); border-radius: var(--radius-card); padding: 28rpx; }
 .guest-card .btn-primary { flex-shrink: 0; margin: 0; padding: 16rpx 24rpx; }
 .view-switch { display: flex; padding: 6rpx; background: var(--c-card-2); border-radius: 24rpx; margin-bottom: 24rpx; }

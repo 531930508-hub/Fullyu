@@ -6,7 +6,7 @@
  *  - 演示导师用户：手机号前缀 13911
  *  - 演示课程：标题在 MOCK_COURSE_TITLES 集合内
  */
-import { PrismaClient, MemberCardType, CourseType, CourseStatus, ScheduleType, OrderStatus, OrderType, CheckInMethod, VoucherStatus, TaskScope, TaskStatus, MemberCardStatus } from '@prisma/client'
+import { PrismaClient, CourseType, CourseStatus, ScheduleType, OrderStatus, OrderType, CheckInMethod, VoucherStatus, TaskScope, TaskStatus } from '@prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -84,7 +84,6 @@ async function cleanup() {
     await prisma.checkIn.deleteMany({ where: { courseId: { in: courseIds } } })
     await prisma.waitlistEntry.deleteMany({ where: { courseId: { in: courseIds } } })
     await prisma.coursePriceTier.deleteMany({ where: { courseId: { in: courseIds } } })
-    await prisma.courseMemberDiscount.deleteMany({ where: { courseId: { in: courseIds } } })
     await prisma.order.deleteMany({ where: { courseId: { in: courseIds } } })
   }
   if (uids.length) {
@@ -93,7 +92,6 @@ async function cleanup() {
     await prisma.checkIn.deleteMany({ where: { userId: { in: uids } } })
     await prisma.pointsRecord.deleteMany({ where: { userId: { in: uids } } })
     await prisma.voucher.deleteMany({ where: { userId: { in: uids } } })
-    await prisma.memberCard.deleteMany({ where: { userId: { in: uids } } })
     await prisma.waitlistEntry.deleteMany({ where: { userId: { in: uids } } })
     await prisma.taskClaim.deleteMany({ where: { userId: { in: uids } } })
   }
@@ -153,33 +151,6 @@ async function main() {
     users.push({ id: u.id })
   }
   console.log(`✅ C端用户: ${users.length}`)
-
-  // ===== 会员卡（商品 + 部分用户持卡）=====
-  const products = await prisma.memberCardProduct.findMany()
-  const prodByType: Record<string, any> = {}
-  for (const p of products) prodByType[p.type] = p
-  const now = new Date()
-  const cardHolders = users.slice(0, 6)
-  const cardTypes: MemberCardType[] = ['MONTHLY', 'QUARTERLY', 'YEARLY']
-  for (let i = 0; i < cardHolders.length; i++) {
-    const type = pick(cardTypes, i)
-    const prod = prodByType[type]
-    const durationDays = prod?.durationDays ?? 30
-    const start = addDays(now, -10 - i)
-    const end = addDays(start, durationDays)
-    const card = await prisma.memberCard.create({
-      data: { userId: cardHolders[i].id, type, status: MemberCardStatus.ACTIVE, startDate: start, endDate: end },
-    })
-    // 对应购卡订单
-    await prisma.order.create({
-      data: {
-        userId: cardHolders[i].id, orderType: OrderType.MEMBER_CARD, memberCardProductId: prod?.id, memberCardId: card.id,
-        cardType: type, originalPrice: prod ? Number(prod.price) : 699, actualPaid: prod ? Number(prod.price) : 699,
-        status: OrderStatus.COMPLETED, paymentId: 'MOCKPAY' + Date.now() + i, paymentTime: start,
-      },
-    })
-  }
-  console.log(`✅ 会员卡 + 购卡订单: ${cardHolders.length}`)
 
   // ===== 课程（不同状态 + 本周开课 + 不同满员率）=====
   const monday = mondayOfThisWeek()

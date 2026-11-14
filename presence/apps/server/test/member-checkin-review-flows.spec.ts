@@ -1,17 +1,14 @@
 import { buildTestContext, Seeder, TestContext } from './helpers'
-import { MemberService } from '../src/modules/member/member.service'
 import { CheckinService } from '../src/modules/checkin/checkin.service'
 import { ReviewService } from '../src/modules/review/review.service'
 import { BusinessException } from '../src/common/exceptions/business.exception'
-import { RedisService } from '../src/common/redis.service'
 
 /**
- * 非资金流程：会员卡缺席冻结/解冻、签到名单与手工签到、课程评价。
+ * 非资金流程：签到名单与手工签到、课程评价。
  */
-describe('会员卡/签到/评价非资金流程', () => {
+describe('签到/评价非资金流程', () => {
   let ctx: TestContext
   let seeder: Seeder
-  let member: MemberService
   let checkin: CheckinService
   let review: ReviewService
   const courseIds: string[] = []
@@ -19,7 +16,6 @@ describe('会员卡/签到/评价非资金流程', () => {
   beforeAll(async () => {
     ctx = await buildTestContext()
     seeder = new Seeder(ctx.prisma)
-    member = new MemberService(ctx.prisma, ctx.moduleRef.get(RedisService))
     checkin = new CheckinService(ctx.prisma)
     review = new ReviewService(ctx.prisma)
   })
@@ -47,38 +43,6 @@ describe('会员卡/签到/评价非资金流程', () => {
     })
   }
 
-  it('会员卡累计 3 次缺席自动冻结，解冻重置次数，过期卡解冻后为 EXPIRED', async () => {
-    const user = await seeder.user()
-    const card = await seeder.memberCard(user.id)
-
-    expect((await member.recordAbsence(card.id)).absences).toBe(1)
-    expect((await member.recordAbsence(card.id)).status).toBe('ACTIVE')
-    const third = await member.recordAbsence(card.id)
-    expect(third.absences).toBe(3)
-    expect(third.status).toBe('FROZEN')
-
-    await expect(member.unfreeze(card.id)).resolves.toMatchObject({ status: 'ACTIVE', absences: 0 })
-    await expect(member.unfreeze(card.id)).rejects.toBeInstanceOf(BusinessException)
-
-    await member.freeze(card.id)
-    expect((await ctx.prisma.memberCard.findUnique({ where: { id: card.id } }))!.status).toBe('FROZEN')
-
-    const expiredUser = await seeder.user()
-    const expiredCard = await ctx.prisma.memberCard.create({
-      data: {
-        userId: expiredUser.id,
-        type: 'MONTHLY',
-        status: 'FROZEN',
-        startDate: new Date(Date.now() - 60 * 86400 * 1000),
-        endDate: new Date(Date.now() - 86400 * 1000),
-        absences: 3,
-      },
-    })
-    const thawed = await member.unfreeze(expiredCard.id)
-    expect(thawed.status).toBe('EXPIRED')
-    expect(thawed.absences).toBe(0)
-  })
-
   it('签到名单只含有效报名并标记会员卡，手工签到防重复，取消后可重签', async () => {
     const user = await seeder.user()
     const cancelledUser = await seeder.user()
@@ -93,11 +57,10 @@ describe('会员卡/签到/评价非资金流程', () => {
     courseIds.push(course!.id)
     await paidCourseOrder(user.id, course!.id)
     await paidCourseOrder(cancelledUser.id, course!.id, 'CANCELLED')
-    await seeder.memberCard(user.id)
 
     const roster = await checkin.courseRoster(course!.id)
     expect(roster).toHaveLength(1)
-    expect(roster[0]).toMatchObject({ checkedIn: false, cardType: 'YEARLY' })
+    expect(roster[0]).toMatchObject({ checkedIn: false })
     expect(roster[0].user.id).toBe(user.id)
 
     await expect(checkin.manualCheckIn(course!.id, cancelledUser.id)).rejects.toBeInstanceOf(

@@ -4,7 +4,8 @@
  * 订单金额列（originalPrice / discountAmount / pointsDeduction /
  * voucherDeduction / actualPaid / refundAmount）的单位随订单类型而不同：
  * COURSE / WAITLIST 跟随课程价格链，单位为「分」；COMMUNITY 跟随社群年费，
- * 同样为「分」；MEMBER_CARD 跟随卡商品价格，单位为「元」。凡是要换算到
+ * 同样为「分」；已下线的畅练卡（MEMBER_CARD）存量单为「元」，保留在
+ * 非「分」分支里。凡是要换算到
  * 支付网关（分）或展示/统计（元），都必须经过本文件的函数，禁止在调用方
  * 直接乘除 100。
  */

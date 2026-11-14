@@ -495,36 +495,6 @@ describe('订单生命周期与金额口径', () => {
       expect(Number((await getOrder(third.orderId))!.actualPaid)).toBe(9000)
     })
 
-    // 2026-11-08 会议：畅练卡有效期内 0 元报课；课程会员折扣改由 Full愈品牌会员享受（见 brand-member-program.spec）。
-    it('有效畅练卡 0 元报课（原价照常记账），过期后恢复原价', async () => {
-      const course = await seeder.course({
-        ...timing(240),
-        originalPrice: 10000,
-        memberDiscounts: [{ cardType: 'YEARLY', discountPercent: 80 }],
-      })
-      const user = await seeder.user()
-      const card = await seeder.memberCard(user.id, 'YEARLY')
-
-      const withCard = await ctx.enrollment.enroll(course.id, user.id, {})
-      const withCardOrder = await getOrder(withCard.orderId)
-      expect(Number(withCardOrder!.originalPrice)).toBe(10000)
-      expect(Number(withCardOrder!.discountAmount)).toBe(10000)
-      expect(Number(withCardOrder!.actualPaid)).toBe(0)
-      expect(withCardOrder!.cardType).toBe('YEARLY')
-
-      await ctx.prisma.memberCard.update({
-        where: { id: card.id },
-        data: { endDate: new Date(Date.now() - 24 * 3600 * 1000) },
-      })
-      const course2 = await seeder.course({
-        ...timing(240),
-        originalPrice: 10000,
-        memberDiscounts: [{ cardType: 'YEARLY', discountPercent: 80 }],
-      })
-      const expired = await ctx.enrollment.enroll(course2.id, user.id, {})
-      expect(Number((await getOrder(expired.orderId))!.actualPaid)).toBe(10000)
-    })
-
     it('积分按 1 点 = 1 元（100 分）抵扣，不可用于未开启抵扣的课程', async () => {
       const course = await seeder.course({ ...timing(240), originalPrice: 10000 })
       const user = await seeder.user()

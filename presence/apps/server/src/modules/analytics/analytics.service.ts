@@ -20,15 +20,11 @@ export class AnalyticsService {
     const [
       userCount,
       courseCount,
-      activeMemberCount,
       paidOrders,
       monthPaidOrders,
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.course.count(),
-      this.prisma.memberCard.count({
-        where: { status: 'ACTIVE', endDate: { gt: now } },
-      }),
       this.prisma.order.findMany({
         where: { status: { in: ['PAID', 'COMPLETED'] } },
         select: { actualPaid: true, orderType: true },
@@ -48,7 +44,6 @@ export class AnalyticsService {
     return {
       userCount,
       courseCount,
-      activeMemberCount,
       orderCount: paidOrders.length,
       totalRevenue,
       monthRevenue,
@@ -113,7 +108,6 @@ export class AnalyticsService {
             include: {
               user: { select: { nickname: true } },
               course: { select: { title: true } },
-              memberCardProduct: { select: { name: true } },
             },
           })
         : [],
@@ -248,7 +242,7 @@ export class AnalyticsService {
     const recentOrders = recentOrdersRaw.map((o) => ({
       id: o.id,
       user: o.user?.nickname || '匿名',
-      course: o.course?.title || o.memberCardProduct?.name || '会员卡',
+      course: o.course?.title || '订单',
       amount: orderAmountToFen(o.orderType, Number(o.actualPaid)),
     }))
 
@@ -333,13 +327,12 @@ export class AnalyticsService {
       .sort((a, b) => a.date.localeCompare(b.date))
   }
 
-  /** 数据分析扩展图表：课程热度 / 导师评分 / 用户增长 / 会员分布 */
+  /** 数据分析扩展图表：课程热度 / 导师评分 / 用户增长 */
   async charts() {
-    const now = new Date()
     const since = new Date()
     since.setDate(since.getDate() - 30)
 
-    const [topCourses, trainers, newUsers, memberCards, reviews] = await Promise.all([
+    const [topCourses, trainers, newUsers, reviews] = await Promise.all([
       this.prisma.course.findMany({
         where: { status: { in: ['PUBLISHED', 'COMPLETED'] } },
         orderBy: { currentEnrolled: 'desc' },
@@ -350,10 +343,6 @@ export class AnalyticsService {
       this.prisma.user.findMany({
         where: { createdAt: { gte: since } },
         select: { createdAt: true },
-      }),
-      this.prisma.memberCard.findMany({
-        where: { status: 'ACTIVE', endDate: { gt: now } },
-        select: { type: true },
       }),
       this.prisma.review.findMany({
         select: { rating: true, course: { select: { trainerId: true } } },
@@ -397,11 +386,6 @@ export class AnalyticsService {
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    // 会员分布（按卡型统计有效会员卡）
-    const distMap = new Map<string, number>()
-    for (const c of memberCards) distMap.set(c.type, (distMap.get(c.type) || 0) + 1)
-    const memberDistribution = Array.from(distMap.entries()).map(([type, count]) => ({ type, count }))
-
-    return { coursePopularity, trainerRatings, userGrowth, memberDistribution }
+    return { coursePopularity, trainerRatings, userGrowth }
   }
 }

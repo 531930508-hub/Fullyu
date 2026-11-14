@@ -275,9 +275,6 @@ export class PaymentService {
             data: { status: 'WAITING', paidAt: new Date() },
           })
           break
-        case 'MEMBER_CARD':
-          await this.fulfillMemberCard(tx, order)
-          break
         case 'COMMUNITY':
           await this.fulfillCommunityMembership(tx, order)
           break
@@ -343,52 +340,6 @@ export class PaymentService {
       })
     }
     return true
-  }
-
-  /**
-   * 会员卡履约：生成或续期会员卡（叠加 durationDays）
-   */
-  private async fulfillMemberCard(tx: Prisma.TransactionClient, order: any) {
-    if (!order.memberCardProductId) return
-    const product = await tx.memberCardProduct.findUnique({
-      where: { id: order.memberCardProductId },
-    })
-    if (!product) return
-
-    // 查找该用户同类型有效会员卡以续期
-    const existing = await tx.memberCard.findFirst({
-      where: { userId: order.userId, type: product.type, status: 'ACTIVE' },
-      orderBy: { endDate: 'desc' },
-    })
-
-    const now = new Date()
-    let card
-    if (existing && existing.endDate > now) {
-      // 续期：从原到期日叠加
-      const newEnd = new Date(existing.endDate)
-      newEnd.setDate(newEnd.getDate() + product.durationDays)
-      card = await tx.memberCard.update({
-        where: { id: existing.id },
-        data: { endDate: newEnd },
-      })
-    } else {
-      const endDate = new Date(now)
-      endDate.setDate(endDate.getDate() + product.durationDays)
-      card = await tx.memberCard.create({
-        data: {
-          userId: order.userId,
-          type: product.type,
-          status: 'ACTIVE',
-          startDate: now,
-          endDate,
-        },
-      })
-    }
-
-    await tx.order.update({
-      where: { id: order.id },
-      data: { memberCardId: card.id },
-    })
   }
 
   /**
@@ -789,9 +740,6 @@ export class PaymentService {
       await this.restoreBenefits(order)
       if (order.orderType === 'COURSE' && order.courseId) {
         await this.releaseSeatAndPromote(order.courseId)
-      }
-      if (order.orderType === 'MEMBER_CARD') {
-        await this.revokeMemberCard(this.prisma, order)
       }
       if (order.orderType === 'COMMUNITY' && order.communityId) {
         await this.recomputeCommunityMembership(order.userId, order.communityId)
@@ -1499,9 +1447,6 @@ export class PaymentService {
           data: { paidUntil },
         })
       }
-      if (order.orderType === 'MEMBER_CARD' && fullRefund) {
-        await this.revokeMemberCard(tx, order)
-      }
     })
 
     if (!settledRefund) return { settled: false, reason: 'race' }
@@ -1519,34 +1464,6 @@ export class PaymentService {
       })
     }
     return { settled: true }
-  }
-
-  /**
-   * 整单退款后回收会员卡权益：按商品时长从到期日回退。
-   * - 本单新开的卡：到期日回到起始日 → 置 EXPIRED
-   * - 续费单：仅扣回本单时长，之前的有效期保留
-   */
-  private async revokeMemberCard(
-    db: Pick<Prisma.TransactionClient, 'memberCard' | 'memberCardProduct'>,
-    order: { memberCardId: string | null; memberCardProductId: string | null },
-  ) {
-    if (!order.memberCardId) return
-    const card = await db.memberCard.findUnique({ where: { id: order.memberCardId } })
-    if (!card) return
-    const product = order.memberCardProductId
-      ? await db.memberCardProduct.findUnique({ where: { id: order.memberCardProductId } })
-      : null
-    const days = product?.durationDays ?? 0
-    const endDate = new Date(card.endDate)
-    endDate.setDate(endDate.getDate() - days)
-    const expired = endDate.getTime() <= Date.now()
-    await db.memberCard.update({
-      where: { id: card.id },
-      data: {
-        endDate,
-        ...(expired ? { status: 'EXPIRED' as const } : {}),
-      },
-    })
   }
 
   /** 按仍未退款的订单重算社群有效期（用于不走网关回调的 0 元退款） */

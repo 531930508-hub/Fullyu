@@ -40,13 +40,11 @@ const NOT_MEMBER = { perks: null, unknown: false }
 const UNKNOWN = { perks: null, unknown: true }
 
 /**
- * Prisma 桩：默认「无畅练卡、有品牌会员」+ S1 门店 + 60 分钟课程 + 无固定折扣。
- * 2026-11-08 起会员价归品牌会员（按年卡口径取规则），畅练卡改为 0 元报课。
+ * Prisma 桩：默认有品牌会员 + S1 门店 + 60 分钟课程 + 无固定折扣。
  */
 function svc(over: Record<string, any> = {}, rules: any[] = [], brand: any = BRAND_MEMBER) {
   return new PricingService(
     {
-      memberCard: { findFirst: async () => null },
       course: { findUnique: async () => ({ duration: 60, venue: { orgId: 'S1' } }) },
       memberTimeDiscountRule: { findMany: async () => rules },
       courseMemberDiscount: { findUnique: async () => null },
@@ -162,32 +160,11 @@ describe('PricingService.getMemberDiscount：时段折扣', () => {
     })
   })
 
-  it('品牌会员价按年卡口径取规则：只对年卡生效的规则也能命中', async () => {
+  it('品牌会员价只命中有品牌会员权益的规则', async () => {
     const res = await svc({}, [
       row({ id: 'r-yearly', cardTypes: ['YEARLY'], discountPercent: 80 }),
     ]).getMemberDiscount('u1', 'c1', BASE_PRICE_FEN, SAT_1530)
     expect(res).toMatchObject({ hitTimeRuleId: 'r-yearly', discountAmount: 7200, memberSource: 'BRAND' })
-  })
-
-  it('有效畅练卡：0 元报课，基础价全额记为抵扣，不查品牌会员', async () => {
-    const resolve = jest.fn()
-    const pricing = new PricingService(
-      {
-        memberCard: { findFirst: async () => ({ id: 'card1', type: 'QUARTERLY' }) },
-        memberTimeDiscountRule: { findMany: async () => [row({ discountPercent: 115 })] },
-      } as any,
-      { resolve } as any,
-    )
-    const res = await pricing.getMemberDiscount('u1', 'c1', BASE_PRICE_FEN, SAT_1530)
-    expect(res).toMatchObject({
-      cardType: 'QUARTERLY',
-      discountPercent: 0,
-      discountAmount: BASE_PRICE_FEN,
-      memberSource: 'PASS',
-    })
-    // 峰时加价规则不作用于畅练卡
-    expect(res.hitTimeRuleId).toBeNull()
-    expect(resolve).not.toHaveBeenCalled()
   })
 
   it('品牌会员资格查不到：下单严格拒绝，询价降级并标记待确认', async () => {

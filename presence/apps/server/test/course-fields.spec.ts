@@ -21,7 +21,6 @@ describe('课程后台补充字段持久化 round-trip', () => {
   afterAll(async () => {
     // 先清理本用例通过 service 直接创建的课程（seeder.cleanup 不追踪它们）
     await ctx.prisma.venueReservation.deleteMany({ where: { courseId: { in: createdCourseIds } } })
-    await ctx.prisma.courseMemberDiscount.deleteMany({ where: { courseId: { in: createdCourseIds } } })
     await ctx.prisma.coursePriceTier.deleteMany({ where: { courseId: { in: createdCourseIds } } })
     await ctx.prisma.course.deleteMany({ where: { id: { in: createdCourseIds } } })
     await seeder.cleanup()

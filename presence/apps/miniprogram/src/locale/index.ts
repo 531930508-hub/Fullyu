@@ -37,11 +37,6 @@ const zh: Record<string, string> = {
   'myCourses.reviewed': '已评价',
 
   // 会员中心
-  'member.title': '在场畅练卡',
-  'member.benefits': '会员权益',
-  'member.upgrade': '升级 / 续费',
-  'member.buyNow': '立即购买',
-  'member.validUntil': '有效期至 ',
   'member.notMember': '暂未开通会员',
   'member.normalUser': '普通用户',
 
@@ -57,7 +52,6 @@ const zh: Record<string, string> = {
   'profile.myAssets': '我的资产',
   'profile.bookings': '我的预约',
   'profile.myReviews': '我的评价',
-  'profile.memberCard': '在场畅练卡',
   'profile.trainerWorkspace': '导师工作台',
   'profile.trainerRole': '导师身份',
   'profile.language': '语言切换',
@@ -105,11 +99,6 @@ const en: Record<string, string> = {
   'myCourses.reviewed': 'Reviewed',
 
   // 会员中心
-  'member.title': 'Presence Pass',
-  'member.benefits': 'Benefits',
-  'member.upgrade': 'Upgrade / Renew',
-  'member.buyNow': 'Buy Now',
-  'member.validUntil': 'Valid until ',
   'member.notMember': 'Not a member yet',
   'member.normalUser': 'Regular User',
 
@@ -125,7 +114,6 @@ const en: Record<string, string> = {
   'profile.myAssets': 'My Assets',
   'profile.bookings': 'Bookings',
   'profile.myReviews': 'My Reviews',
-  'profile.memberCard': 'Presence Pass',
   'profile.trainerWorkspace': 'Trainer Studio',
   'profile.trainerRole': 'Trainer',
   'profile.language': 'Language',

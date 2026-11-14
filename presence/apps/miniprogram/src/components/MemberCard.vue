@@ -173,7 +173,7 @@ const benefitRows = computed(() => {
     ? rows.map((item) => ({ business: item.business, title: item.title, desc: item.desc }))
     : [
         { business: 'teahour', title: tr('时叙 · 会员茶饮权益', 'Teahour · member tea benefits'), desc: tr('会员专属茶饮权益，具体内容以门店公示为准', 'Member-only tea benefits; details per store notice') },
-        { business: 'presence', title: tr('在场 · 优先排位与阶梯价', 'Presence · priority spots & tier pricing'), desc: tr('热门课程候补优先排位；没有畅练卡时课程享会员阶梯价', 'Priority waitlist on popular classes; member tier prices without a Pass') },
+        { business: 'presence', title: tr('在场 · 优先排位与阶梯价', 'Presence · priority spots & tier pricing'), desc: tr('热门课程候补优先排位；课程享会员阶梯价', 'Priority waitlist on popular classes; member tier pricing') },
         { business: 'retreat', title: tr('轻疗 · 项目会员价', 'Retreat · member treatment prices'), desc: tr('提前一天预约享会员价，当日预约另有会员价', 'Book a day ahead for member price; same-day bookings get a member price too') }
       ]
   // 中文权益按已知文案翻译；后端新增文案保持原文，不硬翻。

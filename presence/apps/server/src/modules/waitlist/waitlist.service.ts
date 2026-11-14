@@ -156,7 +156,7 @@ export class WaitlistService {
             discountAmount,
             actualPaid: priceAfterDiscount,
             status: 'PENDING_PAYMENT',
-            cardType: cardType ?? undefined,
+            memberCardType: cardType ?? undefined,
           },
         })
 

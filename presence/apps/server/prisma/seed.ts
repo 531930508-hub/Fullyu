@@ -1,4 +1,4 @@
-import { PrismaClient, MemberCardType, OrgType, DataScope, PermLevel } from '@prisma/client'
+import { PrismaClient, OrgType, DataScope, PermLevel } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 import { PERMISSIONS, BUILTIN_ROLES } from '@fullyu/shared'
 import { seedBiz } from './seed-biz'
@@ -168,45 +168,6 @@ const TRAINER_LEVELS: { level: number; name: string; hourlyRate: number }[] = [
   { level: 3, name: 'LV3 高级导师', hourlyRate: 450 },
   { level: 4, name: 'LV4 资深导师', hourlyRate: 600 },
   { level: 5, name: 'LV5 首席导师', hourlyRate: 800 },
-]
-
-/** 会员卡商品：¥699/1980/5980 */
-const MEMBER_PRODUCTS: {
-  type: MemberCardType
-  name: string
-  price: number
-  durationDays: number
-  benefits: string[]
-  sort: number
-}[] = [
-  {
-    type: 'MONTHLY',
-    name: '月卡',
-    price: 699,
-    durationDays: 30,
-    benefits: ['有效期内报课 0 元（不限次）', '免费赠送同期 Full愈 品牌大会员'],
-    sort: 1,
-  },
-  {
-    type: 'QUARTERLY',
-    name: '季卡',
-    price: 1980,
-    durationDays: 90,
-    benefits: ['有效期内报课 0 元（不限次）', '免费赠送同期 Full愈 品牌大会员'],
-    sort: 2,
-  },
-  {
-    type: 'YEARLY',
-    name: '年卡',
-    price: 5980,
-    durationDays: 365,
-    benefits: [
-      '有效期内报课 0 元（不限次）',
-      '免费赠送同期 Full愈 品牌大会员',
-      '专属活动',
-    ],
-    sort: 3,
-  },
 ]
 
 async function main() {
@@ -435,17 +396,6 @@ async function main() {
     })
   }
   console.log(`✅ 导师等级: ${TRAINER_LEVELS.length}`)
-
-  // 5. 会员卡商品
-  for (const prod of MEMBER_PRODUCTS) {
-    const existing = await prisma.memberCardProduct.findFirst({ where: { type: prod.type } })
-    if (existing) {
-      await prisma.memberCardProduct.update({ where: { id: existing.id }, data: prod })
-    } else {
-      await prisma.memberCardProduct.create({ data: prod })
-    }
-  }
-  console.log(`✅ 会员卡商品: ${MEMBER_PRODUCTS.length}`)
 
   // 6. 示例场地
   const venue = await prisma.venue.findFirst({ where: { name: '总店·瑜伽馆' } })

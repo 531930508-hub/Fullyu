@@ -1,19 +1,25 @@
 <template>
   <view class="page">
     <view :style="{ height: statusBarHeight + 'px' }"></view>
-    <FloatingBack fallback="/pages/profile/index" />
     <view class="nav-bar" :style="{ paddingTop: headerTop + 'px' }">
-      <view class="back-spacer"></view>
       <view class="nav-copy">
         <text class="nav-title serif">{{ tr('Full愈年卡', 'Full Yu Annual') }}</text>
-        <text class="nav-sub">{{ tr('品牌通用会员', 'One card across Full Yu') }}</text>
+        <text class="nav-sub">{{ tr('品牌通用会员 · 三店权益', 'One card across Full Yu') }}</text>
       </view>
       <text v-if="isMock" class="dev-chip">{{ tr('合成数据', 'Mock data') }}</text>
     </view>
 
     <view class="content">
       <PageState
-        v-if="loading"
+        v-if="!isLoggedIn"
+        state="guest"
+        :title="tr('开通 Full愈年卡', 'Join Full Yu Annual')"
+        :message="tr('登录后查看会员身份、积分与三店权益', 'Log in to see your membership, points and benefits')"
+        :action="tr('去登录', 'Log in')"
+        @action="goLogin"
+      />
+      <PageState
+        v-else-if="loading"
         state="loading"
         :title="tr('正在读取品牌会员身份', 'Loading your brand membership')"
       />
@@ -27,15 +33,14 @@
       />
 
       <template v-else-if="data">
-        <!-- 01 两张卡：品牌卡承载身份、权益与续费；畅练卡管在场上课 -->
+        <!-- 01 会员卡：承载身份、权益与续费 -->
         <view class="section cards">
           <view class="chapter-head">
             <text class="chapter-index">01</text>
             <view class="chapter-copy">
-              <text class="section-title serif">{{ tr('你的两张卡', 'Your two cards') }}</text>
-              <text class="section-sub">{{ tr('畅练卡同期附赠品牌会员', 'The Pass includes brand membership') }}</text>
+              <text class="section-title serif">{{ tr('你的会员卡', 'Your membership') }}</text>
+              <text class="section-sub">{{ tr('三店通用 · 统一积分', 'All three stores · shared points') }}</text>
             </view>
-            <button class="text-link" @tap="goCompare">{{ tr('看区别', 'Compare') }}<PresenceIcon name="arrow" :size="24" /></button>
           </view>
 
           <!-- 品牌卡：权益与续费都收在卡内抽屉，页面不再另开两节 -->
@@ -51,39 +56,9 @@
             @gift="openGift"
           />
 
-          <!-- 畅练卡：在场本店的卡，卡种与续费以在场会员页为准 -->
-          <view class="pass" :class="{ 'is-open': passOpen, 'is-off': !localActive }">
-            <view class="pass-main">
-              <view class="pass-top">
-                <view class="pass-mark">练</view>
-                <view class="pass-copy">
-                  <text class="pass-name">{{ passName }}</text>
-                  <text class="pass-role">{{ tr('在场本店 · 有效期内报课 0 元', 'Presence only · ¥0 classes while active') }}</text>
-                </view>
-                <text class="pass-state" :class="{ on: localActive }">{{ localActive ? cardStateLabel(localPass?.state) : tr('未开通', 'Not active') }}</text>
-              </view>
-              <text class="pass-valid">{{ passValidLine }}</text>
-            </view>
-            <view class="pass-foot" role="button" @tap="passOpen = !passOpen">
-              <text>{{ localActive ? tr('畅练卡权益', 'Pass benefits') : tr('了解畅练卡', 'About the Pass') }}</text>
-              <text class="pass-car" :class="{ 'is-up': passOpen }">⌄</text>
-            </view>
-            <view class="pass-drawer">
-              <view class="pass-drawer-in">
-                <view v-for="item in passBenefits" :key="item" class="pass-ben">
-                  <text class="pass-ben-t">{{ item }}</text>
-                </view>
-                <text class="pass-note">{{ tr('畅练卡由在场单独售卖与核销，卡种与续费以在场会员页为准。', 'Sold and managed by Presence; plans and renewal live on the Presence membership page.') }}</text>
-                <button class="btn compact pass-link" @tap="goLocalMember">{{ localActive ? tr('查看畅练卡', 'View Presence Pass') : tr('打开在场会员页', 'Open Presence membership') }}</button>
-              </view>
-            </view>
-          </view>
-
           <view class="precedence">
             <text class="precedence-title">{{ tr('上课怎么计价', 'How class pricing works') }}</text>
             <view class="precedence-flow">
-              <text class="precedence-step on">{{ tr('畅练卡 0 元', 'Pass ¥0') }}</text>
-              <PresenceIcon name="arrow" :size="22" color="#756a55" />
               <text class="precedence-step" :class="{ dim: !active }">{{ tr('品牌会员价', 'Brand member price') }}</text>
               <PresenceIcon name="arrow" :size="22" color="#756a55" />
               <text class="precedence-step dim">{{ tr('原价', 'List price') }}</text>
@@ -256,7 +231,6 @@
         <view class="confirm-row"><text>{{ tr('包含', 'Includes') }}</text><text>{{ tr('三店会员价 · 愈行之旅', 'Member prices · Journey game') }}</text></view>
         <view class="confirm-row"><text>{{ tr('卡类型', 'Card type') }}</text><text>{{ tr('服务权益卡（非储值，不可提现）', 'Service-benefit card (no stored balance)') }}</text></view>
         <view class="confirm-row"><text>{{ tr('收款方', 'Paid to') }}</text><text>{{ tr('在场（本小程序）', 'Presence (this mini program)') }}</text></view>
-        <view class="confirm-row"><text>{{ tr('畅练卡', 'Presence Pass') }}</text><text>{{ localActive ? tr('保持有效，不受影响', 'Stays active, unaffected') : tr('不包含，需单独开通', 'Not included; buy separately') }}</text></view>
         <view v-if="isMock" class="mock-note">{{ tr('本地联调：不会发起真实扣款，开通只更新本页状态。', 'Local mock: no real payment. Joining only updates this page state.') }}</view>
         <view v-else class="mock-note">{{ tr('线上支付接入中，本页暂不会发起扣款；已购卡权益与愈行之旅不受影响。', 'Online payment is not live yet. This page will not charge you; your card benefits and the journey game are unaffected.') }}</view>
         <button class="btn primary full" :disabled="paying" @tap="confirmPurchase">{{ paying ? tr('处理中…', 'Processing…') : tr('确认开通', 'Confirm') }}</button>
@@ -287,24 +261,25 @@
         <button class="text-btn" @tap="closeFeedback">{{ tr('取消', 'Cancel') }}</button>
       </view>
     </BottomSheet>
+
+    <FloatingTabBar active="member" />
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad, onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
-import FloatingBack from '@/components/FloatingBack.vue'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import PageState from '@/components/PageState.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
 import MemberCard from '@/components/MemberCard.vue'
+import FloatingTabBar from '@/components/FloatingTabBar.vue'
 import { readCapsuleLayout } from '@/utils/capsule'
 import { tr, isEnglish } from '@/locale'
 import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 import { useUserStore } from '@/stores/user'
 import {
   CARD_PRODUCTS,
-  cardStateLabel,
   formatDate,
   formatYuan,
   isMock,
@@ -336,6 +311,8 @@ const capsule = readCapsuleLayout()
 const statusBarHeight = capsule.statusBarHeight
 const headerTop = capsule.headerTop
 const userStore = useUserStore()
+const isLoggedIn = computed(() => userStore.isLoggedIn)
+function goLogin() { uni.switchTab({ url: '/pages/profile/index' }) }
 
 const loading = ref(true)
 const error = ref(false)
@@ -346,7 +323,6 @@ const openingGame = ref(false)
 const selectedCode = ref('FY_ANNUAL')
 /** 本地联调强制态（?card=NONE&pass=NONE），只影响合成数据。 */
 const forcedCard = ref('')
-const forcedPass = ref('')
 
 const products = computed<BrandCardProduct[]>(() => {
   const rows = data.value && data.value.products
@@ -399,35 +375,6 @@ const feedbackText = ref('')
 const allowQuote = ref(false)
 const sending = ref(false)
 const feedbackLength = computed(() => feedbackText.value.trim().length)
-const localPass = computed(
-  () => data.value?.businessCards?.find((card) => card.code === 'PRESENCE_PASS') || null
-)
-const localActive = computed(
-  () => localPass.value?.state === 'ACTIVE' || localPass.value?.state === 'EXPIRING'
-)
-// 畅练卡抽屉默认收起，避免两张卡同时铺开太长。
-const passOpen = ref(false)
-const passName = computed(() => (isEnglish() ? 'Presence Pass' : localPass.value?.name || '在场畅练卡'))
-const passValidLine = computed(() => {
-  const pass = localPass.value
-  if (!pass || !localActive.value) return tr('按在场会员页的卡种与规则', 'See the Presence membership page for plans')
-  const until = pass.validUntil ? formatDate(pass.validUntil) : ''
-  // 临期才补剩余天数，平时只报到到期日。
-  const tail = pass.state === 'EXPIRING' && pass.remainingDays ? tr(` · 还剩 ${pass.remainingDays} 天`, ` · ${pass.remainingDays} days left`) : ''
-  return tr(`有效期至 ${until}${tail}`, `Valid until ${until}${tail}`)
-})
-/** 畅练卡权益由在场系统给出（中文），英文界面下按已知文案翻译。 */
-const PASS_BENEFIT_EN: Record<string, string> = {
-  '有效期内报课 0 元': '¥0 classes while active',
-  '同期附赠 Full愈 品牌会员': 'Includes Full Yu brand membership',
-  '优先排位热门课程': 'Priority waitlist on popular classes',
-  '提前 24 小时免费取消': 'Free cancellation up to 24 hours ahead'
-}
-const passBenefits = computed(() => {
-  const rows = localPass.value?.benefits || []
-  const list = rows.length ? rows : [tr('有效期内报课 0 元', '¥0 classes while active'), tr('同期附赠 Full愈 品牌会员', 'Includes Full Yu brand membership')]
-  return isEnglish() ? list.map((item) => PASS_BENEFIT_EN[item] || item) : list
-})
 /** 愈行之旅是否解锁以 CRM 返回为准，不在前端按卡状态自行推断。 */
 const gameReady = computed(() => Boolean(data.value?.game?.enabled))
 /** 商品目录来自 CRM；缺 period 时用有效天数说明，避免空白。 */
@@ -448,10 +395,7 @@ async function load() {
       const forced =
         forcedCard.value || uni.getStorageSync('fy.brand.mockCard') || ''
       if (forced === 'NONE' || forced === 'ACTIVE' || forced === 'EXPIRING') {
-        data.value = setMockCardState(
-          forced,
-          forcedPass.value === 'NONE' ? 'NONE' : 'ACTIVE'
-        )
+        data.value = setMockCardState(forced)
         uni.removeStorageSync('fy.brand.mockCard')
       }
     }
@@ -603,9 +547,6 @@ onLoad((options: any) => {
   if (isMock && ['NONE', 'ACTIVE', 'EXPIRING'].includes(options?.card)) {
     forcedCard.value = options.card
   }
-  if (isMock && options?.pass === 'NONE') {
-    forcedPass.value = 'NONE'
-  }
   const sceneCode = parseGiftScene(options || {})
   if (sceneCode && !userStore.isLoggedIn) {
     // 未登录先记住口令，登录成功后由「我的」自动领取。
@@ -613,25 +554,23 @@ onLoad((options: any) => {
     uni.switchTab({ url: '/pages/profile/index' })
     return
   }
+  if (!isLoggedIn.value) {
+    loading.value = false
+    return
+  }
   void load().then(() => {
     if (sceneCode) void claimSceneGift(sceneCode)
   })
 })
 onShow(() => {
-  if (data.value && !loading.value) void load()
+  if (isLoggedIn.value && data.value && !loading.value) void load()
 })
 
-function goCompare() {
-  uni.navigateTo({ url: '/pages/brand-member/compare' })
-}
 function openRules() {
   uni.navigateTo({ url: '/pages/legal/index?tab=member' })
 }
 function openStories() {
   uni.navigateTo({ url: '/pages/brand-member/stories/index' })
-}
-function goLocalMember() {
-  uni.switchTab({ url: '/pages/member/index' })
 }
 function openPurchase(code: string) {
   selectedCode.value = code
@@ -701,9 +640,8 @@ onShareTimeline(() => brandShareTimeline(shareTitle()))
 </script>
 
 <style scoped>
-.page { min-height: 100vh; background: var(--c-cream); color: var(--c-ink); padding-bottom: calc(48rpx + env(safe-area-inset-bottom)); font-size: 28rpx; }
+.page { min-height: 100vh; background: var(--c-cream); color: var(--c-ink); padding-bottom: calc(180rpx + env(safe-area-inset-bottom)); font-size: 28rpx; }
 .nav-bar { padding: 20rpx 32rpx; display: flex; align-items: center; gap: 16rpx; }
-.back-spacer { width: 80rpx; height: 80rpx; flex-shrink: 0; }
 .nav-copy { flex: 1; min-width: 0; }
 .nav-title { display: block; font-size: 36rpx; line-height: 1.4; }
 .nav-sub { display: block; font-size: 20rpx; letter-spacing: 1rpx; color: var(--c-muted); }
@@ -724,38 +662,12 @@ button::after { border: none; }
 .group-row.divided { border-top: 1rpx solid var(--line-soft); }
 .text-link { display: inline-flex; align-items: center; gap: 2rpx; margin: 0; padding: 8rpx 0; background: transparent; color: var(--c-brown); font-size: 23rpx; line-height: 1.6; }
 
-/* 畅练卡：在场本店的卡，浅绿区分，抽屉与品牌卡同一套开合手感 */
-.pass { margin-top: 20rpx; border-radius: 28rpx; border: 1rpx solid #dbe3c8; background: #f2f5ea; overflow: hidden; }
-.pass.is-off { background: var(--c-card); border-color: var(--line-soft); }
-.pass-main { padding: 22rpx 24rpx 16rpx; }
-.pass-top { display: flex; align-items: center; gap: 14rpx; }
-.pass-mark { flex: none; width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #6d7f52; color: #f6f8ef; font-family: var(--serif); font-size: 24rpx; }
-.pass.is-off .pass-mark { background: var(--c-cream); color: var(--c-muted); }
-.pass-copy { flex: 1; min-width: 0; }
-.pass-name { display: block; font-size: 28rpx; font-weight: 600; }
-.pass-role { display: block; margin-top: 2rpx; font-size: 20rpx; color: var(--c-muted); }
-.pass-state { flex: none; font-size: 19rpx; letter-spacing: 1rpx; color: var(--c-muted); border: 1rpx solid var(--line-soft); border-radius: 999rpx; padding: 4rpx 14rpx; }
-.pass-state.on { color: #55663f; border-color: rgba(109, 127, 82, .45); }
-.pass-valid { display: block; margin-top: 14rpx; font-size: 21rpx; line-height: 1.6; color: var(--c-muted); }
-.pass-foot { display: flex; align-items: center; justify-content: space-between; padding: 12rpx 24rpx; border-top: 1rpx solid rgba(109, 127, 82, .18); font-size: 21rpx; color: #55663f; }
-.pass.is-off .pass-foot { border-top-color: var(--line-soft); color: var(--c-brown); }
-.pass-car { font-size: 22rpx; transition: transform .25s ease; }
-.pass-car.is-up { transform: rotate(180deg); }
-.pass-drawer { max-height: 0; overflow: hidden; transition: max-height .28s ease; }
-.pass.is-open .pass-drawer { max-height: 520rpx; }
-.pass-drawer-in { padding: 4rpx 24rpx 20rpx; }
-.pass-ben { padding: 12rpx 0; border-bottom: 1rpx solid rgba(109, 127, 82, .14); }
-.pass-ben:last-of-type { border-bottom: 0; }
-.pass-ben-t { display: block; font-size: 22rpx; line-height: 1.6; }
-.pass-note { display: block; margin-top: 10rpx; font-size: 20rpx; line-height: 1.65; color: var(--c-muted); }
-.pass-link { width: 100%; margin-top: 16rpx; }
 .rules-link { margin-top: 10rpx; }
 
 .precedence { margin-top: 22rpx; padding-top: 22rpx; border-top: 1rpx solid var(--line-soft); }
 .precedence-title { display: block; font-size: 22rpx; font-weight: 600; }
 .precedence-flow { display: flex; align-items: center; gap: 8rpx; margin-top: 14rpx; flex-wrap: wrap; }
 .precedence-step { font-size: 20rpx; padding: 6rpx 14rpx; border-radius: 999rpx; background: var(--c-card-2); color: var(--c-primary); }
-.precedence-step.on { background: #6d7f52; color: #f6f8ef; }
 .precedence-step.dim { background: var(--c-cream); color: var(--c-muted); }
 
 .benefit-mark { flex: none; width: 60rpx; height: 60rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-serif); font-size: 25rpx; color: #fffaf2; background: #96581c; }

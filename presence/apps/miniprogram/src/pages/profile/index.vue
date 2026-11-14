@@ -10,11 +10,6 @@
             <view class="user-copy"><text class="user-name serif">{{ userInfo?.nickname || tr('在场会员', 'Presence Member') }}</text><text class="secondary">{{ maskedPhone }}</text></view>
             <view class="edit-link"><text>{{ tr('编辑资料', 'Edit profile') }}</text><PresenceIcon name="arrow" :size="26" /></view>
           </button>
-          <button v-if="!loading && !loadError" class="member-strip" @tap="goPage('member')">
-            <PresenceIcon name="card" :size="34" :color="iconColors.gold" />
-            <view class="member-copy"><text>{{ activeCard ? tr('在场畅练卡', 'Presence Pass') : tr('尚未开通畅练卡', 'Presence Pass not active') }}</text><text v-if="memberExpiry" class="member-date">{{ tr('有效期内报课 0 元 · 至 ', '¥0 classes until ') }}{{ memberExpiry }}</text></view>
-            <text class="member-action">{{ activeCard ? tr('查看', 'View') : tr('了解', 'Learn more') }}</text><PresenceIcon name="arrow" :size="26" :color="iconColors.gold" />
-          </button>
         </template>
         <!-- 访客态：仅头像+提示行，点按弹出屏幕居中的登录弹窗（对齐时叙 center 登录层/轻疗独立登录页） -->
         <button v-else class="user-row" @tap="openSignIn">
@@ -23,7 +18,7 @@
           <view class="edit-link"><text>{{ tr('登录', 'Sign in') }}</text><PresenceIcon name="arrow" :size="26" /></view>
         </button>
       </view>
-      <!-- 品牌会员入口：与畅练卡分开，避免把两种会员当成同一张卡；未登录也保留入口，点击先登录 -->
+      <!-- 品牌会员入口：未登录也保留入口，点击先登录 -->
       <button class="brand-entry" :class="{ active: brandActive }" @tap="goBrandMember">
         <view class="brand-entry-head">
           <text class="brand-entry-eyebrow latin">FULL YU ANNUAL</text>
@@ -49,7 +44,7 @@
         <button v-for="item in accountMenu" :key="item.page" class="menu-item" @tap="openAccountPage(item.page, item.tab)">
           <PresenceIcon :name="item.icon" :size="38" /><text class="menu-text">{{ item.label }}</text>
           <view v-if="!isLoggedIn" class="menu-meta"><PresenceIcon name="lock" :size="26" :color="iconColors.muted" /><text>{{ tr('登录后可用', 'Log in to use') }}</text></view>
-          <template v-else><text v-if="item.page === 'member' && !loading && !loadError" class="menu-extra">{{ activeCard ? tr('已开通', 'Active') : tr('未开通', 'Inactive') }}</text><text v-else-if="item.page === 'brand-member'" class="menu-extra">{{ brandActive ? tr(`${brandPoints} 积分`, `${brandPoints} pts`) : tr('三店通用', 'All stores') }}</text><PresenceIcon name="arrow" :size="26" /></template>
+          <template v-else><text v-if="item.page === 'brand-member'" class="menu-extra">{{ brandActive ? tr(`${brandPoints} 积分`, `${brandPoints} pts`) : tr('三店通用', 'All stores') }}</text><PresenceIcon name="arrow" :size="26" /></template>
         </button>
       </view>
       <view v-if="isLoggedIn && isTrainer" class="menu-group">
@@ -134,7 +129,6 @@ import { readCapsuleLayout } from '@/utils/capsule'
 import { consumeShareJump } from '@/utils/share'
 import { getTrainerToken } from '@/utils/trainer-request'
 import { getPoints } from '@/api/user'
-import { getActiveCard, type MemberCard } from '@/api/member'
 import { loadBrandMember, claimGiftCode, peekPendingGift, takePendingGift, type BrandMemberData } from '@/api/brandMember'
 import { listMyOrders } from '@/api/order'
 import { listMyVouchers } from '@/api/voucher'
@@ -155,7 +149,6 @@ const points = ref(0)
 const completedCount = ref(0)
 const upcomingCount = ref(0)
 const voucherCount = ref(0)
-const activeCard = ref<(MemberCard & { endDate?: string }) | null>(null)
 const brandMember = ref<BrandMemberData | null>(null)
 /** 扫码带会员码时只自动弹一次登录层，避免顾客关闭后反复打断。 */
 let giftLoginPrompted = false
@@ -173,14 +166,6 @@ const agreed = ref(false)
 const consentHint = ref(false)
 const avatarText = computed(() => userInfo.value?.nickname?.charAt(0) || (isEnglish() ? 'F' : '愈'))
 const maskedPhone = computed(() => { const p = userInfo.value?.phone || ''; return p.length === 11 ? `${p.slice(0, 3)}****${p.slice(7)}` : p })
-const memberExpiry = computed(() => {
-  const value = activeCard.value?.endDate || activeCard.value?.expiresAt
-  if (!value) return ''
-  const d = new Date(value)
-  if (isNaN(d.getTime())) return ''
-  if (isEnglish()) return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-})
 const brandActive = computed(() => ['ACTIVE', 'EXPIRING', 'PENDING'].includes(brandMember.value?.card?.state || ''))
 const brandRemaining = computed(() => brandMember.value?.card?.remainingDays || 0)
 const brandPoints = computed(() => brandMember.value?.points?.balance || 0)
@@ -192,7 +177,6 @@ const accountMenu = computed(() => [
   { page: 'my-reviews', icon: 'star', label: t('profile.myReviews'), tab: false },
   { page: 'community-mine', icon: 'users', label: tr('我的社群', 'My communities'), tab: false },
   { page: 'brand-member', icon: 'card', label: tr('Full愈年卡', 'Full Yu Annual'), tab: false },
-  { page: 'member', icon: 'heart', label: t('profile.memberCard'), tab: true },
 ])
 
 async function loadBrandData() {
@@ -207,7 +191,7 @@ async function loadBrandData() {
 async function loadUserData() {
   if (!uni.getStorageSync('token')) userStore.logout()
   if (!isLoggedIn.value) {
-    points.value = 0; activeCard.value = null; completedCount.value = 0; upcomingCount.value = 0; voucherCount.value = 0; brandMember.value = null
+    points.value = 0; completedCount.value = 0; upcomingCount.value = 0; voucherCount.value = 0; brandMember.value = null
     return
   }
   void loadBrandData()
@@ -215,10 +199,9 @@ async function loadUserData() {
   loading.value = true
   loadError.value = false
   try {
-    const [pts, card, orders, vouchers] = await Promise.all([getPoints(), getActiveCard(), listMyOrders(), listMyVouchers()])
+    const [pts, orders, vouchers] = await Promise.all([getPoints(), listMyOrders(), listMyVouchers()])
     if (!uni.getStorageSync('token')) { userStore.logout(); return }
     points.value = pts.balance
-    activeCard.value = card
     const courseOrders = (orders || []).filter(o => o.orderType === 'COURSE')
     completedCount.value = courseOrders.filter(o => o.status === 'COMPLETED').length
     upcomingCount.value = courseOrders.filter(o => o.status === 'PAID').length
@@ -370,7 +353,7 @@ function confirmLogout() {
     success: (res) => {
       if (res.confirm) {
         userStore.logout()
-        points.value = 0; activeCard.value = null; completedCount.value = 0; upcomingCount.value = 0; voucherCount.value = 0; brandMember.value = null
+        points.value = 0; completedCount.value = 0; upcomingCount.value = 0; voucherCount.value = 0; brandMember.value = null
         agreed.value = false; consentHint.value = false
         uni.showToast({ title: tr('已退出登录', 'Signed out'), icon: 'none' })
       }
@@ -405,8 +388,7 @@ button::after { border: none; }
 .user-name { display: block; font-size: 36rpx; line-height: 1.5; overflow-wrap: anywhere; }
 .secondary { display: block; color: var(--c-muted); font-size: 24rpx; line-height: 1.7; margin-top: 8rpx; }
 .edit-link { display: flex; gap: 4rpx; align-items: center; color: var(--c-brown); font-size: 24rpx; flex-shrink: 0; }
-.member-strip { display: flex; gap: 16rpx; align-items: center; margin: 24rpx 0 0; padding: 24rpx; border-radius: var(--radius-button); background: var(--c-primary); color: var(--c-rice); text-align: left; font-size: 26rpx; line-height: 1.5; }
-/* 品牌会员入口：与畅练卡分开成两张卡，避免被理解成同一会员 */
+/* 品牌会员入口：三店通用会员卡 */
 .brand-entry { display: block; width: 100%; margin: 0 0 24rpx; padding: 30rpx 32rpx 26rpx; border-radius: var(--radius-card); background: var(--c-card); border: 1rpx solid var(--line-soft); box-shadow: var(--shadow-card); text-align: left; line-height: 1.5; color: var(--c-ink); }
 .brand-entry.active { background: linear-gradient(145deg, #4d3a2c 0%, #6b4a35 58%, #7b5a41 100%); border-color: transparent; color: #f7f1e7; box-shadow: 0 16rpx 36rpx rgba(53, 47, 43, .2); }
 .brand-entry-head { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
@@ -419,9 +401,6 @@ button::after { border: none; }
 .brand-entry.active .brand-entry-sub { color: rgba(247, 241, 231, .78); }
 .brand-entry-foot { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; margin-top: 18rpx; padding-top: 16rpx; border-top: 1rpx solid var(--line-soft); font-size: 21rpx; color: var(--c-primary); }
 .brand-entry.active .brand-entry-foot { border-top-color: rgba(247, 241, 231, .18); color: #e8c58d; }
-.member-copy { flex: 1; }
-.member-date { display: block; font-size: 24rpx; margin-top: 4rpx; }
-.member-action { font-size: 24rpx; color: var(--c-gold); }
 .primary-button { background: var(--c-primary); color: var(--c-rice); border-radius: var(--radius-button); min-height: 80rpx; padding: 18rpx 28rpx; font-size: 28rpx; line-height: 1.6; }
 /* 登录弹窗（已批准提案）：居中欢迎区 → 整宽一键登录 → 两行协议区 → 行内提示 */
 .signin-hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 8rpx 0 36rpx; }

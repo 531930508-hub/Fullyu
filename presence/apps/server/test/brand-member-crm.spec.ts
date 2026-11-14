@@ -9,7 +9,7 @@ import { startFakeBrandCrm, type FakeBrandCrm } from './mocks/brand-crm-fake'
 /**
  * 在场接入品牌会员（CRM）的单元测试：
  * - 不连数据库、不连真实 CRM；
- * - 只覆盖配置、签名客户端与「本地畅练卡合并」这一段接口层逻辑。
+ * - 只覆盖配置、签名客户端与顾客端接口层逻辑。
  */
 
 const baseEnv = {
@@ -20,16 +20,6 @@ const baseEnv = {
 
 const configOf = (env: Record<string, string | undefined>): ConfigService =>
   ({ get: (key: string) => env[key] }) as unknown as ConfigService
-
-const activePass = () => ({
-  id: 'card-1',
-  userId: 'u-1',
-  type: 'YEARLY',
-  status: 'ACTIVE',
-  startDate: new Date('2026-01-01T00:00:00+08:00'),
-  endDate: new Date('2027-01-01T00:00:00+08:00'),
-  absences: 0,
-})
 
 describe('品牌会员配置与客户端（在场）', () => {
   let fake: FakeBrandCrm
@@ -154,7 +144,7 @@ describe('品牌会员配置与客户端（在场）', () => {
   })
 })
 
-describe('在场会员页接口：品牌身份 + 本地畅练卡合并', () => {
+describe('在场会员页接口：品牌身份', () => {
   let fake: FakeBrandCrm
   let client: BrandMemberClient
 
@@ -167,59 +157,16 @@ describe('在场会员页接口：品牌身份 + 本地畅练卡合并', () => {
     await fake.close()
   })
 
-  const controllerOf = (card: any) =>
+  const controllerOf = () =>
     new BrandMemberController(
       client,
-      { activeCard: jest.fn().mockResolvedValue(card) } as any,
       { forget: jest.fn() } as any,
       {} as any,
       { withLock: (_key: string, fn: () => Promise<unknown>) => fn() } as any,
     )
 
-  it('有畅练卡时合并为只读业务卡，并标明「报课 0 元」优先', async () => {
-    const controller = controllerOf(activePass())
-    const payload = await controller.me({ user: { userId: 'u-1' } })
-
-    expect(payload.member.memberNo).toBe('FY-TEST-000002')
-    expect(payload.businessCards).toHaveLength(1)
-    const pass = payload.businessCards[0] as any
-    expect(pass).toMatchObject({
-      business: 'presence',
-      code: 'PRESENCE_PASS',
-      name: '在场畅练卡',
-      state: 'ACTIVE',
-      system: 'presence',
-      readOnly: true,
-      managePath: '/pages/member/index',
-    })
-    expect(pass.benefits.join(' ')).toMatch(/报课 0 元/)
-    // 候补优先排位与会员阶梯价已迁移到随赠的品牌大会员，畅练卡只保留 0 元报课。
-    expect(pass.benefits.join(' ')).toMatch(/免费赠送同期/)
-    expect(pass.priorityNote).toMatch(/随赠品牌大会员/)
-    // CRM 身份查询必须使用登录用户，不能由前端指定
-    expect(fake.requests[0].path).toBe(
-      '/api/v1/brand-member/me?business=presence&localUserId=u-1',
-    )
-  })
-
-  it('畅练卡 30 天内到期标为 EXPIRING；无卡时业务卡为空', async () => {
-    const soon = activePass()
-    soon.endDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
-    const payload = await controllerOf(soon).me({ user: { userId: 'u-1' } })
-    expect(payload.businessCards[0]).toMatchObject({ state: 'EXPIRING', remainingDays: 10 })
-
-    const empty = await controllerOf(null).me({ user: { userId: 'u-1' } })
-    expect(empty.businessCards).toEqual([])
-  })
-
-  it('已冻结/过期卡不当作有效畅练卡展示', async () => {
-    const frozen = { ...activePass(), status: 'FROZEN' }
-    const payload = await controllerOf(frozen).me({ user: { userId: 'u-1' } })
-    expect(payload.businessCards).toEqual([])
-  })
-
   it('购买接口如实返回未接入，不生成订单、不调用 CRM', async () => {
-    const controller = controllerOf(null)
+    const controller = controllerOf()
     const failure = await controller.purchase({ productCode: 'FY_ANNUAL' }).catch(
       (error) => error,
     )
@@ -230,7 +177,7 @@ describe('在场会员页接口：品牌身份 + 本地畅练卡合并', () => {
   })
 
   it('商品、报价走 CRM；游戏票据按需换新', async () => {
-    const controller = controllerOf(null)
+    const controller = controllerOf()
     const products = await controller.products()
     expect(products.products).toHaveLength(2)
 

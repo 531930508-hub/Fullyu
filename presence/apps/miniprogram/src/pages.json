@@ -13,20 +13,12 @@
       "style": { "navigationStyle": "custom" }
     },
     {
-      "path": "pages/member/index",
-      "style": { "navigationStyle": "custom" }
-    },
-    {
       "path": "pages/brand-member/index",
       "style": { "navigationStyle": "custom" }
     },
     {
       "path": "pages/brand-member/stories/index",
       "style": { "navigationStyle": "custom", "navigationBarTitleText": "会员故事" }
-    },
-    {
-      "path": "pages/brand-member/compare",
-      "style": { "navigationStyle": "custom" }
     },
     {
       "path": "pages/brand-member/game",
@@ -153,7 +145,7 @@
         "text": "预约"
       },
       {
-        "pagePath": "pages/member/index",
+        "pagePath": "pages/brand-member/index",
         "text": "会员"
       },
       {
