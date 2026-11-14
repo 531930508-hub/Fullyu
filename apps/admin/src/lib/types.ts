@@ -581,6 +581,13 @@ export type AttendanceMine = {
     distanceM: number | null;
     limitM: number;
   } | null;
+  /** 今日计划班次；没排班为 null。只作提示，不参与到店判定 */
+  shift: {
+    storeId: string;
+    startMin: number;
+    endMin: number;
+    note: string;
+  } | null;
 };
 
 export type AttendanceBoardPerson = {
@@ -592,6 +599,8 @@ export type AttendanceBoardPerson = {
   minutes: number;
   liveMinutes: number;
   unresolved: number;
+  /** 当天计划工时（班表），用于「计划 vs 实际」对照；不参与工时合计 */
+  plannedMinutes: number;
 };
 
 export type AttendanceBoard = {
@@ -618,9 +627,54 @@ export type AttendanceBoard = {
     peopleCount: number;
     totalMinutes: number;
     liveMinutes: number;
+    plannedMinutes: number;
+    /** 往天排了班却没有任何计时的人数 */
+    notClockedCount: number;
     unresolvedCount: number;
     pendingApprovals: number;
   };
+  /** 往天排了班但没打卡的人：只提示，不阻断（人可能临时请假） */
+  notClocked: Array<{
+    userId: string;
+    name: string;
+    storeNames: string[];
+    plannedMinutes: number;
+  }>;
+};
+
+/* ------------------------------ 排班（班表） ------------------------------ */
+
+export type ShiftState = 'none' | 'planned' | 'done' | 'short' | 'absent';
+
+export type ShiftCell = {
+  businessDate: string;
+  shift: { id: string; startMin: number; endMin: number; note: string } | null;
+  plannedMinutes: number;
+  /** 当天已计入的实际工时（已闭合时段） */
+  actualMinutes: number;
+  /** 服务端算好的对照结论：今天一律不算缺勤 */
+  state: ShiftState;
+};
+
+export type ShiftRow = {
+  userId: string;
+  name: string;
+  cells: ShiftCell[];
+  plannedMinutes: number;
+  actualMinutes: number;
+};
+
+export type ShiftMatrix = {
+  storeId: string;
+  storeName: string;
+  stores: Array<{ id: string; name: string }>;
+  from: string;
+  to: string;
+  today: string;
+  days: string[];
+  rows: ShiftRow[];
+  summary: { people: number; plannedMinutes: number; actualMinutes: number; absentDays: number };
+  limits: { maxRangeDays: number; pastEditDays: number; futureEditDays: number };
 };
 
 /* ------------------------------ 劳务结算 ------------------------------ */

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type Approval, type WorkSession } from '@prisma/client';
+import { Prisma, type Approval, type PlannedShift, type WorkSession } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { assertStoreAccess, type StaffContext } from '../common/auth.types';
 import { ApiError, badRequest, conflict, forbidden, notFound } from '../common/errors';
@@ -140,6 +140,11 @@ export class AttendanceService {
       adjustable: row.status === 'open' || row.status === 'lapsed',
       note: row.note
     };
+  }
+
+  /** 计划班次只给「今天几点该来」用：分钟数原样返回，文案由前端拼。 */
+  mapShift(row: PlannedShift) {
+    return { storeId: row.storeId, startMin: row.startMin, endMin: row.endMin, note: row.note };
   }
 
   // ---------- 到店 / 离店 ----------
@@ -577,7 +582,7 @@ export class AttendanceService {
     const month = monthOf(today);
     const { start, end } = monthRange(month);
 
-    const [open, todaySessions, closedThisMonth, pendingCount, unresolvedRows, stores] =
+    const [open, todaySessions, closedThisMonth, pendingCount, unresolvedRows, stores, todayShifts] =
       await Promise.all([
         this.prisma.workSession.findUnique({ where: { openKey: staff.id } }),
         this.prisma.workSession.findMany({
@@ -599,7 +604,9 @@ export class AttendanceService {
         }),
         staff.allStores
           ? this.prisma.store.findMany({ where: { open: true }, orderBy: { name: 'asc' } })
-          : this.prisma.store.findMany({ where: { id: { in: staff.storeIds } }, orderBy: { name: 'asc' } })
+          : this.prisma.store.findMany({ where: { id: { in: staff.storeIds } }, orderBy: { name: 'asc' } }),
+        // 今日班次：只是给店员「今天几点该来」的提示，不参与到店判定
+        this.prisma.plannedShift.findMany({ where: { userId: staff.id, businessDate: today } })
       ]);
 
     const monthMinutes = closedThisMonth.reduce(
@@ -610,6 +617,8 @@ export class AttendanceService {
     const policy = await this.policy();
     const preferred = storeId || open?.storeId || stores[0]?.id;
     const previewStore = stores.find((item) => item.id === preferred);
+    // 今日计划班次：优先当前门店那段（人在 A 店就看 A 店的班），没有就取第一条
+    const todayShift = todayShifts.find((row) => row.storeId === preferred) || todayShifts[0] || null;
 
     return {
       today,
@@ -634,6 +643,8 @@ export class AttendanceService {
         accuracyAllowanceM: policy.accuracyAllowanceM,
         maxSegmentMinutes: policy.maxSegmentMinutes
       },
+      // 今日计划班次（没有排班就是 null）：只作提示，不参与到店判定
+      shift: todayShift ? this.mapShift(todayShift) : null,
       // 与 clockIn 走完全同一条判定（evaluateGate），避免「预览通过、提交被拒」。
       // 只认这名员工可见的门店：拿别人的门店 id 来问距离没有意义。
       preview:
@@ -676,7 +687,13 @@ export class AttendanceService {
       where: { storeId: { in: storeIds }, businessDate: date },
       orderBy: { clockInAt: 'asc' }
     });
-    const userIds = [...new Set(sessions.map((row) => row.userId))];
+    // 班表只作对照：不进 minutes，也不影响任何状态；只为了让「计划了却没人打卡」浮出来
+    const plannedShifts = await this.prisma.plannedShift.findMany({
+      where: { storeId: { in: storeIds }, businessDate: date }
+    });
+    const userIds = [
+      ...new Set([...sessions.map((row) => row.userId), ...plannedShifts.map((row) => row.userId)])
+    ];
     const users = userIds.length
       ? await this.prisma.user.findMany({ where: { id: { in: userIds } } })
       : [];
@@ -705,6 +722,38 @@ export class AttendanceService {
       }))
       .sort((a, b) => (a.name > b.name ? 1 : a.name < b.name ? -1 : 0));
 
+    // 今天还没过完时，「计划了但没打卡」可能只是人还没到，不算异常，所以只看往天
+    const plannedOf = new Map<string, { minutes: number; stores: string[] }>();
+    for (const shift of plannedShifts) {
+      const entry = plannedOf.get(shift.userId) || { minutes: 0, stores: [] };
+      entry.minutes += shift.endMin - shift.startMin;
+      const storeName = storeNameOf.get(shift.storeId) || shift.storeId;
+      if (!entry.stores.includes(storeName)) entry.stores.push(storeName);
+      plannedOf.set(shift.userId, entry);
+    }
+    // 只排了班、当天一条记录都没有的人：补一行空 sessions，店长才看得见「没人来」
+    for (const [userId, planned] of plannedOf) {
+      if (rows.some((row) => row.userId === userId)) continue;
+      rows.push({
+        userId,
+        name: nameOf.get(userId) || userId,
+        storeNames: planned.stores,
+        sessions: [],
+        minutes: 0,
+        liveMinutes: 0,
+        unresolved: 0
+      });
+    }
+    rows.sort((a, b) => (a.name > b.name ? 1 : a.name < b.name ? -1 : 0));
+    const withPlan = rows.map((row) => ({
+      ...row,
+      plannedMinutes: plannedOf.get(row.userId)?.minutes ?? 0
+    }));
+    const pastDate = date < shanghaiDate(now);
+    const notClocked = withPlan
+      .filter((row) => pastDate && row.plannedMinutes > 0 && row.minutes === 0 && row.liveMinutes === 0)
+      .map((row) => ({ userId: row.userId, name: row.name, storeNames: row.storeNames, plannedMinutes: row.plannedMinutes }));
+
     const unresolvedList = rows.flatMap((row) =>
       row.sessions
         .filter((item) => ['open', 'pending_close', 'lapsed'].includes(item.status))
@@ -732,7 +781,7 @@ export class AttendanceService {
         // 跨店看板时半径可能因店而异，展示口默认值，单店时用该店的
         radiusM: this.gatePolicyFor(policy, scope[0].id).radiusM
       },
-      rows,
+      rows: withPlan,
       onDuty: rows
         .filter((row) => row.sessions.some((item) => item.status === 'open'))
         .map((row) => {
@@ -746,10 +795,14 @@ export class AttendanceService {
           };
         }),
       unresolved: unresolvedList,
+      // 缺勤提示：往天排了班却没有任何计时的人。今天不算，人可能只是还没到
+      notClocked,
       summary: {
         peopleCount: rows.length,
         totalMinutes: rows.reduce((sum, row) => sum + row.minutes, 0),
         liveMinutes: rows.reduce((sum, row) => sum + row.liveMinutes, 0),
+        plannedMinutes: withPlan.reduce((sum, row) => sum + row.plannedMinutes, 0),
+        notClockedCount: notClocked.length,
         unresolvedCount: unresolvedList.length,
         pendingApprovals: unresolvedList.filter((item) => item.status === 'pending_close').length
       }

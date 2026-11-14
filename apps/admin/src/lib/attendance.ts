@@ -102,3 +102,32 @@ export function elapsedText(fromMs: number, nowMs: number): string {
   const secs = seconds % 60;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
+
+/* ------------------------------ 班表 ------------------------------ */
+
+/** 分钟数 → 「09:00」；1440 是「当天 24:00」，班表里按结束时刻展示。 */
+export function shiftClock(minutes: number): string {
+  const value = Math.max(0, Math.min(1440, Math.round(minutes)));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(Math.floor(value / 60))}:${pad(value % 60)}`;
+}
+
+/** 「09:00–18:00」。中间用 en dash，和其它时段文案一致。 */
+export function shiftText(startMin: number, endMin: number): string {
+  return `${shiftClock(startMin)}–${shiftClock(endMin)}`;
+}
+
+/** 计划 vs 实际的结论文案：只用于提示，不用于任何计算。 */
+export const SHIFT_STATE_LABEL: Record<string, string> = {
+  planned: '未开始',
+  done: '已对上',
+  short: '短时',
+  absent: '没来'
+};
+
+export function shiftStateTone(state: string): 'ok' | 'warn' | 'danger' | 'neutral' {
+  if (state === 'done') return 'ok';
+  if (state === 'short') return 'warn';
+  if (state === 'absent') return 'danger';
+  return 'neutral';
+}

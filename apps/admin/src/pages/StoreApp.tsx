@@ -41,6 +41,7 @@ import {
   elapsedText,
   minutesText as durationText,
   sessionTone,
+  shiftText,
   shanghaiWallClock,
   wallClockToMs,
   type GeoFix
@@ -3148,6 +3149,18 @@ function AttendanceSection({ store }: { store: Store }) {
             </button>
           </div>
         </div>
+
+        {mine.shift ? (
+          <div className="attendance-shift">
+            <Icon name="calendar" size={15} />
+            <span>
+              今日计划 <strong className="mono">{shiftText(mine.shift.startMin, mine.shift.endMin)}</strong>
+              {' · '}
+              {durationText(mine.shift.endMin - mine.shift.startMin)}
+              {mine.shift.note ? ` · ${mine.shift.note}` : ''}
+            </span>
+          </div>
+        ) : null}
 
         {!open ? (
           <div className={`attendance-fix attendance-fix-${preview?.reason || 'none'}`}>

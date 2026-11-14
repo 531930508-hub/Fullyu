@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { StaffGuard } from '../auth/staff.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -6,6 +6,7 @@ import { RequirePerm, Staff } from '../auth/decorators';
 import { parseInput } from '../common/zod';
 import type { StaffContext } from '../common/auth.types';
 import { AttendanceService } from '../attendance/attendance.service';
+import { ShiftService } from '../attendance/shift.service';
 import { MAX_LABOR_RATE_CENTS, SettlementsService } from '../attendance/settlement.service';
 
 const pointSchema = {
@@ -30,6 +31,7 @@ const queryPointSchema = {
 export class AttendanceController {
   constructor(
     private readonly attendance: AttendanceService,
+    private readonly shifts: ShiftService,
     private readonly settlements: SettlementsService
   ) {}
 
@@ -126,6 +128,56 @@ export class AttendanceController {
       query
     );
     return this.attendance.board(staff, input);
+  }
+
+  // ---------- 排班（轻量：只管计划时段，不校验打卡） ----------
+
+  /** 矩阵口径：人 × 天。不传日期默认本周（周一起算）。 */
+  @Get('shifts')
+  @RequirePerm('attendance:view')
+  async shiftList(@Query() query: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(
+      z.object({
+        storeId: z.string().min(1).optional(),
+        from: z.string().optional(),
+        to: z.string().optional()
+      }),
+      query ?? {}
+    );
+    return this.shifts.list(staff, input);
+  }
+
+  /** 同一人同一天同店只有一条班：重复提交即覆盖，改动进操作日志。 */
+  @Put('shifts')
+  @RequirePerm('attendance:manage')
+  async shiftSave(@Body() body: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(
+      z.object({
+        storeId: z.string().min(1, '请选择门店'),
+        userId: z.string().min(1, '请选择员工'),
+        businessDate: z.string().min(1, '请选择日期'),
+        startMin: z.number().int('班次时间应为整分钟'),
+        endMin: z.number().int('班次时间应为整分钟'),
+        note: z.string().max(80).optional()
+      }),
+      body
+    );
+    return this.shifts.save(staff, input);
+  }
+
+  /** 清空某天的班：按 (门店, 员工, 日期) 删，前端不必先拿 id。 */
+  @Delete('shifts')
+  @RequirePerm('attendance:manage')
+  async shiftRemove(@Query() query: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(
+      z.object({
+        storeId: z.string().min(1, '请选择门店'),
+        userId: z.string().min(1, '请选择员工'),
+        businessDate: z.string().min(1, '请选择日期')
+      }),
+      query ?? {}
+    );
+    return this.shifts.remove(staff, input);
   }
 
   // ---------- 劳务单价与月结（金额敏感，统一 attendance:settle） ----------

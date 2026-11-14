@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import { SettlementsService } from './settlement.service';
+import { ShiftService } from './shift.service';
 import { AttendanceSweeper } from './attendance.sweeper';
 
 @Module({
-  providers: [AttendanceService, AttendanceSweeper, SettlementsService],
-  exports: [AttendanceService, SettlementsService]
+  providers: [AttendanceService, AttendanceSweeper, SettlementsService, ShiftService],
+  exports: [AttendanceService, SettlementsService, ShiftService]
 })
 export class AttendanceModule {}

@@ -472,6 +472,27 @@ export const api = {
   attendanceBoard: (storeId?: string, date?: string) =>
     request<import('./types').AttendanceBoard>('/attendance/board', { query: { storeId, date } }),
 
+  /* ------------------------- 考勤：排班（班表） ------------------------- */
+
+  /** 人 × 天的矩阵；不传 from/to 默认本周（周一起算）。 */
+  attendanceShifts: (query: { storeId?: string; from?: string; to?: string }) =>
+    request<import('./types').ShiftMatrix>('/attendance/shifts', { query }),
+  /** 同一人同一天同店只有一条班：重复提交即覆盖。 */
+  attendanceSaveShift: (body: {
+    storeId: string;
+    userId: string;
+    businessDate: string;
+    startMin: number;
+    endMin: number;
+    note?: string;
+  }) => request<{ shift: { id: string; startMin: number; endMin: number; note: string }; plannedMinutes: number }>(
+    '/attendance/shifts',
+    { method: 'PUT', body }
+  ),
+  /** 按 (门店, 员工, 日期) 清空，前端不必先拿 id。 */
+  attendanceClearShift: (query: { storeId: string; userId: string; businessDate: string }) =>
+    request<{ ok: boolean }>('/attendance/shifts', { method: 'DELETE', query }),
+
   /* ------------------------- 考勤：劳务结算 ------------------------- */
 
   attendanceLaborRates: () => request<import('./types').LaborRateList>('/attendance/labor-rates'),
