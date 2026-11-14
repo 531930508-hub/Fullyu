@@ -86,7 +86,7 @@ function openCommunity(id: string) {
 }
 function onEmptyAction() { if (currentSegment.value === 'managed') goCreate(); else goDiscover() }
 function goCreate() { uni.navigateTo({ url: '/pages/community-create/index' }) }
-function goDiscover() { uni.navigateTo({ url: '/pages/community-list/index' }) }
+function goDiscover() { uni.switchTab({ url: '/pages/community-list/index' }) }
 function goLogin() { uni.switchTab({ url: '/pages/profile/index' }) }
 function goBack() { uni.navigateBack({ fail: goLogin }) }
 

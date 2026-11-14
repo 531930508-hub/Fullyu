@@ -145,8 +145,8 @@
         "text": "预约"
       },
       {
-        "pagePath": "pages/brand-member/index",
-        "text": "会员"
+        "pagePath": "pages/community-list/index",
+        "text": "社群"
       },
       {
         "pagePath": "pages/profile/index",

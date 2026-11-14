@@ -10,7 +10,7 @@ const zh: Record<string, string> = {
   // TabBar
   'tab.home': '首页',
   'tab.courses': '预约',
-  'tab.member': '会员',
+  'tab.community': '社群',
   'tab.profile': '我的',
 
   // 首页
@@ -72,7 +72,7 @@ const en: Record<string, string> = {
   // TabBar
   'tab.home': 'Home',
   'tab.courses': 'Bookings',
-  'tab.member': 'Member',
+  'tab.community': 'Community',
   'tab.profile': 'Me',
 
   // 首页
@@ -173,7 +173,7 @@ export function updateTabBarLanguage() {
   const tabs = [
     { index: 0, key: 'tab.home' },
     { index: 1, key: 'tab.courses' },
-    { index: 2, key: 'tab.member' },
+    { index: 2, key: 'tab.community' },
     { index: 3, key: 'tab.profile' },
   ]
   tabs.forEach(({ index, key }) => {

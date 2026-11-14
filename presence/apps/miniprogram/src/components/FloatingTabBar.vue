@@ -12,11 +12,11 @@
 import { computed, onMounted } from 'vue'
 import { t, tr } from '@/locale'
 import PresenceIcon from './PresenceIcon.vue'
-const props = defineProps<{ active: 'home' | 'courses' | 'member' | 'profile' }>()
+const props = defineProps<{ active: 'home' | 'courses' | 'community' | 'profile' }>()
 const items = computed(() => [
   { key: 'home', icon: 'home', label: t('tab.home'), url: '/pages/index/index' },
   { key: 'courses', icon: 'calendar', label: t('tab.courses'), url: '/pages/my-courses/index' },
-  { key: 'member', icon: 'card', label: t('tab.member'), url: '/pages/brand-member/index' },
+  { key: 'community', icon: 'users', label: t('tab.community'), url: '/pages/community-list/index' },
   { key: 'profile', icon: 'user', label: t('tab.profile'), url: '/pages/profile/index' },
 ])
 onMounted(() => {

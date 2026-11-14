@@ -246,7 +246,7 @@ function goCommunity() {
 }
 
 function goHub() {
-  uni.redirectTo({ url: '/pages/community-list/index' })
+  uni.switchTab({ url: '/pages/community-list/index' })
 }
 
 function kindLabel(kind: string) {

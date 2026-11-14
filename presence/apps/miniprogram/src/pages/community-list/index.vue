@@ -1,7 +1,6 @@
 <template>
   <view class="page">
     <view :style="{ height: statusBarHeight + 'px' }"></view>
-    <FloatingBack />
     <view class="nav-bar" :style="{ paddingTop: headerTop + 'px' }">
       <view class="back-spacer"></view>
       <text class="nav-title serif">{{ tr('社群广场', 'Community hub') }}</text>
@@ -52,6 +51,7 @@
         </view>
       </view>
     </view>
+    <FloatingTabBar active="community" />
   </view>
 </template>
 
@@ -66,7 +66,7 @@ import { readCapsuleLayout } from '@/utils/capsule'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
 import PageState from '@/components/PageState.vue'
-import FloatingBack from '@/components/FloatingBack.vue'
+import FloatingTabBar from '@/components/FloatingTabBar.vue'
 import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 
 const capsule = readCapsuleLayout()
@@ -144,7 +144,6 @@ function feeLabel(fee: number) {
 watch([currentCat, currentSort], load)
 onShow(() => { loadCategories(); load(); loadMemberships() })
 onUnload(() => { requestId++ })
-function goBack() { uni.navigateBack({ fail: () => uni.switchTab({ url: '/pages/index/index' }) }) }
 function goDetail(id: string) { uni.navigateTo({ url: `/pages/community-detail/index?id=${encodeURIComponent(id)}` }) }
 function goMine() { uni.navigateTo({ url: '/pages/community-mine/index' }) }
 
@@ -156,7 +155,7 @@ onShareTimeline(() => brandShareTimeline(shareTitle()))
 </script>
 
 <style scoped>
-.page { min-height: 100vh; background: var(--c-cream); color: var(--c-ink); font-size: 28rpx; padding-bottom: calc(40rpx + env(safe-area-inset-bottom)); }
+.page { min-height: 100vh; background: var(--c-cream); color: var(--c-ink); font-size: 28rpx; padding-bottom: calc(180rpx + env(safe-area-inset-bottom)); }
 button { margin: 0; font-size: 28rpx; line-height: 1.5; border: 0; }
 button::after { border: 0; }
 .nav-bar { display: flex; align-items: center; justify-content: space-between; padding: 16rpx 32rpx 24rpx; gap: 16rpx; }

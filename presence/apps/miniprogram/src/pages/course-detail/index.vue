@@ -475,7 +475,7 @@ function goBookings() { uni.switchTab({ url: '/pages/my-courses/index' }) }
 function goMember() {
   if (busy.value) return
   closeWaitlist()
-  uni.switchTab({ url: '/pages/brand-member/index' })
+  uni.navigateTo({ url: '/pages/brand-member/index' })
 }
 function goTrainer() { const id = course.value?.trainer?.id; if (id) uni.navigateTo({ url: `/pages/trainer-home/index?id=${id}` }) }
 function previewCover() { if (course.value?.coverImage) uni.previewImage({ urls: [course.value.coverImage, ...course.value.gallery], current: course.value.coverImage }) }

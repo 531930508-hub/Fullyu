@@ -369,7 +369,7 @@ function goProfile() { uni.switchTab({ url: '/pages/profile/index' }) }
 function goBrand() { uni.navigateTo({ url: '/pages/brand-member/index' }) }
 function goBookings() { uni.switchTab({ url: '/pages/my-courses/index' }) }
 function goTrainerWorkspace() { uni.navigateTo({ url: '/pages/trainer-workspace/index' }) }
-function goCommunityList() { uni.navigateTo({ url: '/pages/community-list/index' }) }
+function goCommunityList() { uni.switchTab({ url: '/pages/community-list/index' }) }
 function goCommunityDetail(id: string) { uni.navigateTo({ url: `/pages/community-detail/index?id=${id}` }) }
 function goCommunityWorkspace(id: string) { uni.navigateTo({ url: `/pages/community-workspace/index?id=${id}` }) }
 function goCommunityCreate() { uni.navigateTo({ url: '/pages/community-create/index' }) }

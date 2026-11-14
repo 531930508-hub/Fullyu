@@ -262,7 +262,7 @@
       </view>
     </BottomSheet>
 
-    <FloatingTabBar active="member" />
+    <FloatingBack />
   </view>
 </template>
 
@@ -273,7 +273,7 @@ import PresenceIcon from '@/components/PresenceIcon.vue'
 import PageState from '@/components/PageState.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
 import MemberCard from '@/components/MemberCard.vue'
-import FloatingTabBar from '@/components/FloatingTabBar.vue'
+import FloatingBack from '@/components/FloatingBack.vue'
 import { readCapsuleLayout } from '@/utils/capsule'
 import { tr, isEnglish } from '@/locale'
 import { brandShareMessage, brandShareTimeline } from '@/utils/share'
