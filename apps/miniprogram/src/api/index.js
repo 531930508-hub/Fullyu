@@ -78,6 +78,12 @@ export const api = {
   myCoupons() {
     return request('/customer/coupons');
   },
+  claimableCoupons() {
+    return request('/customer/coupons/claimable');
+  },
+  claimCoupon(id) {
+    return request(`/customer/coupons/${encodeURIComponent(id)}/claim`, { method: 'POST' });
+  },
   retail() {
     return request('/customer/retail', { auth: false });
   },

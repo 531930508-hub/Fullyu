@@ -31,6 +31,8 @@ export type OpsNavGroup<T extends OpsNavItem = OpsNavItem> = {
 export const OPS_NAV: OpsNavItem[] = [
   // 营业台是门店每天最常用的入口：固定在一级，一次点击直达，不折进分组。
   { key: 'store/workbench', label: '营业台', icon: 'grid', perm: 'pos:use', group: '门店营业', pinned: true },
+  // 到店确认排在门店组第一位：开门第一件事就是它，比帮客人点单更早。
+  { key: 'store/attendance', label: '到店确认', icon: 'clock', perm: 'attendance:clock', group: '门店营业' },
   { key: 'store/assisted', label: '帮客人点单', icon: 'plus', perm: 'pos:use', group: '门店营业' },
   { key: 'store/retail', label: '零售提取', icon: 'bag', perm: 'retail:handover', group: '门店营业' },
   { key: 'store/orders', label: '订单记录', icon: 'receipt', perm: 'order:view', group: '门店营业' },
@@ -41,6 +43,7 @@ export const OPS_NAV: OpsNavItem[] = [
   { key: 'admin/finance', label: '财务流水', icon: 'coin', perm: 'finance:view', group: '经营分析' },
   { key: 'admin/profit', label: '门店利润', icon: 'sliders', perm: 'dashboard:profit', group: '经营分析' },
   { key: 'admin/expenses', label: '运营费用', icon: 'receipt', perm: 'finance:view', group: '经营分析' },
+  { key: 'admin/attendance', label: '在店看板', icon: 'users', perm: 'attendance:view', group: '运营管理' },
   { key: 'admin/approvals', label: '审批中心', icon: 'check', perm: 'approval:view', group: '运营管理' },
   { key: 'admin/losses', label: '报损与损耗', icon: 'alert', perm: 'loss:view', group: '运营管理' },
   { key: 'admin/coupons', label: '优惠券', icon: 'megaphone', perm: 'coupon:view', group: '运营管理' },

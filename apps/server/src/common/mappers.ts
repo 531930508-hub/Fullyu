@@ -111,6 +111,8 @@ export const mapOrder = (
   couponId: row.couponId,
   couponTitle: row.couponTitle,
   couponDiscountCents: row.couponDiscountCents,
+  byoCupCups: row.byoCupCups,
+  byoCupDiscountCents: row.byoCupDiscountCents,
   customerId: row.customerId,
   ownerKind: row.ownerKind,
   createdBy: row.createdBy,
@@ -134,6 +136,8 @@ export const mapOrder = (
     unitPriceCents: item.unitPriceCents,
     totalCents: item.totalCents,
     costCents: item.costCents,
+    byoCupQty: item.byoCupQty,
+    byoCupDiscountCents: item.byoCupDiscountCents,
     temp: item.temp,
     ice: item.ice
   })),

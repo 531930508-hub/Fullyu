@@ -5,7 +5,7 @@
       <button hover-class="none" class="bm-back" :aria-label="tt('返回', 'Back')" @click="goBack">
         <AppIcon name="chevronLeft" :size="20" />
       </button>
-      <text class="bm-nav-title">{{ tt('Full愈会员卡', 'Full Yuk member card') }}</text>
+      <text class="bm-nav-title">{{ tt('Full愈大会员', 'Full Yu Membership') }}</text>
       <view class="bm-nav-tail" />
     </view>
 
@@ -23,7 +23,7 @@
         </view>
 
         <template v-else-if="data">
-          <!-- 会员卡：身份、本年已省、全平台权益与续费都在这张卡里 -->
+          <!-- 会员卡：身份、本卡期已省、全平台权益与续费都在这张卡里 -->
           <MemberCard
             :data="data"
             :active="active"
@@ -144,7 +144,7 @@
             </view>
           </view>
 
-          <!-- 03 礼物与兑换：年卡礼提货码与会员码收在同一组 -->
+          <!-- 03 礼物与兑换：会员礼提货码与会员码收在同一组 -->
           <view v-if="vouchers.length || active" class="bm-section bm-panel bm-panel--gift">
             <view class="bm-panel-head">
               <text class="bm-panel-index">03</text>
@@ -174,7 +174,7 @@
 
           <view class="bm-foot">
             <text>{{ tt('放松有道　自在生活', 'Rest, with intention') }}</text>
-            <text class="bm-foot-sub">{{ tt('Full愈 · 时叙', 'Full Yuk · 时叙') }}</text>
+            <text class="bm-foot-sub">{{ tt('Full愈 · 时叙', 'Full Yu · 时叙') }}</text>
           </view>
         </template>
       </view>
@@ -182,7 +182,7 @@
 
     <BottomSheet
       v-if="purchaseOpen"
-      :title="active ? tt('续费 Full愈会员', 'Renew Full Yuk membership') : tt('开通 Full愈会员', 'Join Full Yuk membership')"
+      :title="active ? tt('续费 Full愈大会员', 'Renew Full Yu Membership') : tt('开通 Full愈大会员', 'Join Full Yu Membership')"
       @close="closePurchase"
     >
       <view class="bm-confirm">
@@ -216,11 +216,11 @@
       </view>
     </BottomSheet>
 
-    <BottomSheet v-if="detailOpen" :title="tt('本年已省', 'Saved this year')" @close="closeDetail">
+    <BottomSheet v-if="detailOpen" :title="tt('本卡期已省', 'Saved this term')" @close="closeDetail">
       <view class="bm-confirm">
         <view class="bm-confirm-head">
           <view>
-            <text class="bm-confirm-name serif">{{ tt(`本年已省 ¥${formatYuan(data.savedCents)}`, `Saved ¥${formatYuan(data.savedCents)} this year`) }}</text>
+            <text class="bm-confirm-name serif">{{ tt(`本卡期已省 ¥${formatYuan(data.savedCents)}`, `Saved ¥${formatYuan(data.savedCents)} this term`) }}</text>
             <text class="bm-confirm-desc">{{ tt('按全平台会员价结算累计', 'Accumulated from member-price settlements') }}</text>
           </view>
         </view>
@@ -334,7 +334,7 @@ const active = computed(() => {
   return state === 'ACTIVE' || state === 'EXPIRING' || state === 'PENDING';
 });
 const gameReady = computed(() => Boolean(data.value && data.value.game && data.value.game.enabled));
-// 骰子进度、续费提醒与年卡礼都由 CRM 计算；页面只展示，不在前端推算金额。
+// 骰子进度、续费提醒与会员礼都由 CRM 计算；页面只展示，不在前端推算金额。
 const progress = computed(() => (data.value && data.value.dice && data.value.dice.progress) || null);
 // 退款可能把骰子扣成负数；欠账先补回，进度文案由 CRM 一并计算。
 const diceDebt = computed(() => {
@@ -564,7 +564,8 @@ function openPurchase(code) {
     return;
   }
   payError.value = '';
-  selectedCode.value = code;
+  // 产品目录由 CRM 决定，时长可能增删；传入的编码不在目录里就退回第一个时长。
+  selectedCode.value = products.value.some((product) => product.code === code) ? code : products.value[0].code;
   purchaseOpen.value = true;
 }
 

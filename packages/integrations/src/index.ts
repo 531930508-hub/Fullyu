@@ -12,6 +12,17 @@ export {
   type FeieLabelPrinterOptions,
   type FeieLabelStyle
 } from './providers/live/feie';
+export {
+  XpyunLabelPrinter,
+  buildXpyunCupLabel,
+  buildXpyunCalibration,
+  fitMm,
+  xpyunText,
+  DEFAULT_XPYUN_LABEL_STYLE,
+  XPYUN_CUP_LAYOUT,
+  type XpyunLabelPrinterOptions,
+  type XpyunLabelStyle
+} from './providers/live/xpyun';
 export { AgentLabelPrinter, isAgentTransport } from './providers/live/agent';
 export {
   buildCupLabelTspl,

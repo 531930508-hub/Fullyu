@@ -52,7 +52,7 @@ describe('顾客品牌会员代理', () => {
   it('未登录也能读取公开产品目录，价格只来自 CRM', async () => {
     const res = await h.api('get', '/brand-member/products');
     expect(res.status).toBe(200);
-    expect(res.body.products[1]).toMatchObject({ code: 'FY_ANNUAL', priceCents: 29900 });
+    expect(res.body.products[1]).toMatchObject({ code: 'FY_ANNUAL', priceCents: 36500 });
   });
 
   it('身份页使用登录顾客的本地 id，不把手机号或密钥带到前端', async () => {
@@ -75,14 +75,14 @@ describe('顾客品牌会员代理', () => {
     const customer = await h.customer('报价茶客');
     const products = await h.api('get', '/customer/brand-member/products', customer.token);
     expect(products.status).toBe(200);
-    expect(products.body.products[1]).toMatchObject({ code: 'FY_ANNUAL', priceCents: 29900 });
+    expect(products.body.products[1]).toMatchObject({ code: 'FY_ANNUAL', priceCents: 36500 });
 
     const quote = await h.api('post', '/customer/brand-member/quote', customer.token, {
       productCode: 'FY_ANNUAL',
       priceCents: 1
     });
     expect(quote.status).toBe(201);
-    expect(quote.body.priceCents).toBe(29900);
+    expect(quote.body.priceCents).toBe(36500);
 
     const body = JSON.parse(fake.requests[fake.requests.length - 1].body) as Record<string, unknown>;
     expect(body).toMatchObject({
@@ -112,7 +112,7 @@ describe('顾客品牌会员代理', () => {
     });
     expect(res.status).toBe(201);
     // 金额来自 CRM 报价，预下单走模拟渠道。
-    expect(res.body.order).toMatchObject({ amountCents: 29900, payStatus: 'pending', issueStatus: 'idle' });
+    expect(res.body.order).toMatchObject({ amountCents: 36500, payStatus: 'pending', issueStatus: 'idle' });
     expect(res.body.prepayMode).toBe('mock');
     // 没收到钱就绝不调开卡：CRM 侧不应出现 issue 请求。
     expect(fake.requests.some((item) => item.path.startsWith('/api/v1/brand-member/issue'))).toBe(false);
@@ -129,14 +129,14 @@ describe('顾客品牌会员代理', () => {
     const outcome = await h.app.get(BrandCardPaymentService).settle({
       reference: orderId,
       providerRef: 'HF-ISSUE-1',
-      amountCents: 29900,
+      amountCents: 36500,
       status: 'paid'
     });
     expect(outcome).toBe('applied');
 
     const issue = fake.requests.filter((item) => item.path.startsWith('/api/v1/brand-member/issue')).pop();
     expect(issue?.signatureOk).toBe(true);
-    expect(JSON.parse(issue!.body)).toMatchObject({ orderRef: orderId, paidCents: 29900 });
+    expect(JSON.parse(issue!.body)).toMatchObject({ orderRef: orderId, paidCents: 36500 });
 
     const row = await h.prisma.brandCardOrder.findUnique({ where: { id: orderId } });
     expect(row).toMatchObject({ payStatus: 'paid', issueStatus: 'issued', crmCardId: 'MBC-TEST-1' });

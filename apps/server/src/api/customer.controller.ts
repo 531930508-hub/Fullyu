@@ -38,13 +38,13 @@ const orderSchema = z.object({
 
 const profileSchema = z
   .object({
-    name: z.string().max(40).optional(),
+    // 姓名以 CRM 统一账号为准，这里不再接收：旧版本小程序传上来的 name 被忽略。
     // 1=男 2=女 null=未填写，与在场一致
     gender: z.union([z.literal(1), z.literal(2), z.null()]).optional(),
     birthday: z.union([z.string().max(10), z.null()]).optional()
   })
   .refine(
-    (value) => value.name !== undefined || value.gender !== undefined || value.birthday !== undefined,
+    (value) => value.gender !== undefined || value.birthday !== undefined,
     { message: '没有需要更新的资料' }
   );
 
@@ -129,6 +129,8 @@ export class CustomerController {
       store: catalog.store,
       categories: catalog.categories,
       products: catalog.products,
+      // 自带杯政策：小程序结算页据此提示「自带杯到柜台每杯立减」，金额仍以服务端结算为准。
+      byoCup: catalog.byoCup,
       retail: await this.catalog.retailAvailability(),
       // 首页轮播与系列图覆盖；后台未配置时小程序回落到内置图。
       home: await this.content.publicHome(),
@@ -202,7 +204,7 @@ export class CustomerController {
     return this.auth.bindWechatPhone(customer.id, input);
   }
 
-  /** 个人资料维护：姓名、性别、生日。字段口径与在场一致。 */
+  /** 个人资料维护：性别、生日（姓名以 CRM 统一账号为准，小程序不可改）。字段口径与在场一致。 */
   @Put('profile')
   @UseGuards(CustomerGuard)
   async updateProfile(@Body() body: unknown, @Customer() customer: CustomerContext) {
@@ -291,11 +293,29 @@ export class CustomerController {
     };
   }
 
-  /** 我的券：可用在前，含已使用与已过期，状态由服务端按有效期计算。 */
+  /** 我的券：可用在前，含已使用与已过期，状态由服务端按每张券的有效期计算。 */
   @Get('coupons')
   @UseGuards(CustomerGuard)
   async myCoupons(@Customer() customer: CustomerContext) {
     return this.coupons.listForCustomer(customer.id);
+  }
+
+  /** 可领券中心：只列开放领取、活动期内且本人还能领的模板。 */
+  @Get('coupons/claimable')
+  @UseGuards(CustomerGuard)
+  async claimableCoupons(@Customer() customer: CustomerContext) {
+    return this.coupons.listClaimable(customer.id);
+  }
+
+  /** 自助领取：服务端校验活动期、领取上限与「同款只持有一张未使用」。 */
+  @Post('coupons/:id/claim')
+  @UseGuards(CustomerGuard)
+  async claimCoupon(@Param('id') id: string, @Customer() customer: CustomerContext) {
+    return this.coupons.claim(id, {
+      id: customer.id,
+      name: customer.name,
+      phone: customer.phone
+    });
   }
 
   @Get('orders')

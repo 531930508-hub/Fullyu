@@ -16,6 +16,8 @@ import type {
   PaymentCallback,
   PaymentCallbackResult,
   PaymentChannel,
+  PaymentCloseRequest,
+  PaymentCloseResult,
   PaymentGateway,
   PaymentQueryRequest,
   PaymentQueryResult,
@@ -335,6 +337,56 @@ export class HuifuPaymentGateway implements PaymentGateway {
       status,
       providerRef,
       paidAt: status === 'paid' ? this.now() : undefined
+    };
+  }
+
+  /**
+   * 关闭未支付的渠道预下单。
+   * 汇付关单接口必须带原交易请求流水号或原交易全局流水号；我们统一用 req_seq_id（订单号派生）对原单。
+   * 关单请求号沿用「订单号_CLOSE」，重试天然幂等，不会在渠道侧生成第二笔关单。
+   */
+  async close(request: PaymentCloseRequest): Promise<PaymentCloseResult> {
+    const ready = this.credentials();
+    if (!ready.ok) return { ok: false, status: 'failed', error: ready.error };
+    const merchant = this.merchantFor(request.storeId);
+    if (!merchant) return { ok: false, status: 'failed', error: '汇付子商户号未配置' };
+
+    const result = await this.call(
+      '/v2/trade/payment/scanpay/close',
+      {
+        huifu_id: merchant,
+        req_date: ymd(this.now()),
+        req_seq_id: `${toSeqId(request.orderId)}_CLOSE`,
+        org_req_date: ymd(request.requestedAt || this.now()),
+        org_req_seq_id: toSeqId(request.orderId)
+      },
+      ready.keys,
+      { tolerateBusinessError: true }
+    );
+    const code = trim(result.resp_code);
+    const stat = trim(result.trans_stat);
+    const orgStat = trim(result.org_trans_stat);
+    const providerRef = trim(result.hf_seq_id) || undefined;
+    // 原单已支付的关单请求没有意义：如实报 paid，交给迟到支付/退款链路。
+    if (orgStat === 'S' || stat === 'S') {
+      return { ok: false, status: 'paid', providerRef, error: '原交易已支付，无法关单' };
+    }
+    if (code === '00000000' && (stat === 'C' || stat === 'F')) {
+      return { ok: true, status: 'closed', providerRef };
+    }
+    // 00000100 = 关单处理中（实测），最终由兜底查询收敛。
+    if (code === '00000100' || stat === 'P') {
+      return { ok: true, status: 'processing', providerRef };
+    }
+    // 23000000 = 原订单已是终态（此前关单已生效或交易自行关闭）：钱没进来，按已关闭处理。
+    if (code === '23000000') {
+      return { ok: true, status: 'closed', providerRef };
+    }
+    return {
+      ok: false,
+      status: 'failed',
+      providerRef,
+      error: `${code ? `汇付关单失败（${code}）：` : '汇付关单失败：'}${trim(result.resp_desc) || trim(result.bank_message) || '未知原因'}`
     };
   }
 

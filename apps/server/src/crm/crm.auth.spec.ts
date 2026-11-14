@@ -87,14 +87,44 @@ describe('时叙顾客接入 CRM', () => {
   it('资料更新后的响应余额同样以 CRM 为准', async () => {
     const login = await h.api('post', '/customer/session', null, {
       phone: '13900002004',
-      name: '改名前'
+      name: '改资料茶客'
     });
     const id = login.body.customer.id as string;
     fake.members.get(id)!.balance = 42;
 
-    const updated = await h.api('put', '/customer/profile', login.body.token, { name: '改名后' });
+    const updated = await h.api('put', '/customer/profile', login.body.token, { gender: 2 });
     expect(updated.status).toBe(200);
-    expect(updated.body.customer.name).toBe('改名后');
+    expect(updated.body.customer.gender).toBe(2);
     expect(updated.body.customer.points).toBe(42);
+  });
+
+  it('姓名以 CRM 统一账号为准，并写回本地快照', async () => {
+    const login = await h.api('post', '/customer/session', null, {
+      phone: '13900002005',
+      name: '旧名'
+    });
+    const id = login.body.customer.id as string;
+    // 会员中心改名后，小程序「我的」直接显示 CRM 姓名，不需要顾客再设置。
+    fake.members.get(id)!.name = '统一姓名';
+
+    const me = await h.api('get', '/customer/me', login.body.token);
+    expect(me.status).toBe(200);
+    expect(me.body.customer.name).toBe('统一姓名');
+
+    const saved = await h.prisma.customer.findUnique({ where: { id } });
+    expect(saved?.name).toBe('统一姓名');
+  });
+
+  it('CRM 还没有姓名时保留本地名字，不被清空', async () => {
+    const login = await h.api('post', '/customer/session', null, {
+      phone: '13900002006',
+      name: '待取名'
+    });
+    const id = login.body.customer.id as string;
+    fake.members.get(id)!.name = '';
+
+    const me = await h.api('get', '/customer/me', login.body.token);
+    expect(me.status).toBe(200);
+    expect(me.body.customer.name).toBe('待取名');
   });
 });

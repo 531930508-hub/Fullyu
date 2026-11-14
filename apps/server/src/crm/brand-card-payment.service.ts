@@ -10,7 +10,7 @@ import { HardwareService } from '../hardware/hardware.module';
 import { BrandMemberClient } from './brand-member.client';
 
 /**
- * 会员卡（Full愈年卡/月卡）自助购卡：下单 → JSAPI 预下单 → 验签回调落账 → CRM 开卡。
+ * 会员卡（Full愈大会员/月会员）自助购卡：下单 → JSAPI 预下单 → 验签回调落账 → CRM 开卡。
  *
  * 与茶饮订单的区别，也是这里的全部设计前提：
  * - 商品与价格不来自本地菜单，只来自 CRM 服务端报价（quoteId + priceCents），客户端传价一律忽略；

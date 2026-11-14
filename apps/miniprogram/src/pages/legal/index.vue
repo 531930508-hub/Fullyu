@@ -217,7 +217,7 @@ const DOCS = {
           h: '四、共享与委托处理',
           p: [
             '我们不会出售你的个人信息。仅在实现以下功能所必需的范围内共享：微信（登录、手机号授权与支付）、支付服务商（汇付天下，用于收付款与退款）、云服务商（服务器与数据存储）。我们会要求合作方按约定保护你的信息。',
-            '为提供 Full愈年卡在时叙、在场、轻疗三店通用的会员权益，你的手机号、会员编号、卡期与积分会在 Full愈品牌会员体系内共享，仅用于跨店识别会员身份、核销权益与内部结算，不用于与会员服务无关的用途。'
+            '为提供 Full愈大会员在时叙、在场、轻疗三店通用的会员权益，你的手机号、会员编号、卡期与积分会在 Full愈大会员体系内共享，仅用于跨店识别会员身份、核销权益与内部结算，不用于与会员服务无关的用途。'
           ]
         },
         {
@@ -284,7 +284,7 @@ const DOCS = {
           h: '4. Sharing and processors',
           p: [
             'We do not sell your personal information. We share only what is necessary with WeChat (sign-in, phone authorisation and payment), our payment provider (Huifu, for payments and refunds) and our cloud provider (servers and data storage). Partners are required to protect your information under our agreements.',
-            'To provide Full Yu annual card benefits across Teahour, Presence and Retreat, your phone number, member number, card term and points are shared within the Full Yu membership programme. This is used only to recognise your membership across stores, redeem benefits and settle internally, not for unrelated purposes.'
+            'To provide Full Yu Membership benefits across Teahour, Presence and Retreat, your phone number, member number, card term and points are shared within the Full Yu membership programme. This is used only to recognise your membership across stores, redeem benefits and settle internally, not for unrelated purposes.'
           ]
         },
         {
@@ -324,12 +324,12 @@ const DOCS = {
   member: {
     zh: {
       title: '会员规则',
-      lead: '本规则适用于 Full愈年卡与月卡。开通前请确认卡种、价格、有效期与适用门店；开通即表示你已阅读并同意本规则。',
+      lead: '本规则适用于 Full愈大会员。开通前请确认所选时长、价格、有效期与适用门店；开通即表示你已阅读并同意本规则。',
       sections: [
         {
           h: '一、卡的性质',
           p: [
-            'Full愈年卡与月卡（价格与时长以购买页展示为准）是在有效期内享受时叙、在场、轻疗会员权益的服务权益卡，不是储值卡。卡内不含可消费本金，不产生余额，不可提现、转账、代付或找零。'
+            'Full愈大会员（价格与时长以购买页展示为准）是在有效期内享受时叙、在场、轻疗会员权益的服务权益卡，不是储值卡。卡内不含可消费本金，不产生余额，不可提现、转账、代付或找零。'
           ]
         },
         {
@@ -350,7 +350,7 @@ const DOCS = {
         {
           h: '四、积分',
           p: [
-            '积分由 Full愈品牌会员中心统一记录，时叙、在场、轻疗共用一个积分账户。',
+            '积分由 Full愈会员中心统一记录，时叙、在场、轻疗共用一个积分账户。',
             '积分通过消费、活动与「愈行之旅」获得，不可购买、不可提现、不可转让，不构成预付款。',
             '积分按批次计算有效期，到期未使用自动失效；页面展示最近到期时间。',
             '轻疗结算时 1 积分可抵 ¥1，单笔可抵扣金额与可用范围以结算页为准；时叙、在场本期仅展示积分，暂不参与抵扣。',
@@ -360,8 +360,8 @@ const DOCS = {
         {
           h: '五、退款',
           p: [
-            '开通后 7 日内可申请无理由退款，退还实付金额；期间已领取的年卡礼（实物礼）按其标注价值扣除。',
-            '超过 7 日的，按实付金额扣除已享会员优惠与已领取年卡礼价值后计算；已享优惠包括会员价差额、积分抵扣、赠品与活动优惠。计算结果为 0 或以下的，不予退款。',
+            '开通后 7 日内可申请无理由退款，退还实付金额；期间已领取的会员礼（实物礼）按其标注价值扣除。',
+            '超过 7 日的，按实付金额扣除已享会员优惠与已领取会员礼价值后计算；已享优惠包括会员价差额、积分抵扣、赠品与活动优惠。计算结果为 0 或以下的，不予退款。',
             '通过会员码兑换、或随其他卡附赠的会员资格未单独付款，不涉及退款；附赠资格随原卡失效。',
             '特殊情况可联系门店伙伴，由工作人员核实后协商处理。',
             '退款原路退回，到账时间以支付渠道为准；已开具发票的，需按税务规定办理发票退回或红冲。'
@@ -377,15 +377,15 @@ const DOCS = {
         {
           h: '七、收款、发票与经营主体',
           p: [
-            '会员卡由开通页面注明的业务主体销售并收款，发票由实际收款方开具。',
-            '三店权益由各业务主体分别提供；会员身份、卡期与积分由 Full愈品牌会员中心统一记录，用于跨店识别与结算。',
+            '大会员由开通页面注明的业务主体销售并收款，发票由实际收款方开具。',
+            '三店权益由各业务主体分别提供；会员身份、卡期与积分由 Full愈会员中心统一记录，用于跨店识别与结算。',
             '门店调整、装修、暂停营业或迁址时，未使用权益按门店公示与本规则处理。'
           ]
         },
         {
           h: '八、个人信息',
           p: [
-            '为提供三店通用权益，你的手机号、会员编号、卡期与积分会在 Full愈品牌会员体系内（时叙、在场、轻疗）共享；我们不会出售你的个人信息。',
+            '为提供三店通用权益，你的手机号、会员编号、卡期与积分会在 Full愈大会员体系内（时叙、在场、轻疗）共享；我们不会出售你的个人信息。',
             '详细处理规则见《隐私政策》。你可以在「我的」查看、更正资料，或联系我们注销账号。'
           ]
         },
@@ -402,12 +402,12 @@ const DOCS = {
     },
     en: {
       title: 'Member Rules',
-      lead: 'These rules apply to the Full Yu annual and monthly card. Please confirm the plan, price, term and participating stores before joining. Joining means you have read and accepted these rules.',
+      lead: 'These rules apply to the Full Yu Membership. Please confirm the term, price, validity period and participating stores before joining. Joining means you have read and accepted these rules.',
       sections: [
         {
           h: '1. What the card is',
           p: [
-            'The Full Yu annual card and monthly card (price and term as shown on the purchase page) are service-benefit cards for member pricing at Teahour, Presence and Retreat during the term. They are not stored-value cards: there is no spendable principal or balance, and no cash withdrawal, transfer, payment on behalf of others or change.'
+            'The Full Yu Membership (price and term as shown on the purchase page) is a service-benefit card for member pricing at Teahour, Presence and Retreat during the term. It is not a stored-value card: there is no spendable principal or balance, and no cash withdrawal, transfer, payment on behalf of others or change.'
           ]
         },
         {
@@ -438,8 +438,8 @@ const DOCS = {
         {
           h: '5. Refunds',
           p: [
-            'Within 7 days of joining, you may request a refund without giving a reason. The amount paid is refunded, less the stated value of any annual-card gift you have already collected.',
-            'After 7 days, the refund is the amount paid less member benefits already enjoyed and the value of collected annual-card gifts. Benefits enjoyed include member-price savings, point offsets, gifts and promotional discounts. If the result is 0 or less, no refund is available.',
+            'Within 7 days of joining, you may request a refund without giving a reason. The amount paid is refunded, less the stated value of any member gift you have already collected.',
+            'After 7 days, the refund is the amount paid less member benefits already enjoyed and the value of collected member gifts. Benefits enjoyed include member-price savings, point offsets, gifts and promotional discounts. If the result is 0 or less, no refund is available.',
             'Membership obtained through a member code, or bundled with another card, was not paid for separately and is not refundable; bundled membership ends with the original card.',
             'For special circumstances, contact a store partner and our team will review the case with you.',
             'Refunds are returned to the original payment method; timing depends on the payment channel. If an invoice has been issued, it must be returned or reversed under tax rules.'

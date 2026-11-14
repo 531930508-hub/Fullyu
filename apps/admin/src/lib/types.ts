@@ -97,6 +97,9 @@ export type OrderItem = {
   unitPriceCents: number;
   totalCents: number;
   costCents: number;
+  /** 本行参与自带杯减免的杯数（按加入顺序分配）。 */
+  byoCupQty?: number;
+  byoCupDiscountCents?: number;
   temp: string | null;
   ice: string | null;
 };
@@ -132,6 +135,10 @@ export type Order = {
   createdBy: string | null;
   paymentRef: string | null;
   paymentMethod: string | null;
+  /** 自带杯：杯数与按杯减免金额，退款时按实付口径分摊。 */
+  byoCupCups?: number;
+  byoCupDiscountCents?: number;
+  couponDiscountCents?: number;
   preparedAt: number | null;
   createdAt: number;
   paidAt: number | null;
@@ -228,7 +235,7 @@ export type ProfitReport = {
 
 export type Approval = {
   id: string;
-  kind: 'REFUND' | 'LOSS';
+  kind: 'REFUND' | 'LOSS' | 'ATTENDANCE';
   status: 'pending' | 'approved' | 'rejected';
   amountCents: number;
   storeId: string | null;
@@ -405,16 +412,23 @@ export type Overview = {
   topProducts: Array<{ name: string; series: Series; qty: number; amount: number }>;
 };
 
-/** 优惠券模板：总部按通用 / 指定品类创建，限定有效期，按手机号发放给会员。 */
+/** 优惠券模板：总部按通用 / 指定品类 / 指定单品创建，限定有效期，按手机号或规则发放给会员。 */
 export type Coupon = {
   id: string;
   title: string;
-  scope: 'all' | 'category';
+  scope: 'all' | 'category' | 'product';
   categoryId: string | null;
+  productId: string | null;
   amountCents: number;
   minSpendCents: number;
   validFrom: number;
   validTo: number;
+  /** 发放后 N 天有效；0 表示只用固定区间。 */
+  validDays: number;
+  /** 是否在顾客端「可领券」列表中开放自助领取。 */
+  claimable: boolean;
+  /** 每位会员自助领取的上限张数。 */
+  claimLimit: number;
   active: boolean;
   note: string;
   createdBy: string;
@@ -422,6 +436,58 @@ export type Coupon = {
   issued?: number;
   used?: number;
   available?: number;
+  revoked?: number;
+  claimed?: number;
+};
+
+export type CouponRuleKind = 'birthday' | 'welcome' | 'winback';
+
+/** 自动发券规则：命中人群后按天幂等发放，执行记录落在发券批次上。 */
+export type CouponRule = {
+  id: string;
+  couponId: string;
+  couponTitle: string;
+  couponActive: boolean;
+  couponValidTo: number;
+  amountCents: number;
+  kind: CouponRuleKind;
+  kindLabel: string;
+  enabled: boolean;
+  tier: 'all' | 'standard' | 'annual';
+  config: {
+    daysBefore?: number;
+    inactiveDays?: number;
+    minOrders?: number;
+    withinDays?: number;
+  };
+  note: string;
+  lastRunAt: number | null;
+  lastRunIssued: number;
+  lastRunSkipped: number;
+  totalIssued: number;
+  createdAt: number;
+};
+
+export type CouponRulePreview = {
+  count: number;
+  willIssue: number;
+  held: number;
+  alreadyThisPeriod: number;
+  period: string;
+  kindLabel?: string;
+};
+
+export type CouponRuleRunResult = {
+  ruleId: string;
+  kind: CouponRuleKind;
+  couponTitle: string;
+  targetCount: number;
+  issued: number;
+  skipped: number;
+  period: string;
+  replayed: boolean;
+  batchId: string;
+  error?: string;
 };
 
 export type CouponIssueResult = {
@@ -457,4 +523,102 @@ export type HomeContent = {
   banners: Banner[];
   series: HomeSeriesSlot[];
   products: Array<Pick<Product, 'id' | 'name' | 'nameEn' | 'series' | 'kind' | 'status'>>;
+};
+
+/* ------------------------------ 考勤（在店时段） ------------------------------ */
+
+export type WorkSessionStatus = 'open' | 'pending_close' | 'closed' | 'lapsed' | 'voided';
+
+/** 一段在店时间。minutes 只有 closed 才有值——进行中和待补签都不计入工时。 */
+export type WorkSession = {
+  id: string;
+  storeId: string;
+  userId: string;
+  businessDate: string;
+  clockInAt: number;
+  clockOutAt: number | null;
+  minutes: number;
+  liveMinutes: number;
+  status: WorkSessionStatus;
+  inDistanceM: number | null;
+  inAccuracyM: number | null;
+  outDistanceM: number | null;
+  pendingApprovalId: string | null;
+  adjustable: boolean;
+  note: string;
+};
+
+export type AttendanceStoreOption = {
+  id: string;
+  name: string;
+  short: string;
+  address: string;
+  lat: number;
+  lng: number;
+};
+
+export type AttendanceMine = {
+  today: string;
+  now: number;
+  open: WorkSession | null;
+  sessions: WorkSession[];
+  pendingCount: number;
+  unresolvedCount: number;
+  /** 全部未闭合时段（含往天的），页面上要能逐条补离店/撤回 */
+  unresolved: WorkSession[];
+  month: { label: string; minutes: number; days: number };
+  stores: AttendanceStoreOption[];
+  policy: {
+    radiusM: number;
+    accuracyCeilingM: number;
+    accuracyAllowanceM: number;
+    maxSegmentMinutes: number;
+  };
+  /** 带上定位读数请求时的围栏预判；服务端与 clock-in 共用同一份判定 */
+  preview: {
+    ok: boolean;
+    reason: 'ok' | 'no_location' | 'untrusted_accuracy' | 'out_of_range';
+    distanceM: number | null;
+    limitM: number;
+  } | null;
+};
+
+export type AttendanceBoardPerson = {
+  userId: string;
+  name: string;
+  /** 跨店看板时这段属于哪家店；单店时只有一项 */
+  storeNames: string[];
+  sessions: WorkSession[];
+  minutes: number;
+  liveMinutes: number;
+  unresolved: number;
+};
+
+export type AttendanceBoard = {
+  /** 单店口径时为该店；「全部门店」时为 null */
+  storeId: string | null;
+  storeName: string;
+  stores: Array<{ id: string; name: string }>;
+  date: string;
+  now: number;
+  policy: { radiusM: number };
+  rows: AttendanceBoardPerson[];
+  onDuty: Array<{ userId: string; name: string; storeName: string; clockInAt: number; liveMinutes: number }>;
+  unresolved: Array<{
+    sessionId: string;
+    userId: string;
+    name: string;
+    storeName: string;
+    status: WorkSessionStatus;
+    businessDate: string;
+    clockInAt: number;
+    liveMinutes: number;
+  }>;
+  summary: {
+    peopleCount: number;
+    totalMinutes: number;
+    liveMinutes: number;
+    unresolvedCount: number;
+    pendingApprovals: number;
+  };
 };

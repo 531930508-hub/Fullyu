@@ -33,7 +33,7 @@
 
       <view class="st-foot">
         <text>{{ tt('放松有道　自在生活', 'Rest, with intention') }}</text>
-        <text class="st-foot-sub">{{ tt('Full愈 · 时叙', 'Full Yuk · 时叙') }}</text>
+        <text class="st-foot-sub">{{ tt('Full愈 · 时叙', 'Full Yu · 时叙') }}</text>
       </view>
     </view>
   </view>
@@ -77,9 +77,9 @@ async function load() {
     stories.value = res && Array.isArray(res.stories) ? res.stories : [];
   } catch {
     stories.value = [];
-    // 接口只对有效品牌会员开放；请求层不透出状态码，统一给可重试的边界提示。
+    // 接口只对有效大会员开放；请求层不透出状态码，统一给可重试的边界提示。
     error.value = tt(
-      '会员故事暂时没读到。仅有效品牌会员可查看，稍后可以再试。',
+      '会员故事暂时没读到。仅有效大会员可查看，稍后可以再试。',
       'Stories are unavailable right now. Only active members can read them — please try again later.'
     );
   } finally {

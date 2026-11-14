@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError, type RangeQuery } from '../lib/api';
-import { useApi, useStoredJsonState, useStoredState } from '../lib/hooks';
+import { useApi, useNow, useStoredJsonState, useStoredState } from '../lib/hooks';
 import { useStaffAuth } from '../lib/auth';
 import { StaffShell } from '../components/StaffShell';
 import { visibleNav } from '../lib/nav';
@@ -38,6 +38,7 @@ import {
   percent,
   todayText
 } from '../lib/format';
+import { SESSION_LABEL, elapsedText, minutesText as durationText, sessionTone } from '../lib/attendance';
 import { HOME_IMAGE_HEIGHT, HOME_IMAGE_WIDTH, MAX_UPLOAD_BYTES, prepareHomeImage, prepareProductImage } from '../lib/image';
 import type {
   Approval,
@@ -46,6 +47,9 @@ import type {
   Category,
   Coupon,
   CouponIssueResult,
+  CouponRule,
+  CouponRuleKind,
+  CouponRulePreview,
   Expense,
   FinanceEntry,
   HomeContent,
@@ -74,6 +78,7 @@ type Section =
   | 'profit'
   | 'expenses'
   | 'approvals'
+  | 'attendance'
   | 'losses'
   | 'coupons'
   | 'content'
@@ -90,6 +95,7 @@ const SECTION_TITLE: Record<Section, string> = {
   profit: '门店利润',
   expenses: '运营费用',
   approvals: '审批中心',
+  attendance: '在店看板',
   losses: '报损与损耗',
   coupons: '优惠券',
   content: '首页内容',
@@ -108,6 +114,7 @@ const SECTION_PERM: Record<Section, string> = {
   profit: 'dashboard:profit',
   expenses: 'finance:view',
   approvals: 'approval:view',
+  attendance: 'attendance:view',
   losses: 'loss:view',
   coupons: 'coupon:view',
   content: 'product:view',
@@ -125,6 +132,7 @@ const SECTION_ORDER: Section[] = [
   'profit',
   'expenses',
   'approvals',
+  'attendance',
   'losses',
   'coupons',
   'content',
@@ -135,6 +143,30 @@ const SECTION_ORDER: Section[] = [
   'roles',
   'logs'
 ];
+
+/* 三类审批的展示与判定权限：金额为 0 的补签按「时长」呈现，避免出现 ¥0.00 的卡面。 */
+const APPROVAL_PERM: Record<Approval['kind'], string> = {
+  REFUND: 'order:refund:approve',
+  LOSS: 'loss:approve',
+  ATTENDANCE: 'attendance:approve'
+};
+const APPROVAL_LABEL: Record<Approval['kind'], string> = {
+  REFUND: '退款审批',
+  LOSS: '报损审批',
+  ATTENDANCE: '补签审批'
+};
+const APPROVAL_TONE: Record<Approval['kind'], 'accent' | 'warn' | 'dark'> = {
+  REFUND: 'accent',
+  LOSS: 'warn',
+  ATTENDANCE: 'dark'
+};
+
+function attendanceMinutes(payload: Record<string, unknown>): number {
+  const from = Number(payload.clockInAt);
+  const to = Number(payload.clockOutAt);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return 0;
+  return Math.round((to - from) / 60000);
+}
 
 type RangeKind = 'today' | '7' | '30' | 'custom';
 type RangeState = { kind: RangeKind; from: string; to: string };
@@ -282,6 +314,7 @@ export function AdminApp() {
       {allowed && section === 'profit' ? <ProfitPage /> : null}
       {allowed && section === 'expenses' ? <ExpensesPage /> : null}
       {allowed && section === 'approvals' ? <ApprovalsPage onChanged={refreshApprovalCount} /> : null}
+      {allowed && section === 'attendance' ? <AttendancePage /> : null}
       {allowed && section === 'losses' ? <LossesPage /> : null}
       {allowed && section === 'coupons' ? <CouponsPage /> : null}
       {allowed && section === 'content' ? <ContentPage /> : null}
@@ -1369,7 +1402,11 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
     'todo',
     ['todo', 'done', 'all']
   );
-  const [kind, setKind] = useStoredState<'all' | 'REFUND' | 'LOSS'>('teahour.admin.approvals.kind', 'all', ['all', 'REFUND', 'LOSS']);
+  const [kind, setKind] = useStoredState<'all' | 'REFUND' | 'LOSS' | 'ATTENDANCE'>(
+    'teahour.admin.approvals.kind',
+    'all',
+    ['all', 'REFUND', 'LOSS', 'ATTENDANCE']
+  );
   const query = useApi(() => api.adminApprovals({ view, kind }), [view, kind]);
   const [decision, setDecision] = useState<{ approval: Approval; action: 'approve' | 'reject' } | null>(null);
   const [comment, setComment] = useState('');
@@ -1410,7 +1447,7 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
       <PageHead
         eyebrow="品牌总部 · 风控"
         title="审批中心"
-        description="退款与超限报损都在这里处理：先看等待你审批的，再回看自己处理过的和全部留档。"
+        description="退款、超限报损与补签都在这里处理：先看等待你审批的，再回看自己处理过的和全部留档。"
         actions={
           <Segmented
             value={kind}
@@ -1418,7 +1455,9 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
             options={[
               { value: 'all', label: '全部' },
               { value: 'REFUND', label: '退款' },
-              { value: 'LOSS', label: '报损' }
+              { value: 'LOSS', label: '报损' },
+              // 补签只给有 attendance:approve 的岗位看，避免出现点了就被拒的筛选
+              ...(can('attendance:approve') ? [{ value: 'ATTENDANCE' as const, label: '补签' }] : [])
             ]}
             onChange={setKind}
           />
@@ -1437,16 +1476,14 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
 
       <div style={{ marginTop: 14 }}>
         {data.approvals.map((approval) => {
-          const permission = approval.kind === 'REFUND' ? 'order:refund:approve' : 'loss:approve';
+          const permission = APPROVAL_PERM[approval.kind];
           const canDecide = view === 'todo' && approval.status === 'pending' && can(permission);
           return (
             <article className="approval-card" key={approval.id}>
               <div className="approval-head">
                 <div>
                   <h3>
-                    <Badge tone={approval.kind === 'REFUND' ? 'accent' : 'warn'}>
-                      {approval.kind === 'REFUND' ? '退款审批' : '报损审批'}
-                    </Badge>{' '}
+                    <Badge tone={APPROVAL_TONE[approval.kind]}>{APPROVAL_LABEL[approval.kind]}</Badge>{' '}
                     {approval.summary}
                   </h3>
                   <div className="approval-meta">
@@ -1465,7 +1502,9 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
                   {approval.comment ? <p className="faint tiny" style={{ marginTop: 4 }}>审批意见：{approval.comment}</p> : null}
                 </div>
                 <div className="approval-actions">
-                  <span className="approval-amount">{money(approval.amountCents)}</span>
+                  <span className="approval-amount">
+                    {approval.kind === 'ATTENDANCE' ? durationText(attendanceMinutes(approval.payload)) : money(approval.amountCents)}
+                  </span>
                   {view === 'todo' && approval.status === 'pending' ? (
                     canDecide ? (
                       <>
@@ -1648,6 +1687,207 @@ function RefundRulePanel() {
 }
 
 /* ------------------------------- losses ------------------------------- */
+
+/* ------------------------------ 在店看板 ------------------------------ */
+
+/**
+ * 在店看板：今天谁在店里、各人记了多少、哪些时段没闭合。
+ *
+ * 落在「运营管理」而不是「经营分析」，因为它回答的是「现在要不要打电话叫人」，
+ * 不是月底算账——所以默认是今天，且只在店与未闭合两类会变色。
+ */
+function AttendancePage() {
+  const [storeId, setStoreId] = useState('');
+  const [date, setDate] = useState(todayText());
+  const query = useApi(() => api.attendanceBoard(storeId || undefined, date), [storeId, date]);
+  const now = useNow(1000);
+
+  if (query.loading && !query.data) return <Spinner label="正在读取在店情况" />;
+  if (query.error && !query.data) return <InlineError message={query.error} />;
+  const data = query.data;
+  if (!data) return null;
+  // 回看往天时「正在店里」这个词不成立：那天的段要么已闭合，要么还挂在那里等人处理
+  const isToday = data.date === todayText();
+
+  return (
+    <>
+      <PageHead
+        eyebrow="品牌总部 · 门店"
+        title="在店看板"
+        description="按天看在店情况：谁正在店里计时、谁已经下班、哪些时段忘了点离店。补签的审批在「审批中心 · 补签」。"
+        actions={
+          <div className="row-gap">
+            <select value={storeId} onChange={(event) => setStoreId(event.target.value)} aria-label="门店">
+              <option value="">全部门店</option>
+              {data.stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={date}
+              max={todayText()}
+              onChange={(event) => setDate(event.target.value)}
+              aria-label="日期"
+            />
+          </div>
+        }
+      />
+
+      <div className="stat-grid">
+        <Stat
+          label={isToday ? '在店人数' : '仍在校时'}
+          value={data.onDuty.length}
+          hint={`统计范围：${data.storeName}`}
+          icon="users"
+        />
+        <Stat label="已计入工时" value={durationText(data.summary.totalMinutes)} hint={`${data.summary.peopleCount} 人有记录`} icon="clock" />
+        <Stat
+          label="进行中"
+          value={durationText(data.summary.liveMinutes)}
+          hint="离店确认后才会转为已计入"
+          tone={data.summary.liveMinutes ? 'soft' : 'plain'}
+        />
+        <Stat
+          label="未闭合时段"
+          value={data.summary.unresolvedCount}
+          hint={data.summary.pendingApprovals ? `${data.summary.pendingApprovals} 段在等审批` : '没有待审批的补签'}
+          tone={data.summary.unresolvedCount ? 'soft' : 'plain'}
+          icon="alert"
+        />
+      </div>
+
+      <Panel
+        title={isToday ? '正在店里' : '当天仍在计时'}
+        description="从到店确认开始实时计时。超过 16 小时未离店会自动转为待补签。"
+        flush
+      >
+        {!data.onDuty.length ? (
+          <EmptyState
+            icon="clock"
+            title={isToday ? '此刻没有人在店里计时' : '这一天没有仍在计时的时段'}
+            description={`${data.date} 的到店记录会出现在下面；如果人明明在店里却没有记录，多半是忘了点到店确认。`}
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>员工</th>
+                  <th>门店</th>
+                  <th>到店</th>
+                  <th className="num">已计时</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.onDuty.map((row) => (
+                  <tr key={row.userId}>
+                    <td>{row.name}</td>
+                    <td className="tiny muted">{row.storeName}</td>
+                    <td className="tiny">{dateTimeText(row.clockInAt)}</td>
+                    <td className="num mono">{elapsedText(row.clockInAt, now)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <Panel
+        title="未闭合的时段"
+        description="待补签的时段不计工时；员工提交补签后进入审批中心，通过的才会补记。"
+        flush
+      >
+        {!data.unresolved.length ? (
+          <EmptyState icon="check" title="全部时段都闭合了" description="今天没有忘记离店的情况。" />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>员工</th>
+                  <th>门店</th>
+                  <th>到店</th>
+                  <th>状态</th>
+                  <th className="num">已过时长</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.unresolved.map((row) => (
+                  <tr key={row.sessionId}>
+                    <td>{row.name}</td>
+                    <td className="tiny muted">{row.storeName}</td>
+                    <td className="tiny">{dateTimeText(row.clockInAt)}</td>
+                    <td>
+                      <Badge tone={sessionTone(row.status)}>{SESSION_LABEL[row.status] || row.status}</Badge>
+                    </td>
+                    <td className="num">
+                      {row.status === 'open' ? (
+                        <span className="mono">{elapsedText(row.clockInAt, now)}</span>
+                      ) : (
+                        <span className="muted">{durationText(row.liveMinutes || 0)}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <Panel title={`按人汇总 · ${data.date}`} description="同一人当天多段会累加；跨店时括号里注明门店。" flush>
+        {!data.rows.length ? (
+          <EmptyState icon="users" title="这一天没有在店记录" description="换一天或换门店看看。" />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>员工</th>
+                  <th>门店</th>
+                  <th className="num">段数</th>
+                  <th className="num">已计入</th>
+                  <th className="num">进行中</th>
+                  <th className="num">未闭合</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((row) => (
+                  <tr key={row.userId}>
+                    <td>{row.name}</td>
+                    <td className="tiny muted">{row.storeNames.join('、') || '—'}</td>
+                    <td className="num">{row.sessions.length}</td>
+                    <td className="num">{durationText(row.minutes)}</td>
+                    <td className="num muted">{row.liveMinutes ? durationText(row.liveMinutes) : '—'}</td>
+                    <td className="num">
+                      {row.unresolved ? (
+                        <Badge tone="warn">{row.unresolved}</Badge>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <div className="notice">
+        <Icon name="info" size={15} />
+        <span>
+          工时按「已结束」的时段累加，跨零点会拆到两天。看板只反映计时情况，
+          工资结算以月底的工时结算单为准。
+        </span>
+      </div>
+    </>
+  );
+}
 
 function LossesPage() {
   const { can } = useStaffAuth();
@@ -2764,15 +3004,28 @@ function CouponsPage() {
   if (!data) return null;
 
   const categories = catalog.data?.categories || [];
+  const products = catalog.data?.products || [];
   const categoryName = (id: string | null) =>
     categories.find((item) => item.id === id)?.name || '指定品类';
+  const productName = (id: string | null) => products.find((item) => item.id === id)?.name || '指定单品';
+  const scopeText = (coupon: Coupon) =>
+    coupon.scope === 'product'
+      ? `单品券 · ${productName(coupon.productId)}`
+      : coupon.scope === 'category'
+        ? `品类券 · ${categoryName(coupon.categoryId)}`
+        : '全场通用';
+  const validityText = (coupon: Coupon) =>
+    coupon.validDays > 0
+      ? `领取后 ${coupon.validDays} 天有效 · 活动截止 ${dateText(coupon.validTo)}`
+      : `固定有效期 ${dateText(coupon.validFrom)} 至 ${dateText(coupon.validTo)}`;
   const totals = data.coupons.reduce(
     (acc, row) => ({
       issued: acc.issued + (row.issued || 0),
       used: acc.used + (row.used || 0),
-      available: acc.available + (row.available || 0)
+      available: acc.available + (row.available || 0),
+      claimed: acc.claimed + (row.claimed || 0)
     }),
-    { issued: 0, used: 0, available: 0 }
+    { issued: 0, used: 0, available: 0, claimed: 0 }
   );
 
   const toggle = async (coupon: Coupon) => {
@@ -2793,7 +3046,7 @@ function CouponsPage() {
       <PageHead
         eyebrow="品牌总部 · 会员权益"
         title="优惠券"
-        description="按通用或指定品类创建券，限定有效期与使用门槛；发放时按手机号定位会员，顾客在小程序下单时抵扣。"
+        description="按全场、品类或单品创建券，可选固定有效期或领取后 N 天有效；发放时按手机号定位会员，也可开放会员自助领取，或交给自动化规则按人群发放。"
         meta={<span>{data.coupons.length} 个券模板</span>}
         actions={
           managed ? (
@@ -2805,7 +3058,7 @@ function CouponsPage() {
       />
       <div className="stat-grid">
         <Stat label="券模板" value={data.coupons.length} hint="含已停用" tone="dark" icon="megaphone" />
-        <Stat label="已发放" value={totals.issued} hint="按手机号发到会员" />
+        <Stat label="已发放" value={totals.issued} hint={`其中自助领取 ${totals.claimed}`} />
         <Stat label="已使用" value={totals.used} hint="支付成功后才核销" />
         <Stat label="可再用" value={totals.available} hint="未使用的券张数" />
       </div>
@@ -2819,16 +3072,24 @@ function CouponsPage() {
             <div className="mapping-row" key={coupon.id}>
               <span className="mapping-ext">{money(coupon.amountCents)}</span>
               <span className="grow">
-                <strong>{coupon.title}</strong>
+                <strong>
+                  {coupon.title}
+                  {coupon.claimable ? (
+                    <span className="faint tiny" style={{ marginLeft: 8 }}>
+                      可自助领取 · 每人限 {coupon.claimLimit} 张
+                    </span>
+                  ) : null}
+                </strong>
                 <span className="faint tiny" style={{ display: 'block', marginTop: 2 }}>
-                  {coupon.scope === 'category' ? categoryName(coupon.categoryId) : '通用券'}
+                  {scopeText(coupon)}
                   {coupon.minSpendCents > 0 ? ` · 满 ${money(coupon.minSpendCents)} 可用` : ' · 无门槛'}
-                  {` · ${dateText(coupon.validFrom)} 至 ${dateText(coupon.validTo)}`}
+                  {` · ${validityText(coupon)}`}
                 </span>
               </span>
               <Badge tone={coupon.active ? 'ok' : 'danger'}>{coupon.active ? '生效中' : '已停用'}</Badge>
               <span className="faint tiny">
                 发 {coupon.issued || 0} · 用 {coupon.used || 0}
+                {coupon.revoked ? ` · 作废 ${coupon.revoked}` : ''}
               </span>
               {managed ? (
                 <div className="row-gap">
@@ -2861,12 +3122,14 @@ function CouponsPage() {
           ) : null}
         </div>
       </Panel>
+      <CouponRulesPanel coupons={data.coupons} />
       <p className="page-foot-note">
-        券的面额、门槛、品类与有效期由服务端在下单时再次核验；停用后未使用的券立即失效，已使用的记录保留。
+        券的面额、门槛、范围与有效期由服务端在下单时再次核验；领取后 N 天的券在发放那一刻固化到期时间，后续改动模板不会延长已发出去的券。停用后未使用的券立即失效，已使用的记录保留。
       </p>
       <CouponCreateModal
         open={creating}
         categories={categories}
+        products={products}
         onClose={() => setCreating(false)}
         onSaved={() => {
           setCreating(false);
@@ -2883,24 +3146,358 @@ function CouponsPage() {
   );
 }
 
+const RULE_TIER_LABEL: Record<CouponRule['tier'], string> = {
+  all: '全部会员',
+  standard: '普通会员',
+  annual: 'Full愈大会员'
+};
+
+function ruleConfigText(rule: CouponRule): string {
+  if (rule.kind === 'birthday') {
+    const days = rule.config.daysBefore ?? 0;
+    return days > 0 ? `生日前 ${days} 天发放，一年一张` : '生日当天发放，一年一张';
+  }
+  if (rule.kind === 'welcome') {
+    return `注册后 ${rule.config.withinDays ?? 7} 天内、尚无支付订单的会员，一次一张`;
+  }
+  return `${rule.config.inactiveDays ?? 60} 天没来消费、且至少有 ${rule.config.minOrders ?? 1} 笔已支付订单，${rule.config.inactiveDays ?? 60} 天一次`;
+}
+
+function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
+  const { can } = useStaffAuth();
+  const notify = useToast();
+  const confirm = useConfirm();
+  const query = useApi(() => api.adminCouponRules(), []);
+  const [creating, setCreating] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<Record<string, CouponRulePreview>>({});
+  const managed = can('coupon:manage');
+
+  if (query.loading && !query.data) return <Spinner label="正在读取自动发券规则" />;
+  const rules = query.data?.rules || [];
+
+  const preview = async (rule: CouponRule) => {
+    setBusy(`preview:${rule.id}`);
+    try {
+      const result = await api.adminPreviewCouponRule(rule.id);
+      setPreviews((current) => ({ ...current, [rule.id]: result }));
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '预览失败', 'danger');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const run = async (rule: CouponRule) => {
+    setBusy(`run:${rule.id}`);
+    try {
+      const { result } = await api.adminRunCouponRule(rule.id);
+      notify(
+        result.replayed
+          ? `「${rule.couponTitle}」今天已经跑过，不会重复发券`
+          : `命中 ${result.targetCount} 人，实际发券 ${result.issued} 张` +
+              (result.skipped ? `，跳过 ${result.skipped} 人` : ''),
+        result.replayed ? 'info' : 'ok'
+      );
+      setPreviews((current) => {
+        const next = { ...current };
+        delete next[rule.id];
+        return next;
+      });
+      query.reload({ silent: true });
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '执行失败', 'danger');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const toggleEnabled = async (rule: CouponRule, enabled: boolean) => {
+    setBusy(`toggle:${rule.id}`);
+    try {
+      await api.adminUpdateCouponRule(rule.id, { enabled });
+      notify(enabled ? '规则已启用' : '规则已暂停', 'ok');
+      query.reload({ silent: true });
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '操作失败', 'danger');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async (rule: CouponRule) => {
+    const ok = await confirm({
+      title: '删除这条发券规则？',
+      message: `「${rule.kindLabel} · ${rule.couponTitle}」删除后不再自动发券，已发出去的券不受影响。`,
+      confirmText: '删除规则',
+      tone: 'danger'
+    });
+    if (!ok) return;
+    setBusy(`delete:${rule.id}`);
+    try {
+      await api.adminDeleteCouponRule(rule.id);
+      notify('规则已删除', 'ok');
+      query.reload({ silent: true });
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '删除失败', 'danger');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <>
+      <Panel
+        eyebrow="自动化"
+        title="自动发券规则"
+        description="每天凌晨自动扫描命中人群：生日关怀、新客欢迎、沉睡唤回。同一会员同一个规则周期内只会发一张，手动执行也只补发缺的那部分。"
+        flush
+        actions={
+          managed ? (
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setCreating(true)}>
+              <Icon name="plus" size={14} /> 新建规则
+            </button>
+          ) : null
+        }
+      >
+        <div className="mapping-list" style={{ padding: '4px 20px 12px' }}>
+          {rules.map((rule) => {
+            const result = previews[rule.id];
+            return (
+              <div className="mapping-row" key={rule.id}>
+                <span className="mapping-ext">{rule.kindLabel}</span>
+                <span className="grow">
+                  <strong>{rule.couponTitle}</strong>
+                  <span className="faint tiny" style={{ display: 'block', marginTop: 2 }}>
+                    {ruleConfigText(rule)}
+                    {` · ${RULE_TIER_LABEL[rule.tier]}`}
+                    {` · 已发 ${rule.totalIssued} 张`}
+                    {rule.lastRunAt ? ` · 上次 ${dateText(rule.lastRunAt)} 发 ${rule.lastRunIssued}` : ' · 还没跑过'}
+                  </span>
+                  {result ? (
+                    <span className="faint tiny" style={{ display: 'block', marginTop: 2 }}>
+                      本期命中 {result.count} 人：将发 {result.willIssue} 张；本周期已发{' '}
+                      {result.alreadyThisPeriod} 人；手持同款券 {result.held} 人。
+                    </span>
+                  ) : null}
+                </span>
+                <Badge tone={rule.enabled ? 'ok' : 'neutral'}>{rule.enabled ? '每日执行' : '已暂停'}</Badge>
+                {managed ? (
+                  <div className="row-gap">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      disabled={busy === `preview:${rule.id}`}
+                      onClick={() => preview(rule)}
+                    >
+                      预览
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      disabled={busy === `run:${rule.id}` || !rule.enabled}
+                      onClick={() => run(rule)}
+                    >
+                      立即执行
+                    </button>
+                    <Switch
+                      checked={rule.enabled}
+                      label={`${rule.kindLabel}规则启用状态`}
+                      onChange={(next) => toggleEnabled(rule, next)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      disabled={busy === `delete:${rule.id}`}
+                      onClick={() => remove(rule)}
+                    >
+                      删除
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+          {!rules.length ? (
+            <EmptyState
+              icon="megaphone"
+              title="还没有自动规则"
+              description="生日、新客、沉睡唤回都可以交给规则每天自动发放，不用再手动按手机号发券。"
+            />
+          ) : null}
+        </div>
+      </Panel>
+      <CouponRuleModal
+        open={creating}
+        coupons={coupons.filter((coupon) => coupon.active)}
+        onClose={() => setCreating(false)}
+        onSaved={() => {
+          setCreating(false);
+          notify('自动发券规则已创建', 'ok');
+          query.reload({ silent: true });
+        }}
+      />
+    </>
+  );
+}
+
+function CouponRuleModal({
+  open,
+  coupons,
+  onClose,
+  onSaved
+}: {
+  open: boolean;
+  coupons: Coupon[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [couponId, setCouponId] = useState('');
+  const [kind, setKind] = useState<CouponRuleKind>('birthday');
+  const [tier, setTier] = useState<CouponRule['tier']>('all');
+  const [daysBefore, setDaysBefore] = useState('0');
+  const [withinDays, setWithinDays] = useState('7');
+  const [inactiveDays, setInactiveDays] = useState('60');
+  const [minOrders, setMinOrders] = useState('1');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setCouponId(coupons[0]?.id || '');
+    setKind('birthday');
+    setTier('all');
+    setDaysBefore('0');
+    setWithinDays('7');
+    setInactiveDays('60');
+    setMinOrders('1');
+    setNote('');
+    setError(null);
+  }, [open, coupons]);
+
+  const save = async () => {
+    if (!couponId) return setError('请选择要发放的券');
+    const config =
+      kind === 'birthday'
+        ? { daysBefore: Math.round(Number(daysBefore || 0)) }
+        : kind === 'welcome'
+          ? { withinDays: Math.round(Number(withinDays || 0)) }
+          : { inactiveDays: Math.round(Number(inactiveDays || 0)), minOrders: Math.round(Number(minOrders || 1)) };
+    if (kind === 'welcome' && !(config as { withinDays: number }).withinDays) setError('新客窗口需大于 0 天');
+    if (kind === 'winback' && !(config as { inactiveDays: number }).inactiveDays) setError('沉睡天数需大于 0');
+    setBusy(true);
+    setError(null);
+    try {
+      await api.adminCreateCouponRule({ couponId, kind, tier, config, note: note.trim() || undefined });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '创建失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      title="新建自动发券规则"
+      description="规则创建后立即生效，每天自动扫描；也可以随时手动执行一次。"
+      onClose={busy ? () => undefined : onClose}
+      footer={
+        <>
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
+            取消
+          </button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={save}>
+            {busy ? '保存中…' : '创建规则'}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid">
+        <Field label="规则类型" className="span-2">
+          <Segmented
+            value={kind}
+            ariaLabel="规则类型"
+            options={[
+              { value: 'birthday', label: '生日关怀' },
+              { value: 'welcome', label: '新客欢迎' },
+              { value: 'winback', label: '沉睡唤回' }
+            ]}
+            onChange={(next) => setKind(next)}
+          />
+        </Field>
+        <Field label="发放的券" className="span-2" hint="只列出生效中的券模板。">
+          <select value={couponId} onChange={(event) => setCouponId(event.target.value)}>
+            {coupons.map((coupon) => (
+              <option key={coupon.id} value={coupon.id}>
+                {money(coupon.amountCents)} · {coupon.title}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {kind === 'birthday' ? (
+          <Field label="提前天数" hint="0 表示生日当天发放。">
+            <input inputMode="numeric" value={daysBefore} onChange={(event) => setDaysBefore(event.target.value)} />
+          </Field>
+        ) : null}
+        {kind === 'welcome' ? (
+          <Field label="注册后多少天内">
+            <input inputMode="numeric" value={withinDays} onChange={(event) => setWithinDays(event.target.value)} />
+          </Field>
+        ) : null}
+        {kind === 'winback' ? (
+          <>
+            <Field label="多少天没消费">
+              <input inputMode="numeric" value={inactiveDays} onChange={(event) => setInactiveDays(event.target.value)} />
+            </Field>
+            <Field label="最少历史订单数">
+              <input inputMode="numeric" value={minOrders} onChange={(event) => setMinOrders(event.target.value)} />
+            </Field>
+          </>
+        ) : null}
+        <Field label="会员层级">
+          <select value={tier} onChange={(event) => setTier(event.target.value as CouponRule['tier'])}>
+            <option value="all">全部会员</option>
+            <option value="standard">普通会员</option>
+            <option value="annual">Full愈大会员</option>
+          </select>
+        </Field>
+        <Field label="内部备注" hint="仅总部可见。">
+          <input value={note} maxLength={200} onChange={(event) => setNote(event.target.value)} />
+        </Field>
+      </div>
+      <InlineError message={error} />
+    </Modal>
+  );
+}
+
 function CouponCreateModal({
   open,
   categories,
+  products,
   onClose,
   onSaved
 }: {
   open: boolean;
   categories: Category[];
+  products: Product[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [title, setTitle] = useState('');
-  const [scope, setScope] = useState<'all' | 'category'>('all');
+  const [scope, setScope] = useState<'all' | 'category' | 'product'>('all');
   const [categoryId, setCategoryId] = useState('');
+  const [productId, setProductId] = useState('');
   const [amount, setAmount] = useState('10');
   const [minSpend, setMinSpend] = useState('0');
+  const [validityMode, setValidityMode] = useState<'fixed' | 'days'>('fixed');
   const [validFrom, setValidFrom] = useState(todayText());
   const [validTo, setValidTo] = useState(dateText(Date.now() + 29 * 86400000));
+  const [validDays, setValidDays] = useState('7');
+  const [claimable, setClaimable] = useState(false);
+  const [claimLimit, setClaimLimit] = useState('1');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2910,22 +3507,37 @@ function CouponCreateModal({
     setTitle('');
     setScope('all');
     setCategoryId(categories[0]?.id || '');
+    setProductId(products[0]?.id || '');
     setAmount('10');
     setMinSpend('0');
+    setValidityMode('fixed');
     setValidFrom(todayText());
     setValidTo(dateText(Date.now() + 29 * 86400000));
+    setValidDays('7');
+    setClaimable(false);
+    setClaimLimit('1');
     setNote('');
     setError(null);
-  }, [open, categories]);
+  }, [open, categories, products]);
 
   const save = async () => {
     const amountCents = Math.round(Number(amount) * 100);
     const minSpendCents = Math.round(Number(minSpend || 0) * 100);
+    const days = Math.round(Number(validDays || 0));
     if (!title.trim()) return setError('请填写券名称');
     if (!Number.isFinite(amountCents) || amountCents <= 0) return setError('券面额必须大于 0');
     if (!Number.isFinite(minSpendCents) || minSpendCents < 0) return setError('使用门槛不能为负数');
     if (scope === 'category' && !categoryId) return setError('指定品类券需要选择分类');
-    if (!validFrom || !validTo || validFrom > validTo) return setError('有效期结束需晚于开始');
+    if (scope === 'product' && !productId) return setError('指定单品券需要选择商品');
+    if (validityMode === 'fixed' && (!validFrom || !validTo || validFrom > validTo)) {
+      return setError('有效期结束需晚于开始');
+    }
+    if (validityMode === 'days' && (!Number.isFinite(days) || days < 1 || days > 365)) {
+      return setError('领取后有效天数需在 1~365 之间');
+    }
+    if (claimable && !(Number(claimLimit) >= 1 && Number(claimLimit) <= 99)) {
+      return setError('每人领取上限需在 1~99 之间');
+    }
     setBusy(true);
     setError(null);
     try {
@@ -2933,10 +3545,14 @@ function CouponCreateModal({
         title: title.trim(),
         scope,
         categoryId: scope === 'category' ? categoryId : null,
+        productId: scope === 'product' ? productId : null,
         amountCents,
         minSpendCents,
-        validFrom,
+        validFrom: validityMode === 'fixed' ? validFrom : todayText(),
         validTo,
+        validDays: validityMode === 'days' ? days : 0,
+        claimable,
+        claimLimit: claimable ? Math.round(Number(claimLimit)) : 1,
         note: note.trim() || undefined
       });
       onSaved();
@@ -2974,7 +3590,8 @@ function CouponCreateModal({
             ariaLabel="适用范围"
             options={[
               { value: 'all', label: '全场通用' },
-              { value: 'category', label: '指定品类' }
+              { value: 'category', label: '指定品类' },
+              { value: 'product', label: '指定单品' }
             ]}
             onChange={(next) => setScope(next)}
           />
@@ -2990,18 +3607,61 @@ function CouponCreateModal({
             </select>
           </Field>
         ) : null}
+        {scope === 'product' ? (
+          <Field label="适用单品" className="span-2" hint="只有这张券指定的商品才能抵扣；茶单和零售商品都可以选。">
+            <select value={productId} onChange={(event) => setProductId(event.target.value)}>
+              {products.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {money(item.priceCents)} · {item.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : null}
         <Field label="券面额（元）">
           <input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} />
         </Field>
         <Field label="使用门槛（元）" hint="填 0 表示无门槛。">
           <input inputMode="decimal" value={minSpend} onChange={(event) => setMinSpend(event.target.value)} />
         </Field>
-        <Field label="生效日">
-          <input type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} />
+        <Field label="有效期方式" className="span-2">
+          <Segmented
+            value={validityMode}
+            ariaLabel="有效期方式"
+            options={[
+              { value: 'fixed', label: '固定日期区间' },
+              { value: 'days', label: '领取后 N 天' }
+            ]}
+            onChange={(next) => setValidityMode(next)}
+          />
         </Field>
-        <Field label="失效日">
-          <input type="date" value={validTo} onChange={(event) => setValidTo(event.target.value)} />
+        {validityMode === 'fixed' ? (
+          <>
+            <Field label="生效日">
+              <input type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} />
+            </Field>
+            <Field label="失效日">
+              <input type="date" value={validTo} onChange={(event) => setValidTo(event.target.value)} />
+            </Field>
+          </>
+        ) : (
+          <>
+            <Field label="领取后有效天数" hint="从发放那一刻算起，写入每张券，不随模板改动。">
+              <input inputMode="numeric" value={validDays} onChange={(event) => setValidDays(event.target.value)} />
+            </Field>
+            <Field label="活动截止日" hint="领取后 N 天与这个日期取较早者。">
+              <input type="date" value={validTo} onChange={(event) => setValidTo(event.target.value)} />
+            </Field>
+          </>
+        )}
+        <Field label="开放自助领取" className="span-2" hint="打开后，会员在小程序「我的券」里可以直接领取，每人限领下方张数。">
+          <Switch checked={claimable} label="开放自助领取" onChange={setClaimable} />
         </Field>
+        {claimable ? (
+          <Field label="每人限领（张）">
+            <input inputMode="numeric" value={claimLimit} onChange={(event) => setClaimLimit(event.target.value)} />
+          </Field>
+        ) : null}
         <Field label="内部备注" className="span-2" hint="仅总部可见，不会展示给顾客。">
           <input value={note} maxLength={200} onChange={(event) => setNote(event.target.value)} />
         </Field>
@@ -3114,26 +3774,25 @@ function CouponIssueModal({
  * 二维码内容是 https 链接，微信识别后打开 pages/index/index，并把原链接放进 q 参数。
  * 这里只保存链接前缀；能否真正拉起取决于公网域名备案、规则发布与小程序正式版。
  */
-function SeatQrPanel({ onChange }: { onChange: (baseUrl: string) => void }) {
+function SeatQrPanel() {
   const { can } = useStaffAuth();
   const notify = useToast();
   const query = useApi(() => api.adminSeatQr(), []);
   const editable = can('store:config:edit');
   const [baseUrl, setBaseUrl] = useState('');
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (!query.data) return;
     setBaseUrl(query.data.baseUrl);
-    onChange(query.data.baseUrl);
-  }, [query.data, onChange]);
+  }, [query.data]);
 
   const save = async (next: string) => {
     setBusy(true);
     try {
       const result = await api.adminSaveSeatQr(next.trim());
       setBaseUrl(result.baseUrl);
-      onChange(result.baseUrl);
       notify(
         result.baseUrl
           ? '已保存链接前缀，重新下载桌签即可使用；微信规则发布后扫码才直接打开小程序。'
@@ -3154,9 +3813,27 @@ function SeatQrPanel({ onChange }: { onChange: (baseUrl: string) => void }) {
     <Panel
       eyebrow="门店 · 桌签"
       title="微信原生扫一扫"
-      description="普通二维码不能直接拉起小程序。填写一个已通过 ICP 备案、并在微信公众平台登记了「扫普通链接二维码打开小程序」规则的链接前缀后，桌签二维码会改为链接码：规则发布后，顾客用微信「扫一扫」直接打开小程序，并自动选中本店本桌、默认店内享用；规则发布前，同一链接会打开顾客端 H5 预览（可浏览茶单，不能下单），不会进入本后台。"
-      actions={<Badge tone={active ? 'ok' : 'neutral'}>{active ? '链接码已启用' : '小程序内扫码'}</Badge>}
+      description={
+        active
+          ? `当前桌签为 https 链接码，前缀 ${baseUrl}；微信「扫一扫」直接打开小程序并选中本店本桌。`
+          : '当前桌签为「门店ID|位置」纯文本码，只有在小程序内点「扫桌签」才能识别。'
+      }
+      actions={
+        <div className="row-gap">
+          <Badge tone={active ? 'ok' : 'neutral'}>{active ? '链接码已启用' : '小程序内扫码'}</Badge>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setOpen((value) => !value)}>
+            {open ? '收起设置' : '展开设置'}
+          </button>
+        </div>
+      }
     >
+      {!open ? (
+        <p className="faint tiny" style={{ margin: 0, lineHeight: 1.7 }}>
+          普通二维码不能直接拉起小程序：先在微信公众平台登记「扫普通链接二维码打开小程序」规则，再在这里填写链接前缀即可。
+          这是全局设置，展开后可填写前缀或恢复纯文本码。
+        </p>
+      ) : (
+        <>
       {query.loading && !query.data ? (
         <Spinner label="正在读取桌签扫码配置" />
       ) : query.error && !query.data ? (
@@ -3217,40 +3894,66 @@ function SeatQrPanel({ onChange }: { onChange: (baseUrl: string) => void }) {
           ? '当前桌签内容为 https 链接，小程序内直接扫同一张码也能识别。微信规则发布前，微信「扫一扫」会打开 H5 预览页；位置改名或删除后旧桌签会失效，需要重新下载打印。'
           : '未配置时桌签内容为「门店ID|位置」，只有在小程序内点「扫桌签」才能识别；微信原生「扫一扫」只会显示码内文本。'}
       </p>
+        </>
+      )}
     </Panel>
   );
+}
+
+/** 桌签链接前缀只用于详情页的文案与桌签内容提示；切换列表/详情时重新取一次。 */
+function useSeatQrBase(reloadKey: string) {
+  const query = useApi(() => api.adminSeatQr(), [reloadKey]);
+  const [base, setBase] = useState('');
+  useEffect(() => {
+    if (query.data) setBase(query.data.baseUrl);
+  }, [query.data]);
+  return base;
 }
 
 function StoresPage() {
   const { can } = useStaffAuth();
   const notify = useToast();
   const query = useApi(() => api.adminStores(), []);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
-  const [seatQrBase, setSeatQrBase] = useState('');
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<'all' | 'open' | 'closed'>('all');
   const editable = can('store:config:edit');
+
+  // /admin/stores/:id 复用同一节菜单，避免新增一级菜单；详情本身就是「维护」子页。
+  const detailId = (location.pathname.replace(/^\/admin\/stores\/?/, '').split('/')[0] || '').trim();
+  const seatQrBase = useSeatQrBase(detailId);
 
   if (query.loading && !query.data) return <Spinner label="正在读取门店" />;
   if (query.error && !query.data) return <InlineError message={query.error} />;
   const data = query.data;
   if (!data) return null;
 
-  return (
-    <>
-      <PageHead
-        eyebrow="品牌总部 · 门店"
-        title="门店配置"
-        description="维护门店身份、地址、营业状态、下单渠道、取餐位置与标签机。门店账号只可调整本店库存与售罄，不修改总部配置。"
-        meta={<span>{data.stores.length} 家门店</span>}
-        actions={
-          editable ? (
-            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
-              新增门店
-            </button>
-          ) : null
-        }
-      />
-      <SeatQrPanel onChange={setSeatQrBase} />
-      {data.stores.map((store) => (
+  const backToList = () => navigate('/admin/stores');
+
+  if (detailId) {
+    const store = data.stores.find((item) => item.id === detailId);
+    if (!store) {
+      return (
+        <>
+          <PageHead
+            eyebrow="品牌总部 · 门店"
+            title="门店不存在"
+            description="门店可能已被删除，或这条链接已经过期。"
+          />
+          <EmptyState icon="store" title="找不到这家门店" description={`门店 ID：${detailId}`} action={<button type="button" className="btn btn-primary" onClick={backToList}>返回门店列表</button>} />
+        </>
+      );
+    }
+    return (
+      <>
+        <div className="detail-bar">
+          <button type="button" className="btn btn-sm btn-ghost" onClick={backToList}>
+            ← 返回门店列表
+          </button>
+          <span className="faint tiny">共 {data.stores.length} 家门店</span>
+        </div>
         <StoreCard
           key={store.id}
           store={store}
@@ -3261,7 +3964,102 @@ function StoresPage() {
             query.reload({ silent: true });
           }}
         />
-      ))}
+      </>
+    );
+  }
+
+  const keyword = search.trim().toLowerCase();
+  const filtered = data.stores.filter((store) => {
+    if (status === 'open' && !store.open) return false;
+    if (status === 'closed' && store.open) return false;
+    if (!keyword) return true;
+    return [store.name, store.nameEn, store.short, store.city, store.cityEn, store.address, store.id]
+      .filter(Boolean)
+      .some((text) => String(text).toLowerCase().includes(keyword));
+  });
+  const openCount = data.stores.filter((store) => store.open).length;
+
+  return (
+    <>
+      <PageHead
+        eyebrow="品牌总部 · 门店"
+        title="门店配置"
+        description="列表只显示关键状态，默认收起；门店资料、营业设置、取餐位置与桌签都进详情页维护。门店账号只可调整本店库存与售罄，不修改总部配置。"
+        meta={
+          <span>
+            {data.stores.length} 家门店 · {openCount} 家营业中
+          </span>
+        }
+        actions={
+          editable ? (
+            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+              新增门店
+            </button>
+          ) : null
+        }
+      />
+      <Panel
+        title="门店列表"
+        description="点门店名称或右侧按钮进入详情页维护。"
+        actions={
+          <div className="toolbar">
+            <div className="search">
+              <Icon name="search" size={15} />
+              <input
+                value={search}
+                placeholder="搜索门店 / 城市 / 地址"
+                aria-label="搜索门店"
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+            <Segmented
+              ariaLabel="筛选营业状态"
+              value={status}
+              options={[
+                { value: 'all' as const, label: '全部' },
+                { value: 'open' as const, label: '营业中' },
+                { value: 'closed' as const, label: '未营业' }
+              ]}
+              onChange={setStatus}
+            />
+          </div>
+        }
+        flush
+      >
+        {filtered.length ? (
+          <ul className="store-admin-list">
+            {filtered.map((store) => (
+              <li className="store-admin-row" key={store.id}>
+                <button type="button" className="store-admin-row-main" onClick={() => navigate(`/admin/stores/${store.id}`)}>
+                  <span className="store-admin-row-title">
+                    {store.name}
+                    <span className="faint tiny">{store.nameEn}</span>
+                  </span>
+                  <span className="faint tiny">
+                    {store.city} · {store.address} · {store.hours}
+                  </span>
+                </button>
+                <div className="store-admin-row-meta">
+                  <Badge tone={store.open ? 'ok' : 'warn'}>{store.open ? '营业中' : '未营业'}</Badge>
+                  {store.retailPickup ? <Badge tone="accent">零售提货</Badge> : null}
+                  <span className="faint tiny">{store.positions.length} 个取餐位置</span>
+                  <Badge tone={store.printerStatus === 'online' ? 'ok' : 'warn'}>
+                    标签机{store.printerStatus === 'online' ? '在线' : '离线'}
+                  </Badge>
+                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => navigate(`/admin/stores/${store.id}`)}>
+                    {editable ? '维护资料' : '查看资料'}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="store-admin-empty">
+            <EmptyState icon="store" title="没有匹配的门店" description="换个关键词，或把筛选切回「全部」。" />
+          </div>
+        )}
+      </Panel>
+      <SeatQrPanel />
       <StoreCreateDrawer
         open={creating}
         onClose={() => setCreating(false)}
@@ -3934,7 +4732,7 @@ function StaffPage() {
         }}
       />
       <p className="page-foot-note">
-        新建账号使用 6–20 位数字手机号作为登录名，初始密码至少 8 位，建议首次登录后由本人修改。账号停用后无法登录，但历史操作记录保留。
+        新建账号使用 6–20 位数字手机号作为登录名，初始密码必填、不限制长度，建议首次登录后由本人修改。账号停用后无法登录，但历史操作记录保留。
       </p>
     </>
   );
@@ -4034,8 +4832,7 @@ function StaffDrawer({
   if (isNew && !/^\d{6,20}$/.test(username.trim())) {
     issues.push({ field: 'username', message: '登录账号需为 6–20 位数字手机号' });
   }
-  if (isNew && password.length < 8) issues.push({ field: 'password', message: '初始密码至少 8 位' });
-  if (!isNew && password && password.length < 8) issues.push({ field: 'password', message: '密码至少 8 位，留空表示不修改' });
+  if (isNew && !password) issues.push({ field: 'password', message: '请填写初始密码' });
   if (password.length > 72) issues.push({ field: 'password', message: '密码最多 72 位' });
   if (!roleIds.length) issues.push({ field: 'roles', message: '请至少选择一个角色' });
   if (!allStores && !storeIds.length) issues.push({ field: 'stores', message: '请至少选择一个门店，或开启全部门店' });
@@ -4106,7 +4903,7 @@ function StaffDrawer({
         </Field>
         <Field
           label={isNew ? '初始密码' : '重置密码'}
-          hint="至少 8 位；编辑时留空表示不修改。"
+          hint={isNew ? '不限长度；建议首次登录后由本人修改。' : '编辑时留空表示不修改。'}
           error={fieldError('password')}
         >
           <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" />

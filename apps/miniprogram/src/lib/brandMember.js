@@ -1,7 +1,7 @@
 import { request } from '../api/request';
 
 /**
- * 品牌会员（Full愈年卡）客户端适配层。
+ * 品牌会员（Full愈大会员）客户端适配层。
  *
  * 线上只走时叙服务端代理（/customer/brand-member/*）：签名密钥只留在服务端，
  * 会员身份固定取当前登录顾客。会员身份、卡期、积分、骰子、产品目录与权益说明
@@ -36,6 +36,24 @@ export async function loadBrandProducts() {
   } catch (error) {
     return [];
   }
+}
+
+/**
+ * 入口报价：取 CRM 在售目录里最便宜的时长。
+ * 目录里有多个时长时前端才显示「起」，只有一个时长就报原价；
+ * 目录为空返回 null，页面宁可不显示金额，也不用本地价目表补位。
+ */
+export function entryPrice(products) {
+  const rows = (Array.isArray(products) ? products : []).filter(
+    (item) => item && Number.isFinite(Number(item.priceCents))
+  );
+  if (!rows.length) return null;
+  const cheapest = rows.reduce((low, item) => (Number(item.priceCents) < Number(low.priceCents) ? item : low));
+  return {
+    amountCents: Number(cheapest.priceCents),
+    validDays: Number(cheapest.validDays) || 0,
+    from: rows.length > 1
+  };
 }
 
 /**

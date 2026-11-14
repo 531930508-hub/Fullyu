@@ -302,19 +302,19 @@ export class AuthService {
   }
 
   /**
-   * 顾客资料维护：姓名、性别、生日。
+   * 顾客资料维护：性别、生日。
+   * 姓名以会员中心统一账号为准，小程序不再提供单独设置（旧客户端传上来的 name 会被忽略）。
    * 字段口径与在场一致（gender 1=男 2=女 null=未填写，birthday 精确到日），
    * 落库后交 ProfileSyncProvider 外推，待第三方用户中心接入时替换实现。
    */
   async updateCustomerProfile(
     customerId: string,
-    input: { name?: string; gender?: number | null; birthday?: string | null }
+    input: { gender?: number | null; birthday?: string | null }
   ) {
     const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
     if (!customer) throw unauthorized('顾客会话不存在');
 
-    const data: { name?: string; gender?: number | null; birthday?: Date | null } = {};
-    if (input.name !== undefined) data.name = normalizeName(input.name);
+    const data: { gender?: number | null; birthday?: Date | null } = {};
     if (input.gender !== undefined) data.gender = normalizeGender(input.gender);
     if (input.birthday !== undefined) data.birthday = normalizeBirthday(input.birthday);
     if (!Object.keys(data).length) throw badRequest('没有需要更新的资料');
@@ -369,7 +369,26 @@ export class AuthService {
     const perCupCents = await this.perkRates.perCupCents();
     if (!this.crm.enabled) return customerPayload(fresh, undefined, perCupCents);
     const member = await this.crm.resolve(this.crmIdentity(fresh));
-    return customerPayload(fresh, member.balance, perCupCents);
+    return customerPayload(await this.adoptCrmName(fresh, member.name), member.balance, perCupCents);
+  }
+
+  /**
+   * 姓名以 CRM 统一账号为准：回源拿到姓名后写回本地快照，
+   * 让小程序「我的」、店员扫码、小票等各处显示同一个名字。
+   * CRM 尚未取名（空值）时保留本地值，不把顾客的名字清空。
+   */
+  private async adoptCrmName<T extends CrmCustomer>(customer: T, crmName?: string | null): Promise<T> {
+    const name = String(crmName ?? '')
+      .replace(/[\r\n\t]/g, ' ')
+      .trim()
+      .slice(0, 30);
+    if (!name || name === customer.name) return customer;
+    try {
+      await this.prisma.customer.update({ where: { id: customer.id }, data: { name } });
+    } catch {
+      // 快照写回失败不影响本次读取：先按 CRM 姓名展示，下次回源再补写。
+    }
+    return { ...customer, name };
   }
 
   /**
@@ -425,13 +444,6 @@ function normalizePhone(value: string | undefined | null, countryCode?: string):
   if (/^\+861\d{10}$/.test(phone)) phone = phone.slice(3);
   if (/^1\d{10}$/.test(phone) || /^\+\d{7,15}$/.test(phone)) return phone;
   throw badRequest('请填写正确的手机号');
-}
-
-function normalizeName(value: string): string {
-  const name = String(value).replace(/[\r\n\t]/g, ' ').trim();
-  if (!name) throw badRequest('请填写姓名');
-  if (name.length > 12) throw badRequest('姓名不能超过 12 个字');
-  return name;
 }
 
 function normalizeGender(value: number | null): number | null {

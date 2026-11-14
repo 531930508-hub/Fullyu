@@ -146,6 +146,8 @@ export class StoreController {
         /** 顾客付款码：只透传给渠道，不落库、不写日志。 */
         authCode: z.string().trim().min(6).max(64).optional(),
         memberCode: z.string().max(40).optional(),
+        /** 自带杯杯数：营业台与顾客确认后填写，按杯减免，服务端再校验上限与适用范围。 */
+        byoCups: z.number().int().min(0).max(10).optional(),
         // 营业台断网/双击重试时用同一个键：同键同内容返回原单，同键异内容 409。
         idempotencyKey: z.string().trim().min(4).max(64).optional()
       }),

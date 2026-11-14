@@ -84,8 +84,8 @@ const cardPayload = (state: 'ACTIVE' | 'NONE') =>
         cardId: 'MBC-TEST-1',
         state: 'ACTIVE',
         productCode: 'FY_ANNUAL',
-        productName: 'Full愈年卡',
-        priceCents: 29900,
+        productName: 'Full愈大会员',
+        priceCents: 36500,
         validFrom: '2026-10-30',
         validUntil: '2027-10-29',
         remainingDays: 356,
@@ -223,17 +223,17 @@ export async function startFakeBrandCrm(options: {
         products: [
           {
             code: 'FY_MONTH',
-            name: 'Full愈月卡',
-            priceCents: 4500,
-            validDays: 30,
+            name: 'Full愈月会员',
+            priceCents: 9900,
+            validDays: 90,
             benefits: [],
             pointsSpend: {},
             gameEnabled: true
           },
           {
             code: 'FY_ANNUAL',
-            name: 'Full愈年卡',
-            priceCents: 29900,
+            name: 'Full愈大会员',
+            priceCents: 36500,
             validDays: 365,
             benefits: [],
             pointsSpend: {},
@@ -258,8 +258,8 @@ export async function startFakeBrandCrm(options: {
       reply(res, 201, {
         quoteId: `BCQ-TEST-${seq}`,
         productCode: input.productCode,
-        priceCents: input.productCode === 'FY_ANNUAL' ? 29900 : 4500,
-        validDays: input.productCode === 'FY_ANNUAL' ? 365 : 30,
+        priceCents: input.productCode === 'FY_ANNUAL' ? 36500 : 9900,
+        validDays: input.productCode === 'FY_ANNUAL' ? 365 : 90,
         expiresAt: '2026-11-08T11:12:00+08:00'
       });
       return;

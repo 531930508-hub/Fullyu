@@ -74,7 +74,7 @@ describe('BrandMemberClient', () => {
     expect(products.products.map((item) => item.code)).toEqual(['FY_MONTH', 'FY_ANNUAL']);
 
     const quote = await client.quote('CUST-200', 'FY_ANNUAL');
-    expect(quote.priceCents).toBe(29900);
+    expect(quote.priceCents).toBe(36500);
     const body = JSON.parse(fake.requests[1].body) as Record<string, unknown>;
     expect(body).toMatchObject({
       business: 'teahour',
@@ -89,7 +89,7 @@ describe('BrandMemberClient', () => {
     const result = await client.issue({
       quoteId: 'BCQ-TEST-9',
       orderRef: 'teahour:order:9',
-      paidCents: 29900,
+      paidCents: 36500,
       paidAt: '2026-11-08T10:42:00+08:00',
       idempotencyKey: 'teahour:order:9'
     });

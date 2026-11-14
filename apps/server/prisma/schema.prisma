@@ -243,42 +243,124 @@ model Customer {
 
 // ========== 优惠券 ==========
 
-/// 券模板：由总部创建，可通用或限定品类，带面额、门槛与有效期。
+/// 券模板：由总部创建，可通用或限定品类/单品，带面额、门槛与有效期。
+/// validFrom..validTo 是活动期（也是券的最晚可用期限）；validDays>0 时每张券按发放/领取时刻顺延 N 天，取两者较早。
 model Coupon {
   id            String   @id
   title         String
-  // all=全场通用；category=仅限指定商品品类
+  // all=全场通用；category=仅限指定商品品类；product=仅限指定单品
   scope         String   @default("all")
   categoryId    String?  @map("category_id")
+  productId     String?  @map("product_id")
   amountCents   Int      @map("amount_cents")
   minSpendCents Int      @default(0) @map("min_spend_cents")
   validFrom     DateTime @map("valid_from")
   validTo       DateTime @map("valid_to")
+  // 0=固定区间；>0=发放后 N 天有效（且不晚于 validTo）
+  validDays     Int      @default(0) @map("valid_days")
+  // 顾客能否在会员中心自助领取
+  claimable     Boolean  @default(false)
+  // 每人最多领取张数（仅自助领取生效）
+  claimLimit    Int      @default(1) @map("claim_limit")
   active        Boolean  @default(true)
   note          String   @default("")
   createdBy     String?  @map("created_by")
   createdAt     DateTime @default(now()) @map("created_at")
 
-  issued CustomerCoupon[]
+  issued  CustomerCoupon[]
+  batches CouponBatch[]
+  rules   CouponRule[]
 
+  @@index([claimable, validTo])
   @@map("coupons")
 }
 
-/// 顾客持券实例：available 可用 / reserved 已锁单待支付 / used 已使用。
+/// 自动化发券规则：生日当天、注册后 N 天、沉睡 N 天三类。
+/// config 为 JSON 文本（生日提前天数 / 注册后区间 / 沉睡天数与最少消费次数），避免频繁加列。
+model CouponRule {
+  id             String    @id
+  couponId       String    @map("coupon_id")
+  // birthday=生日；welcome=新客欢迎；winback=沉睡唤醒
+  kind           String
+  enabled        Boolean   @default(true)
+  tier           String    @default("all")
+  config         String    @default("{}")
+  note           String    @default("")
+  lastRunAt      DateTime? @map("last_run_at")
+  lastRunIssued  Int       @default(0) @map("last_run_issued")
+  lastRunSkipped Int       @default(0) @map("last_run_skipped")
+  createdBy      String?   @map("created_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  coupon Coupon           @relation(fields: [couponId], references: [id])
+  issued CustomerCoupon[]
+
+  @@index([enabled])
+  @@map("coupon_rules")
+}
+
+/// 发券批次：一次发放动作的可追溯记录，发券记录与撤回都以批次为单位。
+/// 幂等键 requestKey 保证运营重复点击只会产生一个批次。
+model CouponBatch {
+  id           String   @id
+  couponId     String   @map("coupon_id")
+  // manual=按手机号；segment=按会员条件；all=全部会员
+  source       String
+  // 目标人数 / 成功张数 / 跳过人数
+  requested    Int      @default(0)
+  issued       Int      @default(0)
+  skipped      Int      @default(0)
+  // 当时的筛选条件快照（JSON 文本），用于复盘「这批发给了谁」
+  filter       String   @default("")
+  requestKey   String   @unique @map("request_key")
+  note         String   @default("")
+  operatorId   String?  @map("operator_id")
+  operatorName String   @default("") @map("operator_name")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  coupon  Coupon           @relation(fields: [couponId], references: [id])
+  records CustomerCoupon[]
+
+  @@index([couponId, createdAt])
+  @@map("coupon_batches")
+}
+
+/// 顾客持券实例：available 可用 / reserved 已锁单待支付 / used 已使用 / revoked 已作废。
+/// 每张券落库时就固化 validFrom..validTo（发放后 N 天或券模板区间，取较早），
+/// 并快照会员等级、入会时间与累计消费单数，保证「发放时谁、处于什么等级」可回溯。
 model CustomerCoupon {
-  id         String    @id
-  couponId   String    @map("coupon_id")
-  customerId String    @map("customer_id")
-  status     String    @default("available")
-  issuedAt   DateTime  @default(now()) @map("issued_at")
-  usedAt     DateTime? @map("used_at")
-  orderId    String?   @map("order_id")
+  id           String    @id
+  couponId     String    @map("coupon_id")
+  customerId   String    @map("customer_id")
+  batchId      String?   @map("batch_id")
+  status       String    @default("available")
+  issuedAt     DateTime  @default(now()) @map("issued_at")
+  // 本张券的实际可用区间（由发放时刻与模板规则计算，之后不随模板改动）
+  validFrom    DateTime  @map("valid_from")
+  validTo      DateTime  @map("valid_to")
+  usedAt       DateTime? @map("used_at")
+  orderId      String?   @map("order_id")
+  revokedAt    DateTime? @map("revoked_at")
+  revokeReason String    @default("") @map("revoke_reason")
+  revokedBy    String?   @map("revoked_by")
+  // 发券时会员快照
+  memberTier   String    @default("") @map("member_tier")
+  memberSince  DateTime? @map("member_since")
+  orderCount   Int       @default(0) @map("order_count")
+  // 自动规则来源：同一规则同一周期（生日年份/月份/once）对同一会员只发一次
+  ruleId       String?   @map("rule_id")
+  rulePeriod   String    @default("") @map("rule_period")
 
-  coupon   Coupon   @relation(fields: [couponId], references: [id])
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  coupon   Coupon       @relation(fields: [couponId], references: [id])
+  customer Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  batch    CouponBatch? @relation(fields: [batchId], references: [id])
+  rule     CouponRule?  @relation(fields: [ruleId], references: [id], onDelete: SetNull)
 
+  @@unique([ruleId, customerId, rulePeriod])
   @@index([customerId, status])
   @@index([couponId, customerId])
+  @@index([couponId, validTo])
+  @@index([batchId, status])
   @@map("customer_coupons")
 }
 
@@ -300,6 +382,9 @@ model Order {
   couponId            String? @map("coupon_id")
   couponTitle         String? @map("coupon_title")
   couponDiscountCents Int     @default(0) @map("coupon_discount_cents")
+  // 自带杯优惠：只由营业台代点声明（顾客自带杯），按杯数逐杯减免，金额已分摊进订单行。
+  byoCupCups          Int     @default(0) @map("byo_cup_cups")
+  byoCupDiscountCents Int     @default(0) @map("byo_cup_discount_cents")
   pickupCode    String?   @map("pickup_code")
   pickupStoreId String?   @map("pickup_store_id")
   printStatus   String    @default("pending") @map("print_status")
@@ -344,6 +429,9 @@ model OrderItem {
   unitPriceCents Int     @map("unit_price_cents")
   totalCents     Int     @map("total_cents")
   costCents      Int     @map("cost_cents")
+  // 该行里享受自带杯减免的杯数与该行减免金额，便于对账与退款口径复核。
+  byoCupQty           Int @default(0) @map("byo_cup_qty")
+  byoCupDiscountCents Int @default(0) @map("byo_cup_discount_cents")
   temp           String?
   ice            String?
 
@@ -590,4 +678,110 @@ model BrandCardOrder {
   @@index([payStatus])
   @@index([issueStatus, issueNextAt])
   @@map("brand_card_orders")
+}
+
+// ========== 在店时段（灵活用工口径：只记录服务时段，不承载考勤/工资语义） ==========
+
+/// 在店时段：一次「到店确认 → 离店确认」。
+///
+/// 设计要点：
+/// - businessDate 按【到店时刻】的上海日期归属，跨零点不切分；结算按它分组；
+/// - openKey 在段处于 open 时写入 userId、闭合即释放：唯一索引保证「一人同时只有一段」，
+///   并发双击由数据库兜底，不依赖应用层的先查后写；
+/// - pending_close = 员工已申报离店时间、等待总部审批，期间一律不计入工时；
+/// - lapsed = 超过 16 小时未闭合，同样不计入，等待补签或作废；
+/// - 只有 closed 参与时长汇总，这个口径是「宁可少算、不可虚增」的唯一实现点。
+model WorkSession {
+  id           String    @id
+  storeId      String    @map("store_id")
+  userId       String    @map("user_id")
+  businessDate String    @map("business_date")
+  clockInAt    DateTime  @map("clock_in_at")
+  clockOutAt   DateTime? @map("clock_out_at")
+
+  inLat        Float  @map("in_lat")
+  inLng        Float  @map("in_lng")
+  inAccuracyM  Int?   @map("in_accuracy_m")
+  inDistanceM  Int?   @map("in_distance_m")
+  outLat       Float? @map("out_lat")
+  outLng       Float? @map("out_lng")
+  outAccuracyM Int?   @map("out_accuracy_m")
+  outDistanceM Int?   @map("out_distance_m")
+
+  // open | pending_close | closed | lapsed | voided
+  status String @default("open")
+
+  /// 进行中的占用键：open 时 = userId，其它状态 = null（SQLite 唯一索引允许多个 NULL）
+  openKey String? @unique @map("open_key")
+
+  pendingApprovalId String?   @unique @map("pending_approval_id")
+  note              String    @default("")
+  adjustedBy        String?   @map("adjusted_by")
+  adjustedAt        DateTime? @map("adjusted_at")
+  adjustReason      String    @default("") @map("adjust_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([storeId, businessDate])
+  @@index([userId, businessDate])
+  @@index([status, clockInAt])
+  @@map("work_sessions")
+}
+
+/// 计划班次：一人一店一日一条，startMin/endMin 为相对当日 00:00 的分钟数。
+/// 只用于「计划 vs 实际」的对照提示，不阻断打卡、不产生金额差异。
+model PlannedShift {
+  id           String   @id
+  storeId      String   @map("store_id")
+  userId       String   @map("user_id")
+  businessDate String   @map("business_date")
+  startMin     Int      @map("start_min")
+  endMin       Int      @map("end_min")
+  note         String   @default("")
+  createdBy    String?  @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([storeId, userId, businessDate])
+  @@index([storeId, businessDate])
+  @@map("planned_shifts")
+}
+
+/// 劳务结算单：金额的唯一事实源，Expense 只是它的投影。
+///
+/// - draft 可反复重算；确认（posted）时冻结 linesJson 并同事务写入人力费用；
+/// - 改错只能作废（void）+ 重出，绝不 update 已入账的 Expense；
+/// - postedExpenseId 唯一，配合 Expense.sourceKey 兜住重复入账。
+model WorkSettlement {
+  id              String @id
+  storeId         String @map("store_id")
+  userId          String @map("user_id")
+  periodStart     String @map("period_start")
+  periodEnd       String @map("period_end")
+  minutes         Int
+  ratePerMinCents Int    @map("rate_per_min_cents")
+  amountCents     Int    @map("amount_cents")
+  // draft | posted | voided
+  status String @default("draft")
+
+  linesJson String @default("[]") @map("lines_json")
+  /// 出单时仍处于 pending_close / lapsed 的段数：> 0 时禁止确认入账（月结硬阻断）
+  unclosedCount    Int @default(0) @map("unclosed_count")
+  pendingApprovals Int @default(0) @map("pending_approvals")
+
+  postedExpenseId String?   @unique @map("posted_expense_id")
+  confirmedBy     String?   @map("confirmed_by")
+  confirmedAt     DateTime? @map("confirmed_at")
+  confirmedNote   String    @default("") @map("confirmed_note")
+  voidedAt        DateTime? @map("voided_at")
+  voidedBy        String?   @map("voided_by")
+  voidReason      String    @default("") @map("void_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([storeId, userId, periodStart, periodEnd])
+  @@index([storeId, periodStart])
+  @@map("work_settlements")
 }

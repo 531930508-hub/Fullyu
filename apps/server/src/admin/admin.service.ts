@@ -18,6 +18,11 @@ import { StaffService } from '../auth/staff.service';
 /** 与顾客端一致：醒 → 松 → 庆 → 眠。 */
 const SERIES_RANK_ORDER: Record<string, number> = { xing: 0, song: 1, qing: 2, mian: 3 };
 
+/** 密码不设长度下限（后台发放的初始密码允许短口令），只拦 bcrypt 会静默截断的超长口令。 */
+function assertPasswordLength(password: string) {
+  if (password.length > 72) throw badRequest('密码最多 72 位');
+}
+
 export type ProductInput = {
   name?: string;
   nameEn?: string;
@@ -753,7 +758,7 @@ export class AdminService {
     if (input.id) {
       const existing = await this.prisma.user.findUnique({ where: { id: input.id } });
       if (!existing) throw notFound('账号不存在');
-      if (input.password && String(input.password).length < 8) throw badRequest('密码至少 8 位');
+      if (input.password) assertPasswordLength(String(input.password));
       await this.prisma.$transaction(async (tx) => {
         await tx.user.update({
           where: { id: input.id },
@@ -793,7 +798,8 @@ export class AdminService {
     const exists = await this.prisma.user.findUnique({ where: { username } });
     if (exists) throw conflict('该账号已存在');
     const password = String(input.password || '');
-    if (password.length < 8) throw badRequest('密码至少 8 位');
+    if (!password) throw badRequest('请填写初始密码');
+    assertPasswordLength(password);
     const id = newId('U');
     await this.prisma.$transaction(async (tx) => {
       await tx.user.create({

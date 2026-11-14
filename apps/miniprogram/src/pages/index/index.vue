@@ -485,6 +485,16 @@
                 </view>
                 <text v-if="checkoutCouponWarning" class="tiny muted section-space">{{ checkoutCouponWarning }}</text>
               </view>
+
+              <view v-if="!checkoutRetail && state.byoCup && state.byoCup.enabled" class="mini-card">
+                <text class="card-title">{{ tt('自带杯优惠', 'Bring your own cup') }}</text>
+                <text class="tiny muted section-space">
+                  {{ tt(
+                    `自带杯每杯减 ${money(state.byoCup.perCupCents)}，需在门店柜台点单时由伙伴当面确认，小程序下单不适用。`,
+                    `Save ${money(state.byoCup.perCupCents)} per cup with your own cup — confirmed by our team at the counter only; not available on in-app orders.`
+                  ) }}
+                </text>
+              </view>
             </template>
           </template>
 
@@ -714,14 +724,14 @@
               v-if="!state.customer"
               hover-class="none"
               class="brand-entry section-space"
-              :aria-label="tt('了解 Full愈年卡', 'About the Full Yu annual card')"
+              :aria-label="tt('了解 Full愈大会员', 'About the Full Yu Membership')"
               @click="openBrandMember"
             >
               <view class="brand-entry-head">
-                <text class="brand-entry-eyebrow">FULL YU ANNUAL MEMBER</text>
+                <text class="brand-entry-eyebrow">FULL YU MEMBER</text>
                 <text class="brand-entry-state">{{ tt('权益卡 · 三店通用', 'Benefit card') }}</text>
               </view>
-              <text class="brand-entry-title serif">Full愈年卡</text>
+              <text class="brand-entry-title serif">Full愈大会员</text>
               <text class="brand-entry-sub">
                 {{ brandPriceLine }}
               </text>
@@ -761,16 +771,16 @@
                 hover-class="none"
                 class="brand-entry"
                 :class="{ 'is-active': brandActive }"
-                :aria-label="tt('打开 Full愈年卡会员中心', 'Open Full Yu annual member center')"
+                :aria-label="tt('打开 Full愈大会员中心', 'Open Full Yu Membership')"
                 @click="openBrandMember"
               >
                 <view class="brand-entry-head">
-                  <text class="brand-entry-eyebrow">FULL YU ANNUAL MEMBER</text>
+                  <text class="brand-entry-eyebrow">FULL YU MEMBER</text>
                   <text class="brand-entry-state">
                     {{ brandActive ? tt(`还有 ${brandRemaining} 天`, `${brandRemaining} days left`) : tt('权益卡 · 三店通用', 'Benefit card') }}
                   </text>
                 </view>
-                <text class="brand-entry-title serif">Full愈年卡</text>
+                <text class="brand-entry-title serif">Full愈大会员</text>
                 <text v-if="brandActive" class="brand-entry-sub">
                   {{ tt(`有效期至 ${brandValidUntil} · ${brandPoints} 积分 · ${brandDice} 颗骰子`, `Valid until ${brandValidUntil} · ${brandPoints} points · ${brandDice} dice`) }}
                 </text>
@@ -779,7 +789,7 @@
                   {{ brandPriceLine }}
                 </text>
                 <view class="brand-entry-foot">
-                  <text>{{ brandActive ? tt('进入会员中心', 'Member center') : tt('开通年卡', 'Join annual') }}</text>
+                  <text>{{ brandActive ? tt('进入会员中心', 'Member center') : tt('开通大会员', 'Join now') }}</text>
                   <AppIcon name="chevronRight" :size="14" />
                 </view>
               </button>
@@ -862,7 +872,7 @@
         <text class="pay-bar-amount">{{ money(checkoutTotal) }}</text>
       </view>
       <button hover-class="none" class="pay-bar-btn" :disabled="paying" @click="onPay">
-        {{ paying ? tt('正在支付…', 'Paying…') : tt('立即支付', 'Pay now') }}
+        {{ paying ? tt('正在支付…', 'Paying…') : checkoutTotal <= 0 ? tt('确认下单', 'Place order') : tt('立即支付', 'Pay now') }}
       </button>
     </view>
 
@@ -981,24 +991,10 @@
         </text>
       </view>
 
+      <!-- 姓名以 CRM 统一账号为准：这里只展示，顾客不需要也不可能在小程序里另设一个名字。 -->
       <view class="form-row">
         <text class="form-label">{{ tt('姓名', 'Name') }}</text>
-        <input
-          v-if="isWeixin"
-          type="nickname"
-          :value="profileForm.name"
-          :maxlength="12"
-          :placeholder="tt('怎么称呼你', 'What should we call you')"
-          @input="onProfileName"
-          @change="onProfileName"
-        />
-        <input
-          v-else
-          :value="profileForm.name"
-          :maxlength="12"
-          :placeholder="tt('怎么称呼你', 'What should we call you')"
-          @input="onProfileName"
-        />
+        <text class="form-static">{{ state.customer.name }}</text>
       </view>
 
       <text class="option-title">{{ tt('性别', 'Gender') }}</text>
@@ -1030,7 +1026,7 @@
           {{ profileSaving ? tt('正在保存…', 'Saving…') : tt('保存', 'Save') }}
         </button>
       </view>
-      <text class="note section-space">{{ tt('生日与性别选填，仅用于会员关怀。', 'Birthday and gender are optional and used for member care.') }}</text>
+      <text class="note section-space">{{ tt('姓名取自会员中心统一账号，不支持在小程序内修改；生日与性别选填，仅用于会员关怀。', 'Your name comes from your member account and cannot be changed here. Birthday and gender are optional and used for member care.') }}</text>
     </BottomSheet>
 
     <!-- ------------------------------ 会员码 ------------------------------ -->
@@ -1156,7 +1152,7 @@
         <text class="small">{{ couponsError }}</text>
         <button hover-class="none" class="btn" @click="loadCoupons()">{{ tt('重试', 'Retry') }}</button>
       </view>
-      <view v-else-if="!assetCoupons.length" class="empty">
+      <view v-else-if="!assetCoupons.length && !claimableList.length" class="empty">
         <AppIcon name="megaphone" :size="35" />
         <text class="empty-title">{{ couponPicker ? tt('暂时没有可用券', 'No coupons available') : tt('还没有优惠券', 'No coupons yet') }}</text>
         <text class="small">{{ tt('门店活动发放后，会出现在这里。', 'Coupons from store campaigns will appear here.') }}</text>
@@ -1179,10 +1175,42 @@
           <text class="coupon-title">{{ coupon.title }}</text>
           <text class="tiny muted">{{ couponScopeText(coupon) }}</text>
           <text class="tiny muted">{{ tt(`有效期至 ${dayText(coupon.validTo)}`, `Valid until ${dayText(coupon.validTo)}`) }}</text>
+          <text v-if="coupon.status === 'revoked' && coupon.revokeReason" class="tiny muted">{{ coupon.revokeReason }}</text>
           <text v-if="couponPicker && !couponFits(coupon).ok" class="tiny muted">{{ couponFits(coupon).reason }}</text>
         </view>
         <text class="pill" :class="{ green: coupon.status === 'available' }">{{ couponStatusText(coupon.status) }}</text>
       </view>
+
+      <template v-if="claimableList.length">
+        <text class="section-label">{{ tt('可领取的优惠券', 'Coupons you can claim') }}</text>
+        <view v-for="template in claimableList" :key="template.id" class="coupon-card">
+          <view class="coupon-amount">
+            <text class="coupon-value">{{ money(template.amountCents) }}</text>
+            <text class="tiny muted">
+              {{ template.minSpendCents ? tt(`满 ${money(template.minSpendCents)} 可用`, `Min. ${money(template.minSpendCents)}`) : tt('无门槛', 'No minimum') }}
+            </text>
+          </view>
+          <view class="grow">
+            <text class="coupon-title">{{ template.title }}</text>
+            <text class="tiny muted">{{ couponScopeText(template) }}</text>
+            <text class="tiny muted">
+              {{ template.validDays
+                ? tt(`领取后 ${template.validDays} 天有效，活动截止 ${dayText(template.validTo)}`, `Valid ${template.validDays} days after claim, campaign ends ${dayText(template.validTo)}`)
+                : tt(`有效期至 ${dayText(template.validTo)}`, `Valid until ${dayText(template.validTo)}`) }}
+            </text>
+            <text v-if="!template.canClaim && template.reason" class="tiny muted">{{ template.reason }}</text>
+          </view>
+          <button
+            hover-class="none"
+            class="btn compact"
+            :class="{ primary: template.canClaim }"
+            :disabled="!template.canClaim || claimingId === template.id"
+            @click="claimCoupon(template)"
+          >
+            {{ claimingId === template.id ? tt('领取中', 'Claiming') : template.canClaim ? tt('领取', 'Claim') : tt('不可领', 'Unavailable') }}
+          </button>
+        </view>
+      </template>
 
       <template v-if="couponPicker">
         <button hover-class="none" v-if="selectedCouponId" class="btn full section-space" @click="clearCoupon">{{ tt('不使用优惠券', 'Do not use a coupon') }}</button>
@@ -1257,7 +1285,7 @@
       <view class="sheet-footer">
         <button hover-class="none" class="btn" @click="changeStoreFromConfirm">{{ tt('换一家门店', 'Change store') }}</button>
         <button hover-class="none" class="btn primary" :disabled="paying" @click="payNow">
-          {{ paying ? tt('正在支付…', 'Paying…') : tt('门店正确，继续支付', 'Confirm and pay') }}
+          {{ paying ? tt('正在支付…', 'Paying…') : checkoutTotal <= 0 ? tt('门店正确，确认下单', 'Confirm and place order') : tt('门店正确，继续支付', 'Confirm and pay') }}
         </button>
       </view>
     </BottomSheet>
@@ -1389,7 +1417,9 @@ import { distanceKm, formatDistance } from '@/lib/geo';
 import { POSTER_HEIGHT, POSTER_WIDTH, drawSharePoster, logoSrcCandidates } from '@/lib/sharePoster';
 import {
   claimGiftCode,
+  entryPrice,
   formatDate as formatBrandDate,
+  formatYuan,
   loadBrandMember,
   loadBrandProducts,
   peekPendingGift,
@@ -1502,6 +1532,9 @@ const reopenConfirmAfterStore = ref(false);
 const coupons = ref([]);
 const couponsLoading = ref(false);
 const couponsError = ref('');
+/** 总部开放自助领取的券模板：与已到手的券分开展示。 */
+const claimableCoupons = ref([]);
+const claimingId = ref('');
 const assetsOpen = ref(false);
 const couponPicker = ref(false);
 const selectedCouponId = ref('');
@@ -1509,7 +1542,8 @@ const selectedCouponId = ref('');
 const couponAuto = ref(true);
 const memberOpen = ref(false);
 const profileOpen = ref(false);
-const profileForm = reactive({ name: '', gender: null, birthday: '' });
+// 姓名不在小程序里设置：展示 CRM 统一账号的姓名，可编辑的只有性别与生日。
+const profileForm = reactive({ gender: null, birthday: '' });
 const profileSaving = ref(false);
 const avatarSaving = ref(false);
 const profileError = ref('');
@@ -1567,13 +1601,13 @@ const profileSub = computed(() => {
 });
 
 /**
- * 品牌会员（Full愈年卡）入口。
+ * 品牌会员（Full愈大会员）入口。
  * 页面只消费 CRM 适配层返回的状态；加载失败保持空态，不把失败显示成「未开通」。
  */
 const brandMember = ref(null);
 const brandLoading = ref(false);
 // 价格只从 CRM 产品目录读取；未登录或目录不可用时宁可不显示金额。
-const brandAnnualPrice = ref(null);
+const brandEntry = ref(null);
 const brandState = computed(
   () => (brandMember.value && brandMember.value.card && brandMember.value.card.state) || 'NONE'
 );
@@ -1583,34 +1617,37 @@ const brandValidUntil = computed(() => formatBrandDate(brandMember.value && bran
 const brandPoints = computed(() => (brandMember.value && brandMember.value.points && brandMember.value.points.balance) || 0);
 const brandDice = computed(() => (brandMember.value && brandMember.value.dice && brandMember.value.dice.balance) || 0);
 const brandPending = computed(() => (brandMember.value && brandMember.value.prizes && brandMember.value.prizes.pending) || 0);
-const brandPriceText = computed(() => String(Math.round(brandAnnualPrice.value / 100)));
-const brandPriceLine = computed(() =>
-  brandAnnualPrice.value == null
-    ? tt('一张卡，时叙 / 在场 / 轻疗通用', 'One card for Tea Hours, Presence and Retreat')
-    : tt(
-        `一张卡，时叙 / 在场 / 轻疗通用 · ¥${brandPriceText.value}/年`,
-        `One card for Tea Hours, Presence and Retreat · ¥${brandPriceText.value}/year`
-      )
-);
+// CRM 目录里时长可能不止一个（90 天 / 365 天），入口只报最低价并标「起」，
+// 具体时长与金额留给会员页的时长选项，入口不写死「/年」这种假设。
+const brandPriceLine = computed(() => {
+  const base = tt('一张卡，时叙 / 在场 / 轻疗通用', 'One card for Tea Hours, Presence and Retreat');
+  const entry = brandEntry.value;
+  if (!entry) return base;
+  const amount = formatYuan(entry.amountCents);
+  const tail = entry.from
+    ? tt(`¥${amount} 起`, `from ¥${amount}`)
+    : entry.validDays >= 365
+      ? tt(`¥${amount}/年`, `¥${amount}/year`)
+      : entry.validDays
+        ? tt(`¥${amount}/${entry.validDays} 天`, `¥${amount} / ${entry.validDays} days`)
+        : `¥${amount}`;
+  return `${base} · ${tail}`;
+});
 
 async function loadBrand() {
   if (!state.customer) {
     brandMember.value = null;
     // 未登录也展示 CRM 当前目录价；目录不可用时保持不显示金额。
-    const rows = await loadBrandProducts();
-    const listed = rows.find((item) => item.code === 'FY_ANNUAL');
-    brandAnnualPrice.value = listed && Number.isFinite(listed.priceCents) ? listed.priceCents : null;
+    brandEntry.value = entryPrice(await loadBrandProducts());
     return;
   }
   brandLoading.value = true;
   try {
     brandMember.value = await loadBrandMember();
-    const annual = (brandMember.value.products || []).find((item) => item.code === 'FY_ANNUAL');
-    if (annual && Number.isFinite(annual.priceCents)) {
-      brandAnnualPrice.value = annual.priceCents;
-    }
+    brandEntry.value = entryPrice(brandMember.value.products);
   } catch (error) {
     brandMember.value = null;
+    brandEntry.value = null;
   } finally {
     brandLoading.value = false;
   }
@@ -1760,12 +1797,14 @@ const checkoutCut = computed(() => (checkoutRetail.value ? 0 : memberCut()));
 const checkoutLines = computed(() => {
   if (checkoutRetail.value) {
     return state.retailCart.map((line) => ({
+      productId: line.item.id,
       categoryId: line.categoryId || categoryOf(line.item.id),
       totalCents: line.item.priceCents * line.qty
     }));
   }
   const perCup = (state.customer && state.customer.discountPerCupCents) || 0;
   return state.freshCart.map((line) => ({
+    productId: line.product.id,
     categoryId: line.product.categoryId,
     totalCents:
       line.product.priceCents * line.qty -
@@ -1773,10 +1812,17 @@ const checkoutLines = computed(() => {
   }));
 });
 
+/** 单品券只认指定商品；品类券只认对应分类；通用券全场可抵。 */
+function couponLineFits(coupon, line) {
+  if (coupon.scope === 'all') return true;
+  if (coupon.scope === 'product') return Boolean(coupon.productId) && line.productId === coupon.productId;
+  return line.categoryId === coupon.categoryId;
+}
+
 function couponEligibleCents(coupon) {
   if (!coupon) return 0;
   return checkoutLines.value
-    .filter((line) => coupon.scope === 'all' || line.categoryId === coupon.categoryId)
+    .filter((line) => couponLineFits(coupon, line))
     .reduce((sum, line) => sum + line.totalCents, 0);
 }
 
@@ -1818,6 +1864,8 @@ const couponPickerHint = computed(() =>
 const assetCoupons = computed(() =>
   couponPicker.value ? coupons.value.filter((coupon) => coupon.status === 'available') : coupons.value
 );
+/** 结算选券时不展示可领取，避免边买边领干扰。 */
+const claimableList = computed(() => (couponPicker.value ? [] : claimableCoupons.value));
 const checkoutTotal = computed(() =>
   Math.max(0, checkoutGross.value - checkoutCut.value - checkoutCouponDiscount.value)
 );
@@ -2388,6 +2436,7 @@ async function loadOrders(options = {}) {
 async function loadCoupons(options = {}) {
   if (!state.customer) {
     coupons.value = [];
+    claimableCoupons.value = [];
     return;
   }
   const silent = Boolean(options.silent);
@@ -2402,6 +2451,27 @@ async function loadCoupons(options = {}) {
     if (!silent) couponsError.value = (error && error.message) || tt('暂时读不到权益', 'Could not load benefits');
   } finally {
     if (!silent) couponsLoading.value = false;
+  }
+  // 自助领取区失败不打断「我的券」，只是不展示可领模板。
+  try {
+    const result = await api.claimableCoupons();
+    claimableCoupons.value = result.templates || [];
+  } catch (error) {
+    claimableCoupons.value = [];
+  }
+}
+
+async function claimCoupon(template) {
+  if (claimingId.value) return;
+  claimingId.value = template.id;
+  try {
+    await api.claimCoupon(template.id);
+    notify(tt('领取成功，已放入我的券', 'Claimed. It is now in your coupons'));
+    await loadCoupons({ silent: true });
+  } catch (error) {
+    notify((error && error.message) || tt('领取失败', 'Claim failed'), 'danger');
+  } finally {
+    claimingId.value = '';
   }
 }
 
@@ -3008,34 +3078,50 @@ async function payNow() {
     go('receipt');
     loadOrders();
     loadCoupons({ silent: true });
+    // 0 元单（券全额抵扣）服务端建单即落账：没有可支付金额，不拉收银台。
+    const settled = result.order.paymentStatus === 'paid';
+    if (settled) {
+      notify(tt('支付成功，茶正在为你现做', 'Paid. Your tea is being prepared.'));
+    }
     // 微信小程序内走 JSAPI 支付适配层（后端 prepay 下发参数）；H5 预览不提供支付。
-    if (IS_WEIXIN_MP) {
+    if (IS_WEIXIN_MP && !settled) {
       try {
         const prepared = await api.prepay(result.order.id);
-        // mock 适配层在服务端已按模拟扣款记账，订单是否已支付以回执上的服务端状态为准。
-        // 登录可以是 live 而支付仍是 mock：以 prepayMode 判断参数是否真实，避免把模拟回执交给 wx.requestPayment。
-        const prepayMode = (prepared && (prepared.prepayMode || prepared.mode)) || 'mock';
-        if (prepayMode !== 'mock') {
-          const paid = await requestPayment(prepared && prepared.payment);
-          if (paid.ok) {
-            const confirmed = await confirmOrderPaid(result.order.id);
-            if (confirmed) {
-              loadOrders();
-              notify(tt('支付成功，茶正在为你现做', 'Paid. Your tea is being prepared.'));
-            } else {
-              notify(tt('支付结果确认中，请稍后在回执或订单里查看', 'Confirming payment. Check the receipt shortly.'), 'warn');
-            }
+        // 预支付确认已到账（如并发/历史 0 元单）：不再拉起微信收银台。
+        if (prepared && prepared.paid) {
+          const confirmed = await confirmOrderPaid(result.order.id);
+          loadOrders();
+          if (confirmed) {
+            notify(tt('支付成功，茶正在为你现做', 'Paid. Your tea is being prepared.'));
           } else {
-            await cancelUnpaidAfterPayment(result.order.id);
-            loadOrders();
-            loadCoupons({ silent: true });
-            const cancelled = /cancel/i.test(String(paid.error || ''));
-            notify(
-              cancelled
-                ? tt('已取消支付，本单未扣款，订单已取消', 'Payment cancelled. Nothing was charged; the order is cancelled.')
-                : tt(`支付未完成：${paid.error || '请稍后重试'}，本单未扣款`, `Payment not completed: ${paid.error || 'please retry'}. Nothing was charged.`),
-              'danger'
-            );
+            notify(tt('支付结果确认中，请稍后在回执或订单里查看', 'Confirming payment. Check the receipt shortly.'), 'warn');
+          }
+        } else {
+          // mock 适配层在服务端已按模拟扣款记账，订单是否已支付以回执上的服务端状态为准。
+          // 登录可以是 live 而支付仍是 mock：以 prepayMode 判断参数是否真实，避免把模拟回执交给 wx.requestPayment。
+          const prepayMode = (prepared && (prepared.prepayMode || prepared.mode)) || 'mock';
+          if (prepayMode !== 'mock' && prepayMode !== 'none') {
+            const paid = await requestPayment(prepared && prepared.payment);
+            if (paid.ok) {
+              const confirmed = await confirmOrderPaid(result.order.id);
+              if (confirmed) {
+                loadOrders();
+                notify(tt('支付成功，茶正在为你现做', 'Paid. Your tea is being prepared.'));
+              } else {
+                notify(tt('支付结果确认中，请稍后在回执或订单里查看', 'Confirming payment. Check the receipt shortly.'), 'warn');
+              }
+            } else {
+              await cancelUnpaidAfterPayment(result.order.id);
+              loadOrders();
+              loadCoupons({ silent: true });
+              const cancelled = /cancel/i.test(String(paid.error || ''));
+              notify(
+                cancelled
+                  ? tt('已取消支付，本单未扣款，订单已取消', 'Payment cancelled. Nothing was charged; the order is cancelled.')
+                  : tt(`支付未完成：${paid.error || '请稍后重试'}，本单未扣款`, `Payment not completed: ${paid.error || 'please retry'}. Nothing was charged.`),
+                'danger'
+              );
+            }
           }
         }
       } catch (error) {
@@ -3292,12 +3378,19 @@ function couponStatusText(status) {
     reserved: tt('使用中', 'In use'),
     used: tt('已使用', 'Used'),
     expired: tt('已过期', 'Expired'),
+    revoked: tt('已作废', 'Voided'),
     inactive: tt('已停用', 'Inactive')
   };
   return labels[status] || status;
 }
 
 function couponScopeText(coupon) {
+  if (coupon.scope === 'product') {
+    // 本地菜单带英文名，优先用；券上的 productName 只是兜底（商品下架后仍能说清楚）。
+    const product = state.products.find((item) => item.id === coupon.productId);
+    const name = product ? pn(product) : coupon.productName || '';
+    return name ? tt(`仅限 ${name}`, `${name} only`) : tt('指定单品', 'Selected item');
+  }
   if (coupon.scope === 'all') return tt('全品类可用', 'All items');
   const category = state.categories.find((item) => item.id === coupon.categoryId);
   return category
@@ -3326,7 +3419,6 @@ function openProfileEdit() {
     openLogin(() => openProfileEdit());
     return;
   }
-  profileForm.name = state.customer.name || '';
   profileForm.gender = state.customer.gender ?? null;
   profileForm.birthday = state.customer.birthday || '';
   profileError.value = '';
@@ -3336,10 +3428,6 @@ function openProfileEdit() {
 function closeProfileEdit() {
   profileOpen.value = false;
   profileError.value = '';
-}
-
-function onProfileName(event) {
-  profileForm.name = String((event.detail && event.detail.value) || '').slice(0, 12);
 }
 
 function pickGender(value) {
@@ -3352,20 +3440,10 @@ function onBirthday(event) {
 
 async function saveProfile() {
   if (profileSaving.value) return;
-  const name = profileForm.name.replace(/\s+/g, ' ').trim();
-  if (!name) {
-    profileError.value = tt('请填写姓名', 'Please enter your name');
-    return;
-  }
-  if (name.length > 12) {
-    profileError.value = tt('姓名不能超过 12 个字', 'Your name can be at most 12 characters');
-    return;
-  }
   profileSaving.value = true;
   profileError.value = '';
   try {
     const result = await api.updateProfile({
-      name,
       gender: profileForm.gender ?? null,
       birthday: profileForm.birthday || null
     });
@@ -3878,8 +3956,9 @@ onMounted(async () => {
   if (state.customer) {
     loadOrders();
     loadCoupons({ silent: true });
-    loadBrand();
   }
+  // 未登录也要拿到 CRM 目录最低价，入口才不至于只写「一张卡」不写价格。
+  loadBrand();
   if (state.store) {
     const current = state.stores.find((item) => item.id === state.store.id);
     storeCity.value = current ? (locale.value === 'en' ? current.cityEn : current.city) : cities.value[0] || '';

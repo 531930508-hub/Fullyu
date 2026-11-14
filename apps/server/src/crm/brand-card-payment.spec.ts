@@ -48,7 +48,7 @@ describe('会员卡购卡：报价、落账与开卡幂等', () => {
       products: [
         {
           code: PRODUCT,
-          name: 'Full愈年卡',
+          name: 'Full愈大会员',
           priceCents: PRICE_CENTS,
           validDays: 365,
           benefits: [],

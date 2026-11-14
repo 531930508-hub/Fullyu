@@ -242,6 +242,19 @@ const paths: Record<string, React.ReactNode> = {
       <path d="M7 14v6" />
     </>
   ),
+  bell: (
+    <>
+      <path d="M18 16.5H6c1.6-1.3 1.9-2.8 1.9-4.6v-1.6a4.1 4.1 0 0 1 8.2 0v1.6c0 1.8.3 3.3 1.9 4.6Z" />
+      <path d="M10.2 19.2a2 2 0 0 0 3.6 0" />
+    </>
+  ),
+  bellOff: (
+    <>
+      <path d="M18 16.5H8.5M6.1 14.2c.9-1 1.4-2.3 1.4-3.9v-1.2c0-1 .4-2 1.2-2.7" />
+      <path d="M9.8 5.6a4.1 4.1 0 0 1 6.3 3.5v2.6M10.2 19.2a2 2 0 0 0 3.6 0" />
+      <path d="m4 4 16 16" />
+    </>
+  ),
   grid: (
     <>
       <path d="M4 5h16M4 12h16M4 19h16" />
@@ -270,6 +283,11 @@ const paths: Record<string, React.ReactNode> = {
     <>
       <path d="M3 9a13 13 0 0 1 18 0M6.5 12.5a8 8 0 0 1 11 0M10 16a3.5 3.5 0 0 1 4 0" />
       <path d="M12 19.5h.01" />
+    </>
+  ),
+  hamburger: (
+    <>
+      <path d="M4 7h16M4 12h16M4 17h16" />
     </>
   )
 };

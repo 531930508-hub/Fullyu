@@ -5,14 +5,33 @@ import { conflict, forbidden, notFound } from '../common/errors';
 import { logAction } from '../common/logs';
 import { OrdersService, type RefundLineInput } from '../orders/orders.service';
 import { LossesService } from '../losses/losses.service';
+import { AttendanceService, ATTENDANCE_APPROVAL_KIND } from '../attendance/attendance.service';
 import type { Approval } from '@prisma/client';
+
+/**
+ * 每种审批类型对应哪个操作权限。
+ * 之前是二选一的三元表达式，多一种类型就会静默掉进 else 分支、用错误的权限点去校验，
+ * 表现是「有权限也 403」。改成映射表，并且未知类型必须 fail closed。
+ */
+const APPROVER_PERM: Record<string, string> = {
+  REFUND: 'order:refund:approve',
+  LOSS: 'loss:approve',
+  [ATTENDANCE_APPROVAL_KIND]: 'attendance:approve'
+};
+
+const KIND_LABEL: Record<string, string> = {
+  REFUND: '退款',
+  LOSS: '报损',
+  [ATTENDANCE_APPROVAL_KIND]: '补签'
+};
 
 @Injectable()
 export class ApprovalsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orders: OrdersService,
-    private readonly losses: LossesService
+    private readonly losses: LossesService,
+    private readonly attendance: AttendanceService
   ) {}
 
   private async mapApproval(row: Approval) {
@@ -88,7 +107,9 @@ export class ApprovalsService {
   }
 
   private assertApprover(staff: StaffContext, approval: Approval): void {
-    const permission = approval.kind === 'REFUND' ? 'order:refund:approve' : 'loss:approve';
+    const permission = APPROVER_PERM[approval.kind];
+    // fail closed：没有登记的 kind 不猜默认权限，直接拒绝
+    if (!permission) throw forbidden('该审批类型暂不支持处理');
     if (!hasPerm(staff, permission)) throw forbidden('当前账号没有该审批权限');
     if (approval.storeId) assertStoreAccess(staff, approval.storeId);
   }
@@ -126,17 +147,50 @@ export class ApprovalsService {
           const payload = JSON.parse(approval.payloadJson) as { lossId: string };
           await this.losses.reject(staff, payload.lossId, comment, tx);
         }
+        // 补签被驳回：段退回 lapsed，员工可以改时间重新申报，不会卡死在「申请中」
+        if (approval.kind === ATTENDANCE_APPROVAL_KIND) {
+          await this.attendance.releaseSession(tx, approval);
+        }
         if (approval.orderId) {
           await tx.order.update({ where: { id: approval.orderId }, data: { refundPending: false } });
         }
         await logAction(tx, {
           actorId: staff.id,
           actorName: staff.name,
-          action: approval.kind === 'REFUND' ? '驳回退款申请' : '驳回报损',
+          action: `驳回${KIND_LABEL[approval.kind] || ''}申请`,
           detail: `${approval.summary}${comment ? ` · ${comment}` : ''}`,
           type: 'approval',
           storeId: approval.storeId,
           orderId: approval.orderId
+        });
+      });
+      return this.mapApproval(await this.load(id));
+    }
+
+    // 补签：批与「落账到工时」必须同事务，否则会出现「审批已通过但工时没算」，
+    // 而这种不一致只有到月底对账时才会被发现。
+    if (approval.kind === ATTENDANCE_APPROVAL_KIND) {
+      await this.prisma.$transaction(async (tx) => {
+        const resultNote = await this.attendance.applyApproval(tx, approval, staff);
+        const claim = await tx.approval.updateMany({
+          where: { id, status: 'pending' },
+          data: {
+            status: 'approved',
+            decidedBy: staff.id,
+            comment,
+            resultNote,
+            decidedAt: new Date(),
+            executionStatus: 'succeeded'
+          }
+        });
+        if (!claim.count) throw conflict('该审批已处理');
+        await logAction(tx, {
+          actorId: staff.id,
+          actorName: staff.name,
+          action: '审批通过补签',
+          detail: `${approval.summary} · ${resultNote}`,
+          type: 'approval',
+          storeId: approval.storeId
         });
       });
       return this.mapApproval(await this.load(id));
