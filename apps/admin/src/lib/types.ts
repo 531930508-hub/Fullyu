@@ -622,3 +622,73 @@ export type AttendanceBoard = {
     pendingApprovals: number;
   };
 };
+
+/* ------------------------------ 劳务结算 ------------------------------ */
+
+/** 门店劳务单价：库里存「分/分钟」，小时价只是 *60 的展示口径。 */
+export type LaborRateRow = {
+  storeId: string;
+  name: string;
+  city: string;
+  laborRatePerMinCents: number;
+  hourlyCents: number;
+};
+
+export type LaborRateList = { maxRatePerMinCents: number; rows: LaborRateRow[] };
+
+export type SettlementLine = {
+  sessionId: string;
+  businessDate: string;
+  from: string;
+  to: string;
+  minutes: number;
+};
+
+export type SettlementStatus = 'draft' | 'posted' | 'voided';
+
+export type WorkSettlement = {
+  id: string;
+  storeId: string;
+  storeName: string;
+  userId: string;
+  userName: string;
+  month: string;
+  periodStart: string;
+  periodEnd: string;
+  /** 实际记工分钟（含不足 1 小时的零头） */
+  minutes: number;
+  /** 计价分钟：按小时向下取整后的整点分钟 */
+  billableMinutes: number;
+  hours: number;
+  ratePerMinCents: number;
+  hourlyCents: number;
+  baseAmountCents: number;
+  adjustmentCents: number;
+  adjustmentNote: string;
+  amountCents: number;
+  status: SettlementStatus;
+  /** 未闭合段数（含待补签）：大于 0 时不能确认入账 */
+  unclosedCount: number;
+  pendingApprovals: number;
+  lines: SettlementLine[];
+  postedExpenseId: string | null;
+  confirmedBy: string | null;
+  confirmedAt: number | null;
+  confirmedNote: string;
+};
+
+export type SettlementList = {
+  month: string;
+  periodStart: string;
+  periodEnd: string;
+  rows: WorkSettlement[];
+  summary: {
+    count: number;
+    draftCount: number;
+    postedCount: number;
+    minutes: number;
+    baseAmountCents: number;
+    amountCents: number;
+    unclosedCount: number;
+  };
+};

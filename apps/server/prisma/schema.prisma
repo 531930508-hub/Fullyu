@@ -70,6 +70,8 @@ model Store {
   channelsJson  String   @map("channels_json")
   positionsJson String   @map("positions_json")
   waitMinutes   Int      @default(8) @map("wait_minutes")
+  /// 门店劳务单价（分/分钟）。劳务工资 = 门店单价 × 实际工时，旧结算单保留快照单价
+  laborRatePerMinCents Int @default(220) @map("labor_rate_per_min_cents")
 
   stock           Stock[]
   losses          Loss[]
@@ -761,6 +763,12 @@ model WorkSettlement {
   periodEnd       String @map("period_end")
   minutes         Int
   ratePerMinCents Int    @map("rate_per_min_cents")
+  /// 出单时按门店单价算出的基础工资快照（分）
+  baseAmountCents Int    @default(0) @map("base_amount_cents")
+  /// 人工调整（可为负）；amountCents = baseAmountCents + adjustmentCents
+  adjustmentCents Int    @default(0) @map("adjustment_cents")
+  /// 调整备注（金额≠0 时必填）
+  adjustmentNote  String @default("") @map("adjustment_note")
   amountCents     Int    @map("amount_cents")
   // draft | posted | voided
   status String @default("draft")

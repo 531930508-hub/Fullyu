@@ -26,7 +26,10 @@ export const ATTENDANCE_POLICY_KEY = 'attendancePolicy';
 export type AttendancePolicy = GatePolicy & {
   /** 单段上限（分钟）：超过即转 lapsed，避免忘点离店把工时无限拉长 */
   maxSegmentMinutes: number;
-  /** 结算单价（分/分钟） */
+  /**
+   * @deprecated 结算单价已下放到门店（Store.laborRatePerMinCents，见 settlement.service）。
+   * 这里只保留字段读取，避免旧 setting JSON 解析后丢字段；不再参与任何金额计算。
+   */
   ratePerMinCents: number;
   /** 暂时只有月结；字段留着，个人/双周结不用改表 */
   settlementCycle: 'month';

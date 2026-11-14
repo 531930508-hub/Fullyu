@@ -470,7 +470,30 @@ export const api = {
     request<{ ok: boolean }>(`/attendance/requests/${id}/cancel`, { method: 'POST' }),
   /** storeId 省略 = 本人可见的全部门店 */
   attendanceBoard: (storeId?: string, date?: string) =>
-    request<import('./types').AttendanceBoard>('/attendance/board', { query: { storeId, date } })
+    request<import('./types').AttendanceBoard>('/attendance/board', { query: { storeId, date } }),
+
+  /* ------------------------- 考勤：劳务结算 ------------------------- */
+
+  attendanceLaborRates: () => request<import('./types').LaborRateList>('/attendance/labor-rates'),
+  /** 单价只有「保存」一种语义：挂在门店上，不需要新增/删除。 */
+  attendanceSaveLaborRate: (storeId: string, body: { laborRatePerMinCents: number; note?: string }) =>
+    request<import('./types').LaborRateRow>(`/attendance/labor-rates/${storeId}`, { method: 'PUT', body }),
+  attendanceSettlements: (query: { month?: string; storeId?: string }) =>
+    request<import('./types').SettlementList>('/attendance/settlements', { query }),
+  /** 出单/重算：草稿刷新，已入账跳过，返回本次新建/重算/跳过张数。 */
+  attendanceGenerateSettlements: (body: { month?: string; storeId?: string }) =>
+    request<import('./types').SettlementList & { created: number; updated: number; skipped: number }>(
+      '/attendance/settlements/generate',
+      { method: 'POST', body }
+    ),
+  attendanceConfirmSettlement: (
+    id: string,
+    body: { adjustmentCents?: number; adjustmentNote?: string; note?: string }
+  ) =>
+    request<{ settlement: import('./types').WorkSettlement | null; expenseId: string | null }>(
+      `/attendance/settlements/${id}/confirm`,
+      { method: 'POST', body }
+    )
 };
 
 export type RangeQuery = { range?: string; from?: string; to?: string };

@@ -54,6 +54,7 @@ import type {
   FinanceEntry,
   HomeContent,
   HomeSeriesSlot,
+  LaborRateRow,
   LogEntry,
   Loss,
   LossPolicy,
@@ -67,7 +68,8 @@ import type {
   Role,
   Series,
   StaffRow,
-  Store
+  Store,
+  WorkSettlement
 } from '../lib/types';
 
 /* ------------------------------- shared ------------------------------- */
@@ -79,6 +81,7 @@ type Section =
   | 'expenses'
   | 'approvals'
   | 'attendance'
+  | 'settlements'
   | 'losses'
   | 'coupons'
   | 'content'
@@ -96,6 +99,7 @@ const SECTION_TITLE: Record<Section, string> = {
   expenses: '运营费用',
   approvals: '审批中心',
   attendance: '在店看板',
+  settlements: '劳务结算',
   losses: '报损与损耗',
   coupons: '优惠券',
   content: '首页内容',
@@ -115,6 +119,7 @@ const SECTION_PERM: Record<Section, string> = {
   expenses: 'finance:view',
   approvals: 'approval:view',
   attendance: 'attendance:view',
+  settlements: 'attendance:settle',
   losses: 'loss:view',
   coupons: 'coupon:view',
   content: 'product:view',
@@ -133,6 +138,7 @@ const SECTION_ORDER: Section[] = [
   'expenses',
   'approvals',
   'attendance',
+  'settlements',
   'losses',
   'coupons',
   'content',
@@ -315,6 +321,7 @@ export function AdminApp() {
       {allowed && section === 'expenses' ? <ExpensesPage /> : null}
       {allowed && section === 'approvals' ? <ApprovalsPage onChanged={refreshApprovalCount} /> : null}
       {allowed && section === 'attendance' ? <AttendancePage /> : null}
+      {allowed && section === 'settlements' ? <SettlementsPage /> : null}
       {allowed && section === 'losses' ? <LossesPage /> : null}
       {allowed && section === 'coupons' ? <CouponsPage /> : null}
       {allowed && section === 'content' ? <ContentPage /> : null}
@@ -1886,6 +1893,585 @@ function AttendancePage() {
         </span>
       </div>
     </>
+  );
+}
+
+/* ------------------------------ 劳务结算 ------------------------------ */
+
+function currentMonthText() {
+  return todayText().slice(0, 7);
+}
+
+/** 只做「年月」加减；用本地日历而不是 UTC，避免月初/月末换算后差一个月。 */
+function monthShift(month: string, delta: number) {
+  const [year, mon] = month.split('-').map(Number);
+  if (!year || !mon) return month;
+  const date = new Date(year, mon - 1 + delta, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+const SETTLEMENT_STATUS: Record<string, { label: string; tone: 'ok' | 'warn' | 'neutral' }> = {
+  draft: { label: '待确认', tone: 'warn' },
+  posted: { label: '已入账', tone: 'ok' },
+  voided: { label: '已作废', tone: 'neutral' }
+};
+
+/**
+ * 劳务结算：一个月一批，按「门店 × 员工」出单。
+ *
+ * 页面上三件事按顺序做：先定单价（门店维度），再出单/重算（草稿可反复算），
+ * 最后逐张确认入账（写人力费用，金额从此不可变）。阻断项（未闭合时段、审批中的补签）
+ * 只拦「确认」，不拦「出单」——先出单看清差多少，再去补签，比一个都出不来有用。
+ */
+function SettlementsPage() {
+  const notify = useToast();
+  const [month, setMonth] = useState(() => monthShift(currentMonthText(), -1));
+  const [storeId, setStoreId] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [confirming, setConfirming] = useState<WorkSettlement | null>(null);
+  const [detail, setDetail] = useState<WorkSettlement | null>(null);
+  const query = useApi(() => api.attendanceSettlements({ month, storeId: storeId || undefined }), [month, storeId]);
+  const rates = useApi(() => api.attendanceLaborRates(), []);
+
+  const data = query.data;
+  const monthClosed = !!data && data.periodEnd < todayText();
+
+  if (query.loading && !data) return <Spinner label="正在读取结算单" />;
+  if (query.error && !data) return <InlineError message={query.error} />;
+  if (!data) return null;
+
+  // 门店下拉以单价列表为准（含还没出过单的门店），再并上当期有单的店，避免切月份后选项跳动。
+  const storeOptions = new Map<string, string>((rates.data?.rows ?? []).map((row) => [row.storeId, row.name]));
+  data.rows.forEach((row) => storeOptions.set(row.storeId, row.storeName));
+
+  const generate = async () => {
+    setGenerating(true);
+    try {
+      const result = await api.attendanceGenerateSettlements({ month, storeId: storeId || undefined });
+      query.setData(result);
+      notify(
+        `出单完成：新建 ${result.created} 张，重算 ${result.updated} 张，跳过已入账 ${result.skipped} 张`,
+        'ok'
+      );
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '出单失败', 'danger');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const exportCurrent = () => {
+    exportCsv(
+      `劳务结算-${data.month}.csv`,
+      ['门店', '员工', '月份', '计价小时', '计时分钟', '单价（元/小时）', '基础（元）', '调整（元）', '合计（元）', '状态', '未闭合段', '待审批', '调整备注', '入账备注'],
+      data.rows.map((row) => [
+        row.storeName,
+        row.userName,
+        row.month,
+        row.hours,
+        row.minutes,
+        (row.hourlyCents / 100).toFixed(2),
+        (row.baseAmountCents / 100).toFixed(2),
+        (row.adjustmentCents / 100).toFixed(2),
+        (row.amountCents / 100).toFixed(2),
+        SETTLEMENT_STATUS[row.status]?.label || row.status,
+        row.unclosedCount,
+        row.pendingApprovals,
+        row.adjustmentNote,
+        row.confirmedNote
+      ])
+    );
+    notify(`已导出 ${data.month} 的 ${data.rows.length} 张结算单`, 'ok');
+  };
+
+  return (
+    <>
+      <PageHead
+        eyebrow="品牌总部 · 运营"
+        title="劳务结算"
+        description="按「门店 × 员工 × 月」出单：先把门店劳务单价定好，再出单看金额；确认入账会写入一笔人力费用，金额从此不可改。未闭合的时段与审批中的补签只拦确认，不拦出单。"
+        meta={
+          <span>
+            {data.month} · {data.rows.length} 张 · 已入账 {data.summary.postedCount} 张
+          </span>
+        }
+        actions={
+          <div className="row-gap">
+            <select value={storeId} onChange={(event) => setStoreId(event.target.value)} aria-label="门店">
+              <option value="">全部门店</option>
+              {[...storeOptions.entries()].map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="month"
+              value={month}
+              max={currentMonthText()}
+              onChange={(event) => setMonth(event.target.value || currentMonthText())}
+              aria-label="结算月份"
+            />
+            <button type="button" className="btn btn-primary" disabled={generating} onClick={generate}>
+              {generating ? '出单中…' : '出单 / 重算'}
+            </button>
+          </div>
+        }
+      />
+
+      <div className="stat-grid">
+        <Stat
+          label="应结总额"
+          value={money(data.summary.amountCents)}
+          hint={`基础 ${money(data.summary.baseAmountCents)}${data.summary.postedCount ? `，含已入账 ${data.summary.postedCount} 张` : ''}`}
+          icon="coin"
+        />
+        <Stat
+          label="待确认"
+          value={data.summary.draftCount}
+          hint="草稿可重算，入账后不可改"
+          tone={data.summary.draftCount ? 'soft' : 'plain'}
+        />
+        <Stat label="已入账" value={data.summary.postedCount} hint="已写入人力费用" icon="check" />
+        <Stat
+          label="未闭合时段"
+          value={data.summary.unclosedCount}
+          hint={data.summary.unclosedCount ? '补完离店或补签后才能确认' : '没有待补的时段'}
+          tone={data.summary.unclosedCount ? 'soft' : 'plain'}
+          icon="alert"
+        />
+      </div>
+
+      <Panel
+        title="结算单"
+        description={
+          monthClosed
+            ? '确认入账后金额锁定；要改只能作废重出。'
+            : '本月还没结束，可以先出单预览；月末结束后才能确认入账。'
+        }
+        actions={
+          <button type="button" className="btn btn-sm btn-ghost" disabled={!data.rows.length} onClick={exportCurrent}>
+            导出 CSV
+          </button>
+        }
+      >
+        {data.rows.length ? (
+          <div className="table-wrap">
+            <table className="tbl tbl-compact">
+              <thead>
+                <tr>
+                  <th>门店 / 员工</th>
+                  <th className="num">计价工时</th>
+                  <th className="num">单价</th>
+                  <th className="num">基础</th>
+                  <th className="num">调整</th>
+                  <th className="num">合计</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((row) => {
+                  const blocked = row.unclosedCount > 0 || row.pendingApprovals > 0;
+                  const status = SETTLEMENT_STATUS[row.status] ?? { label: row.status, tone: 'neutral' as const };
+                  return (
+                    <tr key={row.id}>
+                      <td>
+                        <div className="cell-title">{row.userName}</div>
+                        <div className="faint tiny">
+                          {row.storeName} · {row.periodStart.slice(5)}—{row.periodEnd.slice(5)}
+                        </div>
+                      </td>
+                      <td className="num">
+                        {row.hours} 小时
+                        {row.minutes !== row.billableMinutes ? (
+                          <div className="faint tiny">计 {durationText(row.minutes)}，满点计</div>
+                        ) : null}
+                      </td>
+                      <td className="num">
+                        {money(row.hourlyCents)}
+                        <div className="faint tiny">{row.ratePerMinCents} 分/分钟</div>
+                      </td>
+                      <td className="num">{money(row.baseAmountCents)}</td>
+                      <td className="num">
+                        {row.adjustmentCents ? money(row.adjustmentCents, { sign: true }) : <span className="muted">—</span>}
+                        {row.adjustmentNote ? <div className="faint tiny">{row.adjustmentNote}</div> : null}
+                      </td>
+                      <td className="num">
+                        <strong>{money(row.amountCents)}</strong>
+                      </td>
+                      <td>
+                        <Badge tone={status.tone}>{status.label}</Badge>
+                        {row.status === 'draft' && blocked ? (
+                          <div className="faint tiny" style={{ marginTop: 4 }}>
+                            {row.unclosedCount ? `${row.unclosedCount} 段未闭合` : ''}
+                            {row.unclosedCount && row.pendingApprovals ? ' · ' : ''}
+                            {row.pendingApprovals ? `${row.pendingApprovals} 条补签待审批` : ''}
+                          </div>
+                        ) : null}
+                        {row.status === 'posted' ? (
+                          <div className="faint tiny" style={{ marginTop: 4 }}>
+                            {row.confirmedAt ? `${dateTimeText(row.confirmedAt)} 入账` : '已入账'}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td>
+                        <div className="row-gap">
+                          {row.status === 'draft' ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-primary"
+                              disabled={!monthClosed || blocked}
+                              title={
+                                !monthClosed
+                                  ? '本月还没结束，结束后才能入账'
+                                  : blocked
+                                    ? '还有未闭合时段或待审批补签，先处理完再入账'
+                                    : undefined
+                              }
+                              onClick={() => setConfirming(row)}
+                            >
+                              确认入账
+                            </button>
+                          ) : null}
+                          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setDetail(row)}>
+                            明细
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            icon="coin"
+            title={`${data.month} 还没有结算单`}
+            description="先在上面点「出单 / 重算」，系统会按当期已结束的时段，为每家店的每位员工生成一张草稿。"
+          />
+        )}
+      </Panel>
+
+      <LaborRatePanel
+        maxRatePerMinCents={rates.data?.maxRatePerMinCents ?? 0}
+        rows={rates.data?.rows ?? null}
+        loading={rates.loading && !rates.data}
+        error={rates.error}
+        onSaved={() => {
+          rates.reload({ silent: true }).catch(() => undefined);
+          // 单价变了，草稿金额也会变：顺手重算一遍再刷新，省得用户手动点两次。
+          query.reload({ silent: true }).catch(() => undefined);
+        }}
+      />
+
+      <div className="notice">
+        <Icon name="info" size={15} />
+        <span>
+          计价按小时向下取整：不足 1 小时的零头不计，整点分钟 × 门店单价。未设置单价的门店按 0 元计，
+          出单后金额为 0 的草稿不会产生费用行；调整额需要写明原因，入账后可以按来源「劳务结算」在财务流水里找到。
+        </span>
+      </div>
+
+      <ConfirmSettlementModal
+        row={confirming}
+        onClose={() => setConfirming(null)}
+        onDone={() => {
+          setConfirming(null);
+          notify('结算单已入账，人力费用已记入财务流水', 'ok');
+          query.reload({ silent: true });
+        }}
+      />
+
+      <Modal
+        open={!!detail}
+        title={detail ? `${detail.storeName} · ${detail.userName} · ${detail.month}` : '结算明细'}
+        description={detail ? `计价 ${detail.hours} 小时 × ${money(detail.hourlyCents)}/小时，合计 ${money(detail.amountCents)}` : undefined}
+        onClose={() => setDetail(null)}
+        size="md"
+        footer={
+          <button type="button" className="btn btn-ghost" onClick={() => setDetail(null)}>
+            关闭
+          </button>
+        }
+      >
+        {detail ? (
+          <div className="table-wrap">
+            <table className="tbl tbl-compact">
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>时段</th>
+                  <th className="num">分钟</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.lines.map((line) => (
+                  <tr key={line.sessionId}>
+                    <td>{line.businessDate}</td>
+                    <td>
+                      {line.from} — {line.to}
+                    </td>
+                    <td className="num">{line.minutes}</td>
+                  </tr>
+                ))}
+                {!detail.lines.length ? (
+                  <tr>
+                    <td colSpan={3} className="muted">
+                      这张单只有未闭合的时段，没有可计价的行。
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+            {detail.confirmedNote ? (
+              <p className="faint tiny" style={{ marginTop: 8 }}>
+                入账备注：{detail.confirmedNote}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+    </>
+  );
+}
+
+/** 门店劳务单价：单位是「元/小时」，落库换算成整数「分/分钟」，换算误差在保存后立刻回显。 */
+function LaborRatePanel({
+  rows,
+  maxRatePerMinCents,
+  loading,
+  error,
+  onSaved
+}: {
+  rows: LaborRateRow[] | null;
+  maxRatePerMinCents: number;
+  loading: boolean;
+  error: string | null;
+  onSaved: () => void;
+}) {
+  const notify = useToast();
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!rows) return;
+    // 只补齐还没进入草稿的门店：保存某一行会触发整表刷新，不能把别行还没保存的输入冲掉。
+    setDraft((current) => {
+      const next = { ...current };
+      rows.forEach((row) => {
+        if (next[row.storeId] === undefined) next[row.storeId] = (row.hourlyCents / 100).toFixed(2);
+      });
+      return next;
+    });
+  }, [rows]);
+
+  const save = async (row: LaborRateRow) => {
+    const yuan = Number(draft[row.storeId] ?? '');
+    if (!Number.isFinite(yuan) || yuan < 0) return notify('单价请填不小于 0 的数字', 'danger');
+    const cents = Math.round((yuan * 100) / 60);
+    if (maxRatePerMinCents && cents > maxRatePerMinCents) {
+      return notify(`单价不能超过 ${money(maxRatePerMinCents * 60)}/小时，请确认填的是时薪`, 'danger');
+    }
+    setBusyId(row.storeId);
+    try {
+      const saved = await api.attendanceSaveLaborRate(row.storeId, { laborRatePerMinCents: cents });
+      setDraft((current) => ({ ...current, [row.storeId]: (saved.hourlyCents / 100).toFixed(2) }));
+      notify(`${row.name} 单价已更新为 ${money(saved.hourlyCents)}/小时`, 'ok');
+      onSaved();
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '保存单价失败', 'danger');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <Panel
+      title="门店劳务单价"
+      description="结算金额 = 计价小时 × 单价。这里改的是门店级默认单价，已入账的结算单不受影响；重新出单才会用新价。"
+    >
+      {loading ? (
+        <Spinner label="正在读取单价" />
+      ) : error && !rows ? (
+        <InlineError message={error} />
+      ) : rows && rows.length ? (
+        <div className="table-wrap">
+          <table className="tbl tbl-compact">
+            <thead>
+              <tr>
+                <th>门店</th>
+                <th className="num">当前（元/小时）</th>
+                <th className="num">等价单价</th>
+                <th>新单价（元/小时）</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const value = draft[row.storeId] ?? '';
+                const dirty = value !== (row.hourlyCents / 100).toFixed(2);
+                return (
+                  <tr key={row.storeId}>
+                    <td>
+                      <div className="cell-title">{row.name}</div>
+                      <div className="faint tiny">{row.city || '—'}</div>
+                    </td>
+                    <td className="num">{money(row.hourlyCents)}</td>
+                    <td className="num faint tiny">{row.laborRatePerMinCents} 分/分钟</td>
+                    <td>
+                      <input
+                        inputMode="decimal"
+                        value={value}
+                        aria-label={`${row.name} 劳务单价`}
+                        style={{ maxWidth: 130 }}
+                        onChange={(event) => setDraft({ ...draft, [row.storeId]: event.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${dirty ? 'btn-primary' : 'btn-ghost'}`}
+                        disabled={busyId === row.storeId || !dirty}
+                        onClick={() => save(row)}
+                      >
+                        {busyId === row.storeId ? '保存中…' : '保存'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState icon="store" title="还没有可维护的门店" description="先在「门店配置」里创建门店。" />
+      )}
+    </Panel>
+  );
+}
+
+function ConfirmSettlementModal({
+  row,
+  onClose,
+  onDone
+}: {
+  row: WorkSettlement | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [adjust, setAdjust] = useState('');
+  const [adjustNote, setAdjustNote] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!row) return;
+    setAdjust('');
+    setAdjustNote('');
+    setNote('');
+    setError(null);
+    setBusy(false);
+  }, [row]);
+
+  const parsed = Number(adjust.trim() === '' ? '0' : adjust);
+  const adjustmentCents = Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
+  const preview = (row?.baseAmountCents ?? 0) + adjustmentCents;
+
+  const submit = async () => {
+    if (!row) return;
+    if (!Number.isFinite(parsed)) {
+      setError('调整额请填数字，正数为补发、负数为扣减');
+      return;
+    }
+    if (adjustmentCents !== 0 && !adjustNote.trim()) {
+      setError('填写了调整金额必须写调整原因');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.attendanceConfirmSettlement(row.id, {
+        adjustmentCents,
+        adjustmentNote: adjustNote.trim() || undefined,
+        note: note.trim() || undefined
+      });
+      onDone();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '确认入账失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={!!row}
+      title="确认劳务结算"
+      description={row ? `${row.storeName} · ${row.userName} · ${row.month}，入账后金额不可修改。` : undefined}
+      onClose={busy ? () => undefined : onClose}
+      size="sm"
+      footer={
+        <>
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
+            取消
+          </button>
+          <button type="button" className="btn btn-primary" disabled={busy || preview < 0} onClick={submit}>
+            {busy ? '入账中…' : '确认入账'}
+          </button>
+        </>
+      }
+    >
+      {row ? (
+        <>
+          <div className="table-wrap" style={{ marginBottom: 12 }}>
+            <table className="tbl tbl-compact">
+              <tbody>
+                <tr>
+                  <td>计价工时</td>
+                  <td className="num">{row.hours} 小时</td>
+                </tr>
+                <tr>
+                  <td>基础劳务</td>
+                  <td className="num">{money(row.baseAmountCents)}</td>
+                </tr>
+                <tr>
+                  <td>调整后合计</td>
+                  <td className="num">
+                    <strong>{money(preview)}</strong>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="form-grid">
+            <Field label="调整额（元）" hint="正数补发、负数扣减；0 表示不调整。">
+              <input
+                inputMode="decimal"
+                value={adjust}
+                placeholder="0.00"
+                onChange={(event) => setAdjust(event.target.value)}
+              />
+            </Field>
+            <Field label="调整原因" hint="调整不为 0 时必填，会写进财务流水与操作记录。">
+              <input
+                value={adjustNote}
+                maxLength={200}
+                onChange={(event) => setAdjustNote(event.target.value)}
+              />
+            </Field>
+            <div className="span-2">
+              <Field label="入账备注" hint="选填，记录这张单的特殊说明。">
+                <input value={note} maxLength={200} onChange={(event) => setNote(event.target.value)} />
+              </Field>
+            </div>
+          </div>
+          {error ? <InlineError message={error} /> : null}
+        </>
+      ) : null}
+    </Modal>
   );
 }
 
@@ -4073,6 +4659,73 @@ function StoresPage() {
   );
 }
 
+/**
+ * 门店劳务单价（元/小时）：走独立接口，和门店配置的「保存」互不影响。
+ *
+ * 只有 attendance:settle 才看得到：单价是金额敏感信息，不该随门店配置页外泄。
+ * 落库单位是「分/分钟」，所以输入按小时换算、保存后回显实际生效的小时价。
+ */
+function StoreLaborRateField({ storeId, storeName }: { storeId: string; storeName: string }) {
+  const { can } = useStaffAuth();
+  const notify = useToast();
+  const allowed = can('attendance:settle');
+  const query = useApi(() => (allowed ? api.attendanceLaborRates() : Promise.resolve(null)), [allowed]);
+  const row = query.data?.rows.find((item) => item.storeId === storeId) ?? null;
+  const saved = row ? (row.hourlyCents / 100).toFixed(2) : '';
+  const [value, setValue] = useState(saved);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setValue(saved);
+    // 只在读到的单价变化时覆写输入框，避免每次渲染打断正在输入的数字。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved, storeId]);
+
+  if (!allowed) return null;
+
+  const save = async () => {
+    const yuan = Number(value);
+    if (!Number.isFinite(yuan) || yuan < 0) {
+      notify('劳务单价请填不小于 0 的数字', 'danger');
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.attendanceSaveLaborRate(storeId, { laborRatePerMinCents: Math.round((yuan * 100) / 60) });
+      await query.reload({ silent: true });
+      notify(`${storeName} 劳务单价已更新`, 'ok');
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '保存劳务单价失败', 'danger');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Field
+      label="劳务单价（元/小时）"
+      hint={
+        row
+          ? `结算按这个价乘计价工时；当前 ${money(row.hourlyCents)}/小时（${row.laborRatePerMinCents} 分/分钟）。`
+          : '还没读到单价，保存后可回显实际生效的小时价。'
+      }
+    >
+      <div className="flex">
+        <input
+          inputMode="decimal"
+          value={value}
+          placeholder="30.00"
+          onChange={(event) => setValue(event.target.value)}
+          aria-label="劳务单价（元/小时）"
+        />
+        <button type="button" className="btn btn-sm btn-ghost" disabled={busy || value === saved} onClick={save}>
+          {busy ? '保存中…' : '保存单价'}
+        </button>
+      </div>
+    </Field>
+  );
+}
+
 function StoreCard({
   store,
   editable,
@@ -4307,6 +4960,7 @@ function StoreCard({
             onChange={(event) => setDraft({ ...draft, waitMinutes: event.target.value })}
           />
         </Field>
+        <StoreLaborRateField storeId={store.id} storeName={store.name} />
         <div className="span-2">
           <div className="cust-sheet-label">下单渠道</div>
           <div className="row-gap">

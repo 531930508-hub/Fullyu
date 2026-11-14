@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { StaffGuard } from '../auth/staff.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -6,6 +6,7 @@ import { RequirePerm, Staff } from '../auth/decorators';
 import { parseInput } from '../common/zod';
 import type { StaffContext } from '../common/auth.types';
 import { AttendanceService } from '../attendance/attendance.service';
+import { MAX_LABOR_RATE_CENTS, SettlementsService } from '../attendance/settlement.service';
 
 const pointSchema = {
   lat: z.number().min(-90).max(90),
@@ -27,7 +28,10 @@ const queryPointSchema = {
 @Controller('attendance')
 @UseGuards(StaffGuard, PermissionsGuard)
 export class AttendanceController {
-  constructor(private readonly attendance: AttendanceService) {}
+  constructor(
+    private readonly attendance: AttendanceService,
+    private readonly settlements: SettlementsService
+  ) {}
 
   @Get('mine')
   @RequirePerm('attendance:clock')
@@ -122,5 +126,75 @@ export class AttendanceController {
       query
     );
     return this.attendance.board(staff, input);
+  }
+
+  // ---------- 劳务单价与月结（金额敏感，统一 attendance:settle） ----------
+
+  /** 门店劳务单价：读得到的是「本人可见门店」，单价不随门店配置页外泄。 */
+  @Get('labor-rates')
+  @RequirePerm('attendance:settle')
+  async laborRates(@Staff() staff: StaffContext) {
+    return this.settlements.rates(staff);
+  }
+
+  @Put('labor-rates/:storeId')
+  @RequirePerm('attendance:settle')
+  async saveLaborRate(
+    @Param('storeId') storeId: string,
+    @Body() body: unknown,
+    @Staff() staff: StaffContext
+  ) {
+    const input = parseInput(
+      z.object({
+        laborRatePerMinCents: z
+          .number()
+          .int('劳务单价应为整数（分/分钟）')
+          .min(0, '劳务单价不能为负数')
+          .max(MAX_LABOR_RATE_CENTS, '劳务单价超出上限，请确认单位是「分/分钟」'),
+        note: z.string().max(80).optional()
+      }),
+      body
+    );
+    return this.settlements.saveRate(staff, storeId, input);
+  }
+
+  @Get('settlements')
+  @RequirePerm('attendance:settle')
+  async settlementsList(@Query() query: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(
+      z.object({ month: z.string().optional(), storeId: z.string().min(1).optional() }),
+      query ?? {}
+    );
+    return this.settlements.list(staff, input);
+  }
+
+  /** 月结出单：不传 month 默认上一个月；草稿可反复重算，已入账的不动。 */
+  @Post('settlements/generate')
+  @RequirePerm('attendance:settle')
+  async generateSettlements(@Body() body: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(
+      z.object({ month: z.string().optional(), storeId: z.string().min(1).optional() }),
+      body ?? {}
+    );
+    return this.settlements.generate(staff, input);
+  }
+
+  /** 确认入账：调整额单独记录，金额 = 基础 + 调整；未闭合时段存在时硬阻断。 */
+  @Post('settlements/:id/confirm')
+  @RequirePerm('attendance:settle')
+  async confirmSettlement(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Staff() staff: StaffContext
+  ) {
+    const input = parseInput(
+      z.object({
+        adjustmentCents: z.number().int('调整额应为整数（分）').optional(),
+        adjustmentNote: z.string().max(200).optional(),
+        note: z.string().max(200).optional()
+      }),
+      body ?? {}
+    );
+    return this.settlements.confirm(staff, id, input);
   }
 }
