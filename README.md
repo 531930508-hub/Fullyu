@@ -7,11 +7,12 @@
 | `presence/` | 在场 / 轻疗（Full愈 主应用） | 小程序 + H5 + 后台 + API | uni-app(Vue3) + Ant Design Vue + NestJS + Prisma |
 | `shixu/` | 时叙（茶饮零售） | 小程序 + 后台 + API | 自有前端 + NestJS |
 | `crm/` | 品牌会员 CRM | 后台 + 小程序 + 游戏化模块 | React + NestJS |
-| `qingliao/full-yu-mini` | 轻疗旧版小程序（Vue2 时代，已停用存档） | 小程序源码，不参与构建部署 | uni-app |
 | `qingliao/tou-mall-server` | 轻疗商城后台 API（admin / portal） | 双 Spring Boot 服务 | Java 8 + Spring Boot + MyBatis-Plus |
 | `qingliao/tou-mall-admin-web` | 轻疗商城管理后台前端 | 静态站点 | Vue2 + Element UI |
 
-> 轻疗现行小程序（appid `wxeb4e8a99b7eeebf8`）在独立工程维护、单独编译上传，**不在本仓库**；原先的 `qingliao/full-yu-mini2` 快照已删除（见 `git log -- qingliao/full-yu-mini2`），需要时用 `git show 32af4a4:qingliao/full-yu-mini2/<path>` 取回。
+> 轻疗小程序（appid `wxeb4e8a99b7eeebf8`）在独立工程维护、单独编译上传，**不在本仓库**。
+> `qingliao/full-yu-mini`（Vue2 旧版）与 `qingliao/full-yu-mini2`（Vue3 快照）两份镜像已删除：它们停在 2025-12 / 2026-02，与现行源码分别差 4 / 86 处，CI 也不构建它们，保留只会让改动落到错的副本。
+> 需要查历史用 `git archive 32af4a4 qingliao/full-yu-mini2 | tar -x -C /tmp`，或 `git show 32af4a4:qingliao/full-yu-mini/<path>`。
 
 ## 快速上手
 
