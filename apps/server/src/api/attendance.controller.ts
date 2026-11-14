@@ -7,6 +7,7 @@ import { parseInput } from '../common/zod';
 import type { StaffContext } from '../common/auth.types';
 import { AttendanceService } from '../attendance/attendance.service';
 import { ShiftService } from '../attendance/shift.service';
+import { AttendanceReportService } from '../attendance/report.service';
 import { MAX_LABOR_RATE_CENTS, SettlementsService } from '../attendance/settlement.service';
 
 const pointSchema = {
@@ -32,6 +33,7 @@ export class AttendanceController {
   constructor(
     private readonly attendance: AttendanceService,
     private readonly shifts: ShiftService,
+    private readonly reports: AttendanceReportService,
     private readonly settlements: SettlementsService
   ) {}
 
@@ -178,6 +180,19 @@ export class AttendanceController {
       query ?? {}
     );
     return this.shifts.remove(staff, input);
+  }
+
+  // ---------- 考勤月报（只核工时，不含金额） ----------
+
+  /** 月度核对：一人一行，附人×天明细；month 缺省为当月。 */
+  @Get('report')
+  @RequirePerm('attendance:view')
+  async monthReport(@Query() query: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(
+      z.object({ storeId: z.string().min(1).optional(), month: z.string().optional() }),
+      query ?? {}
+    );
+    return this.reports.month(staff, input);
   }
 
   // ---------- 劳务单价与月结（金额敏感，统一 attendance:settle） ----------

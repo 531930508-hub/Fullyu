@@ -6,7 +6,7 @@ const canFrom = (perms: string[]) => (permission: string) =>
   perms.includes('*') || perms.includes(permission);
 
 describe('运营台导航分组', () => {
-  it('营业台作为一级直达入口，其余 24 个菜单收拢为 5 个分组', () => {
+  it('营业台作为一级直达入口，其余 25 个菜单收拢为 5 个分组', () => {
     const nav = visibleNav(allowAll);
     expect(pinnedNav(nav).map((item) => item.key)).toEqual(['store/workbench']);
 
@@ -18,8 +18,8 @@ describe('运营台导航分组', () => {
       '商品与门店',
       '组织与权限'
     ]);
-    expect(groups.reduce((total, group) => total + group.items.length, 0)).toBe(24);
-    expect(groups.map((group) => group.items.length)).toEqual([7, 4, 7, 3, 3]);
+    expect(groups.reduce((total, group) => total + group.items.length, 0)).toBe(25);
+    expect(groups.map((group) => group.items.length)).toEqual([7, 4, 8, 3, 3]);
   });
 
   it('二级菜单保持原顺序，营业台不再重复出现在门店营业组里', () => {
@@ -36,7 +36,7 @@ describe('运营台导航分组', () => {
       '本店设备'
     ]);
     expect(labels('经营分析')).toEqual(['经营概览', '财务流水', '门店利润', '运营费用']);
-    expect(labels('运营管理')).toEqual(['排班表', '在店看板', '劳务结算', '审批中心', '报损与损耗', '优惠券', '首页内容']);
+    expect(labels('运营管理')).toEqual(['排班表', '在店看板', '考勤月报', '劳务结算', '审批中心', '报损与损耗', '优惠券', '首页内容']);
     expect(labels('商品与门店')).toEqual(['商品目录', '原料映射', '门店配置']);
     expect(labels('组织与权限')).toEqual(['账号管理', '角色权限', '操作记录']);
   });
@@ -63,6 +63,7 @@ describe('运营台导航分组', () => {
     const nav = visibleNav(allowAll);
     expect(groupOf(nav, 'admin/content')).toBe('运营管理');
     expect(groupOf(nav, 'admin/schedule')).toBe('运营管理');
+    expect(groupOf(nav, 'admin/report')).toBe('运营管理');
     expect(groupOf(nav, 'admin/roles')).toBe('组织与权限');
     expect(groupOf(nav, 'admin/unknown')).toBeUndefined();
     // 营业台是一级直达，不触发任何分组展开。

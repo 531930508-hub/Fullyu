@@ -233,13 +233,40 @@ describe('在店时段与补签', () => {
   });
 
   it('看板按人汇总已闭合工时，并单独列出待处理', async () => {
-    const res = await h.api('get', `/attendance/board?storeId=${STORE}`, managerToken);
+    // 自带数据 + 固定归属日：汇总口径不能依赖用例的运行时刻（凌晨跑时「9 小时前」会跨零点到前一天）
+    const me = await h.prisma.user.findUniqueOrThrow({ where: { username: ACCOUNTS.staffSh } });
+    const date = '2026-03-03';
+    const dayStart = new Date(`${date}T10:00:00+08:00`).getTime();
+    const seeded = [
+      { id: 'ws-board-a', inAt: dayStart, outAt: dayStart + 300 * 60_000, status: 'closed' },
+      { id: 'ws-board-b', inAt: dayStart + 360 * 60_000, outAt: dayStart + 480 * 60_000, status: 'closed' },
+      { id: 'ws-board-c', inAt: dayStart + 500 * 60_000, outAt: null, status: 'lapsed' }
+    ];
+    for (const row of seeded) {
+      await h.prisma.workSession.create({
+        data: {
+          id: row.id,
+          storeId: STORE,
+          userId: me.id,
+          businessDate: date,
+          clockInAt: new Date(row.inAt),
+          clockOutAt: row.outAt ? new Date(row.outAt) : null,
+          inLat: LAT,
+          inLng: LNG,
+          status: row.status
+        }
+      });
+    }
+
+    const res = await h.api('get', `/attendance/board?storeId=${STORE}&date=${date}`, managerToken);
     expect(res.status).toBe(200);
     expect(res.body.summary.totalMinutes).toBe(420);
     expect(res.body.summary.unresolvedCount).toBe(1);
     expect(res.body.unresolved[0]).toMatchObject({ name: '顾小满', status: 'lapsed' });
     expect(res.body.rows[0].name).toBe('顾小满');
     expect(res.body.rows[0].minutes).toBe(420);
+
+    await h.prisma.workSession.deleteMany({ where: { id: { in: seeded.map((row) => row.id) } } });
   });
 
   it('超过单段上限仍在店的段自动转待补签，工时归零', async () => {

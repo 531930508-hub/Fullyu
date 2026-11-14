@@ -677,6 +677,51 @@ export type ShiftMatrix = {
   limits: { maxRangeDays: number; pastEditDays: number; futureEditDays: number };
 };
 
+/* ------------------------------ 考勤月报 ------------------------------ */
+
+export type AttendanceReportDay = {
+  businessDate: string;
+  shift: { id: string; startMin: number; endMin: number; note: string } | null;
+  plannedMinutes: number;
+  actualMinutes: number;
+  /** 当天未闭合的时段数：>0 说明这天的工时还没算完 */
+  unresolvedCount: number;
+  state: ShiftState;
+};
+
+export type AttendanceReportRow = {
+  userId: string;
+  name: string;
+  presentDays: number;
+  plannedMinutes: number;
+  actualMinutes: number;
+  absentDays: number;
+  shortDays: number;
+  unresolvedCount: number;
+  days: AttendanceReportDay[];
+};
+
+export type AttendanceReport = {
+  storeId: string;
+  storeName: string;
+  stores: Array<{ id: string; name: string }>;
+  month: string;
+  from: string;
+  to: string;
+  today: string;
+  rows: AttendanceReportRow[];
+  summary: {
+    people: number;
+    presentPeople: number;
+    attendanceDays: number;
+    plannedMinutes: number;
+    actualMinutes: number;
+    absentDays: number;
+    shortDays: number;
+    unresolvedCount: number;
+  };
+};
+
 /* ------------------------------ 劳务结算 ------------------------------ */
 
 /** 门店劳务单价：库里存「分/分钟」，小时价只是 *60 的展示口径。 */

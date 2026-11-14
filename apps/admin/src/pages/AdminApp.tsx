@@ -96,6 +96,7 @@ type Section =
   | 'approvals'
   | 'schedule'
   | 'attendance'
+  | 'report'
   | 'settlements'
   | 'losses'
   | 'coupons'
@@ -115,6 +116,7 @@ const SECTION_TITLE: Record<Section, string> = {
   approvals: '审批中心',
   schedule: '排班表',
   attendance: '在店看板',
+  report: '考勤月报',
   settlements: '劳务结算',
   losses: '报损与损耗',
   coupons: '优惠券',
@@ -136,6 +138,7 @@ const SECTION_PERM: Record<Section, string> = {
   approvals: 'approval:view',
   schedule: 'attendance:view',
   attendance: 'attendance:view',
+  report: 'attendance:view',
   settlements: 'attendance:settle',
   losses: 'loss:view',
   coupons: 'coupon:view',
@@ -156,6 +159,7 @@ const SECTION_ORDER: Section[] = [
   'approvals',
   'schedule',
   'attendance',
+  'report',
   'settlements',
   'losses',
   'coupons',
@@ -340,6 +344,7 @@ export function AdminApp() {
       {allowed && section === 'approvals' ? <ApprovalsPage onChanged={refreshApprovalCount} /> : null}
       {allowed && section === 'schedule' ? <SchedulePage /> : null}
       {allowed && section === 'attendance' ? <AttendancePage /> : null}
+      {allowed && section === 'report' ? <AttendanceReportPage /> : null}
       {allowed && section === 'settlements' ? <SettlementsPage /> : null}
       {allowed && section === 'losses' ? <LossesPage /> : null}
       {allowed && section === 'coupons' ? <CouponsPage /> : null}
@@ -2361,6 +2366,7 @@ function AttendancePage() {
                   <th className="num">已计入</th>
                   <th className="num">进行中</th>
                   <th className="num">未闭合</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -2392,6 +2398,306 @@ function AttendancePage() {
         <span>
           工时按「已结束」的时段累加，跨零点会拆到两天。看板只反映计时情况，
           工资结算以月底的工时结算单为准。
+        </span>
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------ 考勤月报 ------------------------------ */
+
+const REPORT_TARGET: Record<string, { label: string; tone: 'ok' | 'warn' | 'danger' | 'neutral' }> = {
+  planned: { label: '未开始', tone: 'neutral' },
+  done: { label: '已对上', tone: 'ok' },
+  short: { label: '短时', tone: 'warn' },
+  absent: { label: '缺勤', tone: 'danger' },
+  none: { label: '计划外', tone: 'neutral' }
+};
+
+/** 差异带符号：+ 是多记的，− 是少记的；0 不写「0m」而写破折号，扫表更快。 */
+function signedMinutesText(minutes: number) {
+  if (!minutes) return '—';
+  return `${minutes > 0 ? '+' : '−'}${durationText(Math.abs(minutes))}`;
+}
+
+/**
+ * 考勤月报：一个月、一家店、一人一行，月底核对用。
+ *
+ * 数据和班表同一套口径（服务端算好），页面只负责「按月看汇总 + 按人下钻到天」。
+ * 这里不出现金额：工资在「劳务结算」按门店单价出单，混在一起容易把计划工时当成应付工时。
+ */
+function AttendanceReportPage() {
+  const [storeId, setStoreId] = useState('');
+  const [month, setMonth] = useState(() => currentMonthText());
+  const [personId, setPersonId] = useState('');
+  const query = useApi(() => api.attendanceReport({ storeId: storeId || undefined, month }), [storeId, month]);
+
+  if (query.loading && !query.data) return <Spinner label="正在汇总月度考勤" />;
+  if (query.error && !query.data) return <InlineError message={query.error} />;
+  const data = query.data;
+  if (!data) return null;
+
+  // 全员 × 整月会有很多「没班也没工时」的空行，汇总只留有内容的员工
+  const active = data.rows.filter(
+    (row) => row.plannedMinutes > 0 || row.actualMinutes > 0 || row.unresolvedCount > 0
+  );
+  const picked = active.find((row) => row.userId === personId) ?? null;
+  const detail = (picked ? [picked] : active)
+    .flatMap((row) =>
+      row.days
+        .filter((day) => day.shift || day.actualMinutes > 0 || day.unresolvedCount > 0)
+        .map((day) => ({ row, day }))
+    )
+    .sort((a, b) => (a.day.businessDate === b.day.businessDate ? 0 : a.day.businessDate < b.day.businessDate ? 1 : -1));
+
+  const diffMinutes = data.summary.actualMinutes - data.summary.plannedMinutes;
+  const fileStem = `考勤月报-${data.storeName}-${data.month}`;
+
+  const exportSummary = () =>
+    exportCsv(
+      `${fileStem}-汇总.csv`,
+      ['门店', '月份', '员工', '出勤天数', '计划工时(分钟)', '实际工时(分钟)', '差异(分钟)', '缺勤天数', '短时天数', '未闭合段数'],
+      active.map((row) => [
+        data.storeName,
+        data.month,
+        row.name,
+        row.presentDays,
+        row.plannedMinutes,
+        row.actualMinutes,
+        row.actualMinutes - row.plannedMinutes,
+        row.absentDays,
+        row.shortDays,
+        row.unresolvedCount
+      ])
+    );
+
+  const exportDetail = () =>
+    exportCsv(
+      `${fileStem}-明细.csv`,
+      ['门店', '月份', '日期', '员工', '班次', '计划(分钟)', '实际(分钟)', '结论', '未闭合段数'],
+      detail.map(({ row, day }) => [
+        data.storeName,
+        data.month,
+        day.businessDate,
+        row.name,
+        day.shift ? shiftText(day.shift.startMin, day.shift.endMin) : '',
+        day.plannedMinutes,
+        day.actualMinutes,
+        REPORT_TARGET[day.state]?.label ?? day.state,
+        day.unresolvedCount
+      ])
+    );
+
+  return (
+    <>
+      <PageHead
+        eyebrow="品牌总部 · 门店"
+        title="考勤月报"
+        description="按月核对工时：谁出勤了几天、计划与实际差多少、哪天缺勤或短时、还有哪些时段没闭合。工资请到「劳务结算」出单。"
+        actions={
+          <div className="row-gap">
+            <select value={storeId} onChange={(event) => setStoreId(event.target.value)} aria-label="门店">
+              {data.stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="month"
+              value={month}
+              max={currentMonthText()}
+              onChange={(event) => {
+                if (event.target.value) setMonth(event.target.value);
+              }}
+              aria-label="月份"
+            />
+          </div>
+        }
+      />
+
+      <div className="stat-grid">
+        <Stat
+          label="出勤人天"
+          value={data.summary.attendanceDays}
+          hint={`${data.summary.presentPeople} 人有工时 · ${data.summary.people} 人有排班或工时`}
+          icon="users"
+        />
+        <Stat
+          label="实际工时"
+          value={durationText(data.summary.actualMinutes)}
+          hint={data.summary.plannedMinutes ? `计划 ${durationText(data.summary.plannedMinutes)}` : '本月还没有排班'}
+          icon="clock"
+        />
+        <Stat
+          label="实际 − 计划"
+          value={signedMinutesText(diffMinutes)}
+          hint="计划只作对照，工资按实际工时结算"
+          tone={diffMinutes ? 'soft' : 'plain'}
+        />
+        <Stat
+          label="缺勤 / 短时"
+          value={`${data.summary.absentDays} / ${data.summary.shortDays}`}
+          hint={
+            data.summary.unresolvedCount
+              ? `${data.summary.unresolvedCount} 段未闭合，工时未计入`
+              : '没有未闭合的时段'
+          }
+          tone={data.summary.unresolvedCount ? 'soft' : 'plain'}
+          icon="alert"
+        />
+      </div>
+
+      <Panel
+        title="按人汇总"
+        description="只列本月有排班、有工时或有未闭合时段的员工；点一行可下钻到这个人的人×天明细。"
+        actions={
+          <button type="button" className="btn btn-sm btn-ghost" disabled={!active.length} onClick={exportSummary}>
+            <Icon name="download" size={14} /> 导出汇总
+          </button>
+        }
+        flush
+      >
+        {!active.length ? (
+          <EmptyState
+            icon="chart"
+            title="这个月还没有工时记录"
+            description={`${data.month} 的到店记录会在这里按月汇总；排班只是计划，员工到店确认后才产生实际工时。`}
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>员工</th>
+                  <th className="num">出勤</th>
+                  <th className="num">计划</th>
+                  <th className="num">实际</th>
+                  <th className="num">差异</th>
+                  <th className="num">缺勤</th>
+                  <th className="num">短时</th>
+                  <th className="num">未闭合</th>
+                </tr>
+              </thead>
+              <tbody>
+                {active.map((row) => {
+                  const rowDiff = row.actualMinutes - row.plannedMinutes;
+                  return (
+                    <tr key={row.userId}>
+                      <td>
+                        {row.name}
+                        {!row.plannedMinutes ? <span className="tiny muted"> · 未排班</span> : null}
+                      </td>
+                      <td className="num">{row.presentDays} 天</td>
+                      <td className="num muted">{row.plannedMinutes ? durationText(row.plannedMinutes) : '—'}</td>
+                      <td className="num">{row.actualMinutes ? durationText(row.actualMinutes) : '—'}</td>
+                      <td className={`num${rowDiff ? '' : ' muted'}`}>
+                        {row.plannedMinutes ? signedMinutesText(rowDiff) : '—'}
+                      </td>
+                      <td className="num">
+                        {row.absentDays ? <Badge tone="danger">{row.absentDays}</Badge> : <span className="muted">—</span>}
+                      </td>
+                      <td className="num">
+                        {row.shortDays ? <Badge tone="warn">{row.shortDays}</Badge> : <span className="muted">—</span>}
+                      </td>
+                      <td className="num">
+                        {row.unresolvedCount ? (
+                          <Badge tone="warn">{row.unresolvedCount}</Badge>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => setPersonId(picked?.userId === row.userId ? '' : row.userId)}
+                        >
+                          {picked?.userId === row.userId ? '收起明细' : '看明细'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <Panel
+        title="人 × 天明细"
+        description="只列有班、有工时或有未闭合时段的日期；今天不判缺勤，短时/缺勤只看往天。"
+        actions={
+          <div className="row-gap">
+            <select value={personId} onChange={(event) => setPersonId(event.target.value)} aria-label="员工">
+              <option value="">全部员工</option>
+              {active.map((row) => (
+                <option key={row.userId} value={row.userId}>
+                  {row.name}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn btn-sm btn-ghost" disabled={!detail.length} onClick={exportDetail}>
+              <Icon name="download" size={14} /> 导出明细
+            </button>
+          </div>
+        }
+        flush
+      >
+        {!detail.length ? (
+          <EmptyState
+            icon="calendar"
+            title="没有可展开的明细"
+            description="这个人本月既没有排班也没有工时；换个人或换个月份再看看。"
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>员工</th>
+                  <th>班次</th>
+                  <th className="num">计划</th>
+                  <th className="num">实际</th>
+                  <th>结论</th>
+                  <th className="num">未闭合</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.map(({ row, day }) => {
+                  const target = REPORT_TARGET[day.state] ?? { label: day.state, tone: 'neutral' as const };
+                  return (
+                    <tr key={`${row.userId}|${day.businessDate}`}>
+                      <td>
+                        {day.businessDate}
+                        <span className="tiny muted"> {weekdayText(day.businessDate)}</span>
+                      </td>
+                      <td>{row.name}</td>
+                      <td className="muted">{day.shift ? shiftText(day.shift.startMin, day.shift.endMin) : '—'}</td>
+                      <td className="num muted">{day.plannedMinutes ? durationText(day.plannedMinutes) : '—'}</td>
+                      <td className="num">{day.actualMinutes ? durationText(day.actualMinutes) : '—'}</td>
+                      <td>
+                        <Badge tone={target.tone}>{target.label}</Badge>
+                      </td>
+                      <td className="num">
+                        {day.unresolvedCount ? <Badge tone="warn">{day.unresolvedCount}</Badge> : <span className="muted">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <div className="notice">
+        <Icon name="info" size={15} />
+        <span>
+          实际工时只累加「已结束」的时段，跨零点会拆到两天；未闭合时段（忘了点离店、等审批的补签）先不计入、
+          在这里单独计数。金额与单价不在这页，请看「劳务结算」。
         </span>
       </div>
     </>

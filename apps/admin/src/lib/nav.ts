@@ -46,6 +46,8 @@ export const OPS_NAV: OpsNavItem[] = [
   // 排班在在店看板之前：先排「几点该来」，再看「今天谁在」。
   { key: 'admin/schedule', label: '排班表', icon: 'calendar', perm: 'attendance:view', group: '运营管理' },
   { key: 'admin/attendance', label: '在店看板', icon: 'users', perm: 'attendance:view', group: '运营管理' },
+  // 月报紧跟在店看板之后：看板看「今天谁在」，月报看「这个月谁出勤了多少小时」。
+  { key: 'admin/report', label: '考勤月报', icon: 'chart', perm: 'attendance:view', group: '运营管理' },
   // 结算紧跟在店看板之后：看板看「今天谁在」，结算看「这个月该结多少」。
   { key: 'admin/settlements', label: '劳务结算', icon: 'coin', perm: 'attendance:settle', group: '运营管理' },
   { key: 'admin/approvals', label: '审批中心', icon: 'check', perm: 'approval:view', group: '运营管理' },

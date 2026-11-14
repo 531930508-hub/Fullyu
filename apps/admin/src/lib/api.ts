@@ -492,6 +492,9 @@ export const api = {
   /** 按 (门店, 员工, 日期) 清空，前端不必先拿 id。 */
   attendanceClearShift: (query: { storeId: string; userId: string; businessDate: string }) =>
     request<{ ok: boolean }>('/attendance/shifts', { method: 'DELETE', query }),
+  /** 月度核对：一人一行 + 人×天明细，不含金额（金额在劳务结算）。 */
+  attendanceReport: (query: { storeId?: string; month?: string }) =>
+    request<import('./types').AttendanceReport>('/attendance/report', { query }),
 
   /* ------------------------- 考勤：劳务结算 ------------------------- */
 
