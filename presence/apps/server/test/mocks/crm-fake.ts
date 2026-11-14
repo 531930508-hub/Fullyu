@@ -12,6 +12,9 @@ export interface FakeCrmMember {
   memberNo: string
   name: string
   balance: number
+  gender?: number | null
+  birthday?: string | null
+  avatarUrl?: string | null
 }
 
 export interface FakeCrmRequest {
@@ -26,6 +29,8 @@ export interface FakeCrm {
   url: string
   members: Map<string, FakeCrmMember>
   birthdays: Map<string, string | null>
+  /** 资料回写记录：localUserId → 最近一次收到的补丁 */
+  profiles: Map<string, Record<string, unknown>>
   requests: FakeCrmRequest[]
   failNext: { status: number; body: unknown } | null
   delayMs: number
@@ -56,12 +61,14 @@ export async function startFakeCrm(options: { keyId: string; secret: string }): 
   const { keyId, secret } = options
   const members = new Map<string, FakeCrmMember>()
   const birthdays = new Map<string, string | null>()
+  const profiles = new Map<string, Record<string, unknown>>()
   const requests: FakeCrmRequest[] = []
   let seq = 0
   const state: FakeCrm = {
     url: '',
     members,
     birthdays,
+    profiles,
     requests,
     failNext: null,
     delayMs: 0,
@@ -97,22 +104,50 @@ export async function startFakeCrm(options: { keyId: string; secret: string }): 
     }
 
     if (req.method === 'POST' && path === '/api/external/members/resolve') {
-      const input = JSON.parse(rawBody) as { localUserId?: string; name?: string | null }
+      const input = JSON.parse(rawBody) as {
+        localUserId?: string
+        name?: string | null
+        gender?: number | null
+        birthday?: string | null
+        avatarUrl?: string | null
+      }
       const localUserId = String(input.localUserId || '')
       let member = members.get(localUserId)
       if (!member) {
         seq += 1
+        // 与真实 CRM 一致：新建会员时把性别 / 生日 / 头像一起落库
         member = {
           memberId: `mem-${seq}`,
           memberNo: `FY-TEST-${String(seq).padStart(6, '0')}`,
           name: String(input.name || '会员'),
           balance: 0,
+          gender: input.gender ?? null,
+          birthday: input.birthday ?? null,
+          avatarUrl: input.avatarUrl ?? null,
         }
         members.set(localUserId, member)
         reply(res, 200, { ...member, created: true, bound: false })
         return
       }
       reply(res, 200, { ...member, created: false, bound: false })
+      return
+    }
+
+    // 资料回写：未建档返回 404（在场会补一次 resolve 建档），已建档则记录补丁
+    if (req.method === 'POST' && path === '/api/external/members/profile') {
+      const input = JSON.parse(rawBody) as { localUserId?: string } & Record<string, unknown>
+      const localUserId = String(input.localUserId || '')
+      const member = members.get(localUserId)
+      if (!member) {
+        reply(res, 404, { error: 'NOT_FOUND', message: '该本地用户尚未同步到 CRM' })
+        return
+      }
+      const { localUserId: _ignored, ...patch } = input
+      profiles.set(localUserId, patch)
+      if (patch.birthday !== undefined) {
+        birthdays.set(localUserId, (patch.birthday as string | null) ?? null)
+      }
+      reply(res, 200, { memberNo: member.memberNo, updated: Object.keys(patch) })
       return
     }
 

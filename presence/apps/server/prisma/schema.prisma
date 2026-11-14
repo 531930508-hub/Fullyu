@@ -22,6 +22,10 @@ model User {
   openId             String?            @unique @map("open_id")
   unionId            String?            @map("union_id")
   language           String             @default("zh") // zh | en
+  /// 性别：1=男 2=女；NULL=未设置，与 CRM member.gender 同口径
+  gender             Int?
+  /// 生日（只到日期，不含时间）；YYYY-MM-DD 与 CRM member.birthday 同口径
+  birthday           DateTime?          @db.Date
   isTrainer          Boolean            @default(false) @map("is_trainer")
   /// 导师门户登录密码（bcrypt）；学员账号为空，不能登录导师门户
   passwordHash       String?            @map("password_hash")

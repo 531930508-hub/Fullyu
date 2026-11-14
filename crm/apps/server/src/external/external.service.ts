@@ -8,6 +8,7 @@ import { badRequest, conflict, notFound } from '../common/errors';
 import { newId } from '../common/ids';
 import { runIdempotent } from '../common/idempotency';
 import { normalizePhone } from '../common/phone';
+import { buildProfileUpdate, type ProfilePatch } from '../members/profile-input';
 import type { ExternalContext } from './external.guard';
 
 export type ResolveInput = {
@@ -60,6 +61,7 @@ export class ExternalService {
       memberId: result.member.id,
       memberNo: result.member.memberNo,
       name: result.member.name,
+      ...this.profileFields(result.member),
       balance: await this.points.balance(result.member.id),
       created: result.created,
       bound: result.bound
@@ -77,8 +79,54 @@ export class ExternalService {
       memberId: identity.member.id,
       memberNo: identity.member.memberNo,
       name: identity.member.name,
+      ...this.profileFields(identity.member),
       status: identity.member.status,
       balance: await this.points.balance(identity.member.id)
+    };
+  }
+
+  /** 资料字段给业务端回读用：profileVersion 让业务端判断「本地是否还是旧版」。 */
+  private profileFields(member: Member) {
+    return {
+      gender: member.gender,
+      birthday: member.birthday ? shanghaiDate(member.birthday) : null,
+      avatarUrl: member.avatarUrl,
+      profileVersion: member.profileVersion
+    };
+  }
+
+  /**
+   * 业务端回写会员资料（在场小程序「我的资料」编辑后同步）。
+   *
+   * - 只认已解析过的身份：没绑定直接 404，不在写接口里偷偷建会员；
+   * - 字段规则与员工后台共用 buildProfileUpdate，传了才改、传 null 才清空；
+   * - 员工后台走 baseVersion 乐观锁；业务端是顾客改自己的资料，按最后写入生效，
+   *   每次改动写审计（带业务端 key），后台能追溯谁覆盖了什么。
+   */
+  async updateProfile(input: ProfilePatch & { localUserId: string }, context: ExternalContext) {
+    const localUserId = this.requireString(input?.localUserId, 'localUserId', 64);
+    this.assertLocalId(localUserId);
+    const identity = await this.prisma.memberIdentity.findUnique({
+      where: { business_localUserId: { business: context.business, localUserId } },
+      include: { member: true }
+    });
+    if (!identity) throw notFound('该本地用户尚未同步到 CRM，请先完成身份解析');
+    const data = buildProfileUpdate(input ?? {});
+    const updated = await this.prisma.member.update({
+      where: { id: identity.memberId },
+      data: { ...data, profileVersion: { increment: 1 } }
+    });
+    await audit(this.prisma, {
+      actor: actorOf(context.business, context),
+      action: '修改会员资料',
+      target: updated.memberNo,
+      detail: `业务端 · ${localUserId} · v${identity.member.profileVersion}→v${updated.profileVersion}`
+    });
+    return {
+      memberId: updated.id,
+      memberNo: updated.memberNo,
+      name: updated.name,
+      ...this.profileFields(updated)
     };
   }
 

@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ExternalGuard, type ExternalRequest } from './external.guard';
+import type { ProfilePatch } from '../members/profile-input';
 import { ExternalService, type PointChangeInput, type ResolveInput } from './external.service';
 
 /**
@@ -32,6 +33,12 @@ export class ExternalController {
   @HttpCode(200)
   importMembers(@Body() body: { members?: ResolveInput[] }, @Req() req: ExternalRequest) {
     return this.external.importMembers(body?.members || [], req.external!);
+  }
+
+  @Post('members/profile')
+  @HttpCode(200)
+  updateProfile(@Body() body: ProfilePatch & { localUserId: string }, @Req() req: ExternalRequest) {
+    return this.external.updateProfile(body, req.external!);
   }
 
   @Post('points/earn')

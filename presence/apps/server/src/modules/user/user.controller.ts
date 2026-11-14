@@ -20,7 +20,14 @@ export class UserController {
   @ApiOperation({ summary: '更新用户信息' })
   async updateProfile(
     @Request() req: any,
-    @Body() body: { nickname?: string; avatar?: string; language?: string },
+    @Body()
+    body: {
+      nickname?: string
+      avatar?: string
+      language?: string
+      gender?: number | null
+      birthday?: string | null
+    },
   ) {
     return this.userService.updateProfile(req.user.userId, body)
   }

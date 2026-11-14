@@ -93,6 +93,28 @@ describe('CRM 接入配置与客户端（在场）', () => {
     await expect(client.getBirthdays(['u-b1'])).resolves.toEqual(new Map())
   })
 
+  it('资料回写：已建档按字段覆盖，未建档返回 NOT_SYNCED 由调用方补建档', async () => {
+    const client = new CrmClient(configOf({ ...baseEnv, CRM_BASE_URL: fake.url }))
+    await client.resolve({ localUserId: 'u-p1', name: '资料会员' })
+    await expect(
+      client.updateProfile('u-p1', { name: '新昵称', gender: 2, birthday: '1995-03-08' }),
+    ).resolves.toBe('UPDATED')
+    expect(fake.profiles.get('u-p1')).toEqual({
+      name: '新昵称',
+      gender: 2,
+      birthday: '1995-03-08',
+    })
+    expect(fake.birthdays.get('u-p1')).toBe('1995-03-08')
+    const sent = JSON.parse(fake.requests[fake.requests.length - 1]!.body) as Record<string, unknown>
+    expect(sent).toMatchObject({ localUserId: 'u-p1', name: '新昵称', gender: 2 })
+    expect(fake.requests.every((item) => item.signatureOk)).toBe(true)
+
+    await expect(client.updateProfile('u-absent', { gender: 1 })).resolves.toBe('NOT_SYNCED')
+
+    fake.failNext = { status: 500, body: { message: '内部堆栈' } }
+    await expect(client.updateProfile('u-p1', { gender: 1 })).rejects.toMatchObject({ bizCode: 5030 })
+  })
+
   it('身份冲突返回 409 业务码，由顾客联系客服', async () => {
     const client = new CrmClient(configOf({ ...baseEnv, CRM_BASE_URL: fake.url }))
     fake.failNext = { status: 409, body: { error: 'CONFLICT' } }
@@ -210,6 +232,71 @@ describe('在场业务接入点', () => {
       { enabled: false } as unknown as CrmClient,
     )
     await expect(disabled.getPointsBalance('u-old')).resolves.toBe(77)
+  })
+
+  it('资料编辑先写 CRM 再写本地；未建档时补一次 resolve 建档', async () => {
+    const crm = new CrmClient(configOf({ ...baseEnv, CRM_BASE_URL: fake.url }))
+    const prisma: any = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'u-edit',
+          phone: '13900003006',
+          nickname: '旧名',
+          avatar: null,
+          gender: null,
+          birthday: null,
+          unionId: null,
+          openId: null,
+        }),
+        update: jest.fn(async ({ data }: any) => ({ id: 'u-edit', photo: null, ...data })),
+      },
+    }
+    const service = new UserService(prisma, crm)
+    await service.updateProfile('u-edit', {
+      nickname: '新名',
+      gender: 1,
+      birthday: '1990-05-06',
+      avatar: 'https://cdn.example.com/me.jpg',
+    })
+
+    // 老会话还没建档：先 resolve 再写，建档时带上本次的新值
+    expect(fake.members.get('u-edit')).toMatchObject({
+      name: '新名',
+      gender: 1,
+      birthday: '1990-05-06',
+      avatarUrl: 'https://cdn.example.com/me.jpg',
+    })
+    const stored = prisma.user.update.mock.calls[0][0].data
+    // 生日按 +08 当天 0 点存，避免跨时区变成前一天
+    expect((stored.birthday as Date).toISOString()).toBe('1990-05-05T16:00:00.000Z')
+
+    await expect(service.updateProfile('u-edit', { gender: 3 })).rejects.toThrow(/性别/)
+    await expect(service.updateProfile('u-edit', { birthday: '2999-01-01' })).rejects.toThrow(/生日/)
+  })
+
+  it('CRM 写资料失败时整单失败，不落本地库（否则出现两边不一致）', async () => {
+    const crm = new CrmClient(configOf({ ...baseEnv, CRM_BASE_URL: fake.url }))
+    await crm.resolve({ localUserId: 'u-fail', name: '失败会员' })
+    const prisma: any = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'u-fail',
+          phone: '13900003007',
+          nickname: '失败会员',
+          avatar: null,
+          gender: null,
+          birthday: null,
+          unionId: null,
+          openId: null,
+        }),
+        update: jest.fn(),
+      },
+    }
+    fake.failNext = { status: 500, body: { message: '内部堆栈' } }
+    await expect(
+      new UserService(prisma, crm).updateProfile('u-fail', { gender: 2 }),
+    ).rejects.toMatchObject({ bizCode: 5030 })
+    expect(prisma.user.update).not.toHaveBeenCalled()
   })
 
   it('拒绝返回不符合契约的余额数据，避免前端显示 NaN', async () => {

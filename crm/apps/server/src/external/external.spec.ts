@@ -271,6 +271,68 @@ describe('CRM 1C：业务端签名接口、身份与积分', () => {
     expect(again.body.failed).toHaveLength(1);
   });
 
+  it('资料回写：小程序编辑覆盖 CRM，未解析身份与非法值拒绝', async () => {
+    await signed('post', '/external/members/resolve', {
+      body: { localUserId: 'ql-profile-1', phone: '+8613800000301', name: '资料测试' }
+    });
+
+    const saved = await signed('post', '/external/members/profile', {
+      body: {
+        localUserId: 'ql-profile-1',
+        name: '新昵称',
+        gender: 2,
+        birthday: '1996-03-08',
+        avatarUrl: 'https://cdn.example.com/a.jpg'
+      }
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.body).toMatchObject({
+      name: '新昵称',
+      gender: 2,
+      birthday: '1996-03-08',
+      avatarUrl: 'https://cdn.example.com/a.jpg'
+    });
+
+    // 再改一次：覆盖已有值（resolve 的「只补空」语义在这里不适用）
+    const again = await signed('post', '/external/members/profile', {
+      body: { localUserId: 'ql-profile-1', gender: 1 }
+    });
+    expect(again.status).toBe(200);
+    expect(again.body.gender).toBe(1);
+    expect(again.body.profileVersion).toBeGreaterThan(saved.body.profileVersion);
+
+    // 业务端回读：资料字段与版本号齐全，生日不因时区串日
+    const pulled = await signed('get', '/external/members/ql-profile-1');
+    expect(pulled.status).toBe(200);
+    expect(pulled.body).toMatchObject({
+      name: '新昵称',
+      gender: 1,
+      birthday: '1996-03-08',
+      avatarUrl: 'https://cdn.example.com/a.jpg',
+      profileVersion: again.body.profileVersion
+    });
+
+    const missing = await signed('post', '/external/members/profile', {
+      body: { localUserId: 'ql-never-resolved', gender: 1 }
+    });
+    expect(missing.status).toBe(404);
+
+    const invalid = await signed('post', '/external/members/profile', {
+      body: { localUserId: 'ql-profile-1', birthday: '2999-01-01' }
+    });
+    expect(invalid.status).toBe(400);
+
+    const empty = await signed('post', '/external/members/profile', {
+      body: { localUserId: 'ql-profile-1' }
+    });
+    expect(empty.status).toBe(400);
+
+    // 后台可见「改的是谁、从哪端改的」
+    const audit = await h.api('get', '/audit?action=' + encodeURIComponent('修改会员资料'), admin);
+    expect(audit.status).toBe(200);
+    expect(audit.body.logs.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('外部写入留审计，积分不变量保持', async () => {
     const audit = await h.api('get', '/audit?action=' + encodeURIComponent('外部积分入账'), admin);
     expect(audit.status).toBe(200);

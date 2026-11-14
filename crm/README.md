@@ -118,10 +118,11 @@ pnpm dev:server                                # 先编 shared，再 tsx watch
 | `GET /external/members/:localUserId` | 查本业务用户 |
 | `POST /external/members/import` | ≤500 条批量导入，逐条幂等，返回新建/绑定/已存在/失败 |
 | `POST /external/members/birthdays` | ≤200 个本地用户 id 批量查生日，仅返回本业务已同步身份（`YYYY-MM-DD` 或 null） |
+| `POST /external/members/profile` | 业务端回写资料（`name`/`gender`/`birthday`/`avatarUrl`）：只认已解析身份，未同步 404；传了才改、传 null 才清空；每次写入留审计并递增 `profileVersion` |
 | `POST /external/points/earn` | 加分，`points>0`，带 `reason` 与 `ref` |
 | `POST /external/points/consume` | 扣分，余额不足 422，按到期最早优先 |
 
-身份匹配：本业务身份 → unionId（存在身份上）→ 手机号；unionId 与手机号命中不同会员时 409 `IDENTITY_CONFLICT`，不自动合并；外部只补空缺资料，不覆盖 CRM 已有值。
+身份匹配：本业务身份 → unionId（存在身份上）→ 手机号；unionId 与手机号命中不同会员时 409 `IDENTITY_CONFLICT`，不自动合并；外部只补空缺资料，不覆盖 CRM 已有值。员工后台改资料走 `baseVersion` 乐观锁；业务端 `members/profile` 是顾客改自己的资料，按最后写入生效，规则与后台共用同一套校验。
 
 ### 品牌会员契约（`X-Fy-*`）
 

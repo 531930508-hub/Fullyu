@@ -8,6 +8,10 @@ export interface UserProfile {
   avatar?: string
   language?: string
   isTrainer: boolean
+  /** 1=男 2=女；null 表示未设置 */
+  gender?: number | null
+  /** yyyy-MM-dd；会员中心回读时用于生日礼遇提醒 */
+  birthday?: string | null
   points?: number
   /** 是否已有可用于签到核验的个人照片；接口不返回照片本身 */
   hasVerificationPhoto?: boolean
@@ -33,7 +37,13 @@ export function getProfile() {
 }
 
 /** 更新个人信息 */
-export function updateProfile(body: { nickname?: string; avatar?: string; language?: string }) {
+export function updateProfile(body: {
+  nickname?: string
+  avatar?: string
+  language?: string
+  gender?: number | null
+  birthday?: string | null
+}) {
   return put<UserProfile>('/user/profile', body)
 }
 

@@ -23,6 +23,17 @@ export interface CrmIdentity {
   avatarUrl?: string | null
 }
 
+/** 会员资料回写补丁：只带本次改动的字段，未传的不动。 */
+export interface CrmProfilePatch {
+  name?: string
+  /** 1=男 2=女；null 表示清空 */
+  gender?: number | null
+  /** YYYY-MM-DD；null 表示清空 */
+  birthday?: string | null
+  /** 只接受 http(s) 地址；本地 base64 头像由调用方判断是否推送 */
+  avatarUrl?: string | null
+}
+
 export interface CrmMember {
   memberId: string
   memberNo: string
@@ -139,6 +150,25 @@ export class CrmClient {
       )
     }
     return result
+  }
+
+  /**
+   * 回写会员资料（小程序「编辑资料」保存后同步）。
+   *
+   * 与 resolve 的区别：resolve 只补空字段，这里按传入字段覆盖；
+   * 本地用户尚未在 CRM 建档（404）时返回 NOT_SYNCED，由调用方补一次 resolve 建档。
+   */
+  async updateProfile(
+    localUserId: string,
+    patch: CrmProfilePatch,
+  ): Promise<'UPDATED' | 'NOT_SYNCED'> {
+    try {
+      await this.request('POST', '/api/external/members/profile', { localUserId, ...patch })
+      return 'UPDATED'
+    } catch (error) {
+      if (error instanceof CrmResponseError && error.status === 404) return 'NOT_SYNCED'
+      throw this.mapError(error)
+    }
   }
 
   private normalize(member: CrmMember): CrmMember {

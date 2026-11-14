@@ -14,12 +14,14 @@
         </button>
         <view class="profile-card">
           <view class="form-row"><label class="row-label" for="nickname">{{ tr('昵称', 'Nickname') }}</label><input id="nickname" v-model="form.nickname" class="row-input" :placeholder="tr('请输入昵称', 'Enter a nickname')" maxlength="20" :disabled="saving" /></view>
+          <view class="form-row"><text class="row-label">{{ tr('性别', 'Gender') }}</text><picker class="row-picker" mode="selector" :range="genderLabels" :value="form.gender === 2 ? 2 : form.gender === 1 ? 1 : 0" :disabled="saving" @change="onGenderChange"><view class="row-value">{{ form.gender === 1 ? tr('男', 'Male') : form.gender === 2 ? tr('女', 'Female') : tr('未设置', 'Not set') }}</view></picker></view>
+          <view class="form-row"><text class="row-label">{{ tr('生日', 'Birthday') }}</text><picker class="row-picker" mode="date" :value="form.birthday || '1990-01-01'" :end="today" :disabled="saving" @change="onBirthdayChange"><view :class="['row-value', { placeholder: !form.birthday }]">{{ form.birthday || tr('未设置', 'Not set') }}</view></picker></view>
           <view class="form-row"><text class="row-label">{{ tr('手机号', 'Phone') }}</text><view class="phone-value"><PresenceIcon name="lock" :size="28" :color="iconColors.muted" /><text>{{ maskedPhone || tr('未提供', 'Not provided') }}</text></view></view>
           <text class="field-note">{{ tr('手机号不可在此修改，如需更换请联系客服核验身份。', 'The phone number cannot be changed here. Contact support for identity verification to change it.') }}</text>
         </view>
         <view class="profile-card">
           <view class="card-heading"><PresenceIcon name="user" :size="36" /><text>{{ tr('公开资料', 'Public profile') }}</text></view>
-          <text class="field-note">{{ tr('头像和昵称用于展示。本页仅保存这两项资料，不会修改会员核验照片。', 'Avatar and nickname are for display. This page only saves these two fields and will not change your membership verification photo.') }}</text>
+          <text class="field-note">{{ tr('头像和昵称用于展示；性别和生日用于会员权益与生日礼遇，保存后会同步到会员中心。本页不会修改会员核验照片。', 'Avatar and nickname are for display; gender and birthday drive member perks and birthday gifts and are synced to the member center. Your membership verification photo is not changed here.') }}</text>
         </view>
         <view class="privacy-notice"><PresenceIcon name="lock" :size="32" /><text>{{ tr('会员照片仅用于线下签到核验，开卡后有效期内不可在资料页修改。', 'The membership photo is only used for on-site check-in verification and cannot be changed on this page during the card term.') }}</text></view>
         <text v-if="saveError" class="feedback" role="alert">{{ saveError }}</text>
@@ -48,7 +50,9 @@ const capsule = readCapsuleLayout()
 const statusBarHeight = capsule.statusBarHeight
 const headerTop = capsule.headerTop
 const isLoggedIn = computed(() => userStore.isLoggedIn)
-const form = ref({ nickname: '', avatar: '' })
+const form = ref<{ nickname: string; avatar: string; gender: number | null; birthday: string }>({ nickname: '', avatar: '', gender: null, birthday: '' })
+const genderLabels = computed(() => [tr('未设置', 'Not set'), tr('男', 'Male'), tr('女', 'Female')])
+const today = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
 const phone = ref('')
 const saving = ref(false)
 const choosingAvatar = ref(false)
@@ -61,7 +65,7 @@ const maskedPhone = computed(() => { const p = phone.value || ''; return p.lengt
 
 async function loadProfile() {
   if (!uni.getStorageSync('token')) userStore.logout()
-  if (!isLoggedIn.value) { form.value = { nickname: '', avatar: '' }; phone.value = ''; loaded.value = false; loadedFor.value = ''; return }
+  if (!isLoggedIn.value) { form.value = { nickname: '', avatar: '', gender: null, birthday: '' }; phone.value = ''; loaded.value = false; loadedFor.value = ''; return }
   if (loading.value || saving.value) return
   loading.value = true
   loadError.value = false
@@ -69,7 +73,12 @@ async function loadProfile() {
     const profile = await getProfile()
     if (!uni.getStorageSync('token')) { userStore.logout(); return }
     if (!profile) throw new Error(tr('资料不存在', 'Profile not found'))
-    form.value = { nickname: profile.nickname || '', avatar: profile.avatar || '' }
+    form.value = {
+      nickname: profile.nickname || '',
+      avatar: profile.avatar || '',
+      gender: profile.gender === 1 || profile.gender === 2 ? profile.gender : null,
+      birthday: (profile.birthday || '').slice(0, 10),
+    }
     phone.value = profile.phone || ''
     loaded.value = true
     loadedFor.value = userStore.userInfo?.id || ''
@@ -94,13 +103,25 @@ async function changeAvatar() {
     }
   } finally { choosingAvatar.value = false }
 }
+function onGenderChange(event: any) {
+  const index = Number(event?.detail?.value ?? 0)
+  form.value.gender = index === 1 ? 1 : index === 2 ? 2 : null
+}
+function onBirthdayChange(event: any) {
+  form.value.birthday = String(event?.detail?.value || '')
+}
 async function handleSave() {
   if (!isLoggedIn.value || !loaded.value || loadError.value || saving.value || choosingAvatar.value) return
   if (!form.value.nickname.trim()) { saveError.value = tr('请输入昵称', 'Enter a nickname'); return }
   saving.value = true
   saveError.value = ''
   try {
-    const updated = await updateProfile({ nickname: form.value.nickname.trim(), avatar: form.value.avatar || undefined })
+    const updated = await updateProfile({
+      nickname: form.value.nickname.trim(),
+      avatar: form.value.avatar || undefined,
+      gender: form.value.gender,
+      birthday: form.value.birthday || undefined,
+    })
     if (userStore.userInfo) {
       userStore.userInfo.nickname = updated.nickname
       userStore.userInfo.avatar = updated.avatar || undefined
@@ -140,6 +161,9 @@ button::after { border: none; }
 .form-row { display: flex; align-items: center; gap: 24rpx; min-height: 100rpx; border-bottom: 1rpx solid var(--line-soft); }
 .row-label { font-size: 28rpx; flex-shrink: 0; }
 .row-input { min-width: 0; flex: 1; text-align: right; font-size: 28rpx; color: var(--c-ink); height: 88rpx; }
+.row-picker { flex: 1; min-width: 0; display: flex; justify-content: flex-end; }
+.row-value { text-align: right; font-size: 28rpx; color: var(--c-ink); height: 88rpx; line-height: 88rpx; }
+.row-value.placeholder { color: var(--c-muted); }
 .phone-value { display: flex; justify-content: flex-end; gap: 10rpx; flex: 1; align-items: center; font-size: 28rpx; color: var(--c-muted); }
 .field-note { display: block; margin-top: 20rpx; font-size: 24rpx; line-height: 1.7; color: var(--c-muted); }
 .card-heading { display: flex; align-items: center; gap: 16rpx; font-size: 30rpx; font-weight: 600; padding-top: 20rpx; }
