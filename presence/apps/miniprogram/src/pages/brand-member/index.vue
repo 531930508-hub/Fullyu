@@ -640,7 +640,7 @@ onShareTimeline(() => brandShareTimeline(shareTitle()))
 </script>
 
 <style scoped>
-.page { min-height: 100vh; background: var(--c-cream); color: var(--c-ink); padding-bottom: calc(180rpx + env(safe-area-inset-bottom)); font-size: 28rpx; }
+.page { min-height: 100vh; background: var(--c-cream); color: var(--c-ink); padding-bottom: calc(60rpx + env(safe-area-inset-bottom)); font-size: 28rpx; }
 .nav-bar { padding: 20rpx 32rpx; display: flex; align-items: center; gap: 16rpx; }
 .nav-copy { flex: 1; min-width: 0; }
 .nav-title { display: block; font-size: 36rpx; line-height: 1.4; }
