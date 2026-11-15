@@ -24,10 +24,10 @@
           <text class="brand-entry-eyebrow latin">FULL YU ANNUAL</text>
           <text class="brand-entry-state">{{ brandActive ? tr(`还有 ${brandRemaining} 天`, `${brandRemaining} days left`) : tr('三店通用', 'All three stores') }}</text>
         </view>
-        <text class="brand-entry-title serif">{{ tr('Full愈年卡', 'Full Yu Annual') }}</text>
-        <text class="brand-entry-sub">{{ brandActive ? tr(`积分 ${brandPoints} · 骰子 ${brandDice}`, `${brandPoints} points · ${brandDice} dice`) : (isLoggedIn ? (brandMember ? tr('¥299 / 年 · 月卡 ¥45', '¥299 / year · ¥45 / month') : tr('品牌通用会员 · 三店权益', 'Brand-wide membership · three stores')) : tr('¥299 / 年 · 月卡 ¥45 · 登录后查看积分与有效期', '¥299 / year · ¥45 / month · sign in for points')) }}</text>
+        <text class="brand-entry-title serif">{{ tr('Full愈大会员', 'Full Yu Member') }}</text>
+        <text class="brand-entry-sub">{{ brandActive ? tr(`积分 ${brandPoints} · 骰子 ${brandDice}`, `${brandPoints} points · ${brandDice} dice`) : (isLoggedIn ? (brandMember ? tr('会员卡 · 三店通用', 'Member card · three stores') : tr('品牌通用会员 · 三店权益', 'Brand-wide membership · three stores')) : tr('会员卡 · 三店通用 · 登录后查看积分与有效期', 'Member card · three stores · sign in for points')) }}</text>
         <view class="brand-entry-foot">
-          <text>{{ brandActive ? tr('进入品牌会员中心', 'Open brand membership') : (isLoggedIn ? tr('开通品牌年卡', 'Join Full Yu Annual') : tr('了解品牌会员', 'See brand membership')) }}</text>
+          <text>{{ brandActive ? tr('进入品牌会员中心', 'Open brand membership') : (isLoggedIn ? tr('开通品牌会员', 'Join Full Yu Member') : tr('了解品牌会员', 'See brand membership')) }}</text>
           <PresenceIcon name="arrow" :size="22" :color="brandActive ? '#eec76f' : iconColors.primary" />
         </view>
       </button>
@@ -176,7 +176,7 @@ const accountMenu = computed(() => [
   { page: 'voucher-redeem', icon: 'ticket', label: tr('兑换代金券', 'Redeem voucher'), tab: false },
   { page: 'my-reviews', icon: 'star', label: t('profile.myReviews'), tab: false },
   { page: 'community-mine', icon: 'users', label: tr('我的社群', 'My communities'), tab: false },
-  { page: 'brand-member', icon: 'card', label: tr('Full愈年卡', 'Full Yu Annual'), tab: false },
+  { page: 'brand-member', icon: 'card', label: tr('Full愈大会员', 'Full Yu Member'), tab: false },
 ])
 
 async function loadBrandData() {

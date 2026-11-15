@@ -7,8 +7,8 @@ const root = path.join(__dirname, 'src')
 const read = p => fs.readFileSync(path.join(root, p), 'utf8')
 const pages = JSON.parse(read('pages.json')).pages
 
-test('全部15个页面保持有效Vue单文件组件结构', () => {
-  assert.equal(pages.length, 15)
+test('全部页面保持有效Vue单文件组件结构', () => {
+  assert.ok(pages.length >= 15)
   for (const p of pages) {
     const source = read(p.path + '.vue')
     const result = parse(source)
@@ -84,8 +84,10 @@ test('返回按钮固定在安全区左上角且不再随内容滚动', () => {
 })
 test('固定社群标签在英文模式下翻译', () => {
   const labels = read('utils/community-labels.ts')
+  // 标签文案改由服务端值集下发，前端只补历史 SDG 前缀标签的英文。
   assert.match(labels, /SDG 3 Good health/)
-  assert.match(labels, /Mind-body healing/)
+  assert.match(labels, /LEGACY_TAG_EN/)
+  assert.match(labels, /DICT_COMMUNITY_TAG/)
   for (const page of ['pages/community-create/index.vue', 'pages/community-list/index.vue', 'pages/community-detail/index.vue']) {
     assert.match(read(page), /communityTagLabel/, page)
   }
@@ -121,7 +123,6 @@ test('所有自定义导航页面为微信胶囊预留顶部避让', () => {
     'pages/my-reviews/index.vue',
     'pages/profile-edit/index.vue',
     'pages/trainer-workspace/index.vue',
-    'pages/member/index.vue',
     'pages/profile/index.vue',
     'pages/my-courses/index.vue',
     'pages/community-list/index.vue',

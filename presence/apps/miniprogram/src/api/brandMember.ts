@@ -1,5 +1,5 @@
 /**
- * 品牌会员（Full愈年卡）客户端适配层。
+ * 品牌会员（Full愈大会员）客户端适配层。
  *
  * 生产构建默认走在场服务端代理（/member/brand/*）：签名密钥只留在服务端，
  * 会员身份固定取当前登录用户，页面不接触 CRM、也不信任前端传入的积分、骰子或金额。
@@ -71,7 +71,7 @@ export interface BrandMemberData {
   savedCents: number
   /** 续费提醒：仅 EXPIRING 且无待生效续卡时由 CRM 给出，金额与文案都以 CRM 为准。 */
   renewal?: { show: boolean; savedCents?: number; remainingDays?: number | null; text?: string }
-  /** 年卡礼提货码：任一门店出示、店员核销一次。 */
+  /** 会员礼提货码：任一门店出示、店员核销一次。 */
   vouchers?: BrandPickupVoucher[]
   /** 会员公告：后台发布后只对有效会员返回，置顶优先，最多 3 条。 */
   notices?: BrandNotice[]
@@ -153,18 +153,22 @@ export interface BrandQuote {
   expiresAt: number | string
 }
 
-export const CARD_PRODUCTS: BrandCardProduct[] = [
+/**
+ * 仅本地联调用的合成目录，两档与 CRM 现行配置一致；
+ * 线上目录、价格一律以 /member/brand/products 返回为准，页面不读这里。
+ */
+const MOCK_PRODUCTS: BrandCardProduct[] = [
   {
     code: 'FY_MONTH',
-    name: 'Full愈月卡',
-    priceCents: 4500,
-    validDays: 30,
-    period: '30 天'
+    name: 'Full愈月会员',
+    priceCents: 9900,
+    validDays: 90,
+    period: '90 天'
   },
   {
     code: 'FY_ANNUAL',
-    name: 'Full愈年卡',
-    priceCents: 29900,
+    name: 'Full愈大会员',
+    priceCents: 36500,
     validDays: 365,
     period: '365 天'
   }
@@ -173,8 +177,8 @@ export const CARD_PRODUCTS: BrandCardProduct[] = [
 const BENEFITS: BrandBenefit[] = [
   {
     business: 'presence',
-    title: '在场 · 优先排位与阶梯价',
-    desc: '热门课程候补优先排位；课程享会员阶梯价'
+    title: '在场 · 优先排位与会员价',
+    desc: '热门课程优先排位，课程可享会员价'
   },
   {
     business: 'teahour',
@@ -205,8 +209,8 @@ function annualCard(forceExpiring = false): BrandCardState {
     return {
       state: 'EXPIRING',
       productCode: 'FY_ANNUAL',
-      productName: 'Full愈年卡',
-      priceCents: 29900,
+      productName: 'Full愈大会员',
+      priceCents: 36500,
       validFrom: '2025-11-27',
       validUntil: '2026-11-26',
       remainingDays: 18,
@@ -217,8 +221,8 @@ function annualCard(forceExpiring = false): BrandCardState {
   return {
     state: daysFromNow('2027-10-29') <= 30 ? 'EXPIRING' : 'ACTIVE',
     productCode: 'FY_ANNUAL',
-    productName: 'Full愈年卡',
-    priceCents: 29900,
+    productName: 'Full愈大会员',
+    priceCents: 36500,
     validFrom: '2026-10-30',
     validUntil: '2027-10-29',
     remainingDays: daysFromNow('2027-10-29'),
@@ -294,7 +298,7 @@ export function createMockState(cardState = 'ACTIVE'): BrandMemberData {
       ? [
           {
             code: 'PV8K2M',
-            title: '年卡茶礼一份',
+            title: '会员茶礼一份',
             desc: '任一门店出示提货码，店员核销一次',
             valueCents: 6800,
             status: 'ISSUED',
@@ -319,7 +323,7 @@ function clone<T>(value: T): T {
 
 /** 读取品牌会员身份、积分、骰子与本业务只读卡；产品目录只读 CRM 当前生效版本。 */
 export async function loadBrandMember(): Promise<BrandMemberData> {
-  if (isMock) return clone({ ...mockState, products: CARD_PRODUCTS })
+  if (isMock) return clone({ ...mockState, products: MOCK_PRODUCTS })
   const [me, catalog] = await Promise.all([
     get<BrandMemberData>('/member/brand/me'),
     get<{ products: BrandCardProduct[] }>('/member/brand/products').catch(() => null)
@@ -333,7 +337,7 @@ export async function loadBrandMember(): Promise<BrandMemberData> {
 
 export function quoteBrandCard(productCode: string): Promise<BrandQuote> {
   const product =
-    CARD_PRODUCTS.find((item) => item.code === productCode) || CARD_PRODUCTS[1]
+    MOCK_PRODUCTS.find((item) => item.code === productCode) || MOCK_PRODUCTS[1]
   if (isMock) {
     return Promise.resolve({
       quoteId: `q_mock_${Date.now()}`,
@@ -362,8 +366,8 @@ export function issueBrandCard(payload: {
       return Promise.reject(new Error('AMOUNT_MISMATCH'))
     }
     const product =
-      CARD_PRODUCTS.find((item) => item.code === quote.productCode) ||
-      CARD_PRODUCTS[1]
+      MOCK_PRODUCTS.find((item) => item.code === quote.productCode) ||
+      MOCK_PRODUCTS[1]
     const start = new Date()
     const end = new Date(start.getTime() + product.validDays * 86400000)
     const iso = (d: Date) =>

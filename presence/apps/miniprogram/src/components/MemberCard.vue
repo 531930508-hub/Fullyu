@@ -7,7 +7,7 @@
   <view class="bmc" :class="{ 'is-open': open, 'is-dim': !active }">
     <view class="bmc-main">
       <view class="bmc-row1">
-        <text class="bmc-eyebrow">FULL YU ANNUAL MEMBER</text>
+        <text class="bmc-eyebrow">FULL YU MEMBER</text>
         <text class="bmc-scope">{{ tr('全平台通用', 'All locations') }}</text>
         <text class="bmc-state" :class="{ 'is-warn': expiring }">{{ stateText }}</text>
       </view>
@@ -23,8 +23,8 @@
     <view class="bmc-foot" :class="{ 'is-warn': expiring }">
       <view class="bmc-cell bmc-saved">
         <text class="bmc-lab">{{ active ? tr('本年已省', 'Saved this year') : tr('开卡', 'Join') }}</text>
-        <text class="bmc-amt serif">¥{{ formatYuan(active ? savedCents : annualPrice) }}</text>
-        <text v-if="!active" class="bmc-more">{{ tr('起 / 年', 'from / year') }}</text>
+        <text class="bmc-amt serif">{{ active || annualPrice !== null ? '¥' + formatYuan(active ? savedCents : annualPrice) : '—' }}</text>
+        <text v-if="!active && annualPrice !== null" class="bmc-more">{{ tr('起', 'from') }}</text>
       </view>
       <view class="bmc-cell bmc-toggle" role="button" @tap="open = !open">
         <text>{{ footText }}</text>
@@ -35,39 +35,20 @@
     <!-- 展开区：往下长，把下面的内容推下去 -->
     <view class="bmc-drawer">
       <view class="bmc-drawer-in">
-        <text class="bmc-dhead">{{ tr('全平台权益 · 全门店可用', 'Platform-wide benefits · all locations') }}</text>
-        <view v-for="item in benefitRows" :key="item.business + item.title" class="bmc-ben">
-          <text class="bmc-brand">{{ brandName(item.business) }}</text>
-          <view class="bmc-ben-body">
-            <text class="bmc-ben-t">{{ item.title }}</text>
-            <text v-if="item.desc" class="bmc-ben-d">{{ item.desc }}</text>
+        <view v-if="benefitRows.length" class="bmc-benefits">
+          <text class="bmc-dhead">{{ tr('全平台权益 · 全门店可用', 'Platform-wide benefits · all locations') }}</text>
+          <view v-for="item in benefitRows" :key="item.business + item.title" class="bmc-ben">
+            <text class="bmc-brand">{{ brandName(item.business) }}</text>
+            <view class="bmc-ben-body">
+              <text class="bmc-ben-t">{{ item.title }}</text>
+              <text v-if="item.desc" class="bmc-ben-d">{{ item.desc }}</text>
+            </view>
+            <text v-if="item.business === homeBusiness" class="bmc-here">{{ tr('本店', 'Here') }}</text>
           </view>
-          <text v-if="item.business === homeBusiness" class="bmc-here">{{ tr('本店', 'Here') }}</text>
         </view>
 
-        <view class="bmc-sep"></view>
-        <view class="bmc-renew-head">
-          <text class="bmc-dhead tight">{{ active ? tr('续费与卡型', 'Renew & plans') : tr('开通', 'Join') }}</text>
-          <text class="bmc-renew-tail">{{ renewTail }}</text>
-        </view>
-        <view class="bmc-plans">
-          <view
-            v-for="product in products"
-            :key="product.code"
-            class="bmc-plan"
-            :class="{ 'is-on': selected === product.code }"
-            role="button"
-            @tap="$emit('select', product.code)"
-          >
-            <text class="bmc-plan-name">{{ planName(product) }}</text>
-            <text class="bmc-plan-price serif">¥{{ formatYuan(product.priceCents) }}</text>
-            <text class="bmc-plan-period">{{ tr(`${product.validDays} 天`, `${product.validDays} days`) }}</text>
-          </view>
-        </view>
-        <button hover-class="none" class="bmc-renew" @tap="$emit('purchase', selected)">
-          {{ active ? tr('续费 ', 'Renew ') : tr('开通 ', 'Join ') }}{{ planName(selectedProduct) }} · ¥{{ formatYuan(selectedProduct.priceCents) }}
-        </button>
-        <text class="bmc-note">{{ active ? tr('续费从到期日往后接；', 'Renewal starts when your current term ends. ') : '' }}{{ tr('7 天内可自助退款，已领年卡礼按价值扣除。', 'Self-service refund within 7 days; received annual gifts are deducted at value.') }}</text>
+        <view v-if="benefitRows.length" class="bmc-sep"></view>
+        <text class="bmc-note">{{ active ? tr('续费从到期日往后接；', 'Renewal starts when your current term ends. ') : '' }}{{ tr('7 天内可自助退款，已领会员礼按价值扣除。', 'Self-service refund within 7 days; gifts already collected are deducted at value.') }}</text>
         <text v-if="!active && purchaseMode !== 'mock'" class="bmc-note">{{ tr('线上支付接入中，暂不能在线开通。', 'Online payment is not live yet, so joining here is unavailable.') }}</text>
         <view class="bmc-link" @tap="$emit('rules')">
           <text>{{ tr('会员权益与退款规则', 'Member benefits & refund rules') }}</text>
@@ -77,6 +58,10 @@
           <text>{{ tr('有会员码？点此兑换', 'Have a member code? Redeem here') }}</text>
           <text class="bmc-link-tail">›</text>
         </view>
+        <!-- 续费/开通统一收进抽屉：点开是选时长的确认弹窗，卡外不再重复放按钮 -->
+        <button hover-class="none" class="bmc-renew" @tap.stop="$emit('renew')">
+          {{ active ? tr('续费 Full愈大会员', 'Renew Full Yu Membership') : tr('开通 Full愈大会员', 'Join Full Yu Membership') }}
+        </button>
       </view>
     </view>
   </view>
@@ -84,17 +69,16 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CARD_PRODUCTS, cardStateLabel, formatDate, formatYuan, type BrandCardProduct, type BrandMemberData } from '@/api/brandMember'
+import { cardStateLabel, formatDate, formatYuan, type BrandCardProduct, type BrandMemberData } from '@/api/brandMember'
 import { isEnglish, tr } from '@/locale'
 
 const props = defineProps<{
   data: BrandMemberData
   active: boolean
   products: BrandCardProduct[]
-  selected: string
   purchaseMode: string
 }>()
-defineEmits<{ (e: 'select', code: string): void; (e: 'purchase', code: string): void; (e: 'rules'): void; (e: 'gift'): void }>()
+defineEmits<{ (e: 'rules'): void; (e: 'gift'): void; (e: 'renew'): void }>()
 
 const open = ref(false)
 /** 当前门店＝在场；权益行上标出「本店」。 */
@@ -105,17 +89,8 @@ const PLAN_EN: Record<string, string> = {
 }
 /** 卡面大字用产品全名，英文界面下按已知全名翻译。 */
 const PLAN_NAME_EN: Record<string, string> = {
-  'Full愈年卡': 'Full Yu Annual',
-  'Full愈月卡': 'Full Yu Monthly'
-}
-/** CRM 权益标题与说明是中文，英文界面下按已知文案翻译，未命中时原样展示。 */
-const BENEFIT_EN: Record<string, [string, string]> = {
-  '在场 · 优先排位与阶梯价': ['Presence · priority spots & tier pricing', 'Priority waitlist on popular classes; member tier prices without a Pass'],
-  '时叙 · 会员茶饮权益': ['Teahour · member tea benefits', 'Member-only tea benefits; details per store notice'],
-  '轻疗 · 项目会员价': ['Retreat · member treatment prices', 'Book a day ahead for member price; same-day bookings get a member price too'],
-  '会员茶饮权益': ['Member tea benefits', 'Details per store notice'],
-  '项目会员价': ['Member treatment prices', 'Book a day ahead for member price'],
-  '优先排位与课程阶梯价': ['Priority spots & tier pricing', 'Priority waitlist on popular classes']
+  'Full愈大会员': 'Full Yu Member',
+  'Full愈月会员': 'Full Yu Monthly Member'
 }
 
 const card = computed(() => props.data?.card || ({} as BrandMemberData['card']))
@@ -125,7 +100,7 @@ const stateText = computed(() => (props.active ? cardStateLabel(card.value.state
 
 const nameLine = computed(() => {
   const name = props.active ? card.value.productName : ''
-  const fallback = name || tr('Full愈年卡', 'Full Yu Annual')
+  const fallback = name || tr('Full愈大会员', 'Full Yu Member')
   return isEnglish() ? PLAN_NAME_EN[fallback] || (card.value.productCode ? PLAN_EN[card.value.productCode] : '') || fallback : fallback
 })
 const whoLine = computed(() => {
@@ -152,42 +127,21 @@ const renewalText = computed(() => {
   }
   return ''
 })
-const annualPrice = computed(() => {
-  const hit = props.products.find((item) => item.code === 'FY_ANNUAL') || CARD_PRODUCTS[1]
-  return (hit || { priceCents: 29900 }).priceCents
+/** 卡脚起价只从 CRM 目录取最低一档；目录没拿到就显示占位符，不写死价格。 */
+const annualPrice = computed<number | null>(() => {
+  const rows = props.products
+  if (!rows.length) return null
+  const hit = rows.find((item) => item.code === 'FY_ANNUAL') || rows[0]
+  return hit && hit.priceCents != null ? hit.priceCents : null
 })
-const selectedProduct = computed(
-  () => props.products.find((item) => item.code === props.selected) || props.products[0] || CARD_PRODUCTS[0]
+const footText = computed(() =>
+  props.active ? tr('权益与续费', 'Benefits & renewal') : tr('查看权益', 'See benefits')
 )
-const footText = computed(() => {
-  if (!props.active) return tr('查看权益', 'See benefits')
-  return expiring.value ? tr('去续费', 'Renew') : tr('权益与续费', 'Benefits & renewal')
-})
-const renewTail = computed(() => {
-  if (props.active) return tr('从到期日接续', 'Starts after your term')
-  return props.purchaseMode === 'mock' ? tr('本单由在场收款', 'Paid to Presence') : tr('线上支付接入中', 'Payment coming soon')
-})
-const benefitRows = computed(() => {
-  const rows = props.data?.benefits || []
-  const list: { business: string; title: string; desc: string }[] = rows.length
-    ? rows.map((item) => ({ business: item.business, title: item.title, desc: item.desc }))
-    : [
-        { business: 'teahour', title: tr('时叙 · 会员茶饮权益', 'Teahour · member tea benefits'), desc: tr('会员专属茶饮权益，具体内容以门店公示为准', 'Member-only tea benefits; details per store notice') },
-        { business: 'presence', title: tr('在场 · 优先排位与阶梯价', 'Presence · priority spots & tier pricing'), desc: tr('热门课程候补优先排位；课程享会员阶梯价', 'Priority waitlist on popular classes; member tier pricing') },
-        { business: 'retreat', title: tr('轻疗 · 项目会员价', 'Retreat · member treatment prices'), desc: tr('提前一天预约享会员价，当日预约另有会员价', 'Book a day ahead for member price; same-day bookings get a member price too') }
-      ]
-  // 中文权益按已知文案翻译；后端新增文案保持原文，不硬翻。
-  return isEnglish() ? list.map((item) => {
-    const hit = BENEFIT_EN[item.title]
-    return hit ? { business: item.business, title: hit[0], desc: hit[1] } : item
-  }) : list
-})
+/** 权益行只认 CRM 文案并原样展示：后台改什么，三端就显示什么。 */
+const benefitRows = computed(() => props.data?.benefits || [])
 
 function brandName(business: string) {
   return ({ teahour: tr('时叙', 'Teahour'), presence: tr('在场', 'Presence'), retreat: tr('轻疗', 'Retreat') } as Record<string, string>)[business] || tr('全平台', 'All')
-}
-function planName(product: BrandCardProduct) {
-  return isEnglish() ? PLAN_EN[product.code] || product.name : product.name
 }
 </script>
 
@@ -453,6 +407,7 @@ function planName(product: BrandCardProduct) {
   width: 100%;
   margin-top: 10px;
   padding: 9px;
+  border: 0;
   border-radius: 10px;
   background: #f7f1e7;
   color: #3a2a1e;
@@ -461,6 +416,7 @@ function planName(product: BrandCardProduct) {
   letter-spacing: 0.04em;
   line-height: 1.2;
 }
+.bmc-renew::after { border: 0; }
 .bmc-note {
   display: block;
   margin-top: 7px;
