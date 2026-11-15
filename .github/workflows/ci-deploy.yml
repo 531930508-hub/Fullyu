@@ -167,13 +167,17 @@ jobs:
           script: |
             set -e
             ts=$(date +%Y%m%d-%H%M%S)
-            for pair in "/tmp/fullyu-ci/admin-dist.tar.gz:$ADMIN_DIST_PATH" "/tmp/fullyu-ci/h5-dist.tar.gz:$H5_DIST_PATH"; do
-              tarball="${pair%%:*}"; dest="${pair##*:}"
+            # 备份名带 label：admin 与 h5 的 dest 都以 dist 结尾，之前用 basename 会互相覆盖备份
+            for pair in "admin:/tmp/fullyu-ci/admin-dist.tar.gz:$ADMIN_DIST_PATH" "h5:/tmp/fullyu-ci/h5-dist.tar.gz:$H5_DIST_PATH"; do
+              label="${pair%%:*}"; rest="${pair#*:}"
+              tarball="${rest%%:*}"; dest="${rest##*:}"
               mkdir -p "$dest"
               # 备份旧产物到 /tmp，再清空目标并解包，避免残留陈旧 chunk
-              [ -d "$dest" ] && tar -czf "/tmp/$(basename "$dest").bak-$ts.tar.gz" -C "$dest" . 2>/dev/null || true
+              [ -d "$dest" ] && tar -czf "/tmp/fullyu-dist-$label.bak-$ts.tar.gz" -C "$dest" . 2>/dev/null || true
               rm -rf "$dest"/*
               tar -xzf "$tarball" -C "$dest"
+              # 只留最近 5 份：/tmp 曾堆积上千个 bak 把磁盘吃满
+              ls -1t /tmp/fullyu-dist-$label.bak-*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm -f
             done
             rm -f /tmp/fullyu-ci/admin-dist.tar.gz /tmp/fullyu-ci/h5-dist.tar.gz
 
@@ -193,6 +197,8 @@ jobs:
             [ -f apps/server/.env.local ] || { echo "apps/server/.env.local missing"; exit 1; }
             ts=$(date +%Y%m%d-%H%M%S)
             [ -d apps/server/dist ] && tar -czf "/tmp/server-dist.bak-$ts.tar.gz" -C apps/server/dist .
+            # 只留最近 5 份备份，避免 /tmp 堆积
+            ls -1t /tmp/server-dist.bak-*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm -f
             # 源码包是覆盖解包：先删旧源码目录，避免已下线的文件/路由继续残留
             rm -rf apps/server/src apps/server/prisma packages/shared/src
             tar -xzf /tmp/fullyu-ci/server-src.tar.gz -C "$SERVER_PATH"
@@ -229,5 +235,19 @@ jobs:
             pm2 restart "$PM2_APP" --update-env \
               || pm2 start dist/main.js --name "$PM2_APP" --cwd "$SERVER_PATH/apps/server" --update-env
             pm2 save
-            sleep 3
-            curl -fsS "http://127.0.0.1:3000/api/v1/health" >/dev/null && echo "health ok"
+            # 就绪探测：pm2 restart 返回 0 只代表进程被拉起来，不代表已开始监听。
+            # 实测冷启动（db push + tsc 之后首次请求要初始化 Prisma 连接池）常常 >3s，
+            # 固定 sleep 3 + 单次 curl 会把正常部署判红，改成 12 次 × 5s（最多 60s）重试。
+            ok=0
+            for i in $(seq 1 12); do
+              if curl -fsS --max-time 3 "http://127.0.0.1:3000/api/v1/health" >/dev/null 2>&1; then
+                ok=1; echo "health ok (attempt $i)"; break
+              fi
+              sleep 5
+            done
+            if [ "$ok" != "1" ]; then
+              echo "::error::$PM2_APP 健康检查 60s 内 12 次均失败，部署判为失败"
+              pm2 describe "$PM2_APP" | tail -40 || true
+              pm2 logs "$PM2_APP" --lines 60 --nostream || true
+              exit 1
+            fi
