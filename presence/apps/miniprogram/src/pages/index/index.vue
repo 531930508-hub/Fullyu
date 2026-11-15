@@ -41,7 +41,7 @@
         <view v-if="isTrainer" class="view-switch"><button :class="{ active: activeView === 'student' }" @tap="setView('student')">{{ tr('学员视角', 'Student') }}</button><button :class="{ active: activeView === 'trainer' }" @tap="setView('trainer')">{{ tr('导师视角', 'Trainer') }}</button></view>
         <view v-if="!userStore.isLoggedIn" class="guest-card"><view><text class="entry-title">{{ tr('登录，开启你的在场体验', 'Sign in to begin your practice') }}</text><text class="muted">{{ tr('查看预约、会员卡与积分', 'See bookings, membership and points') }}</text></view><button class="btn-primary" @tap="goProfile">{{ tr('去登录', 'Sign in') }}</button></view>
         <view v-else class="entry-grid">
-          <button class="entry-card" @tap="activeView === 'trainer' ? goTrainerWorkspace() : goBrand()"><PresenceIcon :name="activeView === 'trainer' ? 'chart' : 'card'" :size="42" /><text class="entry-title">{{ activeView === 'trainer' ? tr('导师工作台', 'Trainer Studio') : brandActive ? tr('我的会员卡', 'My membership') : tr('Full愈年卡', 'Full Yu Annual') }}</text><text class="muted">{{ activeView === 'trainer' ? tr('查看课程与合作记录', 'Classes and collaborations') : brandActive ? tr(`积分 ${brandPoints} · 有效至 ${brandValidUntil}`, `${brandPoints} points · valid until ${brandValidUntil}`) : tr('¥299 / 年 · 三店通用', '¥299 / year · all three stores') }}</text></button>
+          <button class="entry-card" @tap="activeView === 'trainer' ? goTrainerWorkspace() : goBrand()"><PresenceIcon :name="activeView === 'trainer' ? 'chart' : 'card'" :size="42" /><text class="entry-title">{{ activeView === 'trainer' ? tr('导师工作台', 'Trainer Studio') : brandActive ? tr('我的会员卡', 'My membership') : tr('Full愈年卡', 'Full Yu Annual') }}</text><text class="muted">{{ activeView === 'trainer' ? tr('查看课程与合作记录', 'Classes and collaborations') : brandActive ? tr(`积分 ${brandPoints} · 有效至 ${brandValidUntil}`, `${brandPoints} points · valid until ${brandValidUntil}`) : brandEntryLine }}</text></button>
           <button class="entry-card light" @tap="activeView === 'trainer' ? goCommunityMine() : goBookings()"><PresenceIcon :name="activeView === 'trainer' ? 'users' : 'calendar'" :size="42" /><text class="entry-title">{{ activeView === 'trainer' ? tr('我的社群', 'My communities') : tr('我的预约', 'My bookings') }}</text><text class="muted">{{ activeView === 'trainer' ? tr('与学员保持连接', 'Stay connected with students') : tr('课程安排与待支付订单', 'Schedule and pending orders') }}</text></button>
         </view>
       </view>
@@ -112,7 +112,7 @@ import { listVenues, type VenueItem } from '@/api/venue'
 import { fetchCommunities, fetchMine, type Community } from '@/api/skool'
 import { courseTagLabel } from '@/utils/course-labels'
 import { communityCategoryLabel } from '@/utils/community-labels'
-import { loadBrandMember, type BrandMemberData } from '@/api/brandMember'
+import { loadBrandMember, formatYuan, type BrandMemberData } from '@/api/brandMember'
 import { fetchNextCourse } from '@/api/order'
 import { updateTabBarLanguage, tr, isEnglish } from '@/locale'
 import { coursePhaseLabel } from '@fullyu/shared'
@@ -324,6 +324,15 @@ const brandMember = ref<BrandMemberData | null>(null)
 const brandActive = computed(() => ['ACTIVE', 'EXPIRING', 'PENDING'].includes(brandMember.value?.card?.state || ''))
 const brandPoints = computed(() => brandMember.value?.points?.balance || 0)
 const brandValidUntil = computed(() => brandMember.value?.card?.validUntil || '')
+/** 入口价目只读 CRM 目录；读不到就不写金额，避免出现写死的旧价格。 */
+const brandEntryLine = computed(() => {
+  const rows = (brandMember.value?.products || []).filter((item) => Number.isFinite(Number(item.priceCents)))
+  if (!rows.length) return tr('三店通用', 'All three stores')
+  const cheapest = rows.reduce((low, item) => (Number(item.priceCents) < Number(low.priceCents) ? item : low))
+  const amount = `¥${formatYuan(cheapest.priceCents)}`
+  const price = rows.length > 1 ? tr(`${amount} 起`, `from ${amount}`) : amount
+  return tr(`${price} · 三店通用`, `${price} · all three stores`)
+})
 const nextCourse = ref<any>(null)
 async function loadAccount() {
   if (!uni.getStorageSync('token')) { brandMember.value = null; nextCourse.value = null; return }

@@ -25,7 +25,7 @@
           <text class="brand-entry-state">{{ brandActive ? tr(`还有 ${brandRemaining} 天`, `${brandRemaining} days left`) : tr('三店通用', 'All three stores') }}</text>
         </view>
         <text class="brand-entry-title serif">{{ tr('Full愈年卡', 'Full Yu Annual') }}</text>
-        <text class="brand-entry-sub">{{ brandActive ? tr(`积分 ${brandPoints} · 骰子 ${brandDice}`, `${brandPoints} points · ${brandDice} dice`) : (isLoggedIn ? (brandMember ? tr('¥299 / 年 · 月卡 ¥45', '¥299 / year · ¥45 / month') : tr('品牌通用会员 · 三店权益', 'Brand-wide membership · three stores')) : tr('¥299 / 年 · 月卡 ¥45 · 登录后查看积分与有效期', '¥299 / year · ¥45 / month · sign in for points')) }}</text>
+        <text class="brand-entry-sub">{{ brandSubLine }}</text>
         <view class="brand-entry-foot">
           <text>{{ brandActive ? tr('进入品牌会员中心', 'Open brand membership') : (isLoggedIn ? tr('开通品牌年卡', 'Join Full Yu Annual') : tr('了解品牌会员', 'See brand membership')) }}</text>
           <PresenceIcon name="arrow" :size="22" :color="brandActive ? '#eec76f' : iconColors.primary" />
@@ -129,7 +129,7 @@ import { readCapsuleLayout } from '@/utils/capsule'
 import { consumeShareJump } from '@/utils/share'
 import { getTrainerToken } from '@/utils/trainer-request'
 import { getPoints } from '@/api/user'
-import { loadBrandMember, claimGiftCode, peekPendingGift, takePendingGift, type BrandMemberData } from '@/api/brandMember'
+import { loadBrandMember, claimGiftCode, peekPendingGift, takePendingGift, formatYuan, type BrandMemberData } from '@/api/brandMember'
 import { listMyOrders } from '@/api/order'
 import { listMyVouchers } from '@/api/voucher'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
@@ -170,6 +170,24 @@ const brandActive = computed(() => ['ACTIVE', 'EXPIRING', 'PENDING'].includes(br
 const brandRemaining = computed(() => brandMember.value?.card?.remainingDays || 0)
 const brandPoints = computed(() => brandMember.value?.points?.balance || 0)
 const brandDice = computed(() => brandMember.value?.dice?.balance || 0)
+/** 入口价目只读 CRM 目录；读不到就不写金额，避免出现写死的旧价格。 */
+const brandEntryPrice = computed(() => {
+  const rows = (brandMember.value?.products || []).filter((item) => Number.isFinite(Number(item.priceCents)))
+  if (!rows.length) return ''
+  const cheapest = rows.reduce((low, item) => (Number(item.priceCents) < Number(low.priceCents) ? item : low))
+  const amount = `¥${formatYuan(cheapest.priceCents)}`
+  return rows.length > 1 ? tr(`${amount} 起`, `from ${amount}`) : amount
+})
+const brandSubLine = computed(() => {
+  if (brandActive.value) return tr(`积分 ${brandPoints.value} · 骰子 ${brandDice.value}`, `${brandPoints.value} points · ${brandDice.value} dice`)
+  const price = brandEntryPrice.value
+  if (!isLoggedIn.value) {
+    return price
+      ? tr(`一张卡，三店通用 · ${price} · 登录后查看积分与有效期`, `One card, three stores · ${price} · sign in for points`)
+      : tr('一张卡，三店通用 · 登录后查看积分与有效期', 'One card, three stores · sign in for points')
+  }
+  return price ? tr(`${price} · 三店会员价`, `${price} · member prices`) : tr('大会员 · 三店权益', 'Membership · benefits at all three')
+})
 const accountMenu = computed(() => [
   { page: 'my-courses', icon: 'calendar', label: tr('我的预约', 'My bookings'), tab: true },
   { page: 'assets', icon: 'leaf', label: t('profile.myAssets'), tab: false },

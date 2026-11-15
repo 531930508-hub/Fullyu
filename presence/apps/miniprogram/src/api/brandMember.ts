@@ -153,7 +153,8 @@ export interface BrandQuote {
   expiresAt: number | string
 }
 
-export const CARD_PRODUCTS: BrandCardProduct[] = [
+/** 仅本地联调用的合成目录；线上价格一律由 CRM `/member/brand/products` 与报价接口下发。 */
+export const MOCK_CARD_PRODUCTS: BrandCardProduct[] = [
   {
     code: 'FY_MONTH',
     name: 'Full愈月卡',
@@ -319,7 +320,7 @@ function clone<T>(value: T): T {
 
 /** 读取品牌会员身份、积分、骰子与本业务只读卡；产品目录只读 CRM 当前生效版本。 */
 export async function loadBrandMember(): Promise<BrandMemberData> {
-  if (isMock) return clone({ ...mockState, products: CARD_PRODUCTS })
+  if (isMock) return clone({ ...mockState, products: MOCK_CARD_PRODUCTS })
   const [me, catalog] = await Promise.all([
     get<BrandMemberData>('/member/brand/me'),
     get<{ products: BrandCardProduct[] }>('/member/brand/products').catch(() => null)
@@ -333,7 +334,7 @@ export async function loadBrandMember(): Promise<BrandMemberData> {
 
 export function quoteBrandCard(productCode: string): Promise<BrandQuote> {
   const product =
-    CARD_PRODUCTS.find((item) => item.code === productCode) || CARD_PRODUCTS[1]
+    MOCK_CARD_PRODUCTS.find((item) => item.code === productCode) || MOCK_CARD_PRODUCTS[1]
   if (isMock) {
     return Promise.resolve({
       quoteId: `q_mock_${Date.now()}`,
@@ -362,8 +363,8 @@ export function issueBrandCard(payload: {
       return Promise.reject(new Error('AMOUNT_MISMATCH'))
     }
     const product =
-      CARD_PRODUCTS.find((item) => item.code === quote.productCode) ||
-      CARD_PRODUCTS[1]
+      MOCK_CARD_PRODUCTS.find((item) => item.code === quote.productCode) ||
+      MOCK_CARD_PRODUCTS[1]
     const start = new Date()
     const end = new Date(start.getTime() + product.validDays * 86400000)
     const iso = (d: Date) =>

@@ -23,8 +23,8 @@
     <view class="bmc-foot" :class="{ 'is-warn': expiring }">
       <view class="bmc-cell bmc-saved">
         <text class="bmc-lab">{{ active ? tr('本年已省', 'Saved this year') : tr('开卡', 'Join') }}</text>
-        <text class="bmc-amt serif">¥{{ formatYuan(active ? savedCents : annualPrice) }}</text>
-        <text v-if="!active" class="bmc-more">{{ tr('起 / 年', 'from / year') }}</text>
+        <text class="bmc-amt serif">{{ active ? `¥${formatYuan(savedCents)}` : joinPrice === null ? '—' : `¥${formatYuan(joinPrice)}` }}</text>
+        <text v-if="!active" class="bmc-more">{{ joinPrice === null ? tr('价格读取中', 'Loading price') : tr('起 / 年', 'from / year') }}</text>
       </view>
       <view class="bmc-cell bmc-toggle" role="button" @tap="open = !open">
         <text>{{ footText }}</text>
@@ -50,7 +50,7 @@
           <text class="bmc-dhead tight">{{ active ? tr('续费与卡型', 'Renew & plans') : tr('开通', 'Join') }}</text>
           <text class="bmc-renew-tail">{{ renewTail }}</text>
         </view>
-        <view class="bmc-plans">
+        <view v-if="products.length" class="bmc-plans">
           <view
             v-for="product in products"
             :key="product.code"
@@ -64,7 +64,8 @@
             <text class="bmc-plan-period">{{ tr(`${product.validDays} 天`, `${product.validDays} days`) }}</text>
           </view>
         </view>
-        <button hover-class="none" class="bmc-renew" @tap="$emit('purchase', selected)">
+        <text v-else class="bmc-note">{{ tr('会员卡价格暂未取到，请稍后刷新重试。', 'Plan pricing is unavailable right now. Refresh and try again.') }}</text>
+        <button v-if="selectedProduct" hover-class="none" class="bmc-renew" @tap="$emit('purchase', selectedProduct.code)">
           {{ active ? tr('续费 ', 'Renew ') : tr('开通 ', 'Join ') }}{{ planName(selectedProduct) }} · ¥{{ formatYuan(selectedProduct.priceCents) }}
         </button>
         <text class="bmc-note">{{ active ? tr('续费从到期日往后接；', 'Renewal starts when your current term ends. ') : '' }}{{ tr('7 天内可自助退款，已领年卡礼按价值扣除。', 'Self-service refund within 7 days; received annual gifts are deducted at value.') }}</text>
@@ -84,7 +85,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CARD_PRODUCTS, cardStateLabel, formatDate, formatYuan, type BrandCardProduct, type BrandMemberData } from '@/api/brandMember'
+import { cardStateLabel, formatDate, formatYuan, type BrandCardProduct, type BrandMemberData } from '@/api/brandMember'
 import { isEnglish, tr } from '@/locale'
 
 const props = defineProps<{
@@ -152,12 +153,13 @@ const renewalText = computed(() => {
   }
   return ''
 })
-const annualPrice = computed(() => {
-  const hit = props.products.find((item) => item.code === 'FY_ANNUAL') || CARD_PRODUCTS[1]
-  return (hit || { priceCents: 29900 }).priceCents
+/** 价格只认 CRM 目录；目录没取到就显示「价格读取中」，不拿写死金额顶上。 */
+const joinPrice = computed(() => {
+  const hit = props.products.find((item) => item.code === 'FY_ANNUAL') || props.products[0]
+  return hit ? hit.priceCents : null
 })
-const selectedProduct = computed(
-  () => props.products.find((item) => item.code === props.selected) || props.products[0] || CARD_PRODUCTS[0]
+const selectedProduct = computed<BrandCardProduct | null>(
+  () => props.products.find((item) => item.code === props.selected) || props.products[0] || null
 )
 const footText = computed(() => {
   if (!props.active) return tr('查看权益', 'See benefits')

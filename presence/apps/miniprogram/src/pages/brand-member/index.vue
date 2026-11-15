@@ -50,7 +50,7 @@
             :products="products"
             :selected="selectedCode"
             :purchase-mode="purchaseMode"
-            @select="selectedCode = $event"
+            @select="selectCode"
             @purchase="openPurchase"
             @rules="openRules"
             @gift="openGift"
@@ -219,13 +219,14 @@
     </view>
 
     <BottomSheet :show="purchaseOpen" :title="tr('确认开通品牌会员', 'Confirm brand membership')" :busy="paying" @close="closePurchase">
-      <view v-if="data" class="confirm">
+      <view v-if="data && selectedProduct" class="confirm">
         <view class="confirm-head">
           <view>
             <text class="confirm-name serif">{{ selectedProduct.name }}</text>
             <text class="confirm-desc">{{ productPeriod(selectedProduct) }} · {{ tr('三店通用', 'All three stores') }}</text>
           </view>
-          <text class="confirm-price serif">¥{{ formatYuan(selectedProduct.priceCents) }}</text>
+          <text v-if="quote" class="confirm-price serif">¥{{ formatYuan(quote.priceCents) }}</text>
+          <text v-else class="confirm-price serif">{{ quoting ? tr('读取中…', 'Loading…') : '—' }}</text>
         </view>
         <view class="confirm-row"><text>{{ tr('开卡账户', 'Account') }}</text><text>{{ data.member.name }} · {{ data.member.phoneMasked }}</text></view>
         <view class="confirm-row"><text>{{ tr('包含', 'Includes') }}</text><text>{{ tr('三店会员价 · 愈行之旅', 'Member prices · Journey game') }}</text></view>
@@ -233,7 +234,7 @@
         <view class="confirm-row"><text>{{ tr('收款方', 'Paid to') }}</text><text>{{ tr('在场（本小程序）', 'Presence (this mini program)') }}</text></view>
         <view v-if="isMock" class="mock-note">{{ tr('本地联调：不会发起真实扣款，开通只更新本页状态。', 'Local mock: no real payment. Joining only updates this page state.') }}</view>
         <view v-else class="mock-note">{{ tr('线上支付接入中，本页暂不会发起扣款；已购卡权益与愈行之旅不受影响。', 'Online payment is not live yet. This page will not charge you; your card benefits and the journey game are unaffected.') }}</view>
-        <button class="btn primary full" :disabled="paying" @tap="confirmPurchase">{{ paying ? tr('处理中…', 'Processing…') : tr('确认开通', 'Confirm') }}</button>
+        <button class="btn primary full" :disabled="paying || quoting" @tap="confirmPurchase">{{ paying ? tr('处理中…', 'Processing…') : !quote ? (quoting ? tr('正在读取价格…', 'Loading price…') : tr('价格读取失败，点此重试', 'Price unavailable, tap to retry')) : tr('确认开通', 'Confirm') }}</button>
         <button class="text-btn" @tap="closePurchase">{{ tr('再想想', 'Not now') }}</button>
       </view>
     </BottomSheet>
@@ -279,7 +280,6 @@ import { tr, isEnglish } from '@/locale'
 import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 import { useUserStore } from '@/stores/user'
 import {
-  CARD_PRODUCTS,
   formatDate,
   formatYuan,
   isMock,
@@ -301,6 +301,7 @@ import {
   stashPendingGift,
   voucherStatusLabel,
   type BrandCardProduct,
+  type BrandQuote,
   type BrandMemberData,
   type BrandInviteList,
   type BrandPickupVoucher,
@@ -324,13 +325,17 @@ const selectedCode = ref('FY_ANNUAL')
 /** 本地联调强制态（?card=NONE&pass=NONE），只影响合成数据。 */
 const forcedCard = ref('')
 
+// 目录只认 CRM；取不到时保持空数组，由页面提示「价格读取中」，不拿写死金额顶上。
 const products = computed<BrandCardProduct[]>(() => {
   const rows = data.value && data.value.products
-  return Array.isArray(rows) && rows.length ? rows : CARD_PRODUCTS
+  return Array.isArray(rows) ? rows : []
 })
-const selectedProduct = computed(
-  () => products.value.find((item) => item.code === selectedCode.value) || products.value.find((item) => item.code === 'FY_ANNUAL') || products.value[0] || CARD_PRODUCTS[1]
+const selectedProduct = computed<BrandCardProduct | null>(
+  () => products.value.find((item) => item.code === selectedCode.value) || products.value.find((item) => item.code === 'FY_ANNUAL') || products.value[0] || null
 )
+/** 打开结算弹层时先向 CRM 取报价；金额只认报价，前端不参与定价。 */
+const quote = ref<BrandQuote | null>(null)
+const quoting = ref(false)
 
 const active = computed(() => {
   const state = data.value?.card?.state
@@ -378,7 +383,8 @@ const feedbackLength = computed(() => feedbackText.value.trim().length)
 /** 愈行之旅是否解锁以 CRM 返回为准，不在前端按卡状态自行推断。 */
 const gameReady = computed(() => Boolean(data.value?.game?.enabled))
 /** 商品目录来自 CRM；缺 period 时用有效天数说明，避免空白。 */
-function productPeriod(product: BrandCardProduct) {
+function productPeriod(product: BrandCardProduct | null) {
+  if (!product) return ''
   return product.period || `${product.validDays} 天`
 }
 
@@ -574,11 +580,42 @@ function openStories() {
 }
 function openPurchase(code: string) {
   selectedCode.value = code
+  if (!products.value.length) {
+    uni.showToast({ title: tr('会员卡价格暂未取到，请稍后刷新', 'Plan pricing is unavailable. Refresh and retry.'), icon: 'none' })
+    return
+  }
+  quote.value = null
   purchaseOpen.value = true
+  void refreshQuote()
 }
 function closePurchase() {
   if (paying.value) return
   purchaseOpen.value = false
+}
+function selectCode(code: string) {
+  if (selectedCode.value === code) return
+  selectedCode.value = code
+  quote.value = null
+  if (purchaseOpen.value) void refreshQuote()
+}
+/** 重新取价：换卡型或用户重新打开弹层时都走这里；并发时只认最后一次。 */
+let quoteSeq = 0
+async function refreshQuote() {
+  const product = selectedProduct.value
+  if (!product) {
+    quote.value = null
+    return
+  }
+  const seq = ++quoteSeq
+  quoting.value = true
+  try {
+    const next = await quoteBrandCard(product.code)
+    if (seq === quoteSeq) quote.value = next
+  } catch {
+    if (seq === quoteSeq) quote.value = null
+  } finally {
+    if (seq === quoteSeq) quoting.value = false
+  }
 }
 async function confirmPurchase() {
   if (paying.value) return
@@ -587,13 +624,20 @@ async function confirmPurchase() {
     uni.showToast({ title: tr('线上支付接入中，暂不能在此开通', 'Online payment is not live yet. Joining is unavailable here.'), icon: 'none' })
     return
   }
+  const product = selectedProduct.value
+  const currentQuote = quote.value
+  // 没报价就不下单：宁可让用户等一秒，也不按前端数字发起支付。
+  if (!product || !currentQuote) {
+    uni.showToast({ title: tr('正在读取价格，请稍后重试', 'Loading the price. Please retry.'), icon: 'none' })
+    if (product && !quoting.value) void refreshQuote()
+    return
+  }
   paying.value = true
   try {
-    const quote = await quoteBrandCard(selectedProduct.value.code)
     await issueBrandCard({
-      quote,
+      quote: currentQuote,
       orderRef: `presence:brand-card:${Date.now()}`,
-      paidCents: quote.priceCents
+      paidCents: currentQuote.priceCents
     })
     purchaseOpen.value = false
     await load()
