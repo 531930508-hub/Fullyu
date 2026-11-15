@@ -18,8 +18,24 @@ import {
   type CardPerks,
   type GiftRow
 } from '../program/program.rules';
+import {
+  MEMBERSHIP_PLANS,
+  loadMembershipConfig,
+  type MembershipConfig
+} from './membership.config';
 
 export type BenefitInput = { business: string; title: string; desc?: string };
+
+/** 统一大会员一页保存：两档价格 + 共用权益/特权/礼/游戏开关。 */
+export type MembershipSaveInput = {
+  benefits?: unknown;
+  pointsSpend?: unknown;
+  gifts?: unknown;
+  perks?: unknown;
+  gameEnabled?: boolean;
+  note?: string;
+  plans?: { code?: string; priceCents?: number }[];
+};
 
 export type VersionInput = {
   priceCents: number;
@@ -128,6 +144,99 @@ export class BrandCardsService {
     });
     if (!product) throw notFound('大会员卡产品不存在');
     return this.toProductDto(product);
+  }
+
+  /** 当前在售的大会员：两档价格 + 共用权益，小后台与对外接口同一口径。 */
+  membership(): Promise<MembershipConfig> {
+    return loadMembershipConfig(this.prisma);
+  }
+
+  /**
+   * 保存大会员配置：一次写入两档新版本并同时生效。
+   * 两档姓名/权益/特权/礼/游戏开关完全一致，旧版本立即归档；
+   * 已售卡仍按购买时快照执行，不受影响。
+   */
+  async saveMembership(input: MembershipSaveInput, actor: StaffContext) {
+    const benefits = normalizeBenefits(input.benefits);
+    const pointsSpend = normalizePointsSpend(input.pointsSpend);
+    const giftsJson = validateGifts(input.gifts);
+    const perksJson = validatePerks(input.perks);
+    const note = String(input.note || '').trim();
+    if (note.length > 200) throw badRequest('版本备注不能超过 200 个字符');
+    if (input.gameEnabled !== undefined && typeof input.gameEnabled !== 'boolean') {
+      throw badRequest('游戏开关只能是布尔值');
+    }
+
+    const rows = Array.isArray(input.plans) ? input.plans : [];
+    if (rows.length !== MEMBERSHIP_PLANS.length) {
+      throw badRequest('需要同时保存 90 天与一年两档价格');
+    }
+    const priceByCode = new Map<string, number>();
+    for (const row of rows) {
+      const code = String(row?.code || '').trim();
+      if (!MEMBERSHIP_PLANS.some((plan) => plan.code === code)) {
+        throw badRequest(`未知卡档：${code || '（空）'}`);
+      }
+      if (priceByCode.has(code)) throw badRequest(`卡档重复：${code}`);
+      priceByCode.set(code, this.int(row?.priceCents, 1, MAX_PRICE_CENTS, '价格（分）'));
+    }
+
+    const now = new Date();
+    const saved: string[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      for (const plan of MEMBERSHIP_PLANS) {
+        const priceCents = priceByCode.get(plan.code)!;
+        const product = await tx.brandCardProduct.findUnique({ where: { code: plan.code } });
+        if (!product) throw badRequest(`${plan.label}（${plan.code}）产品不存在`);
+        const last = await tx.brandCardVersion.findFirst({
+          where: { productCode: plan.code },
+          orderBy: { version: 'desc' }
+        });
+        const active = await tx.brandCardVersion.findFirst({
+          where: { productCode: plan.code, status: 'ACTIVE' }
+        });
+        // 时长归属卡档本身：月卡/年卡各自沿用当前生效版本的有效期，后台只改价格与共用配置。
+        const validDays = active?.validDays ?? last?.validDays;
+        if (!validDays) throw badRequest(`${plan.label}（${plan.code}）尚无版本，请先创建版本`);
+        const version = (last?.version || 0) + 1;
+        // 一页保存即发布：在售与草稿都归档，只留这一版生效。
+        await tx.brandCardVersion.updateMany({
+          where: { productCode: plan.code, status: { in: ['ACTIVE', 'DRAFT'] } },
+          data: { status: 'ARCHIVED', archivedAt: now }
+        });
+        await tx.brandCardVersion.create({
+          data: {
+            id: newId('BCV'),
+            productCode: plan.code,
+            version,
+            status: 'ACTIVE',
+            priceCents,
+            validDays,
+            benefitsJson: JSON.stringify(benefits),
+            pointsSpendJson: JSON.stringify(pointsSpend),
+            gameEnabled: input.gameEnabled !== false,
+            giftsJson,
+            perksJson,
+            note,
+            createdBy: actor.id,
+            createdByName: actor.name,
+            activatedAt: now
+          }
+        });
+        await tx.brandCardProduct.update({
+          where: { code: product.code },
+          data: { status: 'ACTIVE', currentVersion: version }
+        });
+        saved.push(`${plan.label} v${version} ¥${(priceCents / 100).toFixed(2)}`);
+      }
+      await audit(tx, {
+        actor,
+        action: '保存大会员配置',
+        target: MEMBERSHIP_PLANS.map((plan) => plan.label).join(' + '),
+        detail: saved.join(' / ')
+      });
+    });
+    return this.membership();
   }
 
   async createProduct(

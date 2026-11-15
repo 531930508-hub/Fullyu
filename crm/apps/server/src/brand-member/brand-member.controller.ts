@@ -4,6 +4,7 @@ import {
   Get,
   Headers,
   HttpCode,
+  Patch,
   Post,
   Query,
   Req,
@@ -17,6 +18,7 @@ import {
   BrandMemberService,
   type IssueInput,
   type MeQuery,
+  type ProfileInput,
   type QuoteInput,
   type RefundInput,
   type TicketInput
@@ -39,6 +41,12 @@ export class BrandMemberController {
   @Get('products')
   products() {
     return this.service.products();
+  }
+
+  /** 小程序「我的资料」编辑：昵称/头像/性别/生日以 CRM 为唯一归档。 */
+  @Patch('profile')
+  profile(@Body() body: ProfileInput, @Req() req: BrandMemberRequest) {
+    return this.service.updateProfile(body, req.fy!);
   }
 
   @Post('quote')

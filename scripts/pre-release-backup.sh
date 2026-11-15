@@ -46,7 +46,7 @@ apply_defaults() {
     shixu)   SRC=${SRC:-$REPO/shixu} ;;
     crm)     SRC=${SRC:-$REPO/crm} ;;
     qingliao-mini)
-      SRC=${SRC:-$HOME/Desktop/Full愈-轻疗/full-yu-mini2}
+      SRC=${SRC:-$REPO/qingliao/apps/miniprogram}
       if [ ${#DISTS[@]} -eq 0 ]; then DISTS=("$SRC/unpackage/dist/build/mp-weixin"); fi
       ;;
     qingliao-mall) SRC=${SRC:-$REPO/qingliao/tou-mall-server} ;;

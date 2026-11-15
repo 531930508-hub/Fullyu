@@ -357,6 +357,20 @@ export class ProgramService {
     };
   }
 
+  /** 会员码领取的卡带出活动推荐人；未填推荐人的活动视为无推荐人。 */
+  private giftReferrer(campaign?: {
+    code: string;
+    referrerType: string;
+    referrerName: string;
+  } | null) {
+    if (!campaign || !campaign.referrerName) return null;
+    return {
+      type: campaign.referrerType,
+      name: campaign.referrerName,
+      campaignCode: campaign.code
+    };
+  }
+
   /** 后台会员卡台账：按会员/状态/来源/产品/售出业务/订单号/发卡日期检索。 */
   async adminCards(query: unknown) {
     const input = obj(query);
@@ -420,8 +434,23 @@ export class ProgramService {
     ]);
     const counts: Record<string, number> = {};
     for (const row of grouped) counts[row.state] = row._count._all;
+    const campaignIds = [
+      ...new Set(rows.map((row) => row.giftCampaignId).filter((id): id is string => Boolean(id)))
+    ];
+    const giftCampaigns = campaignIds.length
+      ? await this.prisma.giftCampaign.findMany({
+          where: { id: { in: campaignIds } },
+          select: { id: true, code: true, referrerType: true, referrerName: true }
+        })
+      : [];
+    const referrerByCampaign = new Map(
+      giftCampaigns.map((row) => [row.id, this.giftReferrer(row)])
+    );
     return {
-      items: rows.map((row) => this.cardAdminView(row, row.member, now)),
+      items: rows.map((row) => ({
+        ...this.cardAdminView(row, row.member, now),
+        referrer: row.giftCampaignId ? referrerByCampaign.get(row.giftCampaignId) ?? null : null
+      })),
       total,
       page,
       size,
@@ -452,6 +481,12 @@ export class ProgramService {
     const quote = ['PAID', 'MANUAL'].includes(card.source)
       ? await refundQuote(this.prisma, card)
       : null;
+    const giftCampaign = card.giftCampaignId
+      ? await this.prisma.giftCampaign.findUnique({
+          where: { id: card.giftCampaignId },
+          select: { code: true, referrerType: true, referrerName: true }
+        })
+      : null;
     let retreat: Record<string, unknown> = { configured: this.retreat.enabled };
     if (card.soldBy === 'ql' && card.source === 'PAID') {
       if (!this.retreat.enabled) {
@@ -477,6 +512,7 @@ export class ProgramService {
     return {
       card: {
         ...this.cardAdminView(card, card.member),
+        referrer: this.giftReferrer(giftCampaign),
         benefits: parse(card.benefitsJson) || [],
         perks: parse(card.perksJson) || {},
         pointsSpend: parse(card.pointsSpendJson) || {}

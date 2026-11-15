@@ -119,6 +119,75 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
     expect(denied.status).toBe(403);
   });
 
+  it('台账推荐人：会员码领取的卡带出活动推荐人，其他来源为空', async () => {
+    const now = new Date();
+    await h.prisma.giftCampaign.create({
+      data: {
+        id: 'gc-ref-partner',
+        code: 'PARTNER01',
+        name: '合作方推荐体验',
+        channelTag: '异业合作',
+        referrerType: 'PARTNER',
+        referrerName: '某瑜伽馆',
+        appTarget: 'zc',
+        createdBy: 'seed',
+        createdByName: '种子数据'
+      }
+    });
+    const cardId = 'mbc-ref-partner';
+    await h.prisma.member.create({
+      data: {
+        id: 'm-cd-ref',
+        memberNo: 'FY-CARD-m-cd-ref',
+        phone: '13710000009',
+        name: '推荐人会员'
+      }
+    });
+    await h.prisma.memberBrandCard.create({
+      data: {
+        id: cardId,
+        memberId: 'm-cd-ref',
+        productCode: 'FY_GIFT',
+        version: 1,
+        productName: '赠送会员 · 30 天',
+        priceCents: 0,
+        validDays: 30,
+        validFrom: now,
+        validUntil: new Date(now.getTime() + 29 * 86_400_000),
+        state: 'ACTIVE',
+        soldBy: 'zc',
+        soldByName: '在场',
+        orderRef: 'gift:PARTNER01:FY-CARD-m-cd-ref',
+        paidCents: 0,
+        paidAt: now,
+        source: 'GIFT',
+        giftCampaignId: 'gc-ref-partner'
+      }
+    });
+
+    const list = await h.api('get', '/issued-cards?q=PARTNER01', admin);
+    expect(list.status).toBe(200);
+    expect(list.body.items).toHaveLength(1);
+    expect(list.body.items[0].referrer).toEqual({
+      type: 'PARTNER',
+      name: '某瑜伽馆',
+      campaignCode: 'PARTNER01'
+    });
+
+    const detail = await h.api('get', `/issued-cards/${cardId}`, admin);
+    expect(detail.status).toBe(200);
+    expect(detail.body.card.referrer).toEqual({
+      type: 'PARTNER',
+      name: '某瑜伽馆',
+      campaignCode: 'PARTNER01'
+    });
+
+    // 非会员码来源的卡没有推荐人，返回 null 而不是空字符串。
+    const paidId = await seedPaidCard({ memberId: 'm-cd-man', orderRef: orderRef('CRM-NOREF') });
+    const paidDetail = await h.api('get', `/issued-cards/${paidId}`, admin);
+    expect(paidDetail.body.card.referrer).toBeNull();
+  });
+
   it('赠送发卡：不登记实收、不发券；同订单号重放返回同一张卡，换会员冲突', async () => {
     const ref = orderRef('CRM-GIFT');
     const body = { memberId: 'm-cd-gift', productCode: 'FY_MONTH', mode: 'GIFT', soldBy: 'ql', orderRef: ref };

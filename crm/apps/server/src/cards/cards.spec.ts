@@ -206,4 +206,104 @@ describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
     expect(filtered.body.cards).toHaveLength(1);
     expect(filtered.body.cards[0].cardCode).toBe('PRESENCE_PASS');
   });
+
+  it('统一大会员：一页两档读出/保存，旧版本归档，两档同写权益', async () => {
+    const before = await h.api('get', '/brand-cards/membership', admin);
+    expect(before.status).toBe(200);
+    expect(before.body.plans.map((p: { code: string }) => p.code)).toEqual([
+      'FY_MONTH',
+      'FY_ANNUAL'
+    ]);
+    // 时长归属卡档本身：月卡 90 天、年卡 365 天，后台一页只改价格与共用配置。
+    expect(before.body.plans.map((p: { validDays: number }) => p.validDays)).toEqual([90, 365]);
+    expect(before.body.benefits.length).toBeGreaterThan(0);
+
+    const saved = await h.api('post', '/brand-cards/membership', ops, {
+      plans: [
+        { code: 'FY_MONTH', priceCents: 9900 },
+        { code: 'FY_ANNUAL', priceCents: 36500 }
+      ],
+      benefits: BENEFITS,
+      perks: { presence: { prioritySeat: true, tierPrice: true, invitesPerMonth: 2 } },
+      gifts: [{ title: 'Full愈 香薰礼盒', desc: '到店凭提货码领取', valueCents: 12800 }],
+      gameEnabled: true,
+      note: '统一会员上线'
+    });
+    expect(saved.status).toBe(201);
+    expect(saved.body.plans).toHaveLength(2);
+    expect(saved.body.benefits[0]).toMatchObject({ business: 'ql', title: BENEFITS[0].title });
+    expect(saved.body.perks.presence.invitesPerMonth).toBe(2);
+    expect(saved.body.gifts[0].valueCents).toBe(12800);
+    expect(saved.body.updatedBy).toBeTruthy();
+
+    const annual = await h.api('get', '/brand-cards/FY_ANNUAL', admin);
+    expect(annual.body.current.priceCents).toBe(36500);
+    expect(annual.body.current.validDays).toBe(365);
+    expect(annual.body.current.benefits.map((b: { business: string }) => b.business)).toEqual([
+      'ql',
+      'zc'
+    ]);
+    const nineties = await h.api('get', '/brand-cards/FY_MONTH', admin);
+    expect(nineties.body.current.priceCents).toBe(9900);
+    expect(nineties.body.current.validDays).toBe(90);
+    // 两档同权益：90 天档与一年档的权益快照完全一致。
+    expect(nineties.body.current.benefits).toEqual(annual.body.current.benefits);
+    // 旧版本立即归档，只留一版生效。
+    expect(
+      annual.body.versions.filter((v: { status: string }) => v.status === 'ACTIVE')
+    ).toHaveLength(1);
+
+    const again = await h.api('post', '/brand-cards/membership', ops, {
+      plans: [
+        { code: 'FY_MONTH', priceCents: 9900 },
+        { code: 'FY_ANNUAL', priceCents: 36500 }
+      ],
+      benefits: [BENEFITS[0]]
+    });
+    expect(again.status).toBe(201);
+    // 没传礼/特权时按「清空」处理，不继承上一版。
+    expect(again.body.gifts).toEqual([]);
+    expect(again.body.perks.presence.invitesPerMonth).toBe(0);
+
+    const audit = await h.api(
+      'get',
+      `/audit?action=${encodeURIComponent('保存大会员配置')}`,
+      admin
+    );
+    expect(audit.body.logs.length).toBeGreaterThan(0);
+  });
+
+  it('统一大会员校验：缺档/未知档/非法价格/重复权益 400，客服不可保存', async () => {
+    const plans = [
+      { code: 'FY_MONTH', priceCents: 9900 },
+      { code: 'FY_ANNUAL', priceCents: 36500 }
+    ];
+    const benefits = [BENEFITS[0]];
+    const missingPlan = await h.api('post', '/brand-cards/membership', ops, {
+      plans: [plans[0]],
+      benefits
+    });
+    expect(missingPlan.status).toBe(400);
+
+    const unknownPlan = await h.api('post', '/brand-cards/membership', ops, {
+      plans: [plans[0], { code: 'FY_FOREVER', priceCents: 100 }],
+      benefits
+    });
+    expect(unknownPlan.status).toBe(400);
+
+    const zeroPrice = await h.api('post', '/brand-cards/membership', ops, {
+      plans: [plans[0], { code: 'FY_ANNUAL', priceCents: 0 }],
+      benefits
+    });
+    expect(zeroPrice.status).toBe(400);
+
+    const dupBenefit = await h.api('post', '/brand-cards/membership', ops, {
+      plans,
+      benefits: [BENEFITS[0], BENEFITS[0]]
+    });
+    expect(dupBenefit.status).toBe(400);
+
+    const denied = await h.api('post', '/brand-cards/membership', cs, { plans, benefits });
+    expect(denied.status).toBe(403);
+  });
 });

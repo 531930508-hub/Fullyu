@@ -8,7 +8,12 @@ import {
   Post,
   UseGuards
 } from '@nestjs/common';
-import { BrandCardsService, type BenefitInput, type VersionInput } from './brand-cards.service';
+import {
+  BrandCardsService,
+  type BenefitInput,
+  type MembershipSaveInput,
+  type VersionInput
+} from './brand-cards.service';
 import { RequirePerm, Staff } from '../auth/decorators';
 import { StaffGuard } from '../auth/staff.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -23,6 +28,19 @@ export class BrandCardsController {
   @RequirePerm('crm:card:view')
   async list() {
     return { products: await this.cards.list() };
+  }
+
+  /** 后台会员页：两档在售 + 共用权益；必须声明在 :code 之前。 */
+  @Get('membership')
+  @RequirePerm('crm:card:view')
+  membership() {
+    return this.cards.membership();
+  }
+
+  @Post('membership')
+  @RequirePerm('crm:card:edit')
+  saveMembership(@Body() body: MembershipSaveInput, @Staff() staff: StaffContext) {
+    return this.cards.saveMembership(body, staff);
   }
 
   @Get(':code')

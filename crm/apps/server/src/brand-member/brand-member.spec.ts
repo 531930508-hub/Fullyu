@@ -64,7 +64,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
   };
 
   const signed = (
-    method: 'get' | 'post',
+    method: 'get' | 'post' | 'patch',
     url: string,
     options: SignedOptions = {}
   ) => {
@@ -192,6 +192,62 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     });
     expect(stored).not.toBeNull();
     expect(stored!.tokenHash).not.toBe(ticket);
+  });
+
+  it('PATCH profile 落资料并递增版本，版本冲突 409、非法字段 400', async () => {
+    const created = await signed('patch', '/v1/brand-member/profile', {
+      key: 'sx-test',
+      body: {
+        business: 'teahour',
+        localUserId: 'local-m-lin',
+        profileVersion: 0,
+        nickname: '林小满Plus',
+        avatarUrl: 'https://cdn.test/avatar.png',
+        gender: 2,
+        birthday: '1995-06-18'
+      }
+    });
+    expect(created.status).toBe(200);
+    expect(created.body.member.profileVersion).toBe(2);
+    expect(created.body.member.profile).toMatchObject({
+      nickname: '林小满Plus',
+      avatarUrl: 'https://cdn.test/avatar.png',
+      gender: 2,
+      birthday: '1995-06-18'
+    });
+
+    // 拉取方向要能看到同一份资料（业务端 profile 页靠 me 校准版本号）
+    const after = await me('sx-test', 'teahour', 'local-m-lin');
+    expect(after.body.member.nickname).toBe('林小满Plus');
+    expect(after.body.member.avatarUrl).toBe('https://cdn.test/avatar.png');
+    expect(after.body.member.profileVersion).toBe(2);
+
+    const stale = await signed('patch', '/v1/brand-member/profile', {
+      key: 'sx-test',
+      body: { business: 'teahour', localUserId: 'local-m-lin', profileVersion: 1, nickname: '旧版本' }
+    });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error).toBe('PROFILE_CONFLICT');
+
+    const badGender = await signed('patch', '/v1/brand-member/profile', {
+      key: 'sx-test',
+      body: { business: 'teahour', localUserId: 'local-m-lin', profileVersion: 0, gender: 3 }
+    });
+    expect(badGender.status).toBe(400);
+
+    const nothing = await signed('patch', '/v1/brand-member/profile', {
+      key: 'sx-test',
+      body: { business: 'teahour', localUserId: 'local-m-lin', profileVersion: 0 }
+    });
+    expect(nothing.status).toBe(400);
+
+    // 用最新版本号可以把昵称改回来，避免影响后续用例
+    const restored = await signed('patch', '/v1/brand-member/profile', {
+      key: 'sx-test',
+      body: { business: 'teahour', localUserId: 'local-m-lin', profileVersion: 2, nickname: '林小满' }
+    });
+    expect(restored.status).toBe(200);
+    expect(restored.body.member.nickname).toBe('林小满');
   });
 
   it('密钥与业务绑定：跨业务读取、跨业务本地用户均拒绝', async () => {

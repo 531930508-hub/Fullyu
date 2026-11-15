@@ -24,6 +24,7 @@ import { ApiError, badRequest, conflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { runIdempotent } from '../common/idempotency';
 import type { BrandMemberContext } from './brand-member.guard';
+import { buildProfileUpdate, type ProfilePatch } from '../members/profile-input';
 import {
   issuePickupVouchers,
   perksOf,
@@ -42,6 +43,12 @@ const PRODUCT_CODE = /^FY_[A-Z0-9_]{2,30}$/;
 const ORDER_REF = /^[A-Za-z0-9._:-]{1,80}$/;
 
 export type MeQuery = { business?: string; localUserId?: string };
+export type ProfileInput = {
+  business?: string;
+  localUserId?: string;
+  profileVersion?: number;
+  nickname?: string | null;
+} & ProfilePatch;
 export type QuoteInput = { business?: string; localUserId?: string; productCode?: string };
 export type IssueInput = {
   quoteId?: string;
@@ -268,8 +275,7 @@ export class BrandMemberService {
 
     const body: Record<string, unknown> = {
       member: {
-        memberNo: member.memberNo,
-        name: member.name,
+        ...this.profileView(member),
         phoneMasked: maskPhone(member.phone)
       },
       card,
@@ -314,6 +320,56 @@ export class BrandMemberService {
     };
     if (pendingCard) body.pendingCard = pendingCard;
     return body;
+  }
+
+  /**
+   * 三端小程序「我的资料」改名 / 换头像 / 改性别生日。
+   *
+   * CRM 是资料唯一归档，业务端本地只是缓存：这里写成功业务端才落本地。
+   * profileVersion 只用于防止两端互相覆盖；传 0 / 不传表示调用方还没同步过资料（首次推送），
+   * 不做冲突判断，否则业务端本地版本 0 永远对不上 CRM 的初始版本，资料推不上来。
+   */
+  async updateProfile(body: ProfileInput, ctx: BrandMemberContext) {
+    const input = parseBody(body) as ProfileInput;
+    this.businessOf(input.business, ctx);
+    const member = await this.findMember(input.localUserId, ctx);
+    const baseVersion =
+      input.profileVersion === undefined || input.profileVersion === null
+        ? 0
+        : Number(input.profileVersion);
+    if (!Number.isInteger(baseVersion) || baseVersion < 0) {
+      throw badRequest('profileVersion 必须是非负整数');
+    }
+    if (baseVersion > 0 && baseVersion !== member.profileVersion) {
+      throw new ApiError(409, '资料已被其他人修改，请刷新后重试', {
+        code: 'PROFILE_CONFLICT',
+        details: { profileVersion: member.profileVersion }
+      });
+    }
+
+    // nickname 与 CRM 的 name 是同一字段：小程序用 nickname，后台/业务端用 name，两种键都认。
+    const patch: ProfilePatch = {};
+    const name = input.nickname !== undefined ? input.nickname : input.name;
+    if (name !== undefined) patch.name = String(name ?? '');
+    if (input.gender !== undefined) patch.gender = input.gender;
+    if (input.birthday !== undefined) patch.birthday = input.birthday;
+    if (input.avatarUrl !== undefined) patch.avatarUrl = input.avatarUrl;
+    const data = buildProfileUpdate(patch);
+
+    const updated = await this.prisma.member.update({
+      where: { id: member.id },
+      data: { ...data, profileVersion: { increment: 1 } }
+    });
+    await audit(this.prisma, {
+      actor: {
+        id: `ext:${ctx.business}:${ctx.keyId}`,
+        name: `${businessName(ctx.business)} 外部接口`
+      },
+      action: '修改会员资料',
+      target: updated.memberNo,
+      detail: `小程序 · ${ctx.keyId} · v${member.profileVersion}→v${updated.profileVersion}`
+    });
+    return { member: this.profileView(updated) };
   }
 
   async products() {
@@ -836,6 +892,23 @@ export class BrandMemberService {
       throw new ApiError(404, '产品当前版本不可售', { code: 'PRODUCT_NOT_FOUND' });
     }
     return { product, version };
+  }
+
+  /** 资料视图：nickname 与 CRM 的 name 是同一字段，两种键都给，两端不必再各维护一套映射。 */
+  private profileView(member: Member) {
+    const profile = {
+      nickname: member.name,
+      avatarUrl: member.avatarUrl,
+      gender: member.gender,
+      birthday: member.birthday ? formatDate(member.birthday) : null,
+      profileVersion: member.profileVersion
+    };
+    return {
+      memberNo: member.memberNo,
+      name: member.name,
+      ...profile,
+      profile
+    };
   }
 
   private businessOf(value: unknown, ctx: BrandMemberContext): Business {
