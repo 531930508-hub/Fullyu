@@ -61,9 +61,9 @@
         <span>{{ dashboard.therapistCount || 0 }} 位疗愈师 · 预估口径</span>
       </div>
       <div class="kpi-card">
-        <small>基础接单奖励</small>
+        <small>基础薪资</small>
         <strong>¥{{ money(dashboard.totalBase) }}</strong>
-        <span>按折算分钟 × 对应档位系数</span>
+        <span>折算分钟 × 当前档位单价（元/分钟）</span>
       </div>
       <div class="kpi-card">
         <small>培训 + 复购奖励</small>
@@ -124,7 +124,7 @@
           <h3>疗愈师明细</h3>
           <p>按激励合计从高到低排序，点击“明细”查看档位与构成。</p>
         </div>
-        <span class="table-note">复购奖励需老客 60 天留存率达标后计入</span>
+        <span class="table-note">复购奖励需老客 60 天留存率达标（样本满 30 人次）后计入</span>
       </div>
       <el-table
         v-loading="loading"
@@ -147,12 +147,12 @@
         <el-table-column label="折算时长" width="110" align="right">
           <template slot-scope="scope">{{ money(scope.row.base.minutes, 0) }} 分</template>
         </el-table-column>
-        <el-table-column label="系数" width="80" align="center">
+        <el-table-column label="单价（元/分钟）" width="130" align="center">
           <template slot-scope="scope">
             <el-tag size="mini" effect="plain">{{ decimal(scope.row.base.coefficient) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="基础奖励" width="120" align="right">
+        <el-table-column label="基础薪资" width="120" align="right">
           <template slot-scope="scope">¥{{ money(scope.row.base.amount) }}</template>
         </el-table-column>
         <el-table-column label="培训奖励" width="110" align="right">

@@ -17,6 +17,19 @@ export default {
       params: params
     })
   },
+  tabCounts() {
+    return request({
+      url: '/approvalDetail/tabCounts',
+      method: 'get'
+    })
+  },
+  pageSubmitted(params) {
+    return request({
+      url: '/approvalDetail/pageSubmitted',
+      method: 'get',
+      params: params
+    })
+  },
   pass(id) {
     return request({
       url: `/approvalDetail/pass/${id}`,

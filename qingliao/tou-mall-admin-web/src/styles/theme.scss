@@ -529,6 +529,33 @@
   }
 }
 
+// 桌面端：弹窗在内容区内居中（让出固定侧栏的宽度），避免宽弹窗左侧压到侧栏
+@media (min-width: 992px) {
+  body.app-shell .el-dialog__wrapper {
+    padding-left: $sidebar-width;
+    transition: padding-left .28s cubic-bezier(.2, .7, .3, 1);
+  }
+
+  body.app-shell.app-shell--collapsed .el-dialog__wrapper {
+    padding-left: $sidebar-collapsed-width;
+  }
+
+  body.app-shell .el-dialog {
+    max-width: calc(100vw - #{$sidebar-width} - 64px);
+  }
+
+  body.app-shell.app-shell--collapsed .el-dialog {
+    max-width: calc(100vw - #{$sidebar-collapsed-width} - 64px);
+  }
+}
+
+// 窄屏：沿用整窗居中，只做横向留白兜底，防止宽弹窗溢出
+@media (max-width: 991px) {
+  .el-dialog {
+    max-width: calc(100vw - 32px);
+  }
+}
+
 .el-dialog__wrapper {
   background-color: rgba(28, 27, 32, .32);
 }

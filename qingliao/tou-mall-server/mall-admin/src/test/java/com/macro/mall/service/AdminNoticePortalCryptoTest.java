@@ -54,7 +54,10 @@ class AdminNoticePortalCryptoTest {
     }
     @Test void tamperedMessageSignatureNeverReachesBinding(){
         setup();String body=encrypted(System.currentTimeMillis()/1000);
-        assertThrows(RuntimeException.class,()->post(body,"0"+field(body,"MsgSignature").substring(1)));
+        String sig=field(body,"MsgSignature");
+        // 首字符必须真的换成另一个字符，否则签名首字符恰好是 0 时篡改无效，用例会随机变绿
+        String tampered=(sig.charAt(0)=='0'?"1":"0")+sig.substring(1);
+        assertThrows(RuntimeException.class,()->post(body,tampered));
         verify(mapper,never()).lockChallenge(anyString());verify(mapper,never()).candidate(anyString(),anyString(),any());
     }
     @Test void ciphertextFromAnotherKeyIsRejected(){

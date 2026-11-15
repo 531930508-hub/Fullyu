@@ -29,7 +29,6 @@ class MemberCardPriceEngineTest {
     private MemberCardPriceEngine.Input withCard(MemberCardPriceEngine.Input input) {
         input.setHasActiveCard(true);
         input.setAdvanceRate(new BigDecimal("0.7800"));
-        input.setSameDayRate(new BigDecimal("0.8800"));
         return input;
     }
 
@@ -60,7 +59,7 @@ class MemberCardPriceEngineTest {
     }
 
     @Test
-    void sameDayBookingUsesSameDayRate() {
+    void sameDayBookingGetsNoMemberPrice() {
         MemberCardPriceEngine.Input input = withCard(input(new BigDecimal("900"), TODAY));
         input.setDiscountPayAmount(new BigDecimal("810"));
 
@@ -68,8 +67,8 @@ class MemberCardPriceEngineTest {
 
         assertFalse(result.isAdvance());
         assertNull(option(result, 1));
-        assertMoney("792.00", option(result, 2).getPayAmount());
-        assertEquals(2, result.getSelectedSource());
+        assertNull(option(result, 2));
+        assertEquals(3, result.getSelectedSource());
     }
 
     @Test
@@ -139,7 +138,6 @@ class MemberCardPriceEngineTest {
         MemberCardPriceEngine.Input input = input(new BigDecimal("500"), TODAY);
         input.setHasActiveCard(false);
         input.setAdvanceRate(new BigDecimal("0.7800"));
-        input.setSameDayRate(new BigDecimal("0.8800"));
         input.setCanUseCouponCount(2);
         input.setCouponCostCount(2);
 

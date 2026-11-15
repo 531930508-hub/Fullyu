@@ -47,14 +47,31 @@ export const constantRouterMap = [
   },
   {
     // 待办中心：审批到人级别，所有登录账号都可进入，常驻一级菜单
+    // alwaysAccessible：菜单表未给该角色授权时也要保留路由，否则店长/内训师会 404
     path: '/todo',
     component: Layout,
-    meta: {title: '待办中心', icon: 'form'},
+    redirect: '/todo/index',
+    meta: {title: '待办中心', icon: 'form', alwaysAccessible: true},
     children: [{
       path: 'index',
       name: 'todoCenter',
       component: () => import('@/views/todo/index'),
-      meta: {title: '待办中心', icon: 'form', badge: 'todo'}
+      meta: {title: '待办中心', icon: 'form', badge: 'todo', alwaysAccessible: true}
+    }]
+  },
+  {
+    // 我的请假：疗愈师自助入口（只查本人申请，后端 add/cancel 都校验仅本人）
+    // 放在常量路由里而不是 asyncRouterMap：角色菜单没勾「排班与请假」时，
+    // 导航栏点「请假」不会再落到 /404
+    path: '/my-leave',
+    component: Layout,
+    hidden: true,
+    children: [{
+      path: '',
+      name: 'myLeave',
+      component: () => import('@/views/massagist/leave/index'),
+      meta: {title: '我的请假', icon: 'schedules'},
+      hidden: true
     }]
   },
 
@@ -62,7 +79,7 @@ export const constantRouterMap = [
   // 旧地址兼容：同类页面合并成一个菜单项（tab）后，旧地址统一跳到新入口并带
   // ?tab=xxx，书签、外部链接与历史页面跳转继续可用
   // ---------------------------------------------------------------------------
-  {path: '/appointment', redirect: '/appointment/list', hidden: true},
+  {path: '/appointment', redirect: '/appointment/board', hidden: true},
   {path: '/appointment/schedules', redirect: to => ({path: '/appointment/shift', query: Object.assign({}, to.query, {tab: 'schedules'})}), hidden: true},
   {path: '/appointment/leave', redirect: to => ({path: '/appointment/shift', query: Object.assign({}, to.query, {tab: 'leave'})}), hidden: true},
 
@@ -87,6 +104,8 @@ export const constantRouterMap = [
   {path: '/statistics/salaryDetail', redirect: '/salary/detail', hidden: true},
 
   {path: '/salary', redirect: '/salary/detail', hidden: true},
+  {path: '/salary/settlement', redirect: to => ({path: '/salary/incentive', query: Object.assign({}, to.query, {tab: 'settlement'})}), hidden: true},
+  {path: '/incentive/settlement', redirect: to => ({path: '/salary/incentive', query: Object.assign({}, to.query, {tab: 'settlement'})}), hidden: true},
   {path: '/salary/training', redirect: to => ({path: '/salary/incentive', query: Object.assign({}, to.query, {tab: 'training'})}), hidden: true},
   {path: '/salary/settings', redirect: to => ({path: '/salary/incentive', query: Object.assign({}, to.query, {tab: 'settings'})}), hidden: true},
   {path: '/incentive', redirect: '/salary/incentive', hidden: true},
@@ -100,12 +119,10 @@ export const constantRouterMap = [
   {path: '/massagist/leave', redirect: to => ({path: '/appointment/shift', query: Object.assign({}, to.query, {tab: 'leave'})}), hidden: true},
   {path: '/massagist/comment', redirect: to => ({path: '/staff/team', query: Object.assign({}, to.query, {tab: 'reviews'})}), hidden: true},
   {path: '/shop/shopList', redirect: to => ({path: '/staff/team', query: Object.assign({}, to.query, {tab: 'shop'})}), hidden: true},
-  {path: '/shop/room', redirect: to => ({path: '/staff/team', query: Object.assign({}, to.query, {tab: 'rooms'})}), hidden: true},
   {path: '/shop/bed', redirect: to => ({path: '/staff/team', query: Object.assign({}, to.query, {tab: 'beds'})}), hidden: true},
   {path: '/staff/therapist', redirect: to => ({path: '/staff/team', query: Object.assign({}, to.query, {tab: 'therapist'})}), hidden: true},
   {path: '/staff/reviews', redirect: to => ({path: '/staff/team', query: Object.assign({}, to.query, {tab: 'reviews'})}), hidden: true},
   {path: '/staff/shop', redirect: to => ({path: '/staff/team', query: Object.assign({}, to.query, {tab: 'shop'})}), hidden: true},
-  {path: '/staff/rooms', redirect: to => ({path: '/staff/team', query: Object.assign({}, to.query, {tab: 'rooms'})}), hidden: true},
   {path: '/staff/beds', redirect: to => ({path: '/staff/team', query: Object.assign({}, to.query, {tab: 'beds'})}), hidden: true},
   {path: '/staff/accounts', redirect: to => ({path: '/staff/access', query: Object.assign({}, to.query, {tab: 'accounts'})}), hidden: true},
   {path: '/staff/roles', redirect: to => ({path: '/staff/access', query: Object.assign({}, to.query, {tab: 'roles'})}), hidden: true},
@@ -143,13 +160,15 @@ export const asyncRouterMap = [
     path: '/booking',
     component: Layout,
     name: 'booking',
-    redirect: '/appointment/list',
+    redirect: '/appointment/board',
     meta: {title: '预约与订单', icon: 'schedules'},
     children: [
       {
+        // 预约列表已下线入口：当日预约看排班看板，历史预约看订单列表，旧地址仍可直达
         path: '/appointment/list',
         name: 'appointmentList',
         component: () => import('@/views/appointment/List'),
+        hidden: true,
         meta: {title: '预约列表', icon: 'order'}
       },
       {
@@ -163,6 +182,13 @@ export const asyncRouterMap = [
         name: 'shiftCenter',
         component: () => import('@/views/appointment/ShiftCenter'),
         meta: {title: '排班与请假', icon: 'schedules'}
+      },
+      {
+        // 看板变动日志：排班看板上的新增/调店/清除等改动留痕，单独成页便于排查
+        path: '/appointment/boardLogs',
+        name: 'boardLogs',
+        component: () => import('@/views/massagist/schedules/ChangeLogs'),
+        meta: {title: '变动日志', icon: 'approval'}
       },
       {
         path: '/order/list',
@@ -198,6 +224,12 @@ export const asyncRouterMap = [
         name: 'customer',
         component: () => import('@/views/customer/index'),
         meta: {title: '客户列表', icon: 'ums-admin'}
+      },
+      {
+        path: '/crm/tag',
+        name: 'customerTag',
+        component: () => import('@/views/customer/tag/index'),
+        meta: {title: '标签管理', icon: 'nav-category'}
       },
       {
         path: '/system/product',
@@ -250,6 +282,12 @@ export const asyncRouterMap = [
         component: () => import('@/views/incentive/CenterPage'),
         meta: {title: '激励中心', icon: 'dashboard'}
       },
+      {
+        path: '/statistics/payGroup',
+        name: 'payGroupLedger',
+        component: () => import('@/views/statistics/payGroup/index'),
+        meta: {title: '合并支付台账', icon: 'salary'}
+      },
     ]
   },
   {
@@ -277,6 +315,13 @@ export const asyncRouterMap = [
         name: 'systemConfig',
         component: () => import('@/views/system/ConfigCenter'),
         meta: {title: '系统配置', icon: 'ums-menu'}
+      },
+      {
+        // 导出台账：审计页面，菜单只授权给超级管理员，后端接口同样校验
+        path: '/system/exportRecord',
+        name: 'exportRecord',
+        component: () => import('@/views/system/exportRecord/index'),
+        meta: {title: '导出台账', icon: 'document'}
       },
       {
         path: '/staff/allocMenu',

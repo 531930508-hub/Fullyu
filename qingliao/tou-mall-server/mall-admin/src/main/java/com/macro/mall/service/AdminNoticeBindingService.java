@@ -19,6 +19,9 @@ public class AdminNoticeBindingService {
     @Autowired AdminNoticeBindingMapper mapper;
     @Value("${fullyu.notice.admin-enabled:false}") boolean enabled;
     @Value("${fullyu.notice.admin-app-id:}") String appId;
+    @Value("${fullyu.notice.mode:mock}") String mode;
+    @Value("${fullyu.notice.admin-template-id:}") String templateId;
+    @Value("${fullyu.notice.admin-oauth-callback:}") String callbackUrl;
     Clock clock=Clock.system(ZoneId.of("Asia/Shanghai"));
     private final SecureRandom random=new SecureRandom();
     private LocalDateTime now(){return LocalDateTime.now(clock);}
@@ -34,7 +37,10 @@ public class AdminNoticeBindingService {
     private String validNonce(String nonce){if(nonce==null||!nonce.matches("[A-Za-z0-9_-]{32}"))throw new BusinessException("绑定凭证无效，请重新发起");return digest(nonce);}
     private LocalDateTime time(Object value){if(value instanceof LocalDateTime)return (LocalDateTime)value;if(value instanceof Timestamp)return ((Timestamp)value).toLocalDateTime();return null;}
     public Map<String,Object> status(Long admin){
-        requireId(admin);Map<String,Object> result=new LinkedHashMap<>();result.put("enabled",isEnabled());result.put("realDeliveryEnabled",false);result.put("qrAvailable",false);
+        requireId(admin);Map<String,Object> result=new LinkedHashMap<>();result.put("enabled",isEnabled());
+        result.put("realDeliveryEnabled",isEnabled()&&"live".equalsIgnoreCase(mode==null?"":mode.trim()));
+        result.put("templateConfigured",templateId!=null&&!templateId.trim().isEmpty());
+        result.put("qrAvailable",isEnabled()&&callbackUrl!=null&&!callbackUrl.trim().isEmpty());
         Map<String,Object> row=null;if(isEnabled()){requireActive(admin);row=mapper.binding(admin,appId);}
         result.put("bound",row!=null&&row.get("openId")!=null);result.put("following",row!=null&&Integer.valueOf(1).equals(row.get("following")));result.put("boundAt",row==null?null:row.get("boundAt"));return result;
     }
@@ -43,7 +49,7 @@ public class AdminNoticeBindingService {
         requireActive(admin);requireLockedAdmin(admin);byte[] bytes=new byte[24];random.nextBytes(bytes);String nonce=Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         mapper.expireChallenges(admin);LocalDateTime expires=now().plusMinutes(10);
         if(mapper.insertChallenge(digest(nonce),admin,appId,expires)!=1)throw new BusinessException("无法生成绑定凭证，请重试");
-        Map<String,Object> result=new LinkedHashMap<>();result.put("scene","admin_notice_"+nonce);result.put("expiresAt",expires);result.put("qrAvailable",false);result.put("realDeliveryEnabled",false);return result;
+        Map<String,Object> result=new LinkedHashMap<>();result.put("scene","admin_notice_"+nonce);result.put("expiresAt",expires);result.put("qrAvailable",isEnabled()&&callbackUrl!=null&&!callbackUrl.trim().isEmpty());result.put("realDeliveryEnabled",isEnabled()&&"live".equalsIgnoreCase(mode==null?"":mode.trim()));return result;
     }
     @Transactional(rollbackFor=Exception.class)
     public Map<String,Object> confirm(Long admin,String nonce){

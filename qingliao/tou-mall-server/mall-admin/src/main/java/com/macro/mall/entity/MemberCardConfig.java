@@ -53,7 +53,8 @@ public class MemberCardConfig extends BaseEntity {
     @ApiModelProperty("提前预约折扣率")
     private BigDecimal advanceRate;
 
-    @ApiModelProperty("当日预约折扣率")
+    @Deprecated
+    @ApiModelProperty("历史字段-当日预约折扣率（已取消，固定 1.0000）")
     private BigDecimal sameDayRate;
 
     @ApiModelProperty("有效期天数")

@@ -15,7 +15,8 @@ const getters = {
   menus: state => state.permission.menus,
   shopList: state => state.shop.shopList,
   shopListAll: state => state.shop.shopListAll,
-  roomList: state => state.shop.roomList,
+  // 当前账号授权范围内的门店（门店下拉统一用这个）
+  authorizedShopList: state => state.shop.shopListAll,
   massagistList: state => state.shop.massagistList,
   adminUserList: state => state.user.adminUserList,
   projectList: state => state.goods.projectList,

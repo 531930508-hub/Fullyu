@@ -6,7 +6,7 @@
                        placeholder="请选择所属门店"
                        clearable class="m-r-10"></shop-selector>-->
         <el-select v-model="searchForm.shopIdArrNew"  :style="'width: 100%'"
-                   multiple  @change="searchData" clearable
+                   multiple  @change="handleShopChange" clearable
                    placeholder="可多选门店">
           <el-option
             v-for="item in shopListAll"
@@ -135,7 +135,7 @@ export default {
     return {
       dataList: [],
       listLoading: false,
-      searchForm: {page: 1, size: 10,monthNumber:new Date().toLocaleTimeString()},
+      searchForm: {page: 1, size: 10, monthNumber: ''},
       total: 0,
       dateTime: [],
       topData: {},
@@ -154,16 +154,33 @@ export default {
     ...mapGetters(['shopId','shopListAll'])
   },
   created() {
-    this.$store.dispatch('setShopAllList')
+    this.searchForm.monthNumber = dateUtil.getCurrentMonthCode() + '-01'
     this.searchForm.shopId = this.shopId
-    this.searchForm.shopIdArrNew =[parseInt(this.shopId)]
     this.$set(this.searchForm, 'startPayTime', dateUtil.getCurrentDateCode() + " 00:00:00")
     this.$set(this.searchForm, 'endPayTime', dateUtil.getCurrentDateCode() + " 23:59:59")
     this.dateTime = [dateUtil.getCurrentDateCode() + " 00:00:00", dateUtil.getCurrentDateCode() + " 23:59:59"]
-    this.searchForm.monthNumber = dateUtil.getCurrentMonthCode()+"-01"
-    this.searchData()
+    this.bootstrap()
   },
   methods: {
+    // 总部账号 shopId 为空，后端 shopIdArrNew 必填，默认取全部门店
+    defaultShopIds() {
+      const sid = parseInt(this.shopId, 10)
+      if (Number.isFinite(sid)) {
+        return [sid]
+      }
+      return (this.shopListAll || []).map(item => item.id)
+    },
+    async bootstrap() {
+      await this.$store.dispatch('setShopAllList')
+      this.searchForm.shopIdArrNew = this.defaultShopIds()
+      this.searchData()
+    },
+    handleShopChange(value) {
+      if (!value || !value.length) {
+        this.searchForm.shopIdArrNew = this.defaultShopIds()
+      }
+      this.searchData()
+    },
    async searchData() {
       console.log("searchData");
       console.log(this.searchForm);
@@ -278,8 +295,9 @@ export default {
       if (comment && gender) {
         return comment + (gender == 1 ? '先生' : gender == 2 ? '女士' : '')
       }
-      if (nickname && nickname == '用户' + phone) {
-        return phone
+      const maskPhone = this.$options.filters['maskPhoneFilter']
+      if (nickname && (nickname === '用户' + phone || /^1\d{10}$/.test(nickname))) {
+        return maskPhone(phone || nickname)
       }
       return nickname
     }

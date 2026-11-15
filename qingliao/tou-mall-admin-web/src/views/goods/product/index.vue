@@ -175,11 +175,14 @@ export default {
     },
     async fetchData() {
       this.loading = true
-      let res = await productApi.page(this.searchForm)
-      this.loading = false
-      let {list, total} = res.data
-      this.dataList = list || []
-      this.total = total || 0
+      try {
+        let res = await productApi.page(this.searchForm)
+        let {list, total} = res.data
+        this.dataList = list || []
+        this.total = total || 0
+      } finally {
+        this.loading = false
+      }
     },
     handleSizeChange(val) {
       this.searchForm.size = val;

@@ -21,7 +21,7 @@
       <div style="margin-top: 15px">
         <el-form :inline="true" :model="listQuery" size="small" label-width="140px">
           <el-form-item label="输入搜索：">
-            <el-input v-model="listQuery.keyword" class="input-width" placeholder="帐号/姓名" clearable></el-input>
+            <el-input v-model="listQuery.keyword" class="input-width" placeholder="登录账号/员工姓名" clearable></el-input>
           </el-form-item>
         </el-form>
       </div>
@@ -42,10 +42,10 @@
         <el-table-column label="所属店铺" align="center">
           <template slot-scope="scope"><span v-html="scope.row.shopIdArrName"></span> </template>
         </el-table-column>
-        <el-table-column label="帐号" align="center">
+        <el-table-column label="登录账号" align="center">
           <template slot-scope="scope">{{scope.row.username}}</template>
         </el-table-column>
-        <el-table-column label="姓名" align="center">
+        <el-table-column label="员工姓名" align="center">
           <template slot-scope="scope">{{scope.row.nickName}}</template>
         </el-table-column>
         <el-table-column label="所属疗愈师" align="center">
@@ -123,16 +123,16 @@
             </el-option>
           </el-select>
         </el-form-item>
-        <el-form-item label="帐号/手机：" required>
-          <el-input v-model="admin.username" style="width: 100%"></el-input>
+        <el-form-item label="登录账号：" required>
+          <el-input v-model="admin.username" placeholder="仅用于登录，建议英文或手机号" style="width: 100%"></el-input>
         </el-form-item>
-        <el-form-item label="注册姓名：" required>
-          <el-input v-model="admin.nickName" style="width: 100%"></el-input>
+        <el-form-item label="员工姓名：" required>
+          <el-input v-model="admin.nickName" placeholder="用于后台展示、排班与审批" style="width: 100%"></el-input>
         </el-form-item>
 <!--        <el-form-item label="邮箱：">
           <el-input v-model="admin.email" style="width: 250px"></el-input>
         </el-form-item>-->
-        <el-form-item label="注册密码：" required>
+        <el-form-item label="登录密码：" required>
           <el-input v-model="admin.password"  type="password" style="width: 100%"></el-input>
         </el-form-item>
         <el-form-item label="账号备注：">

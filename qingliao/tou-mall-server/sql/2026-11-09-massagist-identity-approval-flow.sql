@@ -63,8 +63,12 @@ SET @ddl := IF(DATABASE()='tou_mall_test' AND @has_old_rule>0,
   'SELECT ''f_approval_shop_manager not present, skip''');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-SET @ddl := IF(DATABASE()='tou_mall_test',
+SET @has_is_trainer := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='s_massagist' AND COLUMN_NAME='is_trainer');
+SET @ddl := IF(DATABASE()='tou_mall_test' AND @has_is_trainer>0,
   'INSERT IGNORE INTO `f_massagist_identity` (`massagist_id`, `code`)
      SELECT `id`, ''TRAINER'' FROM `s_massagist` WHERE `is_trainer`=1',
-  'SELECT * FROM fullyu_identity_migration_requires_tou_mall_test');
+  IF(DATABASE()='tou_mall_test',
+     'SELECT ''s_massagist.is_trainer not present yet, skip trainer seed''',
+     'SELECT * FROM fullyu_identity_migration_requires_tou_mall_test'));
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;

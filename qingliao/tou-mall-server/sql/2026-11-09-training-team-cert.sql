@@ -72,7 +72,7 @@ SET @ddl := IF(DATABASE()='tou_mall_test',
     KEY `idx_assess_shop` (`shop_id`,`assess_date`),
     KEY `idx_assess_result` (`result`,`assess_date`),
     KEY `idx_assess_submitted` (`submitted_at`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT=''内训师考核流水''',
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT=''内训师考核流水''',
   'SELECT * FROM fullyu_training_team_migration_requires_tou_mall_test');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 

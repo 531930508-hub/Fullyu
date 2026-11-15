@@ -2,6 +2,7 @@ package com.macro.mall.service;
 
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.entity.Massagist;
 import com.macro.mall.entity.SalaryCoefficient;
@@ -43,6 +44,8 @@ public class SalaryRecordService extends BaseService<SalaryRecordMapper, SalaryR
     SalaryCoefficientService salaryCoefficientService;
     @Autowired
     SalaryOtherAmountService salaryOtherAmountService;
+    @Autowired
+    MassagistService massagistService;
 
     private final BigDecimal MONTHLY_DEDUCTION = BigDecimal.valueOf(5000);
 
@@ -120,6 +123,141 @@ public class SalaryRecordService extends BaseService<SalaryRecordMapper, SalaryR
         List<SalaryRecord> list = list(lqw);
         list.sort(Comparator.comparing(SalaryRecord::getMonthCode).reversed());
         return list.stream().map(SalaryRecord::getMonthCode).distinct().collect(Collectors.toList());
+    }
+
+    /**
+     * 全部已生成结算记录的月份，供管理端月份筛选使用。
+     */
+    public List<String> findAllMonthCodes() {
+        QueryWrapper<SalaryRecord> queryWrapper = new QueryWrapper<>();
+        queryWrapper.select("DISTINCT month_code").orderByDesc("month_code");
+        return listObjs(queryWrapper, Object::toString);
+    }
+
+    /**
+     * 指定月份的劳务服务费合计。
+     * 按合作状态、姓名筛选疗愈师后，仅汇总这些疗愈师当月已生成的结算记录。
+     */
+    public Map<String, Object> summarizeMonth(String monthCode, Integer status, String name) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("monthCode", monthCode);
+        result.put("peopleCount", 0);
+        result.put("totalDuration", 0D);
+        result.put("salary", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        result.put("preTaxIncome", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        result.put("payableIncomeTax", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        result.put("actualIncome", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+
+        String keyword = name == null ? "" : name.trim();
+        Set<Long> allowedMassagistIds = null;
+        if ((status != null && status >= 0) || !keyword.isEmpty()) {
+            LambdaQueryWrapper<Massagist> massagistWrapper = new LambdaQueryWrapper<>();
+            if (status != null && status >= 0) {
+                massagistWrapper.eq(Massagist::getStatus, status);
+            }
+            if (!keyword.isEmpty()) {
+                massagistWrapper.like(Massagist::getName, keyword);
+            }
+            massagistWrapper.select(Massagist::getId);
+            allowedMassagistIds = massagistService.list(massagistWrapper).stream()
+                    .map(Massagist::getId).collect(Collectors.toSet());
+            if (allowedMassagistIds.isEmpty()) {
+                return result;
+            }
+        }
+
+        List<SalaryRecord> records = list(new LambdaQueryWrapper<SalaryRecord>()
+                .eq(SalaryRecord::getMonthCode, monthCode));
+        if (CollectionUtils.isEmpty(records)) {
+            return result;
+        }
+
+        Set<Long> peopleIds = new HashSet<>();
+        double totalDuration = 0D;
+        BigDecimal salary = BigDecimal.ZERO;
+        BigDecimal preTaxIncome = BigDecimal.ZERO;
+        BigDecimal payableIncomeTax = BigDecimal.ZERO;
+        BigDecimal actualIncome = BigDecimal.ZERO;
+        for (SalaryRecord record : records) {
+            if (allowedMassagistIds != null && !allowedMassagistIds.contains(record.getMassagistId())) {
+                continue;
+            }
+            peopleIds.add(record.getMassagistId());
+            totalDuration += record.getTotalDuration();
+            salary = salary.add(nullToZero(record.getSalary()));
+            preTaxIncome = preTaxIncome.add(nullToZero(record.getPreTaxIncome()));
+            payableIncomeTax = payableIncomeTax.add(nullToZero(record.getPayableIncomeTax()));
+            actualIncome = actualIncome.add(nullToZero(record.getActualIncome()));
+        }
+
+        result.put("peopleCount", peopleIds.size());
+        result.put("totalDuration", totalDuration);
+        result.put("salary", salary.setScale(2, RoundingMode.HALF_UP));
+        result.put("preTaxIncome", preTaxIncome.setScale(2, RoundingMode.HALF_UP));
+        result.put("payableIncomeTax", payableIncomeTax.setScale(2, RoundingMode.HALF_UP));
+        result.put("actualIncome", actualIncome.setScale(2, RoundingMode.HALF_UP));
+        return result;
+    }
+
+    /**
+     * 指定月份的全员劳务服务费明细。
+     * 一次返回当月全部疗愈师的结算行（含门店名），供管理端不分页表格展示。
+     */
+    public List<Map<String, Object>> listMonthRows(String monthCode, Integer status, String name) {
+        String keyword = name == null ? "" : name.trim();
+        LambdaQueryWrapper<Massagist> massagistWrapper = new LambdaQueryWrapper<>();
+        if (status != null && status >= 0) {
+            massagistWrapper.eq(Massagist::getStatus, status);
+        }
+        if (!keyword.isEmpty()) {
+            massagistWrapper.like(Massagist::getName, keyword);
+        }
+        massagistWrapper.select(Massagist::getId, Massagist::getName, Massagist::getShopId, Massagist::getStatus);
+        List<Massagist> people = massagistService.list(massagistWrapper);
+        if (CollectionUtils.isEmpty(people)) {
+            return new ArrayList<>();
+        }
+        Map<Long, Massagist> peopleMap = people.stream()
+                .collect(Collectors.toMap(Massagist::getId, person -> person, (a, b) -> a));
+
+        List<SalaryRecord> records = list(new LambdaQueryWrapper<SalaryRecord>()
+                .eq(SalaryRecord::getMonthCode, monthCode));
+        List<Map<String, Object>> rows = new ArrayList<>();
+        Map<Long, String> shopNameCache = new HashMap<>();
+        for (SalaryRecord record : records) {
+            Massagist person = peopleMap.get(record.getMassagistId());
+            if (person == null) {
+                continue;
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("massagistId", record.getMassagistId());
+            row.put("name", person.getName());
+            row.put("status", person.getStatus());
+            row.put("shopId", person.getShopId());
+            row.put("shopName", person.getShopId() == null ? "" : shopNameCache.computeIfAbsent(person.getShopId(),
+                    id -> {
+                        String shopName = shopService.findNameById(id);
+                        return shopName == null ? "" : shopName;
+                    }));
+            row.put("monthCode", record.getMonthCode());
+            row.put("totalDuration", record.getTotalDuration());
+            row.put("coefficient", record.getCoefficient());
+            row.put("salary", nullToZero(record.getSalary()).setScale(2, RoundingMode.HALF_UP));
+            row.put("otherAmount", nullToZero(record.getOtherAmount()).setScale(2, RoundingMode.HALF_UP));
+            row.put("preTaxIncome", nullToZero(record.getPreTaxIncome()).setScale(2, RoundingMode.HALF_UP));
+            row.put("payableIncomeTax", nullToZero(record.getPayableIncomeTax()).setScale(2, RoundingMode.HALF_UP));
+            row.put("actualIncome", nullToZero(record.getActualIncome()).setScale(2, RoundingMode.HALF_UP));
+            rows.add(row);
+        }
+        rows.sort(Comparator
+                .comparing((Map<String, Object> row) -> (String) row.get("shopName"), Comparator.nullsLast(String::compareTo))
+                .thenComparing(row -> String.valueOf(row.get("name")))
+                .thenComparing(row -> (Long) row.get("massagistId")));
+        return rows;
+    }
+
+    private BigDecimal nullToZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     /**

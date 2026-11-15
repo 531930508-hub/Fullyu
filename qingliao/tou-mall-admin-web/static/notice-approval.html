@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>审批处理</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;background:#f5f6f8;color:#1f2329;font-size:15px;line-height:1.6;padding:16px 12px 96px}
+    .card{background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+    .title{font-size:18px;font-weight:600;margin-bottom:8px}
+    .meta{color:#646a73;font-size:13px}
+    .meta span{display:inline-block;margin-right:14px}
+    .status{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;background:#e8f3ff;color:#1664ff;margin-top:8px}
+    .kv{display:flex;padding:8px 0;border-bottom:1px solid #f0f1f3;font-size:14px}
+    .kv:last-child{border-bottom:none}
+    .kv .k{color:#646a73;width:96px;flex:none}
+    .kv .v{flex:1;word-break:break-all}
+    h3{font-size:14px;color:#646a73;margin:0 0 6px;font-weight:500}
+    .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;padding:12px 16px calc(12px + env(safe-area-inset-bottom));display:flex;gap:12px;box-shadow:0 -1px 6px rgba(0,0,0,.06)}
+    button{flex:1;height:44px;border-radius:22px;border:none;font-size:16px;font-weight:500}
+    .reject{background:#fff;color:#f54a45;border:1px solid #f54a45}
+    .pass{background:#1664ff;color:#fff}
+    button:disabled{opacity:.5}
+    .tip{text-align:center;color:#8f959e;font-size:13px;margin-top:16px}
+    .result{text-align:center;padding:40px 16px}
+    .result .icon{font-size:44px;margin-bottom:12px}
+    .link{display:block;text-align:center;color:#1664ff;font-size:13px;margin-top:12px;text-decoration:none}
+    .reason-box{display:none;margin-top:8px}
+    textarea{width:100%;height:88px;border:1px solid #dee0e3;border-radius:8px;padding:10px;font-size:14px;resize:none}
+  </style>
+</head>
+<body>
+  <div id="app"><div class="tip">加载中…</div></div>
+  <script>
+    var params = new URLSearchParams(location.search);
+    var query = {
+      approvalId: params.get('approvalId'),
+      detailId: params.get('detailId'),
+      adminId: params.get('adminId'),
+      exp: params.get('exp'),
+      sig: params.get('sig')
+    };
+    var API = '/api/admin/open/admin-notice/link';
+    var app = document.getElementById('app');
+    var labels = {reason:'事由',leaveType:'请假类型',startTime:'开始时间',endTime:'结束时间',days:'天数',
+      shopName:'门店',fromShopName:'原门店',toShopName:'新门店',customerName:'客户',massagistName:'员工',
+      amount:'金额',score:'评分',comment:'评价',content:'内容',remark:'备注',status:'状态',type:'类型',
+      transferType:'调店类型',applyTime:'申请时间',phone:'手机号',name:'姓名'};
+
+    function esc(v){return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+    function fmtTime(v){ if(!v) return ''; return String(v).replace('T',' ').slice(0,16); }
+
+    function post(path, extra){
+      var body = new URLSearchParams(query);
+      if (extra) Object.keys(extra).forEach(function(k){ body.set(k, extra[k]); });
+      return fetch(API + path, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body})
+        .then(function(r){ return r.json().then(function(j){ j.__http = r.status; return j; }); });
+    }
+
+    function valueRows(obj){
+      if (!obj || typeof obj !== 'object') return '';
+      var rows = '';
+      Object.keys(obj).forEach(function(k){
+        var v = obj[k];
+        if (v == null || v === '' || typeof v === 'object') return;
+        if (/time$/i.test(k) && /^\d{4}-\d{2}-\d{2}T/.test(String(v))) v = fmtTime(v);
+        rows += '<div class="kv"><div class="k">' + esc(labels[k] || k) + '</div><div class="v">' + esc(v) + '</div></div>';
+      });
+      return rows;
+    }
+
+    function finish(ok, text){
+      app.innerHTML = '<div class="card result"><div class="icon">' + (ok ? '✅' : '⚠️') + '</div>' +
+        '<div class="title">' + esc(text) + '</div><div class="tip">可关闭本页，后续结果会继续通知到微信</div></div>';
+    }
+
+    function render(data){
+      if (!data.canHandle) {
+        var html = '<div class="card"><div class="title">' + esc(data.title || '审批') + '</div>' +
+          '<div class="meta"><span>提交人：' + esc(data.applicant || '-') + '</span><span>' + esc(fmtTime(data.createTime)) + '</span></div>' +
+          '<div class="status">' + esc(data.detailStateText || data.stateText || '') + '</div>' +
+          (data.rejectReason ? '<div class="kv" style="margin-top:8px"><div class="k">拒绝原因</div><div class="v">' + esc(data.rejectReason) + '</div></div>' : '') +
+          '</div>';
+        app.innerHTML = html + '<div class="tip">这条审批已处理或无需你处理</div>' +
+          '<a class="link" href="../#/todo/index">打开待办中心</a>';
+        return;
+      }
+      var html = '<div class="card"><div class="title">' + esc(data.title || '审批') + '</div>' +
+        '<div class="meta"><span>提交人：' + esc(data.applicant || '-') + '</span><span>' + esc(fmtTime(data.createTime)) + '</span></div>' +
+        (data.nodeName ? '<div class="status">当前节点：' + esc(data.nodeName) + '</div>' : '') + '</div>';
+      var rows = valueRows(data.businessDetail);
+      if (rows) html += '<div class="card"><h3>事项详情</h3>' + rows + '</div>';
+      html += '<div class="card"><div class="kv"><div class="k">处理人</div><div class="v">你</div></div></div>' +
+        '<a class="link" href="../#/todo/index">需要看完整流程？打开待办中心</a>';
+      app.innerHTML = html + '<div class="footer">' +
+        '<button class="reject" id="btnReject">拒绝</button>' +
+        '<button class="pass" id="btnPass">同意</button></div>' +
+        '<div id="reasonWrap" class="reason-box" style="position:fixed;left:12px;right:12px;bottom:80px;background:#fff;padding:12px;border-radius:12px;box-shadow:0 -2px 12px rgba(0,0,0,.12);display:none">' +
+        '<div style="font-size:14px;margin-bottom:8px">请填写拒绝原因</div>' +
+        '<textarea id="reason" maxlength="200" placeholder="例如：班次冲突，请调整后重新提交"></textarea>' +
+        '<div style="display:flex;gap:10px;margin-top:10px"><button class="reject" id="cancelReject" style="height:38px">取消</button>' +
+        '<button class="pass" id="confirmReject" style="height:38px">确认拒绝</button></div></div>';
+
+      document.getElementById('btnPass').onclick = function(){
+        if (!confirm('确认同意这条审批？')) return;
+        var btn = this; btn.disabled = true;
+        post('/pass').then(function(j){
+          if (j.code === 200) finish(true, '已同意');
+          else { alert(j.message || '操作失败'); btn.disabled = false; }
+        }).catch(function(){ alert('网络异常，请稍后重试'); btn.disabled = false; });
+      };
+      document.getElementById('btnReject').onclick = function(){
+        document.getElementById('reasonWrap').style.display = 'block';
+      };
+      document.getElementById('cancelReject').onclick = function(){
+        document.getElementById('reasonWrap').style.display = 'none';
+      };
+      document.getElementById('confirmReject').onclick = function(){
+        var reason = document.getElementById('reason').value.trim();
+        if (!reason) { alert('请填写拒绝原因'); return; }
+        var btn = this; btn.disabled = true;
+        post('/reject', {reason: reason}).then(function(j){
+          if (j.code === 200) finish(true, '已拒绝');
+          else { alert(j.message || '操作失败'); btn.disabled = false; }
+        }).catch(function(){ alert('网络异常，请稍后重试'); btn.disabled = false; });
+      };
+    }
+
+    if (!query.approvalId || !query.detailId || !query.adminId || !query.exp || !query.sig) {
+      finish(false, '链接不完整，请从微信通知重新进入');
+    } else {
+      fetch(API + '/detail?' + new URLSearchParams(query).toString())
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          if (j.code === 200 && j.data) render(j.data);
+          else finish(false, j.message || '链接已失效，请打开待办中心处理');
+        })
+        .catch(function(){ finish(false, '网络异常，请稍后重试'); });
+    }
+  </script>
+</body>
+</html>

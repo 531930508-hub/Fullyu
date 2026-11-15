@@ -1,6 +1,6 @@
 <template>
   <div class="ProjectDrawer">
-    <el-drawer :show-close="true" :visible.sync="showDrawer" :z-index="108" append-to-body size="61%" title="项目列表"
+    <el-drawer :show-close="true" :visible.sync="showDrawer" append-to-body size="61%" title="项目列表"
                :before-close="close">
       <div style="padding: 20px;">
         <el-table

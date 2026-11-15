@@ -304,7 +304,7 @@ public class DouGongPayClient implements IPayClient {
 //        // 2.组装请求参数
 //        Map<String, Object> paramsInfo = new HashMap<>();
 //        // 商户号
-//        paramsInfo.put("huifu_id", PayCert.sysId);
+//        paramsInfo.put("huifu_id", "6666000170100407");
 //        // 退款请求日期退款发生的日期，格式为yyyyMMdd，&lt;font color&#x3D;&quot;green&quot;&gt;示例值：20220925&lt;/font&gt;；&lt;/br&gt;传入退款全局流水号时，非必填，其他场景必填；
 //        paramsInfo.put("org_req_date", "20250616");
 //        // 退款全局流水号退款请求流水号,退款全局流水号,终端订单号三选一不能都为空；&lt;br/&gt;&lt;font color&#x3D;&quot;green&quot;&gt;示例值：0030default220825182711P099ac1f343f00000&lt;/font&gt;

@@ -1,0 +1,86 @@
+/* V5: eight independent training projects, next-day progress, admin record management. */
+.side-item{width:100%;border:0;background:none;text-align:left;font:inherit;cursor:pointer}
+.side-item:hover{background:#5a4530;color:var(--on-dark)}
+.side-item.active:hover{background:var(--cream);color:var(--ink)}
+.side-item.placeholder{cursor:default;opacity:.72}
+.side-item.placeholder:hover{background:none;color:var(--on-dark-muted)}
+.side-item small{margin-left:auto;border:1px solid currentColor;border-radius:4px;padding:0 4px;font-size:9px;line-height:1.6;opacity:.8}
+.admin-main{min-width:0}
+.admin-kpis.five{grid-template-columns:repeat(5,minmax(0,1fr))}
+.summary-card .value small{font-size:13px;font-weight:500;letter-spacing:0}
+.training-teaser{display:flex;align-items:center;gap:24px;margin:18px 0;padding:18px 22px}
+.teaser-copy{flex:1;min-width:230px}
+.teaser-copy h2{margin:4px 0 5px}
+.teaser-copy p{font-size:12px;color:var(--muted);line-height:1.7}
+.teaser-stats{display:flex;gap:26px}
+.teaser-stats strong{display:block;font-size:25px;font-weight:550;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.teaser-stats small{display:block;font-size:10px;color:var(--muted);white-space:nowrap}
+.training-projects-panel{margin:18px 0}
+.project-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:4px}
+.project-chip{display:grid;gap:3px;text-align:left;padding:12px;border:1px solid var(--line-light);background:var(--paper);border-radius:10px;min-width:0;font:inherit;color:var(--ink)}
+.project-chip:hover{background:var(--soft)}
+.project-chip.on{border-color:var(--wood-700);background:var(--soft);box-shadow:inset 0 0 0 1px var(--wood-700)}
+.project-name{font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.project-rule{font-size:11px;color:var(--muted)}
+.project-stat{font-size:10px;color:var(--muted);line-height:1.65}
+.training-table td:nth-child(2){white-space:normal;min-width:148px;max-width:215px}
+.training-table td b{font-weight:550}
+.progress-cell{display:flex;align-items:center;gap:8px;min-width:135px}
+.progress-cell .progress{flex:1;min-width:48px}
+.progress-cell span{font-size:10px;color:var(--muted);white-space:nowrap}
+.training-table .tag{margin:0}
+.training-table td .btn{min-height:32px}
+.training-dialog-body{display:block;height:auto;max-height:74vh;overflow:auto;padding:22px 24px}
+#trainingDialog{width:min(600px,calc(100vw - 32px))}
+.training-form .form-grid .full{grid-column:1/-1}
+.training-form .keyval{font-size:12px;border-bottom:1px dashed var(--line-light)}
+.training-form .keyval:last-of-type{border-bottom:0}
+.training-form .calc-box{background:var(--disabled);padding:12px 14px;border-radius:8px;font-size:12px;line-height:1.8;margin-top:15px}
+.training-form .notice{margin:14px 0}
+.training-form-actions{justify-content:flex-end;margin-top:4px}
+.training-form .form-error{min-height:20px}
+.training-setting-table{overflow:auto;margin:16px 0;border:1px solid var(--line-light);border-radius:8px}
+.training-setting-table table{margin:0}
+.training-setting-table th{font-size:11px}
+.training-setting-table td{white-space:normal;vertical-align:middle;padding:10px 12px}
+.training-setting-table td:first-child{min-width:180px;background:var(--paper)}
+.training-setting-table td b{display:block;font-size:12px}
+.training-setting-table td small{display:block;font-size:10px;color:var(--muted)}
+.training-setting-table input{width:100%;max-width:130px;border:1px solid var(--line);border-radius:5px;padding:7px;min-height:36px;background:var(--paper)}
+.training-setting-table input:invalid{border-color:var(--error)}
+.training-setting-table tr:hover td{background:var(--soft)}
+.training-setting-table tr:hover td:first-child{background:var(--soft)}
+/* Mobile training card: current projects only; full eight-item list stays in the disclosure. */
+.training-card .business-title{margin-bottom:2px}
+.training-intro{font-size:11px;color:var(--muted);line-height:1.8;margin:12px 0 3px}
+.training-list{display:grid}
+.training-item{padding:13px 0;border-bottom:1px solid var(--line-light);min-width:0}
+.training-item:last-child{border-bottom:0;padding-bottom:2px}
+.training-item-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.training-item-head>div{min-width:0}
+.training-item-head b{display:block;font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.training-item-head small{display:block;font-size:10px;color:var(--muted);margin-top:2px;line-height:1.6}
+.training-line{display:flex;align-items:center;gap:9px;margin-top:10px}
+.training-line .progress{flex:1;min-width:40px}
+.training-line span{font-size:10px;color:var(--muted);white-space:nowrap}
+.training-foot{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:7px;font-size:10px;color:var(--muted)}
+.training-foot>span{min-width:0}
+.training-foot .money{font-size:12px;font-weight:550;color:var(--ink);white-space:nowrap;letter-spacing:0}
+.training-summary{display:flex;justify-content:space-between;gap:10px;font-size:10px;color:var(--muted);border-top:1px solid var(--line-light);margin-top:12px;padding-top:10px}
+.training-summary span:last-child{text-align:right}
+.training-past{font-size:10px;color:var(--muted);line-height:1.7;margin-top:8px}
+.training-empty{font-size:11px;color:var(--muted);padding:15px 0 8px;line-height:1.8}
+.tag.done{background:var(--cream);border-color:var(--line);color:var(--wood-700)}
+.tag.plain{background:var(--paper);color:var(--muted)}
+.training-all-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed var(--line-light);font-size:11px}
+.training-all-row:last-child{border-bottom:0}
+.training-all-row b{display:block;font-size:11px;font-weight:600;overflow-wrap:anywhere}
+.training-all-row small{display:block;font-size:9px;color:var(--muted);margin-top:2px}
+.training-all-progress{text-align:right;white-space:nowrap;font-size:10px;color:var(--muted)}
+.training-all-progress .tag{display:inline-flex;margin-left:6px;vertical-align:middle}
+@media(max-width:1350px){.admin-kpis.five{grid-template-columns:repeat(3,minmax(0,1fr))}.project-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1000px){.training-teaser{flex-wrap:wrap}.teaser-copy{flex-basis:100%}.teaser-stats{flex:1}.training-teaser>.toolbar{width:100%}.training-teaser>.toolbar .btn{flex:1}.project-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.admin-kpis.five{grid-template-columns:1fr 1fr}.training-teaser{padding:17px}.teaser-stats{gap:18px}.teaser-stats strong{font-size:22px}.project-grid{grid-template-columns:1fr 1fr}.training-dialog-body{padding:18px}.training-form .form-grid{grid-template-columns:1fr}.training-form .form-grid .full{grid-column:auto}.training-setting-table td:first-child{min-width:150px}}
+@media(max-width:480px){.project-grid{grid-template-columns:1fr}.teaser-stats{width:100%;justify-content:space-between}.teaser-stats strong{font-size:20px}.training-teaser>.toolbar{flex-direction:column}.training-teaser>.toolbar .btn{width:100%}}
+@media(max-width:360px){.training-item-head b{font-size:11px}.training-foot{font-size:9px;gap:6px}.training-foot .money{font-size:11px}.training-summary{font-size:9px}.training-card .business-title .money{font-size:19px}}
+@media print{.training-teaser,.project-grid,.filterbar{display:none!important}}

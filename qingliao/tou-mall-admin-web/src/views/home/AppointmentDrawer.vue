@@ -114,6 +114,14 @@
             </el-form-item>
           </div>
         </el-form-item>
+        <el-form-item v-show="form.phone" label="客户生日">
+          <div class="birthday-row">
+            <birthday-picker :key="openSeq" v-model="form.birthday"></birthday-picker>
+            <span v-if="birthdayCountdown" class="birthday-countdown"
+                  :class="{ 'is-today': birthdayCountdown === '今天生日' }">{{ birthdayCountdown }}</span>
+            <span class="birthday-hint">只记月日，用于生日关怀</span>
+          </div>
+        </el-form-item>
         <el-form-item v-if="blockedMassagistList.length" label="客户暂别">
           <div class="blocked-row">
             <el-tag v-for="item in blockedMassagistList" :key="item.id" size="small" type="warning"
@@ -164,10 +172,8 @@
           <el-switch class="m-r-10" :disabled="form.hiddenIsUpdateSortBtn"
                      style="display: block" v-if="form.massagistIdList && form.massagistIdList.length"
                      v-model="form.isUpdateSort"
-                     inactive-color="#13ce66"
-                     active-color="#ff4949"
-                     :inactive-value="true"
-                     :active-value="false">
+                     active-color="#13ce66"
+                     inactive-color="#ff4949">
           </el-switch>
           <el-button @click="handleClose" class="btn-B m-r-10">取 消</el-button>
           <el-button type="primary" @click="onSubmit" class="btn-A">确 定</el-button>
@@ -186,10 +192,12 @@ import bedApi from "@/api/shop/bed";
 import customerApi from "@/api/customer";
 import customerMassagistBlockApi from "@/api/customer/customerMassagistBlock";
 import dateUtil from "@/utils/dateUtil";
+import { birthdayCountdownLabel } from "@/utils/birthday";
+import BirthdayPicker from "@/views/home/BirthdayPicker";
 
 export default {
   name: 'AppointmentDrawer',
-  components: {ShopSelector, ProjectSelector},
+  components: {ShopSelector, ProjectSelector, BirthdayPicker},
   props: {},
   data() {
     return {
@@ -222,11 +230,16 @@ export default {
       clockOutTime: '',
       maxBedCount: 1,
       drawerTitle: '',
-      loading: false
+      loading: false,
+      baseDataPromise: null,
+      openSeq: 0
     }
   },
   computed: {
     ...mapGetters(['productList', 'shopList', 'shopId']),
+    birthdayCountdown() {
+      return birthdayCountdownLabel(this.form.birthday)
+    },
     selectedBlockedNames() {
       return (this.form.massagistIdList || [])
         .filter(id => this.isBlockedMassagist(id))
@@ -244,14 +257,20 @@ export default {
             if (this.selectCustomerList.find(e => e.phone == newVal)) {
               this.form.comment = this.selectCustomerList.find(e => e.phone == newVal).comment;
               this.form.gender = this.selectCustomerList.find(e => e.phone == newVal).gender;
+              this.form.birthday = this.selectCustomerList.find(e => e.phone == newVal).birthday || null;
             }
           })
           this.fetchBlockedByPhone(newVal)
+          //客户确定后重算时段/床位：同一客户紧接着的加钟段不应因为整理期被置灰
+          this.refreshAvailabilityForCustomer(newVal)
         } else {
           this.form.comment = ''
           this.form.gender = null
+          this.form.birthday = null
           this.blockedMassagistList = []
           this.confirmedBlockedIds = []
+          this.availabilityPhone = ''
+          this.refreshAvailabilityForCustomer('')
         }
       },
       immediate: true
@@ -264,14 +283,17 @@ export default {
             if (customer) {
               this.form.comment = customer.comment;
               this.form.gender = customer.gender;
+              this.form.birthday = customer.birthday || null;
             } else {
               this.form.comment = ''
               this.form.gender = null
+              this.form.birthday = null
             }
           })
         } else {
           this.form.comment = ''
           this.form.gender = null
+          this.form.birthday = null
         }
       },
       immediate: true,
@@ -279,22 +301,56 @@ export default {
     }
   },
   created() {
-    this.$store.dispatch("setProductList")
-    this.$store.dispatch("setShopList")
+    //不在这里 dispatch:create 时门店/用户信息可能还没就绪,且异步返回无人等待。
+    //改为在 open() 打开抽屉时经 ensureBaseData() 等待完成。
   },
   methods: {
+    /**
+     * 确保服务项目、门店等基础数据已加载。
+     * 并发调用共享同一个 Promise,避免重复请求;失败后清空缓存以便下次重试。
+     */
+    ensureBaseData() {
+      if (!this.baseDataPromise) {
+        this.baseDataPromise = Promise.all([
+          this.$store.dispatch("setProductList"),
+          this.$store.dispatch("setShopList")
+        ]).finally(() => {
+          this.baseDataPromise = null
+        })
+      }
+      return this.baseDataPromise
+    },
     async open(form = {}, params = {}, title = '预约') {
+      //同一实例可能被连续 open(连点行/行切换),用序号丢弃过期的那次初始化
+      const seq = ++this.openSeq
       this.dialogVisible = true
       this.drawerTitle = title
       this.loading = true
+      this.availabilityLoaded = false
+      this.availabilityPhone = ''
       try {
-        await this.initForm(form, params);
+        await this.ensureBaseData();
+        if (seq !== this.openSeq) return
+        if (!this.productList.length) {
+          this.$message.error('服务项目加载失败,请关闭后重试')
+          return
+        }
+        await this.initForm(form, params, seq);
         //await this.productSelected(this.productList[0])
+      } catch (e) {
+        if (seq !== this.openSeq) return
+        console.error('预约抽屉初始化失败', e)
+        this.$message.error('预约信息加载失败,请稍后重试')
       } finally {
-        this.loading = false
+        if (seq === this.openSeq) {
+          this.loading = false
+        }
       }
     },
-    async initForm(form = {}, params = {}) {
+    async initForm(form = {}, params = {}, seq) {
+      //seq 存在时表示由 open() 发起,过期则中断,避免写入已被覆盖的表单状态
+      const isStale = () => seq !== undefined && seq !== this.openSeq
+
       let proIndex = 0
       if (params.projectType) {
         proIndex = this.productList.findIndex(e => e.projectList.findIndex(e => e.type == params.projectType) > -1)
@@ -302,8 +358,18 @@ export default {
         proIndex = this.productList.findIndex(e => e.projectList.findIndex(e => e.id == form.projectId) > -1)
       }
 
+      //产品/项目数据可能未就绪或已变更,兜底到第一个可选服务,避免 productList[proIndex] 为 undefined
+      if (proIndex < 0 || !this.productList[proIndex]) {
+        proIndex = 0
+      }
+      const product = this.productList[proIndex]
+      if (!product || !product.projectList || !product.projectList.length) {
+        throw new Error('服务项目数据为空,无法初始化预约表单')
+      }
+
       form.shopId=this.shopId
       await this.initDateToBeSelected(form.shopId)//查询疗愈师的排班表,显示可预定的日期
+      if (isStale()) return
 
       if (!form.date) {
         if (this.dateToBeSelected[0]) {
@@ -312,24 +378,20 @@ export default {
           form.date = dateUtil.getCurrentDateCode()
         }
       }
-      console.log("this.form")
-      console.log(this.form)
       this.form = {
         payType: 3,
         massagistIdList: [],
         bedIdList: [],
         comment: '',
         gender: null,
-        productId: this.productList[proIndex].id,
+        birthday: null,
+        productId: product.id,
         personCount: 1,
         shopId: this.shopId,
-        isUpdateSort: !form.hiddenIsUpdateSortBtn,
+        //选好疗愈师后默认「不计入轮次」(开关为红色),需要计入时由操作员手动打开
+        isUpdateSort: false,
         ...form,
       }
-      console.log("this.form")
-      console.log(this.form)
-      console.log("this.form")
-      console.log(form)
 
       this.$forceUpdate()
 
@@ -343,20 +405,23 @@ export default {
           this.clockOutTime = '22:30'
         }
       }
-      this.projectType = this.productList[proIndex].projectList[0].type
+      this.projectType = product.projectList[0].type
       //luxin修改了
-      if(this.productList[proIndex].projectList[0].id==4){
+      if(product.projectList[0].id==4){
         this.projectTypeNew=3//强制转换为采耳索引
       }else{
         this.projectTypeNew=this.projectType
       }
-      this.projectId = this.productList[proIndex].projectList[0].id
-      this.$set(this.form, "durationMinutes", this.projectTypeDurationMinutesMap[this.projectType][0])
+      this.projectId = product.projectList[0].id
+      this.$set(this.form, "durationMinutes", (this.projectTypeDurationMinutesMap[this.projectType] || [])[0])
       await this.initMaxBedCount()
       await this.fetchTimeList()
+      if (isStale()) return
       if (this.form.time) {
         await this.fetchMassagistList()
         await this.fetchBedList()
+        if (isStale()) return
+        this.availabilityLoaded = true
         if (params.name) {
           if (params.type == 1 && this.form.bedIdList.length == 0) {
             let findIndex = this.bedList.findIndex(e => e.name == params.name);
@@ -375,6 +440,7 @@ export default {
       if (this.form.phone) {
         await this.querySearchCustomer(form.phone, (data) => {
         })
+        if (isStale()) return
         await this.fetchBlockedByPhone(this.form.phone)
       }
     },
@@ -385,6 +451,9 @@ export default {
       this.dateToBeSelected = res.data || []
     },
     handleClose() {
+      //作废仍在进行中的初始化,避免其把数据写回已关闭的抽屉
+      this.openSeq++
+      this.loading = false
       this.dialogVisible = false
       this.massagistList = []
       this.bedList = []
@@ -464,7 +533,7 @@ export default {
           this.projectTypeNew=this.projectType
         }
         this.projectId = item.projectList[0].id
-        this.$set(this.form, "durationMinutes", this.projectTypeDurationMinutesMap[this.projectType][0])
+        this.$set(this.form, "durationMinutes", (this.projectTypeDurationMinutesMap[this.projectType] || [])[0])
         this.setMaxBedCount()
       } else {
         this.projectType = ''
@@ -492,6 +561,7 @@ export default {
     handlePhoneInput(value) {
       this.form.comment = ''
       this.form.gender = null
+      this.form.birthday = null
       if (!value) {
         this.form.phone = ''
         return
@@ -503,6 +573,7 @@ export default {
       this.form.phone = item.phone
       this.form.comment = item.comment;
       this.form.gender = item.gender;
+      this.form.birthday = item.birthday || null;
       this.fetchBlockedByPhone(item.phone)
     },
     async fetchBlockedByPhone(phone) {
@@ -585,10 +656,23 @@ export default {
       }
       this.fetchTimeList()
     },
+    /** 换客户后按新客户重算可约时段与床位（未选时段则只算时段）。 */
+    async refreshAvailabilityForCustomer(phone) {
+      if (!this.availabilityLoaded || !this.dialogVisible) return
+      const normalized = (phone || '').trim()
+      const key = /^1\d{10}$/.test(normalized) ? normalized : ''
+      if (this.availabilityPhone === key) return
+      this.availabilityPhone = key
+      await this.fetchTimeList()
+      if (this.form.time) {
+        await this.fetchMassagistAndBed()
+      }
+    },
     async fetchTimeList() {
       try {
         if(this.form.date!=null&&this.form.date!=undefined){
-          let res = await orderApi.timeList(this.form.date, this.form.personCount, this.projectId, this.form.durationMinutes, this.form.shopId, this.form.massagistId)
+          //带上手机号：加钟时同一客户紧接着的时段不占 15 分钟整理期，否则会被自己上一单挡住
+          let res = await orderApi.timeList(this.form.date, this.form.personCount, this.projectId, this.form.durationMinutes, this.form.shopId, this.form.massagistId, this.form.phone, this.form.orderId)
           console.log(res.data)
           this.timeList = res.data
         }
@@ -614,7 +698,7 @@ export default {
     async fetchBedList() {
       try {
         if(this.form.date!=null&&this.form.date!=undefined) {
-          let res = await orderApi.bedList(this.form.date + " " + this.form.time + ":00", this.projectId, this.form.durationMinutes, this.form.shopId)
+          let res = await orderApi.bedList(this.form.date + " " + this.form.time + ":00", this.projectId, this.form.durationMinutes, this.form.shopId, this.form.orderId, this.form.phone)
           this.bedList = res.data || []
         }
       } catch (e) {
@@ -768,6 +852,34 @@ export default {
     color: #909399;
     font-size: 12px;
     margin-left: 6px;
+  }
+
+  .birthday-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .birthday-hint {
+    color: #909399;
+    font-size: 12px;
+    margin-left: 10px;
+  }
+
+  .birthday-countdown {
+    margin-left: 10px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: #fdf0f4;
+    color: #b4557a;
+    font-size: 12px;
+    line-height: 20px;
+
+    &.is-today {
+      background: #f8dfe8;
+      color: #9c3f63;
+      font-weight: 500;
+    }
   }
 
   .avoided-badge {

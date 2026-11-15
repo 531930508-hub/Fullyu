@@ -21,15 +21,26 @@ public class RepurchaseMetrics {
 
     private LocalDate conversionWindowEnd;
 
+    /**
+     * 老客留存的分母：窗口内在本店由该伙伴服务过的老客到店人次（同客户同日拆单只算一次）。
+     */
     private Integer retentionSample;
 
+    /**
+     * 上述到店人次中，60 天内再次到店的人次。
+     */
     private Integer retainedVisits;
 
+    /**
+     * 无有效样本时为 null，前端展示为“—”，避免和真实的 0% 混淆。
+     */
     private BigDecimal retentionRate;
 
     private Boolean retentionEligible;
 
     private BigDecimal retentionThreshold;
+
+    private Integer minRetentionSample;
 
     /**
      * 30 天窗口内的新客去重人数，用于判断最小样本。

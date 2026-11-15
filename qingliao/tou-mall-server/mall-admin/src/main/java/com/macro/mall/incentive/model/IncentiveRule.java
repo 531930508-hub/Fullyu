@@ -1,5 +1,6 @@
 package com.macro.mall.incentive.model;
 
+import com.macro.mall.incentive.calc.BaseSalaryLadder;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -24,6 +25,11 @@ public class IncentiveRule {
 
     private Integer minNewSample = 30;
 
+    /**
+     * 老客留存的最小样本（可观察老客到店人次）。低于该值不判合格，避免小样本 100% 直接解锁复购档位。
+     */
+    private Integer minRetentionSample = 30;
+
     private List<RepurchaseTier> tiers = new ArrayList<>();
 
     private BigDecimal fibA1 = new BigDecimal("10");
@@ -46,23 +52,11 @@ public class IncentiveRule {
 
     private List<TrainingProjectRule> trainingProjects = new ArrayList<>();
 
+    /**
+     * 基础薪资单价（元/分钟）。档位按起点重排后取价，配置排序不影响结果；新人合作期取单独单价。
+     */
     public BigDecimal coefficientFor(BigDecimal minutes, boolean newPartner) {
-        if (newPartner) {
-            return newCoefficient;
-        }
-        if (coefficients == null || coefficients.isEmpty()) {
-            return BigDecimal.ONE;
-        }
-        BigDecimal value = coefficients.get(0).getCoefficient();
-        long m = minutes == null ? 0L : minutes.longValue();
-        for (CoefficientBand band : coefficients) {
-            if (m >= band.getMinMinutes()) {
-                value = band.getCoefficient();
-            } else {
-                break;
-            }
-        }
-        return value;
+        return BaseSalaryLadder.of(coefficients).unitPriceFor(minutes, newPartner, newCoefficient);
     }
 
     public TrainingProjectRule findProject(String projectKey) {

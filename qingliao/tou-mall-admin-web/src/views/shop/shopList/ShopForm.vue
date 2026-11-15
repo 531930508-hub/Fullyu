@@ -33,6 +33,26 @@
         </el-row>
         <el-row :gutter="20">
           <el-col :span="12">
+            <el-form-item label="英文店名" prop="nameEn">
+              <el-input v-model="form.nameEn" placeholder="选填，如 Raffles City Store" clearable></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="英文简址" prop="shortAddressEn">
+              <el-input v-model="form.shortAddressEn" placeholder="选填，如 Raffles City 5F-11" clearable></el-input>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="24">
+            <el-form-item label="英文地址" prop="addressEn">
+              <el-input v-model="form.addressEn" placeholder="选填，如 5F-11, Raffles City, 268 Xizang Middle Rd, Shanghai" clearable></el-input>
+              <div class="form-tip">选填：小程序英文模式展示门店名、简要地址、地址时用；留空自动回退中文。经纬度仍按上面的中文地址获取。</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
             <el-form-item label="门店纬度" prop="latitude"
                           :rules="[{required: true, message: '请输入门店纬度', trigger: ['blur', 'change']}]">
               <el-input readonly v-model.number="form.latitude" type="number" @input="handleInput($event,'latitude')"
@@ -188,7 +208,7 @@
       </el-form>
       <span slot="footer" class="dialog-footer">
         <el-button @click="handleClose">取 消</el-button>
-        <el-button type="primary" @click="onSubmit">确 定</el-button>
+        <el-button type="primary" :loading="submitting" @click="onSubmit">确 定</el-button>
       </span>
     </el-dialog>
   </div>
@@ -208,6 +228,7 @@ export default {
     return {
       form: {},
       dialogVisible: false,
+      submitting: false,
       coverImageFile: null,
     }
   },
@@ -253,24 +274,29 @@ export default {
         .replace(/(\..*)\./g, '$1');
     },
     async onSubmit() {
+      if (this.submitting) return
       let validate = await this.$refs.refForm.validate().catch(() => false);
       if (!validate) {
         return
       }
+      this.submitting = true
       this.showFullLoading()
-      if (this.coverImageFile) {
-        let res = await generatePreSignedUrl(this.coverImageFile.name, 'shop');
-        console.log(res)
-        let {url, expireTime, key} = res.data
-        this.form.coverImageUrls = key
-        await uploadFile(url, this.coverImageFile.raw)
+      try {
+        if (this.coverImageFile) {
+          let res = await generatePreSignedUrl(this.coverImageFile.name, 'shop');
+          let {url, expireTime, key} = res.data
+          this.form.coverImageUrls = key
+          await uploadFile(url, this.coverImageFile.raw)
+        }
+        await shopApi.saveOrUpd(this.form)
+        this.handleClose()
+        this.$notify.success('操作成功')
+        this.$emit('submit-success')
+        this.$store.dispatch('setShopList', true)
+      } finally {
+        this.hideFullLoading()
+        this.submitting = false
       }
-      await shopApi.saveOrUpd(this.form)
-      this.handleClose()
-      this.hideFullLoading()
-      this.$notify.success('操作成功')
-      this.$emit('submit-success')
-      this.$store.dispatch('setShopList', true)
     },
     getCoordinate() {//获取地址坐标
       var that = this

@@ -192,7 +192,8 @@ class LeaveScheduleTest {
         addShift(day,10,22); MassagistLeave edit=editRequest();
         doReturn(false).when(service).updateById(any());
         assertThrows(BusinessException.class,()->service.add(edit));
-        verifyNoInteractions(service.approvalDetailService);
+        //更新失败不能推进审批流（读取状态/回填抄送属于正常前置动作）
+        verify(service.approvalDetailService,never()).reSubmit(any());
     }
     @Test void successfulEditUsesStoredApprovalNotClientSuppliedId() {
         addShift(day,10,22); MassagistLeave edit=editRequest(); edit.setApprovalId(999L);

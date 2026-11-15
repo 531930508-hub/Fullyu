@@ -3,7 +3,7 @@
 SET @fullyu_notice_ddl = IF(DATABASE() = 'tou_mall_test',
 'CREATE TABLE IF NOT EXISTS c_customer_notice (
  id BIGINT NOT NULL AUTO_INCREMENT,
- notice_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ notice_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
  customer_id BIGINT NOT NULL,
  coupon_id BIGINT NOT NULL,
  end_time DATE NOT NULL,
@@ -26,9 +26,9 @@ SET @fullyu_notice_ddl = IF(DATABASE() = 'tou_mall_test',
 'CREATE TABLE IF NOT EXISTS c_notice_subscription_consent (
  id BIGINT NOT NULL AUTO_INCREMENT,
  customer_id BIGINT NOT NULL,
- template_id VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- decision VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- request_id VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ template_id VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+ decision VARCHAR(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+ request_id VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
  create_time DATETIME NOT NULL,
  PRIMARY KEY (id),
  UNIQUE KEY uk_consent_request (customer_id,request_id),
@@ -53,11 +53,11 @@ DEALLOCATE PREPARE fullyu_notice_stmt;
 SET @fullyu_notice_ddl = IF(DATABASE() = 'tou_mall_test',
 'CREATE TABLE IF NOT EXISTS c_notice_delivery_log (
  id BIGINT NOT NULL AUTO_INCREMENT,
- notice_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ notice_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
  customer_id BIGINT NOT NULL,
- channel VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- status VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- template_id VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ channel VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+ status VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+ template_id VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
  create_time DATETIME NOT NULL,
  PRIMARY KEY (id),
  UNIQUE KEY uk_delivery_event (notice_key,channel),
@@ -73,7 +73,7 @@ SET @fullyu_notice_ddl = IF(DATABASE() != 'tou_mall_test',
 'SELECT * FROM fullyu_notice_migration_requires_tou_mall_test',
 IF((SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE()
  AND table_name='c_notice_subscription_consent' AND column_name='used_notice_key')=0,
-'ALTER TABLE c_notice_subscription_consent ADD COLUMN used_notice_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NULL, ADD UNIQUE KEY uk_consent_used_notice (used_notice_key)', 'SELECT 1'));
+'ALTER TABLE c_notice_subscription_consent ADD COLUMN used_notice_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL, ADD UNIQUE KEY uk_consent_used_notice (used_notice_key)', 'SELECT 1'));
 PREPARE fullyu_notice_stmt FROM @fullyu_notice_ddl;
 EXECUTE fullyu_notice_stmt;
 DEALLOCATE PREPARE fullyu_notice_stmt;

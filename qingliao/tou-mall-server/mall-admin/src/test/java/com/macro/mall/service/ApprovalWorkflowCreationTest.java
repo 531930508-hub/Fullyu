@@ -85,4 +85,58 @@ class ApprovalWorkflowCreationTest {
         doAnswer(call->{for(Object value:(Collection<?>)call.getArgument(0))assertEquals(3L,((ApprovalDetail)value).getCategoryId());return false;}).when(service).saveBatch(anyCollection());
         assertThrows(BusinessException.class,()->service.addBatch(java.util.Arrays.asList(10L,11L),null,FlowCategoryCode.LOW_RATING,0L));
     }
+
+    private com.macro.mall.dto.ApprovalResolvedNode resolvedNode(String name, Long... adminIds) {
+        com.macro.mall.dto.ApprovalResolvedNode node = new com.macro.mall.dto.ApprovalResolvedNode();
+        node.setNodeName(name);
+        node.setApproveMode(com.macro.mall.enums.approval.ApprovalNodeMode.ANY.getCode());
+        node.setAdminIds(new ArrayList<>(java.util.Arrays.asList(adminIds)));
+        return node;
+    }
+
+    @Test void earlyLeaveOnlyCreatesShopManagerNodeAndIgnoresLegacyApprovers() {
+        category.setCode(FlowCategoryCode.ASK_FOR_LEAVE.getCode());
+        category.setApprovalIds("[20]");
+        when(service.approvalFlowNodeService.resolveLeaveChain(8L, 1L, false))
+                .thenReturn(new ArrayList<>(java.util.Collections.singletonList(resolvedNode("店长审批", 7L))));
+        service.addLeave(null, null, 8L, FlowCategoryCode.ASK_FOR_LEAVE, 1L, 1);
+        verify(service).saveBatch(argThat((Collection<ApprovalDetail> rows) -> {
+            // 发起人 + 店长审批（审批中），旧版审批人 20 不再参与
+            if (rows.size() != 2) return false;
+            ApprovalDetail manager = rows.stream()
+                    .filter(r -> Long.valueOf(7L).equals(r.getTargetUserId())).findFirst().orElse(null);
+            return manager != null && "店长审批".equals(manager.getNodeName())
+                    && Integer.valueOf(1).equals(manager.getLevel())
+                    && rows.stream().noneMatch(r -> Long.valueOf(20L).equals(r.getTargetUserId()));
+        }));
+    }
+
+    @Test void sameDayLeaveAddsHqCeoAsSecondLevel() {
+        category.setCode(FlowCategoryCode.ASK_FOR_LEAVE.getCode());
+        category.setApprovalIds("[20]");
+        when(service.approvalFlowNodeService.resolveLeaveChain(8L, 1L, true))
+                .thenReturn(new ArrayList<>(java.util.Arrays.asList(
+                        resolvedNode("店长审批", 7L), resolvedNode("总部CEO审批", 20L))));
+        service.addLeave(null, null, 8L, FlowCategoryCode.ASK_FOR_LEAVE, 1L, 2);
+        verify(service).saveBatch(argThat((Collection<ApprovalDetail> rows) -> {
+            if (rows.size() != 3) return false;
+            ApprovalDetail manager = rows.stream()
+                    .filter(r -> Long.valueOf(7L).equals(r.getTargetUserId())).findFirst().orElse(null);
+            ApprovalDetail ceo = rows.stream()
+                    .filter(r -> Long.valueOf(20L).equals(r.getTargetUserId())).findFirst().orElse(null);
+            return manager != null && Integer.valueOf(1).equals(manager.getLevel())
+                    && ceo != null && "总部CEO审批".equals(ceo.getNodeName())
+                    && Integer.valueOf(2).equals(ceo.getLevel());
+        }));
+    }
+
+    @Test void leaveIsRejectedAndNothingSavedWhenShopHasNoManager() {
+        category.setCode(FlowCategoryCode.ASK_FOR_LEAVE.getCode());
+        when(service.approvalFlowNodeService.resolveLeaveChain(8L, 1L, false))
+                .thenThrow(new BusinessException("本店还没有在岗店长"));
+        assertThrows(BusinessException.class,
+                () -> service.addLeave(null, null, 8L, FlowCategoryCode.ASK_FOR_LEAVE, 1L, 1));
+        verify(service.approvalService, never()).save(any());
+        verify(service, never()).saveBatch(anyCollection());
+    }
 }

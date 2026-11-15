@@ -22,6 +22,13 @@
       <el-table ref="roleTable" :data="dataList" style="width: 100%;" v-loading="listLoading" border>
         <el-table-column label="门店名称" header-align="center" align="left" prop="name"
                          min-width="200" show-overflow-tooltip></el-table-column>
+        <el-table-column label="英文店名" header-align="center" align="left" prop="nameEn"
+                         min-width="160" show-overflow-tooltip>
+          <template slot-scope="scope">
+            <span v-if="scope.row.nameEn">{{ scope.row.nameEn }}</span>
+            <span v-else style="color: #bbb">未填，英文模式回退中文</span>
+          </template>
+        </el-table-column>
         <el-table-column label="门店地址" header-align="center" align="left" prop="address"
                          min-width="240" show-overflow-tooltip></el-table-column>
         <el-table-column label="商户号" header-align="center" align="left" prop="busSysId"
@@ -115,11 +122,14 @@ export default {
     },
     async fetchData() {
       this.listLoading = true
-      let res = await shopApi.page(this.searchForm)
-      this.listLoading = false
-      let {list, total} = res.data
-      this.dataList = list || []
-      this.total = total || 0
+      try {
+        let res = await shopApi.page(this.searchForm)
+        let {list, total} = res.data
+        this.dataList = list || []
+        this.total = total || 0
+      } finally {
+        this.listLoading = false
+      }
     },
     handleSizeChange(val) {
       this.searchForm.size = val;
@@ -136,7 +146,7 @@ export default {
       this.$refs.refShopForm.open(row)
     },
     async handleDelete(row, index) {
-      await this.notifyDelete('此操作将永久删除门店及其房间和床位，是否继续？')
+      await this.notifyDelete('此操作将永久删除门店及其床位，是否继续？')
       await shopApi.remove(row.id)
       this.searchData()
       this.notifySuccess()

@@ -52,12 +52,6 @@ public class BedService extends BaseService<BedMapper, Bed> {
         return list(lqw);
     }
 
-    public List<Bed> listByRoomId(Long roomId) {
-        LambdaQueryWrapper<Bed> lqw = new LambdaQueryWrapper<>();
-        lqw.eq(Bed::getRoomId, roomId);
-        return list(lqw);
-    }
-
     public void remove(Long id) {
         synchronized (NormalConst.bookingLockKey.intern()) {
             Bed bed = getById(id);

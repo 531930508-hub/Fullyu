@@ -10,7 +10,12 @@
             LEFT JOIN c_customer c on c.id = o.customer_id
         where o.type in (0,2)
           and d.state in (0, 1, 2)
-          and o.state not in(3,4)
+          <!-- 只有未付款/已付款的订单才占床位与疗愈师：超时、取消、退款中、已退款一律不占 -->
+          and o.state in (0, 1, 2)
+          <!-- 未来日期的看板不展示已服务完的明细，避免已完成单继续占位 -->
+          <if test="futureView">
+            and d.state != 2
+          </if>
           and d.shop_id = #{shopId} <![CDATA[
           AND d.start_time >= #{startDateTime}
           AND d.end_time <= #{endDateTime} ]]>

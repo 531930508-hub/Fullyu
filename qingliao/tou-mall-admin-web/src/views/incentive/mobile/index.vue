@@ -1,58 +1,64 @@
 <template>
   <div class="mv-page">
     <div class="mv-shell">
-      <header class="mv-top">
-        <div class="brand">Full愈<span>轻疗</span></div>
-        <div class="top-actions">
-          <router-link class="top-link" to="/home">后台</router-link>
-          <button
-            type="button"
-            class="icon-button"
-            :aria-label="moneyHidden ? '显示奖励金额' : '隐藏奖励金额'"
-            @click="moneyHidden = !moneyHidden">
-            <svg v-if="moneyHidden" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 3l18 18"/>
-              <path d="M10.6 10.7a3 3 0 0 0 4.2 4.2"/>
-              <path d="M9.9 5.2A10.9 10.9 0 0 1 12 5c5.5 0 9 5.5 9 5.5a17 17 0 0 1-2.4 3.1"/>
-              <path d="M6.4 6.6A17.6 17.6 0 0 0 3 10.5S6.5 16 12 16c1 0 1.9-.2 2.7-.5"/>
-            </svg>
-            <svg v-else class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-          </button>
+      <div class="mv-pin" :class="{pinned: pageScrolled}">
+        <header class="mv-top">
+          <router-link class="brand" to="/my-rewards" aria-label="轻疗疗愈空间">
+            <img class="brand-wordmark" src="@/assets/images/brand/logo-full-dark.svg" alt="Full愈 轻疗疗愈空间">
+          </router-link>
+          <div class="top-actions">
+            <router-link class="top-link" to="/home">‹ 返回后台</router-link>
+            <button
+              type="button"
+              class="icon-button"
+              :aria-label="moneyHidden ? '显示奖励金额' : '隐藏奖励金额'"
+              @click="moneyHidden = !moneyHidden">
+              <svg v-if="moneyHidden" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 3l18 18"/>
+                <path d="M10.6 10.7a3 3 0 0 0 4.2 4.2"/>
+                <path d="M9.9 5.2A10.9 10.9 0 0 1 12 5c5.5 0 9 5.5 9 5.5a17 17 0 0 1-2.4 3.1"/>
+                <path d="M6.4 6.6A17.6 17.6 0 0 0 3 10.5S6.5 16 12 16c1 0 1.9-.2 2.7-.5"/>
+              </svg>
+              <svg v-else class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="pin-month">
+          <section class="month-bar" aria-label="选择统计月份">
+            <button type="button" class="month-arrow" aria-label="上一个月" @click="shiftMonth(-1)">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+            </button>
+            <label class="month-center">
+              <span>统计月份</span>
+              <input
+                v-model="month"
+                type="month"
+                :max="currentMonth"
+                aria-label="统计月份"
+                @change="onMonthChange">
+            </label>
+            <button
+              type="button"
+              class="month-arrow"
+              :disabled="month >= currentMonth"
+              aria-label="下一个月"
+              @click="shiftMonth(1)">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </section>
+          <div class="cutoff-line">
+            <span v-if="board">{{ cutoffText }}</span>
+            <span v-else>正在读取 {{ monthText(month) }} 的数据</span>
+            <button v-if="month !== currentMonth" type="button" class="text-button" @click="resetMonth">回到本月</button>
+          </div>
         </div>
-      </header>
+      </div>
 
       <main class="mv-main">
-        <section class="month-bar" aria-label="选择统计月份">
-          <button type="button" class="month-arrow" aria-label="上一个月" @click="shiftMonth(-1)">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
-          </button>
-          <label class="month-center">
-            <span>统计月份</span>
-            <input
-              v-model="month"
-              type="month"
-              :max="currentMonth"
-              aria-label="统计月份"
-              @change="onMonthChange">
-          </label>
-          <button
-            type="button"
-            class="month-arrow"
-            :disabled="month >= currentMonth"
-            aria-label="下一个月"
-            @click="shiftMonth(1)">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
-          </button>
-        </section>
-
-        <div class="cutoff-line">
-          <span v-if="board">{{ cutoffText }}</span>
-          <span v-else>正在读取 {{ monthText(month) }} 的数据</span>
-          <button v-if="month !== currentMonth" type="button" class="text-button" @click="resetMonth">回到本月</button>
-        </div>
 
         <div v-if="loading" class="loading-card" aria-live="polite">
           <div class="skeleton wide"></div>
@@ -81,260 +87,484 @@
             <span class="month-badge">{{ monthText(board.month) }}</span>
           </section>
 
-          <section class="card achievement-card">
-            <div class="section-head">
-              <div>
-                <h2>累计成就</h2>
-                <p>加入于 {{ joinDateText }}</p>
-              </div>
-              <span class="micro">截至 {{ asOfText }}</span>
+          <section class="card detail-card">
+            <button
+              type="button"
+              class="card-toggle"
+              :aria-expanded="open('achievement') ? 'true' : 'false'"
+              @click="toggleDetail('achievement')">
+              <span>
+                <b class="toggle-title">累计成就</b>
+                <small>加入第 {{ joinDaysText }} 天 · 累计 {{ count(achievement.totalServiceMinutes) }} 分钟 · {{ count(achievement.customerCount) }} 位客人</small>
+              </span>
+              <span class="toggle-side">
+                <em class="toggle-meta">截至 {{ asOfText }}</em>
+                <svg class="icon" :class="{rotated: open('achievement')}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+            </button>
+
+            <div v-show="open('achievement')" class="card-body">
+                <div class="achievement-grid">
+                  <div>
+                    <strong>{{ joinDaysText }}</strong>
+                    <small>加入天数</small>
+                  </div>
+                  <div>
+                    <strong>{{ count(achievement.totalServiceMinutes) }}</strong>
+                    <small>累计服务分钟</small>
+                  </div>
+                  <div>
+                    <strong>{{ count(achievement.customerCount) }}</strong>
+                    <small>服务客人 · 位</small>
+                  </div>
+                </div>
+                <div class="fan-row">
+                  <svg class="icon heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20 5a5 5 0 0 0-8 1 5 5 0 0 0-8-1c-5 5 8 15 8 15s13-10 8-15z"/>
+                  </svg>
+                  <div>
+                    <b>{{ achievement.topFanMasked ? '头号粉丝 · ' + achievement.topFanMasked : '暂无服务记录' }}</b>
+                    <p>{{ achievement.topFanVisits ? '累计到店 ' + achievement.topFanVisits + ' 次' : '完成服务后在这里积累' }}</p>
+                  </div>
+                </div>
+                <p class="card-note">加入于 {{ joinDateText }}；累计成就统计至所选月份的截止日，客户号码已脱敏。</p>
             </div>
-            <div class="achievement-grid">
-              <div>
-                <strong>{{ joinDaysText }}</strong>
-                <small>加入天数</small>
-              </div>
-              <div>
-                <strong>{{ count(achievement.totalServiceMinutes) }}</strong>
-                <small>累计服务分钟</small>
-              </div>
-              <div>
-                <strong>{{ count(achievement.customerCount) }}</strong>
-                <small>服务客人 · 位</small>
-              </div>
-            </div>
-            <div class="fan-row">
-              <svg class="icon heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M20 5a5 5 0 0 0-8 1 5 5 0 0 0-8-1c-5 5 8 15 8 15s13-10 8-15z"/>
-              </svg>
-              <div>
-                <b>{{ achievement.topFanMasked ? '头号粉丝 · ' + achievement.topFanMasked : '暂无服务记录' }}</b>
-                <p>{{ achievement.topFanVisits ? '累计到店 ' + achievement.topFanVisits + ' 次' : '完成服务后在这里积累' }}</p>
-              </div>
-            </div>
-            <p class="card-note">累计成就统计至所选月份的截止日；客户号码已脱敏。</p>
           </section>
 
           <section class="reward-hero">
             <div class="hero-top">
-              <span class="hero-label">{{ monthText(board.month) }}接单奖励</span>
-              <span class="hero-tag">预估</span>
+              <span class="hero-label">{{ monthText(board.month) }}{{ published ? '已发布结算' : '接单奖励' }}</span>
+              <span class="hero-tag">{{ published ? '已发布' : '预估' }}</span>
             </div>
-            <div class="hero-value">{{ cash(settlement.subtotal) }}</div>
-            <p class="hero-note">基础、培训、复购{{ manager.manager ? '、店长' : '' }}奖励合计，仅含已满足条件的部分。</p>
+            <div class="hero-value">{{ cash(published ? published.subtotal : settlement.subtotal) }}</div>
+            <p class="hero-note">
+              {{ published
+                ? '财务已发布本月的结算快照，金额作为发放依据；下方过程数据仅供参考。'
+                : '基础、培训、复购' + (manager.manager ? '、店长' : '') + '奖励合计，仅含已满足条件的部分。' }}
+            </p>
             <div class="hero-settle">
-              <span>预计合作结算</span>
-              <b>{{ cash(settlement.net) }}</b>
+              <span>{{ published ? '已发布应发' : '预计合作结算' }}</span>
+              <b>{{ cash(published ? published.net : settlement.net) }}</b>
             </div>
           </section>
 
-          <section class="card">
-            <div class="section-head">
-              <div>
-                <h2>基础接单奖励</h2>
-                <p>当月折算 {{ money(base.minutes, 0) }} 分钟 · 系数 {{ decimal(base.coefficient) }}</p>
-              </div>
-              <strong class="section-amount">{{ cash(base.amount) }}</strong>
-            </div>
-
-            <div v-if="base.newPartner" class="inline-notice">
-              新人合作期系数 {{ decimal(base.coefficient) }}，不参与下方档位累加。
-            </div>
-
-            <div class="band-track" :class="{muted: base.newPartner}">
-              <div
-                v-for="(band, index) in bands"
-                :key="band.minMinutes"
-                class="band-step"
-                :class="{reached: !base.newPartner && index <= bandIndex, current: !base.newPartner && index === bandIndex}">
-                <i class="dot"></i>
-                <b>{{ bandLabel(band.minMinutes) }}</b>
-                <small>× {{ decimal(band.coefficient) }}</small>
-              </div>
-            </div>
-            <p class="hint-line">{{ base.nextBandHint || '当前时长档位已记录' }}</p>
-            <p class="card-note">全月折算分钟乘同一档位系数，不分段累加。达到档位起点即跳档，左闭右开。</p>
-          </section>
-
-          <section class="card">
-            <div class="section-head">
-              <div>
-                <h2>复购接单奖励</h2>
-                <p>两类复购奖励共用老客留存前提</p>
-              </div>
-              <strong class="section-amount">{{ cash(repurchase.totalAmount) }}</strong>
-            </div>
-
-            <div class="gate-box" :class="{passed: repurchase.retentionEligible}">
-              <div class="gate-head">
-                <span>老客 60 天留存率</span>
-                <b>{{ retentionRateText }} / {{ percent(repurchase.retentionThreshold, 0) }}</b>
-              </div>
-              <div class="progress">
-                <i :style="{width: retentionWidth}"></i>
-              </div>
-              <p>
-                样本 {{ repurchase.retentionSample || 0 }} 人次，60 天内再次到店 {{ repurchase.retainedVisits || 0 }} 人次。
-                {{ repurchase.retentionEligible ? '门槛已达成，复购奖励计入当月。' : '门槛未达成，复购奖励暂不计入。' }}
-              </p>
-              <p class="window-line">留存窗口 {{ repurchase.retentionWindowStart }} 至 {{ repurchase.retentionWindowEnd }}</p>
-            </div>
-
-            <div class="metric-row">
-              <div>
-                <small>新客 30 天复购率</small>
-                <b>{{ conversionRateText }}</b>
-                <span>
-                  新客 {{ repurchase.newCustomerCount || 0 }} 人
-                  <template v-if="!repurchase.conversionSampleSufficient"> · 样本需满 {{ repurchase.minNewSample }} 人</template>
-                </span>
-              </div>
-              <div>
-                <small>30 天档位奖励</small>
-                <b>{{ cash(repurchase.appliedTierAmount) }}</b>
-                <span>{{ tierStateText }}</span>
-              </div>
-            </div>
-
-            <div class="tier-track">
-              <div
-                v-for="(tier, index) in tiers"
-                :key="tier.rate"
-                class="tier-step"
-                :class="{
-                  reached: index <= tierIndex,
-                  current: index === tierIndex,
-                  pending: index <= tierIndex && !repurchase.retentionEligible
-                }">
-                <b>{{ percent(tier.rate, 0) }}</b>
-                <small>{{ cash(tier.amount, 0) }}</small>
-              </div>
-            </div>
-            <p class="hint-line">{{ tierHint }}</p>
-            <p class="card-note">取最高一档，不叠加；新客样本不足 {{ repurchase.minNewSample || 30 }} 人时，30 天档位暂不计入。</p>
-
-            <div class="sub-divider"></div>
-
-            <div class="metric-row">
-              <div>
-                <small>新客 10 天复购</small>
-                <b>{{ repurchase.tenDayHeadCount || 0 }} 条</b>
-                <span>加权 {{ decimal(repurchase.tenDayWeightedHeads) }} 位 · 共同服务按权重分摊</span>
-              </div>
-              <div>
-                <small>10 天复购奖励</small>
-                <b>{{ cash(repurchase.appliedTenDayAmount) }}</b>
-                <span>{{ repurchase.retentionEligible ? '按递增单价累计' : '留存达标后计入' }}</span>
-              </div>
-            </div>
-
-            <div class="next-reward">
-              <div>
-                <span class="mini-label">下一个激励</span>
-                <p>第 {{ (repurchase.tenDayHeadCount || 0) + 1 }} 位新客 10 天内再来</p>
-                <small>按完整归属一位试算，实际以订单归属为准</small>
-              </div>
-              <strong>{{ nextTenDayText }}</strong>
-            </div>
-            <p class="card-note">
-              10 天复购按 {{ monthText(board.month) }} 首单归属；单价采用斐波那契递增，单笔封顶 {{ cash(fibCap, 0) }} 后继续按封顶价累计。
-            </p>
-          </section>
-
-          <section class="card">
-            <div class="section-head">
-              <div>
-                <h2>培训达标奖励</h2>
-                <p>已登记 {{ registeredTrainingCount }} / {{ trainingProjects.length }} 项 · 当月达标 {{ completedThisMonthCount }} 项</p>
-              </div>
-              <strong class="section-amount">{{ cash(training.earnedAmount) }}</strong>
-            </div>
-            <p class="card-note intro-note">通过考核的次日起累计对应项目订单，达到目标后计入达标当月，之后月份不重复。</p>
-
-            <div v-if="!visibleTrainingGroups.length" class="training-empty">
-              当月没有进行中的培训项目。可在下方查看全部项目与考核状态。
-            </div>
-
-            <div v-for="group in visibleTrainingGroups" :key="group.name" class="training-group">
-              <h3>{{ group.name }}</h3>
-              <article v-for="project in group.projects" :key="project.projectKey" class="training-row">
-                <div class="training-row-head">
-                  <div class="training-name">
-                    <b>{{ project.projectName }}</b>
-                    <small>{{ project.passedAt ? project.passedAt + ' 通过考核 · 次日起累计' : '尚未登记考核' }}</small>
-                  </div>
-                  <span class="status-tag" :class="trainingTagClass(project)">{{ trainingLabel(project) }}</span>
-                </div>
-                <div class="training-line">
-                  <div class="progress">
-                    <i :style="{width: progressWidth(project.progressPercent)}"></i>
-                  </div>
-                  <span>{{ project.count || 0 }} / {{ project.target || 0 }}</span>
-                </div>
-                <div class="training-foot">
-                  <span>{{ trainingNote(project) }}</span>
-                  <strong>{{ trainingAmountText(project) }}</strong>
-                </div>
-              </article>
-            </div>
-
-            <button
-              type="button"
-              class="expand-button"
-              :aria-expanded="trainingAllOpen ? 'true' : 'false'"
-              @click="trainingAllOpen = !trainingAllOpen">
-              <span>{{ trainingAllOpen ? '收起全部项目' : '查看全部 ' + trainingProjects.length + ' 个项目' }}</span>
-              <svg class="icon" :class="{rotated: trainingAllOpen}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          <div class="detail-bar">
+            <span class="detail-label">奖励明细 <em>点开卡片查看计算过程</em></span>
+            <button type="button" class="detail-action" @click="toggleAllDetails">
+              {{ allDetailsOpen ? '全部收起' : '全部展开' }}
             </button>
+          </div>
 
-            <p class="card-note">
-              全感舒筋 6 个部位与头部水疗 60 / 90 分钟分别独立累计；未登记考核的项目不累计。
-            </p>
-          </section>
-
-          <section v-if="manager.manager" class="card">
-            <div class="section-head">
-              <div>
-                <h2>店长奖励</h2>
-                <p>整店实际业绩达到目标后，按全部实际业绩提点</p>
-              </div>
-              <strong class="section-amount">{{ cash(manager.totalAmount) }}</strong>
-            </div>
-            <div v-for="shop in manager.shops" :key="shop.shopId" class="manager-row">
-              <div class="manager-row-head">
-                <b>{{ shop.shopName || ('门店 ' + shop.shopId) }}</b>
-                <span class="status-tag" :class="shop.achieved ? 'done' : 'muted'">{{ shop.achieved ? '已达成' : '进行中' }}</span>
-              </div>
-              <div class="progress">
-                <i :style="{width: managerWidth(shop)}"></i>
-              </div>
-              <div class="manager-meta">
-                <span>实际 {{ cash(shop.actualRevenue) }} / 目标 {{ cash(shop.targetRevenue) }}</span>
-                <span>提点 {{ percent(shop.commissionRate, 0) }}</span>
-              </div>
-              <p class="card-note">
-                {{ shop.achieved
-                  ? '目标已达成，按整店实际业绩 ' + cash(shop.actualRevenue) + ' × ' + percent(shop.commissionRate, 0) + ' 计算。'
-                  : '目标尚未完成，当前为零；完成后按整店全部实际业绩提点，不只计算超出部分。' }}
-              </p>
-            </div>
-          </section>
-
-          <section class="card settlement-card">
+          <section v-if="published" class="card detail-card published-card">
             <button
               type="button"
               class="card-toggle"
-              :aria-expanded="settlementOpen ? 'true' : 'false'"
-              @click="settlementOpen = !settlementOpen">
+              :aria-expanded="open('published') ? 'true' : 'false'"
+              @click="toggleDetail('published')">
               <span>
-                <b>合作结算明细</b>
-                <small>接单奖励合计 {{ cash(settlement.subtotal) }} · 预计结算 {{ cash(settlement.net) }}</small>
+                <b class="toggle-title">已发布结算单 <em class="status-tag done">已发布</em></b>
+                <small>{{ monthText(published.monthCode) }} · {{ published.publishedTime ? dateTime(published.publishedTime) + ' 发布' : '已发布' }} · 金额已冻结</small>
               </span>
-              <svg class="icon" :class="{rotated: settlementOpen}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              <span class="toggle-side">
+                <strong class="toggle-amount">{{ cash(published.net) }}</strong>
+                <svg class="icon" :class="{rotated: open('published')}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
             </button>
 
-            <div v-show="settlementOpen" class="settlement-body">
-              <div class="kv"><span>基础接单奖励</span><b>{{ cash(settlement.baseReward) }}</b></div>
+            <div v-show="open('published')" class="card-body">
+              <div class="compose-box">
+                <div class="compose-head">
+                  <span>结算构成（快照）</span>
+                  <small>发布后金额冻结，不随排班、考核与规则变化</small>
+                </div>
+                <div class="compose-row">
+                  <span>基础服务费</span>
+                  <b>{{ cash(published.baseAmount) }}</b>
+                  <em>折算 {{ count(published.countedMinutes) }} 分</em>
+                </div>
+                <div v-if="numberValue(published.managerAmount) > 0" class="compose-row">
+                  <span>店长奖励</span>
+                  <b>{{ cash(published.managerAmount) }}</b>
+                </div>
+                <div class="compose-row">
+                  <span>培训奖励</span>
+                  <b>{{ cash(published.trainingAmount) }}</b>
+                </div>
+                <div class="compose-row">
+                  <span>复购激励</span>
+                  <b>{{ cash(published.repurchaseAmount) }}</b>
+                  <em v-if="numberValue(published.repurchasePotential) > numberValue(published.repurchaseAmount)">
+                    未达门槛潜力 {{ cash(published.repurchasePotential) }}
+                  </em>
+                </div>
+                <div class="compose-row">
+                  <span>其他调整</span>
+                  <b>{{ cash(published.adjustmentAmount) }}</b>
+                </div>
+                <div class="compose-row total">
+                  <span>小计</span>
+                  <b>{{ cash(published.subtotal) }}</b>
+                </div>
+              </div>
+
+              <div class="compose-box">
+                <div class="compose-row">
+                  <span>含服务费金额</span>
+                  <b>{{ cash(published.gross) }}</b>
+                </div>
+                <div class="compose-row">
+                  <span>税前应得</span>
+                  <b>{{ cash(published.preTax) }}</b>
+                </div>
+                <div class="compose-row">
+                  <span>个税</span>
+                  <b>{{ cash(published.tax) }}</b>
+                </div>
+                <div class="compose-row total">
+                  <span>应发</span>
+                  <b>{{ cash(published.net) }}</b>
+                </div>
+              </div>
+
+              <p v-if="published.remark" class="hint-line">财务备注：{{ published.remark }}</p>
+              <p class="card-note">结算单由财务确认后发布；如需调整请先联系门店店长或财务，撤销确认需超级管理员操作。</p>
+            </div>
+          </section>
+
+          <section class="card detail-card">
+            <button
+              type="button"
+              class="card-toggle"
+              :aria-expanded="open('base') ? 'true' : 'false'"
+              @click="toggleDetail('base')">
+              <span>
+                <b class="toggle-title">基础服务费 <em v-if="base.newPartner" class="status-tag active">新人期</em></b>
+                <small>折算 {{ count(base.minutes) }} 分 × {{ decimal(base.coefficient) }} 元/分</small>
+              </span>
+              <span class="toggle-side">
+                <strong class="toggle-amount">{{ cash(base.amount) }}</strong>
+                <svg class="icon" :class="{rotated: open('base')}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+            </button>
+
+            <div v-show="open('base')" class="card-body">
+              <div v-if="base.newPartner" class="inline-notice">
+                新人合作期单价 {{ decimal(base.coefficient) }} 元/分钟，不参与下方档位累加。
+              </div>
+
+              <div class="compose-box">
+                <div class="compose-head">
+                  <span>折算时长构成</span>
+                  <small>服务 + 接待 + 工时调整 = 计入基础服务费的分钟</small>
+                </div>
+                <div class="compose-row">
+                  <span>服务折算</span>
+                  <b>{{ count(base.serviceWeightedMinutes) }} 分</b>
+                  <em>服务 {{ count(base.serviceMinutes) }} 分 · {{ base.serviceOrderCount || 0 }} 单</em>
+                </div>
+                <div class="compose-row">
+                  <span>接待计入</span>
+                  <b>{{ count(base.receptionCountedMinutes) }} 分</b>
+                  <em>
+                    接待 {{ count(base.receptionMinutes) }} 分 · {{ base.receptionOrderCount || 0 }} 单
+                    <template v-if="base.receptionCapApplied"> · 超出上限 {{ count(base.receptionExcessMinutes) }} 分不计入</template>
+                    <template v-else-if="base.receptionCapMinutes"> · 上限 {{ count(base.receptionCapMinutes) }} 分</template>
+                  </em>
+                </div>
+                <div class="compose-row">
+                  <span>工时/排班调整</span>
+                  <b>{{ signedMinutes(base.adjustMinutes) }} 分</b>
+                  <em>补单、请假等人力调整，可为负数</em>
+                </div>
+                <div class="compose-row total">
+                  <span>合计折算</span>
+                  <b>{{ count(base.minutes) }} 分 × {{ decimal(base.coefficient) }} 元/分 = {{ cash(base.amount) }}</b>
+                  <em>按上月计入时长档位取单价</em>
+                </div>
+              </div>
+
+              <div class="band-track" :class="{muted: base.newPartner}">
+                <div
+                  v-for="(band, index) in bands"
+                  :key="band.minMinutes"
+                  class="band-step"
+                  :class="{reached: !base.newPartner && index <= bandIndex, current: !base.newPartner && index === bandIndex}">
+                  <i class="dot"></i>
+                  <b>{{ bandLabel(band.minMinutes) }}</b>
+                  <small>{{ decimal(band.coefficient) }} 元/分</small>
+                </div>
+              </div>
+              <p class="hint-line">{{ base.nextBandHint || '当前时长档位已记录' }}</p>
+              <p class="card-note">全月折算分钟乘同一档位单价（元/分钟），不分段累加。达到档位起点即跳档，左闭右开。</p>
+            </div>
+          </section>
+
+          <section class="card detail-card">
+            <button
+              type="button"
+              class="card-toggle"
+              :aria-expanded="open('repurchase') ? 'true' : 'false'"
+              @click="toggleDetail('repurchase')">
+              <span>
+                <b class="toggle-title">
+                  复购接单奖励
+                  <em class="status-tag" :class="repurchase.retentionEligible ? 'done' : 'pending'">{{ repurchase.retentionEligible ? '留存已达标' : '留存待达标' }}</em>
+                </b>
+                <small>30 天复购 {{ conversionRateText }} · 10 天复购 {{ repurchase.tenDayHeadCount || 0 }} 头 · 已计入 {{ cash(repurchaseApplied) }} / 理论 {{ cash(repurchase.potentialAmount) }}</small>
+              </span>
+              <span class="toggle-side">
+                <strong class="toggle-amount">{{ cash(repurchase.totalAmount) }}</strong>
+                <svg class="icon" :class="{rotated: open('repurchase')}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+            </button>
+
+            <div v-show="open('repurchase')" class="card-body">
+              <div class="gate-box" :class="{passed: repurchase.retentionEligible}">
+                <div class="gate-head">
+                  <span>老客 60 天留存率</span>
+                  <b>{{ retentionRateText }} / {{ percent(repurchase.retentionThreshold, 0) }}</b>
+                </div>
+                <div class="progress">
+                  <i :style="{width: retentionWidth}"></i>
+                </div>
+                <p>
+                  窗口内老客到店 {{ repurchase.retentionSample || 0 }} 人次，{{ repurchase.retainedVisits || 0 }} 人次在 60 天内再次到店。
+                  <template v-if="repurchase.retentionSample === 0">暂无满 60 天的老客到店样本，不参与判定。</template>
+                  <template v-else-if="repurchase.retentionSample < (repurchase.minRetentionSample || 0)">
+                    样本不足 {{ repurchase.minRetentionSample }} 人次，仅展示不判合格。
+                  </template>
+                  <template v-else-if="!repurchase.retentionEligible">门槛未达成，复购奖励暂不计入。</template>
+                  <template v-else-if="numberValue(repurchase.appliedTierAmount) === 0">门槛已达成，但本月未达复购档位。</template>
+                  <template v-else>门槛已达成，复购奖励计入当月。</template>
+                </p>
+                <p class="window-line">留存窗口 {{ repurchase.retentionWindowStart }} 至 {{ repurchase.retentionWindowEnd }}</p>
+              </div>
+
+              <div class="sample-grid">
+                <div class="sample-item">
+                  <div class="sample-head">
+                    <span>老客样本</span>
+                    <b>{{ repurchase.retentionSample || 0 }} / {{ repurchase.minRetentionSample || 0 }}</b>
+                  </div>
+                  <div class="progress">
+                    <i :style="{width: retentionSampleWidth}"></i>
+                  </div>
+                  <small>不足 {{ repurchase.minRetentionSample || 0 }} 人次时留存率仅展示不判定</small>
+                </div>
+                <div class="sample-item">
+                  <div class="sample-head">
+                    <span>新客样本</span>
+                    <b>{{ repurchase.newCustomerCount || 0 }} / {{ repurchase.minNewSample || 0 }}</b>
+                  </div>
+                  <div class="progress">
+                    <i :style="{width: newSampleWidth}"></i>
+                  </div>
+                  <small>不足 {{ repurchase.minNewSample || 0 }} 人时 30 天档位暂不计入</small>
+                </div>
+              </div>
+
+              <div class="progress-grid">
+                <div class="progress-item">
+                  <div class="progress-head">
+                    <span>30 天档位进度</span>
+                    <b>{{ conversionRateText }} → {{ repurchase.nextTierRate ? percent(repurchase.nextTierRate, 0) : '已到顶' }}</b>
+                  </div>
+                  <div class="progress">
+                    <i :style="{width: tierProgressWidth}"></i>
+                  </div>
+                  <small v-if="repurchase.nextTierRate">
+                    还差 {{ decimal(repurchase.neededForNextTier, 1) }} 个加权新客，可达 {{ cash(repurchase.nextTierAmount, 0) }}
+                  </small>
+                  <small v-else>已达成最高档 30 天复购奖励</small>
+                </div>
+                <div class="progress-item">
+                  <div class="progress-head">
+                    <span>复购奖励计入进度</span>
+                    <b>{{ cash(repurchaseApplied) }} / {{ cash(repurchase.potentialAmount) }}</b>
+                  </div>
+                  <div class="progress">
+                    <i :style="{width: repurchaseProgressWidth}"></i>
+                  </div>
+                  <small>未计入部分待门槛/档位达成后自动补入</small>
+                </div>
+              </div>
+
+              <div class="metric-row">
+                <div>
+                  <small>新客 30 天复购率</small>
+                  <b>{{ conversionRateText }}</b>
+                  <span>
+                    新客 {{ repurchase.newCustomerCount || 0 }} 人
+                    <template v-if="!repurchase.conversionSampleSufficient"> · 样本需满 {{ repurchase.minNewSample }} 人</template>
+                  </span>
+                </div>
+                <div>
+                  <small>30 天档位奖励</small>
+                  <b>{{ cash(repurchase.appliedTierAmount) }}</b>
+                  <span>{{ tierStateText }}</span>
+                </div>
+              </div>
+
+              <div class="tier-track">
+                <div
+                  v-for="(tier, index) in tiers"
+                  :key="tier.rate"
+                  class="tier-step"
+                  :class="{
+                    reached: index <= tierIndex,
+                    current: index === tierIndex,
+                    pending: index <= tierIndex && !repurchase.retentionEligible
+                  }">
+                  <b>{{ percent(tier.rate, 0) }}</b>
+                  <small>{{ cash(tier.amount, 0) }}</small>
+                </div>
+              </div>
+              <p class="hint-line">{{ tierHint }}</p>
+              <p class="card-note">取最高一档，不叠加；新客样本不足 {{ repurchase.minNewSample || 30 }} 人时，30 天档位暂不计入。</p>
+
+              <div class="sub-divider"></div>
+
+              <div class="metric-row">
+                <div>
+                  <small>新客 10 天复购</small>
+                  <b>{{ repurchase.tenDayHeadCount || 0 }} 条</b>
+                  <span>加权 {{ decimal(repurchase.tenDayWeightedHeads) }} 位 · 共同服务按权重分摊</span>
+                </div>
+                <div>
+                  <small>10 天复购奖励</small>
+                  <b>{{ cash(repurchase.appliedTenDayAmount) }}</b>
+                  <span>{{ repurchase.retentionEligible ? '按递增单价累计' : '留存达标后计入' }}</span>
+                </div>
+              </div>
+
+              <div class="next-reward">
+                <div>
+                  <span class="mini-label">下一个激励</span>
+                  <p>第 {{ (repurchase.tenDayHeadCount || 0) + 1 }} 位新客 10 天内再来</p>
+                  <small>按完整归属一位试算，实际以订单归属为准</small>
+                </div>
+                <strong>{{ nextTenDayText }}</strong>
+              </div>
+              <p class="card-note">
+                10 天复购按 {{ monthText(board.month) }} 首单归属；单价采用斐波那契递增，单笔封顶 {{ cash(fibCap, 0) }} 后继续按封顶价累计。
+              </p>
+            </div>
+          </section>
+
+          <section class="card detail-card">
+            <button
+              type="button"
+              class="card-toggle"
+              :aria-expanded="open('training') ? 'true' : 'false'"
+              @click="toggleDetail('training')">
+              <span>
+                <b class="toggle-title">
+                  培训达标奖励
+                  <em v-if="completedThisMonthCount" class="status-tag done">当月达标 {{ completedThisMonthCount }}</em>
+                </b>
+                <small>已登记 {{ registeredTrainingCount }} / {{ trainingProjects.length }} 项 · 进行中 {{ activeTraining.length }} 项</small>
+              </span>
+              <span class="toggle-side">
+                <strong class="toggle-amount">{{ cash(training.earnedAmount) }}</strong>
+                <svg class="icon" :class="{rotated: open('training')}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+            </button>
+
+            <div v-show="open('training')" class="card-body">
+              <p class="card-note intro-note">通过考核的次日起累计对应项目订单，达到目标后计入达标当月，之后月份不重复。</p>
+
+              <div v-if="!activeTraining.length" class="training-empty">
+                当月没有进行中的培训项目，下方为全部项目与考核状态。
+              </div>
+
+              <div v-for="group in trainingGroups" :key="group.name" class="training-group">
+                <h3>{{ group.name }}</h3>
+                <article v-for="project in group.projects" :key="project.projectKey" class="training-row">
+                  <div class="training-row-head">
+                    <div class="training-name">
+                      <b>{{ project.projectName }}</b>
+                      <small>{{ project.passedAt ? project.passedAt + ' 通过考核 · 次日起累计' : '尚未登记考核' }}</small>
+                    </div>
+                    <span class="status-tag" :class="trainingTagClass(project)">{{ trainingLabel(project) }}</span>
+                  </div>
+                  <div class="training-line">
+                    <div class="progress">
+                      <i :style="{width: progressWidth(project.progressPercent)}"></i>
+                    </div>
+                    <span>{{ project.count || 0 }} / {{ project.target || 0 }}</span>
+                  </div>
+                  <div class="training-foot">
+                    <span>{{ trainingNote(project) }}</span>
+                    <strong>{{ trainingAmountText(project) }}</strong>
+                  </div>
+                </article>
+              </div>
+
+              <p class="card-note">
+                全感舒筋 6 个部位与头部水疗 60 / 90 分钟分别独立累计；未登记考核的项目不累计。
+              </p>
+            </div>
+          </section>
+
+          <section v-if="manager.manager" class="card detail-card">
+            <button
+              type="button"
+              class="card-toggle"
+              :aria-expanded="open('manager') ? 'true' : 'false'"
+              @click="toggleDetail('manager')">
+              <span>
+                <b class="toggle-title">
+                  店长奖励
+                  <em class="status-tag" :class="managerAchievedCount ? 'done' : 'muted'">{{ managerAchievedCount }} / {{ manager.shops.length }} 家达成</em>
+                </b>
+                <small>整店实际业绩达到目标后，按全部实际业绩提点</small>
+              </span>
+              <span class="toggle-side">
+                <strong class="toggle-amount">{{ cash(manager.totalAmount) }}</strong>
+                <svg class="icon" :class="{rotated: open('manager')}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+            </button>
+
+            <div v-show="open('manager')" class="card-body">
+              <div v-for="shop in manager.shops" :key="shop.shopId" class="manager-row">
+                <div class="manager-row-head">
+                  <b>{{ shop.shopName || ('门店 ' + shop.shopId) }}</b>
+                  <span class="status-tag" :class="shop.achieved ? 'done' : 'muted'">{{ shop.achieved ? '已达成' : '进行中' }}</span>
+                </div>
+                <div class="progress">
+                  <i :style="{width: managerWidth(shop)}"></i>
+                </div>
+                <div class="manager-meta">
+                  <span>实际 {{ cash(shop.actualRevenue) }} / 目标 {{ cash(shop.targetRevenue) }}</span>
+                  <span>提点 {{ percent(shop.commissionRate, 0) }}</span>
+                </div>
+                <p class="card-note">
+                  {{ shop.achieved
+                    ? '目标已达成，按整店实际业绩 ' + cash(shop.actualRevenue) + ' × ' + percent(shop.commissionRate, 0) + ' 计算。'
+                    : '目标尚未完成，当前为零；完成后按整店全部实际业绩提点，不只计算超出部分。' }}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section class="card detail-card settlement-card">
+            <button
+              type="button"
+              class="card-toggle"
+              :aria-expanded="open('settlement') ? 'true' : 'false'"
+              @click="toggleDetail('settlement')">
+              <span>
+                <b class="toggle-title">合作结算明细</b>
+                <small>接单奖励合计 {{ cash(settlement.subtotal) }} · 服务费折算与税费预估</small>
+              </span>
+              <span class="toggle-side">
+                <strong class="toggle-amount">{{ cash(settlement.net) }}</strong>
+                <svg class="icon" :class="{rotated: open('settlement')}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+            </button>
+
+            <div v-show="open('settlement')" class="settlement-body">
+              <div class="kv"><span>基础服务费</span><b>{{ cash(settlement.baseReward) }}</b></div>
               <div v-if="manager.manager" class="kv"><span>店长奖励</span><b>{{ cash(settlement.managerReward) }}</b></div>
               <div class="kv"><span>培训达标奖励</span><b>{{ cash(settlement.trainingReward) }}</b></div>
               <div class="kv"><span>复购接单奖励</span><b>{{ cash(settlement.repurchaseReward) }}</b></div>
@@ -413,13 +643,22 @@ export default {
       currentMonth: currentMonth(),
       board: null,
       config: null,
+      published: null,
       loading: false,
       error: '',
       moneyHidden: false,
-      trainingAllOpen: false,
-      settlementOpen: false,
       taxOpen: false,
       warningsOpen: false,
+      pageScrolled: false,
+      details: {
+        achievement: false,
+        published: false,
+        base: false,
+        repurchase: false,
+        training: false,
+        manager: false,
+        settlement: false
+      },
       loadToken: 0
     }
   },
@@ -444,6 +683,19 @@ export default {
     },
     warnings() {
       return (this.board && this.board.warnings) || []
+    },
+    managerAchievedCount() {
+      const shops = (this.manager && this.manager.shops) || []
+      return shops.filter(shop => !!shop.achieved).length
+    },
+    detailKeys() {
+      const keys = ['achievement', 'base', 'repurchase', 'training', 'settlement']
+      if (this.published) keys.splice(1, 0, 'published')
+      if (this.manager.manager) keys.splice(keys.indexOf('settlement'), 0, 'manager')
+      return keys
+    },
+    allDetailsOpen() {
+      return this.detailKeys.every(key => !!this.details[key])
     },
     initial() {
       const name = (this.board && this.board.massagistName) || '愈'
@@ -507,6 +759,29 @@ export default {
     retentionWidth() {
       return this.progressWidth(this.repurchase.retentionRate)
     },
+    retentionSampleWidth() {
+      return this.progressWidth(this.ratioPercent(this.repurchase.retentionSample, this.repurchase.minRetentionSample))
+    },
+    newSampleWidth() {
+      return this.progressWidth(this.ratioPercent(this.repurchase.newCustomerCount, this.repurchase.minNewSample))
+    },
+    tierProgressWidth() {
+      const next = numberValue(this.repurchase.nextTierRate)
+      if (next <= 0) {
+        return '100%'
+      }
+      return this.progressWidth(numberValue(this.repurchase.conversionRate) / next * 100)
+    },
+    repurchaseApplied() {
+      return numberValue(this.repurchase.appliedTierAmount) + numberValue(this.repurchase.appliedTenDayAmount)
+    },
+    repurchaseProgressWidth() {
+      const potential = numberValue(this.repurchase.potentialAmount)
+      if (potential <= 0) {
+        return this.repurchaseApplied > 0 ? '100%' : '0%'
+      }
+      return this.progressWidth(this.repurchaseApplied / potential * 100)
+    },
     conversionRateText() {
       if (!this.repurchase.newCustomerCount) {
         return '—'
@@ -562,11 +837,10 @@ export default {
         .sort((a, b) => (order[a.status] === undefined ? 3 : order[a.status])
           - (order[b.status] === undefined ? 3 : order[b.status]))
     },
-    visibleTrainingGroups() {
-      const source = this.trainingAllOpen ? this.trainingProjects : this.activeTraining
+    trainingGroups() {
       const groups = []
       const byName = {}
-      source.forEach(project => {
+      this.trainingProjects.forEach(project => {
         const name = project.projectGroup || '其他项目'
         if (byName[name] === undefined) {
           byName[name] = groups.length
@@ -591,7 +865,15 @@ export default {
     }
   },
   created() {
+    this.applyRouteMonth()
     this.loadData()
+  },
+  mounted() {
+    window.addEventListener('scroll', this.onPageScroll, {passive: true})
+    this.onPageScroll()
+  },
+  beforeDestroy() {
+    window.removeEventListener('scroll', this.onPageScroll)
   },
   methods: {
     money,
@@ -627,6 +909,39 @@ export default {
     },
     progressWidth(value) {
       return Math.max(0, Math.min(100, numberValue(value))) + '%'
+    },
+    open(key) {
+      return !!this.details[key]
+    },
+    toggleDetail(key) {
+      this.$set(this.details, key, !this.details[key])
+    },
+    toggleAllDetails() {
+      const next = !this.allDetailsOpen
+      this.detailKeys.forEach(key => this.$set(this.details, key, next))
+    },
+    onPageScroll() {
+      this.pageScrolled = (window.scrollY || document.documentElement.scrollTop || 0) > 6
+    },
+    /** 实际值占目标值的比例，目标为 0 时视为已满。 */
+    ratioPercent(value, target) {
+      const goal = numberValue(target)
+      if (goal <= 0) {
+        return 100
+      }
+      return numberValue(value) / goal * 100
+    },
+    /** 带符号展示分钟数，0 不显示正号。 */
+    signedMinutes(value, digits) {
+      const num = numberValue(value)
+      const text = money(Math.abs(num), digits === undefined ? 0 : digits)
+      if (num > 0) {
+        return '+' + text
+      }
+      if (num < 0) {
+        return '-' + text
+      }
+      return '0'
     },
     managerWidth(shop) {
       const target = numberValue(shop.targetRevenue)
@@ -718,26 +1033,38 @@ export default {
       this.month = this.currentMonth
       this.loadData()
     },
+    applyRouteMonth() {
+      const query = (this.$route && this.$route.query) || {}
+      const month = typeof query.month === 'string' ? query.month : ''
+      if (/^\d{4}-\d{2}$/.test(month) && month <= this.currentMonth) {
+        this.month = month
+      }
+    },
+    dateTime(value) {
+      return value ? String(value).replace('T', ' ').slice(0, 16) : '—'
+    },
     async loadData() {
       const token = ++this.loadToken
       this.loading = true
       this.error = ''
       this.board = null
       this.config = null
-      this.trainingAllOpen = false
-      this.settlementOpen = false
+      this.published = null
       this.taxOpen = false
       this.warningsOpen = false
       try {
         const responses = await Promise.all([
           incentiveApi.mine({month: this.month}),
-          incentiveApi.config({month: this.month})
+          incentiveApi.config({month: this.month}),
+          incentiveApi.mySettlement({month: this.month}).catch(() => null)
         ])
         if (token !== this.loadToken) {
           return
         }
         this.board = responses[0].data || null
         this.config = responses[1].data || null
+        const settled = responses[2] && responses[2].data
+        this.published = settled && settled.settled ? settled.settlement : null
       } catch (e) {
         if (token !== this.loadToken) {
           return
@@ -775,38 +1102,48 @@ export default {
   -webkit-font-smoothing: antialiased;
 }
 
+.mv-page button,
+.mv-page input {
+  font-family: inherit;
+}
+
 .mv-shell {
   min-height: 100vh;
   background: var(--cream);
 }
 
-.mv-top {
+.mv-pin {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 30;
+  background: var(--cream);
+  transition: box-shadow 0.18s ease;
+
+  &.pinned {
+    box-shadow: 0 10px 22px rgba(75, 54, 33, 0.09);
+  }
+}
+
+.mv-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 56px;
+  min-height: 54px;
   padding: 0 16px;
-  background: rgba(245, 232, 216, 0.94);
-  border-bottom: 1px solid var(--line-light);
-  backdrop-filter: blur(12px);
+  background: var(--cream);
 }
 
 .brand {
-  font-size: 21px;
-  font-weight: 700;
-  letter-spacing: -0.8px;
-  color: var(--wood-900);
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  text-decoration: none;
+}
 
-  span {
-    margin-left: 4px;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-  }
+.brand-wordmark {
+  display: block;
+  height: 22px;
+  width: auto;
 }
 
 .top-actions {
@@ -852,10 +1189,19 @@ export default {
   flex-shrink: 0;
 }
 
+.pin-month {
+  padding: 6px 16px 8px;
+  border-bottom: 1px solid var(--line-light);
+
+  .cutoff-line {
+    margin-top: 4px;
+  }
+}
+
 .mv-main {
   max-width: 480px;
   margin: 0 auto;
-  padding: 14px 16px 44px;
+  padding: 12px 16px 44px;
 }
 
 .month-bar {
@@ -1079,40 +1425,58 @@ export default {
   background: var(--paper);
 }
 
-.section-head {
+.detail-bar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin: 16px 2px 0;
 
-  h2 {
-    margin: 0;
-    font-size: 15px;
+  .detail-label {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
     font-weight: 650;
-    letter-spacing: -0.02em;
+    letter-spacing: 0.01em;
+    color: var(--wood-900);
+
+    em {
+      font-size: 9px;
+      font-style: normal;
+      font-weight: 400;
+      color: var(--muted);
+    }
   }
 
-  p {
-    margin: 5px 0 0;
+  .detail-action {
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--wood-700);
     font-size: 10px;
-    line-height: 1.7;
-    color: var(--muted);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--disabled);
+    }
   }
 }
 
-.section-amount {
-  flex-shrink: 0;
-  font-size: 20px;
-  font-weight: 650;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
+.detail-card {
+  padding: 0;
+  overflow: hidden;
 
-.micro {
-  font-size: 10px;
-  color: var(--muted);
-  white-space: nowrap;
+  .card-body {
+    padding: 14px 18px 16px;
+    border-top: 1px solid var(--line-light);
+
+    > :first-child {
+      margin-top: 0;
+    }
+  }
 }
 
 .achievement-grid {
@@ -1255,6 +1619,11 @@ export default {
   line-height: 1.7;
 }
 
+.published-card {
+  border: 1px solid var(--wood-700);
+  box-shadow: 0 10px 26px rgba(75, 54, 33, 0.12);
+}
+
 .band-track {
   display: flex;
   margin-top: 18px;
@@ -1393,6 +1762,162 @@ export default {
     height: 100%;
     border-radius: 8px;
     background: var(--wood-700);
+  }
+}
+
+.compose-box {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--line-light);
+  border-radius: 10px;
+  background: var(--soft);
+
+  .compose-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line-light);
+
+    span {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--wood-700);
+    }
+
+    small {
+      font-size: 9px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+  }
+
+  .compose-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+    gap: 2px 10px;
+    padding: 7px 0 0;
+
+    span {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    b {
+      justify-self: end;
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    em {
+      grid-column: 1 / -1;
+      font-size: 9px;
+      font-style: normal;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    &.total {
+      margin-top: 4px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--line);
+
+      span,
+      b {
+        color: var(--wood-700);
+      }
+    }
+  }
+}
+
+.progress-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.sample-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+
+  .sample-item {
+    padding: 8px 9px;
+    border-radius: 8px;
+    background: var(--disabled);
+  }
+
+  .sample-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 6px;
+
+    span {
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    b {
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+  }
+
+  small {
+    display: block;
+    margin-top: 6px;
+    font-size: 9px;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+}
+
+.progress-item {
+  padding: 10px 11px;
+  border: 1px solid var(--line-light);
+  border-radius: 9px;
+  background: var(--paper);
+
+  .progress-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 7px;
+
+    span {
+      font-size: 11px;
+      color: var(--ink);
+    }
+
+    b {
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+  }
+
+  .progress {
+    height: 5px;
+  }
+
+  small {
+    display: block;
+    margin-top: 6px;
+    font-size: 9px;
+    line-height: 1.6;
+    color: var(--muted);
   }
 }
 
@@ -1588,6 +2113,7 @@ export default {
   background: var(--paper);
   color: var(--muted);
   font-size: 9px;
+  font-weight: 500;
   line-height: 1.6;
   white-space: nowrap;
 
@@ -1664,35 +2190,6 @@ export default {
   color: var(--muted);
 }
 
-.expand-button {
-  width: 100%;
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--paper);
-  color: var(--ink);
-  font-size: 11px;
-  cursor: pointer;
-
-  &:hover {
-    background: var(--soft);
-  }
-
-  .icon {
-    transition: transform 0.16s ease;
-  }
-
-  .rotated {
-    transform: rotate(180deg);
-  }
-}
-
 .manager-row {
   padding-top: 14px;
 
@@ -1727,26 +2224,28 @@ export default {
 }
 
 .settlement-card {
-  padding: 0;
-  overflow: hidden;
+  .settlement-body {
+    padding: 10px 18px 16px;
+  }
 }
 
 .card-toggle {
   width: 100%;
-  min-height: 66px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px;
+  gap: 10px;
+  padding: 13px 18px;
   border: 0;
   background: var(--paper);
   color: var(--ink);
   text-align: left;
   cursor: pointer;
 
-  > span {
+  > span:first-child {
     min-width: 0;
+    flex: 1;
   }
 
   b {
@@ -1756,10 +2255,13 @@ export default {
   }
 
   small {
-    display: block;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
     margin-top: 3px;
     font-size: 9px;
-    line-height: 1.6;
+    line-height: 1.65;
     color: var(--muted);
   }
 
@@ -1771,10 +2273,42 @@ export default {
   .rotated {
     transform: rotate(180deg);
   }
+
+  .toggle-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .toggle-side {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .toggle-amount {
+    font-size: 19px;
+    font-weight: 650;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .toggle-meta {
+    font-size: 9px;
+    font-style: normal;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  &:hover {
+    background: var(--soft);
+  }
 }
 
 .settlement-body {
-  padding: 2px 18px 16px;
   border-top: 1px solid var(--line-light);
 }
 
@@ -1948,6 +2482,11 @@ input:focus-visible {
     box-shadow: 0 24px 80px rgba(75, 54, 33, 0.17);
   }
 
+  .mv-pin {
+    border-radius: 26px 26px 0 0;
+    overflow: hidden;
+  }
+
   .mv-top {
     border-radius: 26px 26px 0 0;
   }
@@ -1962,6 +2501,22 @@ input:focus-visible {
     padding: 15px;
   }
 
+  .detail-card {
+    padding: 0;
+  }
+
+  .detail-card .card-body {
+    padding: 13px 15px 14px;
+  }
+
+  .card-toggle {
+    padding: 12px 15px;
+  }
+
+  .card-toggle .toggle-amount {
+    font-size: 17px;
+  }
+
   .reward-hero {
     padding: 18px;
   }
@@ -1974,12 +2529,12 @@ input:focus-visible {
     font-size: 20px;
   }
 
-  .section-amount {
-    font-size: 18px;
-  }
-
   .metric-row b {
     font-size: 20px;
+  }
+
+  .sample-grid {
+    grid-template-columns: 1fr;
   }
 
   .next-reward strong {

@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Full愈轻疗 · 语言入口方案对比（真实首页）</title>
+<style>
+  :root{
+    --ink:#584219;
+    --ink-2:#8A6A40;
+    --gold:#C4A974;
+    --sand:#EAE0D7;
+    --paper:#F6F6F6;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0}
+  body{
+    font-family:-apple-system,'PingFang SC','Helvetica Neue',sans-serif;
+    background:radial-gradient(1100px 520px at 50% -8%,#F7F1E7 0,rgba(247,241,231,0) 62%),#EFE9E1;
+    color:#4A3C32;padding-bottom:48px;
+  }
+
+  /* ================= demo 外壳 ================= */
+  .head{
+    max-width:1180px;margin:0 auto;padding:30px 32px 0;
+    display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;
+  }
+  .eyebrow{font-size:11px;letter-spacing:.18em;color:#A08A6C}
+  .head h1{
+    margin:8px 0 8px;font-size:24px;line-height:1.4;font-weight:600;color:var(--ink);
+    font-family:SourceHanSerifSC,'Songti SC',serif;letter-spacing:.06em;
+  }
+  .head p{margin:0;max-width:600px;font-size:13px;line-height:1.85;color:#7B6B58;letter-spacing:.04em}
+  .controls{display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+  .seg{display:flex;background:#fff;border:1px solid #E2D8C9;border-radius:999px;padding:3px;
+       box-shadow:0 6px 16px -12px rgba(88,66,25,.35)}
+  .seg button{
+    border:0;background:transparent;cursor:pointer;font:inherit;font-size:12.5px;letter-spacing:.06em;
+    color:#8A7A63;padding:7px 14px;border-radius:999px;transition:.18s;white-space:nowrap;
+  }
+  .seg button.active{background:var(--ink);color:#F6F4F2}
+  .seg button:not(.active):hover{color:var(--ink)}
+
+  .stage{display:flex;justify-content:center;padding:22px 24px 0}
+  .col{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .caption{font-size:12px;letter-spacing:.1em;color:#8A7A63;background:rgba(255,255,255,.72);
+           border:1px solid #E6DCCE;border-radius:999px;padding:6px 14px}
+
+  .phone{
+    position:relative;width:410px;height:864px;padding:10px;border-radius:46px;
+    background:linear-gradient(160deg,#2A2521,#161311 45%,#2A2521);
+    box-shadow:0 30px 60px -32px rgba(50,38,20,.6),0 1px 0 rgba(255,255,255,.15) inset;
+    transition:width .22s ease;
+  }
+  .phone[data-w="360"]{width:380px}
+  .screen{
+    --r:.52px;
+    position:relative;width:100%;height:100%;border-radius:37px;overflow:hidden;
+    background:#EAE0D7;isolation:isolate;
+  }
+  .phone[data-w="360"] .screen{--r:.48px}
+
+  /* ================= 状态栏 / 胶囊 ================= */
+  .statusbar{
+    position:absolute;top:0;left:0;right:0;height:44px;z-index:60;display:flex;align-items:center;
+    padding:0 26px;font-size:13.5px;font-weight:600;letter-spacing:.02em;color:#fff;
+    text-shadow:0 1px 3px rgba(0,0,0,.28);pointer-events:none;
+  }
+  .sb-r{display:flex;align-items:flex-end;gap:3px;margin-left:auto}
+  .sb-r i{display:block;width:3px;background:currentColor;border-radius:1px;opacity:.95}
+  .capsule{
+    position:absolute;top:50px;right:10px;width:87px;height:32px;z-index:60;
+    border:1px solid rgba(255,255,255,.42);border-radius:999px;background:rgba(30,24,14,.28);
+    backdrop-filter:blur(6px);color:#fff;display:flex;align-items:center;justify-content:space-around;
+    pointer-events:none;
+  }
+  .capsule .dots{letter-spacing:1.5px;font-size:12px}
+  .capsule .ring{width:13px;height:13px;border:1.5px solid currentColor;border-radius:50%;position:relative}
+  .capsule .ring::after{content:"";position:absolute;inset:3px;border:1.4px solid currentColor;border-radius:50%}
+
+  /* ================= 首页本体（按 rpx 还原） ================= */
+  .scroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+  .scroll::-webkit-scrollbar{display:none}
+
+  .hero{position:relative;height:calc(var(--r)*1048);width:100%}
+  .hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top}
+  .hero::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg,rgba(20,14,6,.34) 0%,rgba(20,14,6,0) 26%);
+  }
+  .fade{
+    height:70px;margin-top:-70px;position:relative;
+    background:linear-gradient(to top,#EAE0D7 0%,rgba(255,255,255,0) 100%);
+  }
+  .content{padding:0 calc(var(--r)*40);position:relative}
+
+  .card{
+    background:#fff;border-radius:16px;margin-top:calc(var(--r)*-100);
+    box-shadow:0 18px 40px -32px rgba(88,66,25,.75);overflow:hidden;
+  }
+  .card-top{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:8px 16px;background:#584219;color:#fff;
+  }
+  .nick{font-size:13.5px;letter-spacing:var(--tr);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:47%}
+  .mins{font-size:11.5px;color:rgba(255,255,255,.65);letter-spacing:var(--tr);display:flex;align-items:baseline;gap:4px;white-space:nowrap}
+  .mins b{font-size:calc(var(--r)*34);font-weight:600;color:#fff}
+
+  .coupon{padding:12px 16px 0}
+  .coupon-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+              font-size:calc(var(--r)*24);color:var(--ink);letter-spacing:var(--tr)}
+  .coupon-row .l{max-width:45%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .coupon-row .r{max-width:55%;text-align:right;color:var(--ink-2)}
+  .bar{height:2px;border-radius:2px;background:#E6E3DE;margin-top:8px;overflow:hidden}
+  .bar i{display:block;height:100%;width:38%;background:var(--ink);border-radius:2px}
+
+  .blocks{display:flex;align-items:center;justify-content:space-around;padding:16px 6px 18px}
+  .block{display:flex;flex-direction:column;align-items:center;cursor:pointer}
+  .block img.ico{width:calc(var(--r)*144);height:calc(var(--r)*144);object-fit:contain;margin-bottom:8px}
+  .block img.txt{width:calc(var(--r)*290);height:auto;max-height:calc(var(--r)*86);object-fit:contain}
+  .vdiv{width:1px;height:calc(var(--r)*125);background:rgba(88,66,25,.1)}
+
+  .hint{
+    display:flex;align-items:center;justify-content:center;gap:4px;margin-top:12px;
+    font-size:12.5px;color:var(--ink-2);letter-spacing:var(--tr);
+  }
+  .hint svg{opacity:.75}
+
+  /* ================= 悬浮胶囊 TabBar ================= */
+  .tabbar{
+    position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--r)*30);
+    width:calc(var(--r)*670);height:calc(var(--r)*100);border-radius:68px;
+    background:#fff;box-shadow:0 4px 4px rgba(88,66,25,.30),0 8px 12px 6px rgba(88,66,25,.15);
+    display:flex;align-items:center;justify-content:space-around;z-index:40;
+    padding:0 calc(var(--r)*8);
+  }
+  .tab{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    border:0;background:transparent;cursor:pointer;font:inherit;padding:0;
+    color:var(--ink-2);letter-spacing:var(--tr);
+  }
+  .tab .slot{width:calc(var(--r)*43);height:calc(var(--r)*28);margin-top:calc(var(--r)*-10);
+             display:flex;align-items:center;justify-content:center}
+  .tab .slot img{width:calc(var(--r)*43);height:calc(var(--r)*28);object-fit:contain}
+  .tab span{font-size:calc(var(--r)*28);line-height:1.35;letter-spacing:var(--tr)}
+  .tab.on{color:var(--ink)}
+  .tab.on span{font-weight:600}
+
+  .aiball{
+    position:absolute;left:80%;transform:translateX(-50%);top:calc(var(--r)*640);z-index:45;
+    width:calc(var(--r)*100);height:calc(var(--r)*100);border-radius:50%;background:#fff;
+    display:flex;align-items:center;justify-content:center;
+    filter:drop-shadow(0 0 10px rgba(88,66,25,.5));cursor:pointer;
+  }
+  .aiball img{width:calc(var(--r)*50);height:calc(var(--r)*50);object-fit:contain}
+
+  /* ================= 页眉（三种方案） ================= */
+  .topbar{
+    position:absolute;top:44px;left:0;right:0;height:44px;z-index:35;
+    display:flex;align-items:center;padding-left:16px;
+  }
+  .addr{
+    display:flex;align-items:center;gap:5px;border:0;background:transparent;cursor:pointer;
+    font:inherit;color:#fff;padding:0;max-width:calc(var(--r)*200);
+    text-shadow:0 1px 3px rgba(0,0,0,.3);
+  }
+  .addr .shop{
+    font-size:13px;letter-spacing:var(--tr);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .brand{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none}
+  .brand img{width:calc(var(--r)*150);height:auto;display:block;
+             filter:drop-shadow(0 1px 3px rgba(0,0,0,.25))}
+
+  /* 方案 A：页眉一行三元素，语言贴胶囊左侧，与地址、Logo 同一基线 */
+  .topbar.a .lang{
+    position:absolute;right:105px;top:50%;transform:translateY(-50%);
+    display:flex;align-items:center;gap:2px;
+  }
+  /* A 方案里 Logo 收 10%，与右侧语言控件留出呼吸位 */
+  .topbar.a .brand img{width:calc(var(--r)*135)}
+  .lang-txt{
+    border:0;background:transparent;cursor:pointer;font:inherit;
+    font-size:11.5px;letter-spacing:.06em;color:rgba(255,255,255,.62);
+    padding:0 4px;height:30px;display:flex;align-items:center;justify-content:center;
+    position:relative;text-shadow:0 1px 3px rgba(0,0,0,.3);
+  }
+  .lang-txt.on{color:#fff;font-weight:600}
+  .lang-txt.on::after{
+    content:"";position:absolute;left:4px;right:4px;bottom:2px;height:1.5px;border-radius:2px;
+    background:#F1E8CD;
+  }
+  .lang-dot{width:1px;height:10px;background:rgba(255,255,255,.35)}
+
+  /* 360 窄屏：Logo 收小并微左移，给右侧语言控件让位（仍与两者同基线） */
+  .phone[data-w="360"] .topbar.a .brand{left:47%}
+  .phone[data-w="360"] .topbar.a .brand img{width:calc(var(--r)*132)}
+
+  /* 方案 B：地址与语言合并成一个胶囊 */
+  .addrpill{
+    display:flex;align-items:center;gap:8px;flex:none;
+    padding:6px 12px;border-radius:999px;
+    background:rgba(30,24,14,.30);border:1px solid rgba(255,255,255,.28);
+    backdrop-filter:blur(6px);color:#fff;
+  }
+  .addrpill .addr{margin:0;max-width:calc(var(--r)*150)}
+  .addrpill .sep{width:1px;height:12px;background:rgba(255,255,255,.34)}
+  .addrpill .lang{display:flex;align-items:center;gap:1px}
+  .addrpill .lang-txt{height:22px;padding:0 3px;font-size:11.5px;text-shadow:none}
+  .addrpill .lang-txt.on::after{left:3px;right:3px;bottom:0}
+  /* B 方案 Logo 只能跟在胶囊后面，无法居中 */
+  .topbar.b .brand{position:static;transform:none;margin-left:7%;flex:none}
+  .topbar.b .brand img{width:calc(var(--r)*120)}
+
+  /* 方案 C：现方案，悬浮在胶囊下方 */
+  .floatlang{
+    position:absolute;top:92px;right:12px;z-index:55;height:32px;display:flex;align-items:center;
+    padding:2px;border-radius:999px;background:rgba(255,253,248,.92);backdrop-filter:blur(8px);
+    border:1px solid rgba(88,66,25,.12);box-shadow:0 8px 20px -12px rgba(88,66,25,.55);
+  }
+  .floatlang button{
+    border:0;background:transparent;cursor:pointer;font:inherit;font-size:11px;letter-spacing:.06em;
+    color:#6E5A3C;height:26px;padding:0 9px;border-radius:999px;display:flex;align-items:center;
+    justify-content:center;min-width:26px;text-shadow:none;
+  }
+  .floatlang button.on{background:#584219;color:#F6F4F2}
+
+  /* ================= 对齐参考线 ================= */
+  .guides{position:absolute;inset:0;z-index:70;pointer-events:none;display:none}
+  .guides.show{display:block}
+  .guides .g{position:absolute;background:repeating-linear-gradient(90deg,#FF6B6B 0 4px,transparent 4px 8px)}
+  .guides .g.h{height:1px}
+  .guides .g.v{width:1px;background:repeating-linear-gradient(180deg,#FF6B6B 0 4px,transparent 4px 8px)}
+  .guides .box{position:absolute;border:1px dashed rgba(255,90,90,.85);border-radius:2px}
+  .guides .lb{
+    position:absolute;font-size:9px;line-height:1;padding:2px 4px;border-radius:3px;
+    background:#FF6B6B;color:#fff;letter-spacing:0;white-space:nowrap;font-family:ui-monospace,monospace;
+  }
+  .guides .base{left:0;right:97px;top:66px}
+  .guides .cap{left:calc(100% - 97px);top:44px;bottom:0}
+
+  /* ================= 说明区 ================= */
+  .notes{max-width:1180px;margin:26px auto 0;padding:0 32px;
+         display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+  .note{background:rgba(255,255,255,.75);border:1px solid #E6DCCE;border-radius:14px;padding:16px 18px}
+  .note h5{margin:0 0 8px;font-size:11.5px;letter-spacing:.12em;color:#A08A6C;font-weight:600;text-transform:uppercase}
+  .note p{margin:0;font-size:12.5px;line-height:1.85;color:#6E5E4C;letter-spacing:.03em}
+  .note b{color:var(--ink)}
+  .note.rec{border-color:#C4A974;background:#FFFCF5}
+  .note.rec h5{color:#8A6A40}
+  .spec{margin-top:8px;font-size:11.5px;line-height:1.8;color:#8A7A63;font-variant-numeric:tabular-nums}
+  @media(max-width:880px){.head{padding:24px 20px 0}.head h1{font-size:21px}.notes{padding:0 20px}}
+</style>
+</head>
+<body>
+
+<header class="head">
+  <div>
+    <div class="eyebrow">FULL YU · LIGHT HEAL · 真实首页还原</div>
+    <h1>语言入口放哪儿：三个方案对比</h1>
+    <p>这一版按 <b>pages/index/index.vue</b> 的真实结构还原：1048rpx 全屏轮播、上浮 100rpx 的白色会员卡、670rpx 悬浮胶囊 TabBar、可拖动的 AI 球。切换语言后，会员条、券信息、提示语、TabBar 全部变化；门店名、昵称保持中文。</p>
+  </div>
+  <div class="controls">
+    <div class="seg" id="optSeg">
+      <button data-opt="A" class="active">方案 A · 页眉右侧</button>
+      <button data-opt="B">方案 B · 并入地址</button>
+      <button data-opt="C">方案 C · 悬浮（现方案）</button>
+    </div>
+    <div class="seg">
+      <button id="guideBtn">对齐参考线</button>
+      <button class="w" data-w="390">390px</button>
+      <button class="w" data-w="360">360px</button>
+    </div>
+  </div>
+</header>
+
+<main class="stage">
+  <div class="col">
+    <div class="caption" id="caption">方案 A · 地址 / Logo / 语言共用一条基线</div>
+    <div class="phone" id="phone" data-w="390"></div>
+  </div>
+</main>
+
+<section class="notes">
+  <div class="note rec">
+    <h5>推荐 · 方案 A</h5>
+    <p>页眉变成一行三元素：<b>地址在左</b>、<b>Logo 真正居中</b>、<b>「中 EN」贴着胶囊左侧</b>，三者共用同一条基线（y = 66）。不遮挡内容、不新增浮层，和右上的微信胶囊天然共处。</p>
+    <p class="spec">位置：右边缘距胶囊左沿 8px<br>字号 12px / 字距 0.06em / 高 30px 热区<br>选中：白色 + 1.5px 米色下划线</p>
+  </div>
+  <div class="note">
+    <h5>方案 B · 并入地址胶囊</h5>
+    <p>把「中 EN」塞进地址胶囊，变成 <b>📍 轻疗 · 静安 ｜ 中 EN</b>。看着最省地方，但胶囊变宽 40px 后 <b>Logo 无法再居中</b>（只能往右挪），而且语言藏在地址里，语义上有点混。</p>
+  </div>
+  <div class="note">
+    <h5>方案 C · 现方案（已否）</h5>
+    <p>悬浮在胶囊下方，和地址、Logo 都不在一条线，看起来像外挂的补丁；首页又是满屏大图，白药丸压在图上很跳。点开参考线对比最明显。</p>
+  </div>
+  <div class="note">
+    <h5>真实页面的翻译边界</h5>
+    <p>两块入口标题是图片（<b>预约即「愈」/ Reservation</b>、<b>购卡享「愈」/ Gift Card</b>），图内已自带英文小字，不用重做；会员条、券信息、上滑提示、TabBar 都是文字，可随语言切换。</p>
+  </div>
+</section>
+
+<script>
+(function () {
+  'use strict';
+
+  var A = 'demo-assets/';
+  var state = { opt: 'A', lang: 'zh', width: 390, guides: false };
+
+  var STR = {
+    nick: { zh: '尊敬的「田小愈」', en: 'Welcome back, 田小愈' },
+    mins: { zh: '可享受 {n} mins Full愈时刻', en: '{n} mins of Full Yu time to enjoy' },
+    couponMeta: { zh: '2026-12-31 · 剩余 3 次', en: 'expires 2026-12-31 · 3 left' },
+    hint: { zh: '上滑探索更多精彩', en: 'Swipe up for more' },
+    tHome: { zh: '首页', en: 'Home' },
+    tMall: { zh: '商城', en: 'Shop' },
+    tBook: { zh: '预约', en: 'Book' },
+    tOrders: { zh: '订单', en: 'Orders' },
+    tMe: { zh: '我的', en: 'Me' },
+    toastZh: { zh: '已切换为中文', en: '已切换为中文' },
+    toastEn: { zh: 'Switched to English', en: 'Switched to English' }
+  };
+  function L(k) { return STR[k][state.lang]; }
+
+  /* 业务数据：不翻译 */
+  var SHOP = '轻疗 · 静安';
+  var NICK = '田小愈';
+  var COUPON = '头部水疗券';
+
+  var PIN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s6.5-6 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15 12 21 12 21z"/><circle cx="12" cy="10" r="2.2"/></svg>';
+
+  function statusBar() {
+    return '<div class="statusbar"><span>9:41</span>' +
+      '<span class="sb-r"><i style="height:5px"></i><i style="height:8px"></i><i style="height:11px"></i>' +
+      '<i style="height:11px;opacity:.35;margin-left:3px;width:14px;border-radius:2px"></i></span></div>' +
+      '<div class="capsule"><span class="dots">•••</span><span class="ring"></span></div>';
+  }
+
+  /* 语言控件 —— 三种形态 */
+  function langText(cls) {
+    return '<div class="lang ' + (cls || '') + '">' +
+      '<button class="lang-txt' + (state.lang === 'zh' ? ' on' : '') + '" data-set="zh">中</button>' +
+      '<span class="lang-dot"></span>' +
+      '<button class="lang-txt' + (state.lang === 'en' ? ' on' : '') + '" data-set="en">EN</button>' +
+    '</div>';
+  }
+
+  function topbar() {
+    var addr = '<button class="addr">' + PIN + '<span class="shop">' + SHOP + '</span></button>';
+    var brand = '<div class="brand"><img src="' + A + 'logo-white.png" alt="Full Yu"></div>';
+
+    if (state.opt === 'A') {
+      return '<div class="topbar a">' + addr + brand + langText() + '</div>';
+    }
+    if (state.opt === 'B') {
+      return '<div class="topbar b">' +
+        '<div class="addrpill">' + addr + '<span class="sep"></span>' + langText() + '</div>' +
+        brand +
+      '</div>';
+    }
+    return '<div class="topbar c">' + addr + brand + '</div>' +
+      '<div class="floatlang">' +
+        '<button class="' + (state.lang === 'zh' ? 'on' : '') + '" data-set="zh">中</button>' +
+        '<button class="' + (state.lang === 'en' ? 'on' : '') + '" data-set="en">EN</button>' +
+      '</div>';
+  }
+
+  function guides() {
+    return '<div class="guides' + (state.guides ? ' show' : '') + '">' +
+      '<div class="g h base"></div>' +
+      '<div class="g v cap"></div>' +
+      '<div class="box" style="left:16px;right:auto;top:52px;width:108px;height:28px"></div>' +
+      '<div class="box" style="left:50%;margin-left:-39px;top:52px;width:78px;height:28px"></div>' +
+      (state.opt === 'A'
+        ? '<div class="box" style="right:8px;left:auto;top:52px;width:44px;height:28px"></div>'
+        : '') +
+      '<div class="lb" style="left:8px;top:36px">基线 y=66</div>' +
+      '<div class="lb" style="right:8px;top:88px">胶囊安全区</div>' +
+    '</div>';
+  }
+
+  function tabbar() {
+    var items = [
+      { k: 'tHome', on: true },
+      { k: 'tMall' },
+      { k: 'tBook', icon: true },
+      { k: 'tOrders' },
+      { k: 'tMe' }
+    ];
+    return '<div class="tabbar">' + items.map(function (it) {
+      return '<button class="tab' + (it.on ? ' on' : '') + '">' +
+        '<span class="slot">' + (it.icon ? '<img src="' + A + 'reservation.svg" alt="">' : '') + '</span>' +
+        '<span>' + L(it.k) + '</span></button>';
+    }).join('') + '</div>';
+  }
+
+  function home() {
+    return '<div class="scroll">' +
+      '<div class="hero"><img src="' + A + 'banner.jpg" alt=""></div>' +
+      '<div class="fade"></div>' +
+      '<div class="content">' +
+        '<div class="card">' +
+          '<div class="card-top">' +
+            '<span class="nick">' + (state.lang === 'en' ? 'Welcome back, ' + NICK : '尊敬的「' + NICK + '」') + '</span>' +
+            '<span class="mins">' + (state.lang === 'en'
+              ? '<b>268</b> mins of Full Yu time'
+              : '可享受<b>268</b> mins Full愈时刻') + '</span>' +
+          '</div>' +
+          '<div class="coupon">' +
+            '<div class="coupon-row"><span class="l">' + COUPON + '</span>' +
+              '<span class="r">' + L('couponMeta') + '</span></div>' +
+            '<div class="bar"><i></i></div>' +
+          '</div>' +
+          '<div class="blocks">' +
+            '<div class="block">' +
+              '<img class="ico" src="' + A + 'frame264.png" alt="">' +
+              '<img class="txt" src="' + A + 'frame90.png" alt="">' +
+            '</div>' +
+            '<span class="vdiv"></span>' +
+            '<div class="block">' +
+              '<img class="ico" src="' + A + 'frame265.png" alt="">' +
+              '<img class="txt" src="' + A + 'frame901.png" alt="">' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="hint">' + L('hint') +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m6 15 6-6 6 6"/></svg>' +
+        '</div>' +
+      '</div>' +
+      '<div style="height:120px"></div>' +
+    '</div>';
+  }
+
+  function render() {
+    var phone = document.getElementById('phone');
+    phone.dataset.w = state.width;
+    phone.innerHTML =
+      '<div class="screen" data-lang="' + state.lang + '">' +
+        home() +
+        topbar() +
+        tabbar() +
+        '<div class="aiball"><img src="' + A + 'ai-vector.png" alt=""></div>' +
+        statusBar() +
+        guides() +
+        '<div class="toast"></div>' +
+      '</div>';
+
+    var caps = {
+      A: '方案 A · 地址 / Logo / 语言共用一条基线',
+      B: '方案 B · 语言并入地址胶囊（Logo 被迫右移）',
+      C: '方案 C · 悬浮在胶囊下方（现方案）'
+    };
+    document.getElementById('caption').textContent = caps[state.opt];
+    Array.prototype.forEach.call(document.querySelectorAll('#optSeg button'), function (b) {
+      b.classList.toggle('active', b.dataset.opt === state.opt);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.w'), function (b) {
+      b.classList.toggle('active', Number(b.dataset.w) === state.width);
+    });
+    document.getElementById('guideBtn').classList.toggle('active', state.guides);
+  }
+
+  var timers = {};
+  function toast(text) {
+    var el = document.querySelector('.toast');
+    if (!el) return;
+    el.textContent = '✓  ' + text;
+    el.classList.add('show');
+    clearTimeout(timers.t);
+    timers.t = setTimeout(function () { el.classList.remove('show'); }, 1500);
+  }
+
+  document.addEventListener('click', function (e) {
+    var optBtn = e.target.closest('#optSeg button');
+    if (optBtn) { state.opt = optBtn.dataset.opt; render(); return; }
+
+    var wBtn = e.target.closest('.w');
+    if (wBtn) { state.width = Number(wBtn.dataset.w); render(); return; }
+
+    if (e.target.closest('#guideBtn')) {
+      state.guides = !state.guides;
+      var g = document.querySelector('.guides');
+      if (g) g.classList.toggle('show', state.guides);
+      document.getElementById('guideBtn').classList.toggle('active', state.guides);
+      return;
+    }
+
+    var setBtn = e.target.closest('[data-set]');
+    if (setBtn) {
+      state.lang = setBtn.dataset.set;
+      render();
+      toast(state.lang === 'en' ? STR.toastEn.en : STR.toastZh.zh);
+    }
+  });
+
+  render();
+})();
+</script>
+
+<style>
+  /* 语言切换的排版松弛度：中文 0.05em，英文 0.01em */
+  .screen[data-lang="zh"]{--tr:.05em}
+  .screen[data-lang="en"]{--tr:.012em}
+  .toast{
+    position:absolute;top:132px;left:50%;transform:translate(-50%,-6px);z-index:80;
+    background:rgba(40,32,20,.92);color:#F6F4F2;font-size:12px;letter-spacing:.04em;
+    padding:8px 14px;border-radius:999px;opacity:0;transition:.25s;pointer-events:none;white-space:nowrap;
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</body>
+</html>

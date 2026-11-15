@@ -3,8 +3,12 @@ package com.macro.mall.controller.shop;
 import cn.hutool.core.date.DateTime;
 import com.macro.mall.bo.AdminUserDetails;
 import com.macro.mall.common.api.CommonResult;
+import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.config.ContextMixin;
 import com.macro.mall.entity.Shop;
+import com.macro.mall.model.UmsAdmin;
+import com.macro.mall.model.UmsRole;
+import com.macro.mall.service.UmsAdminService;
 import com.macro.mall.service.shop.ShopService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -13,6 +17,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,37 +30,65 @@ import java.util.Map;
 public class ShopController implements ContextMixin {
     @Autowired
     ShopService shopService;
+    @Autowired
+    private UmsAdminService umsAdminService;
+
+    /** 门店管理（列表/新增编辑/删除）仅超级管理员可用，与前端页签可见性保持一致 */
+    private void requireSuperAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || !(auth.getPrincipal() instanceof AdminUserDetails)) {
+            throw new BusinessException("请先登录后台");
+        }
+        UmsAdmin admin = ((AdminUserDetails) auth.getPrincipal()).getUmsAdmin();
+        if (admin == null || admin.getId() == null) {
+            throw new BusinessException("请先登录后台");
+        }
+        List<UmsRole> roles = umsAdminService.getRoleList(admin.getId());
+        boolean superAdmin = roles != null && roles.stream()
+                .anyMatch(role -> role.getName() != null && "超级管理员".equals(role.getName().trim()));
+        if (!superAdmin) {
+            throw new BusinessException("仅超级管理员可管理门店");
+        }
+    }
 
     @GetMapping("/page")
     @ApiOperation("分页查询")
     public CommonResult page(@RequestParam Map<String, Object> params) {
+        requireSuperAdmin();
         return CommonResult.success(shopService.page(params));
     }
 
     @PostMapping("/saveOrUpd")
     @ApiOperation("添加或者编辑")
     public CommonResult saveOrUpd(@RequestBody Shop shop) {
+        requireSuperAdmin();
         shopService.saveOrUpd(shop);
         return CommonResult.success();
     }
 
 
     @GetMapping("/list")
-    @ApiOperation("门店列表")
+    @ApiOperation("门店列表（当前账号授权范围内）")
     public CommonResult list(@RequestParam Map<String, Object> params) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        AdminUserDetails user = (AdminUserDetails) authentication.getPrincipal();
-        return CommonResult.success(shopService.listNoPageNew(params,user.getUmsAdmin().getShopIdArr()));
+        return CommonResult.success(shopService.listAuthorized(params));
     }
+
+    @GetMapping("/authorized")
+    @ApiOperation("当前账号可查看的门店（前端门店下拉唯一数据源）")
+    public CommonResult authorized(@RequestParam Map<String, Object> params) {
+        return CommonResult.success(shopService.listAuthorized(params));
+    }
+
     @GetMapping("/listAll")
-    @ApiOperation("门店列表")
+    @ApiOperation("门店列表（受限账号仅返回授权门店）")
     public CommonResult listAll(@RequestParam Map<String, Object> params) {
-        return CommonResult.success(shopService.listNoPage(params));
+        return CommonResult.success(shopService.listAuthorized(params));
     }
 
     @DeleteMapping("/remove")
     @ApiOperation("删除门店及其房间和床位")
     public CommonResult remove(@RequestParam Long id) {
+        requireSuperAdmin();
         shopService.remove(id);
         return CommonResult.success();
     }

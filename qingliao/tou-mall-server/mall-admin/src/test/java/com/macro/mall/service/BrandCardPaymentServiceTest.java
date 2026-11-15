@@ -132,6 +132,41 @@ class BrandCardPaymentServiceTest {
 
     // ==================== 下单 ====================
 
+    /** 会员页回填：最近一笔订单的档案优先，缺失字段由客户资料兜底。 */
+    @Test
+    void latestProfilePrefersCustomerProfileAndFallsBackToLatestOrder() {
+        Customer customer = customer(0);
+        customer.setGender(2);
+        when(customerService.getById(CUSTOMER_ID)).thenReturn(customer);
+        MemberCardOrder order = new MemberCardOrder();
+        order.setContactName(" 林晚 ");
+        order.setContactGender(1);
+        order.setContactBirthday(LocalDate.of(1995, 6, 18));
+        when(orderMapper.selectOne(any())).thenReturn(order);
+
+        // 称呼/性别以客户资料为准（会员中心唯一归档），客户资料缺的生日才用订单兜底。
+        Map<String, Object> profile = service.latestProfile(CUSTOMER_ID);
+        assertEquals("测试客户", profile.get("contactName"));
+        assertEquals("2", profile.get("contactGender"));
+        assertEquals("1995-06-18", profile.get("contactBirthday"));
+
+        // 从未下过单：全部退回客户资料，生日留空由前端补填。
+        when(orderMapper.selectOne(any())).thenReturn(null);
+        Map<String, Object> fallback = service.latestProfile(CUSTOMER_ID);
+        assertEquals("测试客户", fallback.get("contactName"));
+        assertEquals("2", fallback.get("contactGender"));
+        assertNull(fallback.get("contactBirthday"));
+
+        // 历史客户资料缺称呼/性别时，才回退到最近一笔品牌卡订单。
+        customer.setNickname(" ");
+        customer.setGender(null);
+        when(orderMapper.selectOne(any())).thenReturn(order);
+        Map<String, Object> legacy = service.latestProfile(CUSTOMER_ID);
+        assertEquals("林晚", legacy.get("contactName"));
+        assertEquals("1", legacy.get("contactGender"));
+        assertTrue(service.latestProfile(null).isEmpty());
+    }
+
     @Test
     void createOrderRejectsLockedCustomerBeforeQuote() {
         Customer customer = customer(1);

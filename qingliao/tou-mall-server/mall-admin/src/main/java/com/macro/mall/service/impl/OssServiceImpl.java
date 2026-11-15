@@ -158,6 +158,24 @@ public class OssServiceImpl implements OssService {
         return doGetFinalUrl(key, 30);
     }
 
+    /**
+     * 稳定可外发的图片地址（不带签名）。
+     *
+     * <p>本端存的是 OSS key，{@link #getFinalUrl} 给出的是 30 天过期的预签名链接，
+     * 写给 CRM 这类第三方存下来会失效；桶本身是公共读（邀请二维码就是这么拼的），
+     * 所以外发时按「桶名.域名/key」拼静态地址。</p>
+     */
+    public String publicUrl(String key) {
+        if (Strings.isBlank(key)) {
+            return null;
+        }
+        if (key.startsWith("http")) {
+            return key;
+        }
+        String host = ALIYUN_OSS_ENDPOINT.replaceFirst("^https?://", "");
+        return "https://" + OSS_BUCKET_NAME + "." + host + "/" + key;
+    }
+
     private String generateFinalUrl(String fileKey, Long expire) {
         // 设置预签名URL过期时间
         Date expiration = new Date(new Date().getTime() + expire);

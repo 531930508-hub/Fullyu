@@ -28,6 +28,7 @@
 <script>
 import BasicCustomerTagCascader from './BasicCustomerTagCascader.vue'
 import customerTagApi from '../../../api/customer/customerTag'
+import basicCustomerTagApi from '../../../api/customer/basicCustomerTag'
 
 export default {
   name: 'CustomerTagDrawer',
@@ -43,21 +44,56 @@ export default {
       },
       tableData: [],
       customer: {},
-      nickname: ''
+      nickname: '',
+      basicTagTitleMap: {}
     }
   },
   methods: {
     open(customer = {}, nickname) {
       this.customer = customer
-      this.form.customerId = customer.id
-      this.searchForm.customerId = customer.id
       this.nickname = nickname
+      this.showForm = false
+      this.form = {customerId: customer.id}
+      this.searchForm.customerId = customer.id
       this.showDrawer = true
       this.fetchData()
     },
+    async loadBasicTagTitles() {
+      if (Object.keys(this.basicTagTitleMap).length) return
+      try {
+        const res = await basicCustomerTagApi.all()
+        const map = {}
+        const walk = (list) => {
+          (list || []).forEach(item => {
+            if (!item) return
+            if (item.id != null && item.title) {
+              map[item.id] = item.title
+            }
+            walk(item.children)
+          })
+        }
+        walk(res.data)
+        this.basicTagTitleMap = map
+      } catch (e) {
+        this.basicTagTitleMap = {}
+      }
+    },
+    tagTitle(tag) {
+      if (!tag) return ''
+      const title = tag.title || tag.name
+      if (title && !/^\d+$/.test(String(title).trim())) {
+        return String(title).trim()
+      }
+      const name = this.basicTagTitleMap[tag.basicCustomerTagId]
+      return name || ''
+    },
     async fetchData() {
+      await this.loadBasicTagTitles()
       const res = await customerTagApi.list(this.searchForm)
-      this.tableData = res.data || []
+      this.tableData = (res.data || []).map(tag => ({
+        ...tag,
+        title: this.tagTitle(tag) || '基础标签已删除'
+      }))
     },
     async submitForm() {
       if (!this.form.basicCustomerTagId) {
@@ -67,18 +103,34 @@ export default {
       this.showFullLoading()
       const res = await customerTagApi.save(this.form)
       this.hideFullLoading()
+      const saved = res.data || {}
+      const tag = {
+        ...saved,
+        title: this.tagTitle(saved) || this.form.title || ''
+      }
       this.notifySuccess()
       this.showForm = false
       this.form = {customerId: this.customer.id}
-      this.tableData.unshift(res.data)
-      this.customer.customerTagList.push(res.data)
+      this.tableData.unshift(tag)
+      if (!Array.isArray(this.customer.customerTagList)) {
+        this.$set(this.customer, 'customerTagList', [])
+      }
+      this.customer.customerTagList.push(tag)
+      this.$emit('change')
     },
     async handleDeleteTag(row, index) {
       await this.notifyDelete()
-      customerTagApi.removeById(row.id)
+      await customerTagApi.removeById(row.id)
       this.notifySuccess()
       this.tableData.splice(index, 1)
-      this.customer.customerTagList.splice(0, 1)
+      const list = this.customer.customerTagList
+      if (Array.isArray(list)) {
+        const targetIndex = list.findIndex(item => item && item.id === row.id)
+        if (targetIndex > -1) {
+          list.splice(targetIndex, 1)
+        }
+      }
+      this.$emit('change')
     },
     onChangeTag(tag) {
       if (tag) {

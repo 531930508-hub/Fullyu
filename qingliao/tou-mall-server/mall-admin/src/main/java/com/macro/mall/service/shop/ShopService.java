@@ -56,6 +56,27 @@ public class ShopService extends BaseService<ShopMapper, Shop> {
     @Autowired
     ShopCollectService shopCollectService;
 
+    @Autowired
+    com.macro.mall.service.base.ShopScopeService shopScopeService;
+
+    /**
+     * 当前账号可查看的门店（全局角色 = 全部）。
+     *
+     * <p>所有前端门店下拉的唯一数据源，避免受限账号通过 /shop/listAll 拿到全量门店。</p>
+     */
+    public List<Shop> listAuthorized(Map<String, Object> params) {
+        Map<String, Object> query = params == null ? new HashMap<>() : params;
+        List<Shop> all = listNoPage(query);
+        List<Long> authorized = shopScopeService.authorizedShopIds();
+        if (authorized == null) {
+            return all;
+        }
+        Set<Long> allowed = new HashSet<>(authorized);
+        return all.stream()
+                .filter(shop -> shop.getId() != null && allowed.contains(shop.getId()))
+                .collect(Collectors.toList());
+    }
+
 
     @Override
     protected QueryWrapper<Shop> buildWrapper(Map<String, Object> params, QueryWrapper<Shop> queryWrapper) {
@@ -67,8 +88,6 @@ public class ShopService extends BaseService<ShopMapper, Shop> {
                 .getQueryWrapper();
     }
 
-    @Autowired
-    RoomService roomService;
     @Autowired
     BedService bedService;
     @Autowired
@@ -83,11 +102,6 @@ public class ShopService extends BaseService<ShopMapper, Shop> {
         if (!CollectionUtils.isEmpty(bedList)) {
             List<Long> bedIds = bedList.stream().map(Bed::getId).collect(Collectors.toList());
             bedService.removeBatchByIds(bedIds);
-        }
-        List<Room> roomList = roomService.listByShopId(id);
-        if (!CollectionUtils.isEmpty(roomList)) {
-            List<Long> roomIds = roomList.stream().map(Room::getId).collect(Collectors.toList());
-            roomService.removeBatchByIds(roomIds);
         }
         removeById(id);
         redisUtil.delData(RedisKey.FIND_SHOP_NAME_BY_ID + id);

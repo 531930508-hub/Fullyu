@@ -72,7 +72,8 @@
         </el-input>
       </div>
       <div style="min-width: 220px" class="flex justify-end">
-        <el-button @click="exportExcel" style="margin-left: 20px">导出</el-button>
+        <!-- 导出含完整客户手机号，仅超级管理员可见入口 -->
+        <el-button v-if="isAdmin" @click="exportExcel" style="margin-left: 20px">导出</el-button>
         <el-button v-if="type==0" type="primary" icon="el-icon-plus" @click="handleShowAppointment"
                    style="margin-left: 20px">添加预约
         </el-button>
@@ -90,13 +91,15 @@
                 style="width: 100%;"
                 v-loading="listLoading" border>
         <el-table-column label="客户称呼" prop="customerNickname" width="150" show-overflow-tooltip>
+          <template slot-scope="scope">{{ scope.row.customerNickname | maskNicknameFilter }}</template>
         </el-table-column>
         <el-table-column label="客户手机号" prop="customerPhone" width="120" show-overflow-tooltip>
+          <template slot-scope="scope">{{ scope.row.customerPhone | maskPhoneFilter }}</template>
         </el-table-column>
         <el-table-column v-if="type==1" label="实际使用人" width="120" show-overflow-tooltip>
           <template slot-scope="scope">
-            <span v-if="!scope.row.isGift">{{ scope.row.customerPhone }}</span>
-            <span v-else>{{ scope.row.toCustomer != null ? scope.row.toCustomer.phone : '' }}</span>
+            <span v-if="!scope.row.isGift">{{ scope.row.customerPhone | maskPhoneFilter }}</span>
+            <span v-else>{{ (scope.row.toCustomer != null ? scope.row.toCustomer.phone : '') | maskPhoneFilter }}</span>
           </template>
         </el-table-column>
         <el-table-column label="产品名称" prop="productTitle" width="90" show-overflow-tooltip></el-table-column>
@@ -363,11 +366,15 @@ export default {
       appointmentRange: [],
       dataList: [],
       listLoading: false,
+      listSeq: 0,
       total: 0,
     }
   },
   computed: {
-    ...mapGetters(['userId', 'shopId','shopListAll'])
+    ...mapGetters(['userId', 'shopId', 'shopListAll', 'roles']),
+    isAdmin() {
+      return (this.roles || []).indexOf('超级管理员') > -1
+    }
   },
   created() {
     this.$store.dispatch("setMassagistList")
@@ -425,6 +432,7 @@ export default {
       this.fetchData()
     },
     async fetchData() {
+      const seq = ++this.listSeq
       this.listLoading = true
       let searchForm = JSON.parse(JSON.stringify(this.searchForm))
       if (this.searchForm.appointmentState && this.searchForm.appointmentState.length > 0) {
@@ -433,11 +441,15 @@ export default {
       if (this.searchForm.state && this.searchForm.state.length > 0) {
         searchForm = {...searchForm, state: this.searchForm.state.join(",")}
       }
-      let res = await orderApi.page(searchForm)
-      this.listLoading = false
-      let {list, total} = res.data
-      this.dataList = list || []
-      this.total = total || 0
+      try {
+        let res = await orderApi.page(searchForm)
+        if (seq !== this.listSeq) return
+        let {list, total} = res.data
+        this.dataList = list || []
+        this.total = total || 0
+      } finally {
+        if (seq === this.listSeq) this.listLoading = false
+      }
     },
     handleSizeChange(val) {
       this.searchForm.size = val;

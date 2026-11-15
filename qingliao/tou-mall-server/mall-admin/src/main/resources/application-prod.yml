@@ -1,8 +1,8 @@
 spring:
   datasource:
     url: jdbc:mysql://rm-bp127cdsipvc7dtseno.mysql.rds.aliyuncs.com:3306/tou_mall_current?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: ${DB_USERNAME:fully}
-    password: ${DB_PASSWORD:}
+    username: fully
+    password: jhSd3#623ha(sdjf8HsyiT23e
     druid:
       initial-size: 5 #连接池初始化大小
       min-idle: 10 #最小空闲连接数
@@ -22,8 +22,8 @@ spring:
     host: 47.111.136.49
     port: 5672
     virtual-host: /fully
-    username: ${DB_USERNAME:fully}
-    password: ${RABBITMQ_PASSWORD:}
+    username: fully
+    password: fully2026**
     publisher-confirm-type: CORRELATED
     # 开启消息回退监听
     publisher-returns: true
@@ -50,8 +50,8 @@ spring:
 minio:
   endpoint: http://localhost:9000 #MinIO服务所在地址
   bucketName: mall #存储桶名称
-  accessKey: ${MINIO_ACCESS_KEY:minioadmin} #访问的key
-  secretKey: ${MINIO_SECRET_KEY:minioadmin} #访问的秘钥
+  accessKey: minioadmin #访问的key
+  secretKey: minioadmin #访问的秘钥
 
 logging:
   level:
@@ -64,15 +64,15 @@ logstash:
 
 # 小票打印
 print:
-  user: ${PRINT_USER:}
-  ukey: ${PRINT_UKEY:}
-  sn: ${PRINT_SN:}
-  appid: ${PRINT_APPID:}
-  appsecret: ${PRINT_APPSECRET:}
+  user: 2041097701@qq.com
+  ukey: EZ9996tDKCEqKUN8
+  sn: 221611350
+  appid: sp6972e32c161cd
+  appsecret:  bf92c827272b2cbbbe3b421d44c2f36d
 
 # 百度语音识别/合成
 baidu:
   voice:
-    appId: ${BAIDU_VOICE_APP_ID:}
-    apiKey: ${BAIDU_VOICE_API_KEY:}
-    secretKey: ${BAIDU_VOICE_SECRET_KEY:}
+    appId: 119355266
+    apiKey: OFbytKmtBx3OdZP0u2AEdPDD
+    secretKey: QzCQciJOyT7ayGMvL1hdZ8XgGkQsynwm

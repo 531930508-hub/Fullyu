@@ -105,14 +105,13 @@
 <script>
 import {mapGetters} from 'vuex'
 import ShopSelector from "@/views/shop/shopList/ShopSelector";
-import RoomSelector from "@/views/shop/room/RoomSelector";
 import ProjectSelector from "@/views/goods/product/ProjectSelector";
 import CouponSelector from "@/views/goods/product/CouponSelector";
 import productApi from "@/api/goods/product";
 
 export default {
   name: 'productForm',
-  components: {CouponSelector, ProjectSelector, RoomSelector, ShopSelector},
+  components: {CouponSelector, ProjectSelector, ShopSelector},
   props: {},
   data() {
     return {

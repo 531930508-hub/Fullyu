@@ -94,4 +94,11 @@ class ApprovalGlobalConfigTest {
         java.util.List<?> result = (java.util.List<?>) assertDoesNotThrow(() -> service.listNoPageNew(new HashMap<>(), "[2]"));
         assertEquals(2, result.size());
     }
+    @Test void legacyConfigurationIsHiddenWhenGlobalConfigurationExists() {
+        ApprovalCategory legacy = new ApprovalCategory(); legacy.setShopId(2L); legacy.setCode("lowRating");
+        doReturn(Arrays.asList(config, legacy)).when(service).listNoPage(anyMap());
+        java.util.List<?> result = (java.util.List<?>) assertDoesNotThrow(() -> service.listNoPageNew(new HashMap<>(), "[2]"));
+        assertEquals(1, result.size());
+        assertSame(config, result.get(0));
+    }
 }

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.macro.mall.serializer.QiniuUrlDeSerializer;
@@ -14,6 +15,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.apache.logging.log4j.util.Strings;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -65,6 +67,19 @@ public class Customer extends BaseEntity {
     private Integer gender;
     private String comment;
     private String note;
+
+    @ApiModelProperty("客户生日")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate birthday;
+
+    @ApiModelProperty("CRM 会员资料版本号(profileVersion)，本地已同步的版本；资料以 CRM 为唯一归档")
+    @JsonIgnore
+    private Long crmProfileVersion;
+
+    @ApiModelProperty("CRM 会员资料最近同步时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonIgnore
+    private LocalDateTime crmProfileSyncedAt;
 
     @ApiModelProperty("1禁止购买品牌会员（连续两次 7 天内无理由退款）")
     private Integer brandCardLocked;

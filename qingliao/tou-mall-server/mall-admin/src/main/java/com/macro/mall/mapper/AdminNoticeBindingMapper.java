@@ -25,6 +25,19 @@ public interface AdminNoticeBindingMapper {
     // 不用双唯一键upsert，避免同一openid冲突时误更新另一位管理员。
     @Insert("INSERT INTO n_admin_mp_binding(admin_id,app_id,open_id,following,bound_at,event_at) VALUES(#{adminId},#{appId},#{openId},1,NOW(),#{eventAt})")
     int insertBinding(@Param("adminId") Long adminId,@Param("appId") String appId,@Param("openId") String openId,@Param("eventAt") LocalDateTime eventAt);
+    // 网页授权绑定：关注状态来自用户信息接口，取不到时按已关注保存，发送失败会回写。
+    @Insert("INSERT INTO n_admin_mp_binding(admin_id,app_id,open_id,following,bound_at,event_at) VALUES(#{adminId},#{appId},#{openId},#{following},NOW(),NOW())")
+    int insertOAuthBinding(@Param("adminId") Long adminId,@Param("appId") String appId,@Param("openId") String openId,@Param("following") int following);
+    @Select("SELECT admin_id FROM n_admin_mp_binding WHERE app_id=#{appId} AND open_id=#{openId} LIMIT 1")
+    Long bindingByOpenId(@Param("appId") String appId,@Param("openId") String openId);
+    @Update("UPDATE n_admin_mp_binding SET following=0 WHERE app_id=#{appId} AND open_id=#{openId} AND following=1")
+    int markUnfollowed(@Param("appId") String appId,@Param("openId") String openId);
+    @Select("SELECT " + AdminNoticeDisplayName.SQL_EMPLOYEE_NAME + " FROM ums_admin u WHERE u.id=#{adminId}")
+    String adminName(@Param("adminId") Long adminId);
+    @Select("SELECT COALESCE(SUM(action='TEST_SENT' AND create_time>=DATE_SUB(NOW(),INTERVAL 1 MINUTE)),0) AS lastMinute, " +
+        "COALESCE(SUM(action='TEST_SENT' AND create_time>=DATE_SUB(NOW(),INTERVAL 1 DAY)),0) AS lastDay " +
+        "FROM n_admin_mp_binding_audit WHERE admin_id=#{adminId} AND action='TEST_SENT'")
+    Map<String,Object> recentTestSends(@Param("adminId") Long adminId);
     @Update("UPDATE n_admin_mp_binding SET open_id=#{openId},following=1,bound_at=NOW(),event_at=#{eventAt} WHERE admin_id=#{adminId} AND app_id=#{appId}")
     int updateBinding(@Param("adminId") Long adminId,@Param("appId") String appId,@Param("openId") String openId,@Param("eventAt") LocalDateTime eventAt);
     @Update("UPDATE n_admin_mp_challenge SET candidate_following=0,event_at=#{eventAt} WHERE app_id=#{appId} AND candidate_open_id=#{openId} AND consumed_at IS NULL AND (event_at IS NULL OR event_at <= #{eventAt})")

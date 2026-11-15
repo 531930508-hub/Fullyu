@@ -16,7 +16,8 @@ export const HOME_LINKS = [
   { key: 'board', label: '排班看板', path: '/appointment/board', icon: 'el-icon-date', tone: 'brand', perm: 'board' },
   { key: 'customer', label: '客户列表', path: '/crm/customer', icon: 'el-icon-user', tone: 'info', perm: 'customer' },
   { key: 'shiftCenter', label: '疗愈师排班', path: '/appointment/shift', icon: 'el-icon-time', tone: 'success', perm: 'shiftCenter:schedules' },
-  { key: 'leave', label: '我的请假', path: '/appointment/shift?tab=leave', icon: 'el-icon-circle-close', tone: 'warning', perm: 'shiftCenter:leave' },
+  // 我的请假走 /my-leave 常量路由：不依赖「排班与请假」菜单授权，只要求账号绑定疗愈师
+  { key: 'leave', label: '我的请假', path: '/my-leave', icon: 'el-icon-circle-close', tone: 'warning', perm: '', requiresMassagist: true },
   { key: 'statisticsOverview', label: '经营流水', path: '/statistics/overview', icon: 'el-icon-data-line', tone: 'warning', perm: 'statisticsOverview:revenue' },
   { key: 'orderCenter', label: '订单列表', path: '/order/list', icon: 'el-icon-tickets', tone: 'info', perm: 'orderCenter:ordinary' },
   { key: 'product', label: '商品列表', path: '/system/product', icon: 'el-icon-goods', tone: 'success', perm: 'product' },

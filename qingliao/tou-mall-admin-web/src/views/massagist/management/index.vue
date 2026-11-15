@@ -174,13 +174,16 @@ export default {
     },
     async fetchData() {
       this.listLoading = true
-      const query = {...this.searchForm}
-      if (!query.identity) delete query.identity
-      let res = await massagistApi.page(query)
-      this.listLoading = false
-      let {list, total} = res.data
-      this.dataList = list || []
-      this.total = total || 0
+      try {
+        const query = {...this.searchForm}
+        if (!query.identity) delete query.identity
+        let res = await massagistApi.page(query)
+        let {list, total} = res.data
+        this.dataList = list || []
+        this.total = total || 0
+      } finally {
+        this.listLoading = false
+      }
     },
     handleSizeChange(val) {
       this.searchForm.size = val;
@@ -194,8 +197,13 @@ export default {
       this.$refs.refMassagistForm.open()
     },
     handleUpdate(row, index) {
-      row.projectArrPage=JSON.parse(row.projectArr)
-
+      let projectArrPage = []
+      try {
+        projectArrPage = row.projectArr ? JSON.parse(row.projectArr) : []
+      } catch (e) {
+        projectArrPage = []
+      }
+      row.projectArrPage = Array.isArray(projectArrPage) ? projectArrPage : []
       this.$refs.refMassagistForm.open(row)
     },
     async handleDelete(row, index) {

@@ -5,6 +5,7 @@ import vm from 'node:vm'
 
 const root = new URL('../src/', import.meta.url)
 const page = await readFile(new URL('views/statistics/therapistStats/index.vue', root), 'utf8')
+const overview = await readFile(new URL('views/statistics/OverviewCenter.vue', root), 'utf8')
 const api = await readFile(new URL('api/statistics.js', root), 'utf8')
 const router = await readFile(new URL('router/index.js', root), 'utf8')
 
@@ -61,7 +62,11 @@ test('stale responses are ignored when filters change quickly', async () => {
 })
 
 test('route, API and multi-select wiring exist', () => {
-  assert.match(router, /path: 'therapistStats'[\s\S]*?views\/statistics\/therapistStats\/index[\s\S]*?title: '疗愈师统计'/)
+  // 「经营数据」汇总页用 Tab 承载疗愈师统计
+  assert.match(router, /path: '\/statistics\/overview'[\s\S]*?views\/statistics\/OverviewCenter[\s\S]*?title: '经营数据'/)
+  // 旧地址保留为兼容跳转，落到同名的 Tab
+  assert.match(router, /path: '\/statistics\/therapistStats',[^\n]*?tab: 'therapistStats'/)
+  assert.match(overview, /name: 'therapistStats'[\s\S]*?label: '疗愈师统计'[\s\S]*?views\/statistics\/therapistStats\/index/)
   assert.match(api, /url: '\/statistics\/therapistStats'/)
   assert.match(api, /url: '\/statistics\/therapistStats\/export'[\s\S]*?responseType: 'blob'[\s\S]*?疗愈师统计\.xlsx/)
   assert.match(page, /<massagist-selector[^>]*multiple/)

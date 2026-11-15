@@ -14,6 +14,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RepurchaseBatchCalculatorTest {
@@ -55,8 +56,8 @@ class RepurchaseBatchCalculatorTest {
     @Test
     void retentionGateBlocksBothRewardsButKeepsPotentialVisible() {
         List<CustomerVisit> visits = ledger();
-        removeNextVisit(visits, "13800000002", LocalDate.of(2026, 8, 30));
-        removeNextVisit(visits, "13800000003", LocalDate.of(2026, 8, 30));
+        // 去掉 B 的 60 天内再访，A 仍有再访、C 本来就没有 → 3 次到店仅 1 次留存 = 33.33%
+        removeNextVisit(visits, "13800000002", LocalDate.of(2026, 9, 6));
 
         RepurchaseMetrics metrics = calculator.calculate(TARGET, visits, null, rule(3),
                 "2026-10", LocalDate.of(2026, 11, 30));
@@ -90,16 +91,18 @@ class RepurchaseBatchCalculatorTest {
     void exactlySixtyPercentRetentionQualifies() {
         IncentiveRule rule = rule(3);
         List<CustomerVisit> visits = new ArrayList<>();
-        LocalDate first = LocalDate.of(2026, 1, 1);
-        for (int i = 1; i <= 5; i++) {
-            String phone = "1390000000" + i;
-            visits.add(visit(phone, first, TARGET, SHOP));
-            LocalDate service = LocalDate.of(2026, 8, i);
-            visits.add(visit(phone, service, TARGET, SHOP));
-            if (i <= 3) {
-                visits.add(visit(phone, service.plusDays(10), OTHER, SHOP));
-            }
-        }
+        LocalDate january = LocalDate.of(2026, 1, 1);
+        String a = "13900000001";
+        // A 窗口内 3 次到店，前两次 60 天内都有再访，最后一次没有 → 2/3。
+        visits.add(visit(a, january, TARGET, SHOP));
+        visits.add(visit(a, LocalDate.of(2026, 8, 1), TARGET, SHOP));
+        visits.add(visit(a, LocalDate.of(2026, 8, 10), TARGET, SHOP));
+        visits.add(visit(a, LocalDate.of(2026, 8, 20), TARGET, SHOP));
+        String b = "13900000002";
+        // B 窗口内 2 次到店，8/2 之后 8/25 再访，8/25 之后无再访 → 1/2。
+        visits.add(visit(b, january, TARGET, SHOP));
+        visits.add(visit(b, LocalDate.of(2026, 8, 2), TARGET, SHOP));
+        visits.add(visit(b, LocalDate.of(2026, 8, 25), TARGET, SHOP));
 
         RepurchaseMetrics metrics = calculator.calculate(TARGET, visits, null, rule,
                 "2026-10", LocalDate.of(2026, 11, 30));
@@ -178,13 +181,97 @@ class RepurchaseBatchCalculatorTest {
     }
 
     @Test
+    void retentionCountsEveryQualifyingVisitAsOnePersonTime() {
+        List<CustomerVisit> visits = new ArrayList<>();
+        String phone = "13600000001";
+        visits.add(visit(phone, LocalDate.of(2026, 1, 1), TARGET, SHOP));
+        // 老客 8 月连来 4 次：前三次之后 60 天内都有再访，最后一次没有，按人次应为 3/4。
+        visits.add(visit(phone, LocalDate.of(2026, 8, 1), TARGET, SHOP));
+        visits.add(visit(phone, LocalDate.of(2026, 8, 10), TARGET, SHOP));
+        visits.add(visit(phone, LocalDate.of(2026, 8, 20), TARGET, SHOP));
+        visits.add(visit(phone, LocalDate.of(2026, 8, 30), TARGET, SHOP));
+
+        RepurchaseMetrics metrics = calculator.calculate(TARGET, visits, null, rule(3),
+                "2026-10", LocalDate.of(2026, 11, 30));
+
+        assertEquals(4, metrics.getRetentionSample());
+        assertEquals(3, metrics.getRetainedVisits());
+        assertMoney("75.00", metrics.getRetentionRate());
+        assertTrue(metrics.getRetentionEligible());
+    }
+
+    @Test
+    void retentionMergesSplitOrdersOnSameDayIntoOneVisit() {
+        List<CustomerVisit> visits = new ArrayList<>();
+        String phone = "13600000003";
+        visits.add(visit(phone, LocalDate.of(2026, 1, 1), TARGET, SHOP));
+        // 8/1 拆成两单，只算一次到店；否则分母会虚高、留存率被稀释。
+        visits.add(visit(phone, LocalDate.of(2026, 8, 1), TARGET, SHOP));
+        visits.add(visit(phone, LocalDate.of(2026, 8, 1), TARGET, SHOP));
+        visits.add(visit(phone, LocalDate.of(2026, 8, 10), TARGET, SHOP));
+
+        RepurchaseMetrics metrics = calculator.calculate(TARGET, visits, null, rule(3),
+                "2026-10", LocalDate.of(2026, 11, 30));
+
+        assertEquals(2, metrics.getRetentionSample());
+        assertEquals(1, metrics.getRetainedVisits());
+        assertMoney("50.00", metrics.getRetentionRate());
+    }
+
+    @Test
+    void retentionSkipsVisitsWithoutSixtyDayObservation() {
+        List<CustomerVisit> visits = new ArrayList<>();
+        String phone = "13600000002";
+        visits.add(visit(phone, LocalDate.of(2026, 1, 1), TARGET, SHOP));
+        visits.add(visit(phone, LocalDate.of(2026, 8, 20), TARGET, SHOP));
+        visits.add(visit(phone, LocalDate.of(2026, 8, 25), TARGET, SHOP));
+
+        // 截止 9/1 时 8 月的到店还不满 60 天，应整体剔出分母，避免当月看板“月底补涨”。
+        RepurchaseMetrics metrics = calculator.calculate(TARGET, visits, null, rule(3),
+                "2026-10", LocalDate.of(2026, 9, 1));
+
+        assertEquals(0, metrics.getRetentionSample());
+        assertNull(metrics.getRetentionRate());
+        assertFalse(metrics.getRetentionEligible());
+    }
+
+    @Test
+    void retentionNeedsMinimumVisitSample() {
+        IncentiveRule rule = rule(3);
+        rule.setMinRetentionSample(30);
+
+        RepurchaseMetrics metrics = calculator.calculate(TARGET, ledger(), null, rule,
+                "2026-10", LocalDate.of(2026, 11, 30));
+
+        assertEquals(3, metrics.getRetentionSample());
+        assertMoney("66.67", metrics.getRetentionRate());
+        assertFalse(metrics.getRetentionEligible());
+        assertMoney("0.00", metrics.getAppliedTierAmount());
+        assertMoney("0.00", metrics.getAppliedTenDayAmount());
+    }
+
+    @Test
+    void historicalTenDayCountsSecondVisitInFollowingMonth() {
+        RepurchaseMetrics metrics = calculator.calculate(TARGET, null, ledger(), null, rule(3),
+                "2026-10", LocalDate.of(2026, 10, 31), LocalDate.of(2026, 11, 10));
+
+        // O4 10/30 首单、11/3 二刷，按“次月仍归首单月”应计入 10 月。
+        assertEquals(4, metrics.getTenDayHeadCount());
+        assertMoney("3.50", metrics.getTenDayWeightedHeads());
+        assertMoney("60.00", metrics.getTenDayPotentialAmount());
+        assertMoney("50.00", metrics.getTenDayNextPrice());
+    }
+
+    @Test
     void emptyLedgerReturnsNoSampleInsteadOfQualifying() {
         RepurchaseMetrics metrics = calculator.calculate(TARGET, new ArrayList<>(), null, rule(3),
                 "2026-10", LocalDate.of(2026, 11, 30));
 
         assertFalse(metrics.getRetentionEligible());
         assertEquals(0, metrics.getRetentionSample());
+        assertNull(metrics.getRetentionRate());
         assertEquals(0, metrics.getNewCustomerCount());
+        assertNull(metrics.getConversionRate());
         assertMoney("0.00", metrics.getTotalAmount());
     }
 
@@ -199,6 +286,8 @@ class RepurchaseBatchCalculatorTest {
         rule.setConversionDays(30);
         rule.setTenDayDays(10);
         rule.setMinNewSample(minNewSample);
+        // 单测数据量小，默认 30 老客门槛会在每条用例里挡住合格判定，单独用 retentionNeedsMinimumCustomerSample 覆盖
+        rule.setMinRetentionSample(1);
         rule.setTiers(Arrays.asList(
                 new RepurchaseTier(new BigDecimal("10"), new BigDecimal("200")),
                 new RepurchaseTier(new BigDecimal("20"), new BigDecimal("1500"))));
@@ -209,7 +298,8 @@ class RepurchaseBatchCalculatorTest {
     }
 
     /**
-     * 老客 A/B 在 8 月各有一次后续到店，C 没有；老客留存 2/3。
+     * 老客 A/B 各在 8 月到店一次，并在 9 月初再次到店（窗口外，不增加分母）；C 没有；
+     * 按人次分母 3、留存 2。
      * 新客 N1/N2/N3 在 9 月首单，N1、N3 在 30 天内二刷（N3 跨月）。
      * 10 月首单 O1/O2 完整归属，O3 由两位伙伴共同服务（0.5），O4 次月二刷仍归 10 月。
      */
@@ -231,9 +321,9 @@ class RepurchaseBatchCalculatorTest {
         visits.add(visit(c, LocalDate.of(2026, 1, 3), TARGET, SHOP));
 
         visits.add(visit(a, LocalDate.of(2026, 8, 5), TARGET, SHOP));
-        visits.add(visit(a, LocalDate.of(2026, 8, 20), OTHER, SHOP));
+        visits.add(visit(a, LocalDate.of(2026, 9, 5), OTHER, SHOP));
         visits.add(visit(b, LocalDate.of(2026, 8, 6), TARGET, SHOP));
-        visits.add(visit(b, LocalDate.of(2026, 8, 30), OTHER, SHOP));
+        visits.add(visit(b, LocalDate.of(2026, 9, 6), OTHER, SHOP));
         visits.add(visit(c, LocalDate.of(2026, 8, 7), TARGET, SHOP));
 
         visits.add(visit(n1, LocalDate.of(2026, 9, 1), TARGET, SHOP));

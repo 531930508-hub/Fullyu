@@ -22,6 +22,8 @@ class ApprovalPermissionTest {
         service=spy(new ApprovalDetailService());
         service.approvalService=mock(ApprovalService.class);
         service.approvalCategoryService=mock(ApprovalCategoryService.class);
+        //门店作用域：用例默认按普通门店角色处理（isGlobal=false，跨店查看不放行）
+        service.shopScopeService=mock(com.macro.mall.service.base.ShopScopeService.class);
         UmsAdmin admin=new UmsAdmin();admin.setId(10L);admin.setShopId(1L);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
             new AdminUserDetails(admin,Collections.emptyList()),null,Collections.emptyList()));
@@ -43,6 +45,22 @@ class ApprovalPermissionTest {
         Map<String,Object> query=new HashMap<>();query.put("targetUserId",99L);query.put("shopId",8L);
         service.pageInfo(query);
         verify(service).page(argThat((Map<String,Object> p)->Long.valueOf(10).equals(p.get("targetUserId")) && !p.containsKey("shopId")));
+    }
+    @Test void leaveQuerySpansEveryStoreConfiguration() {
+        ApprovalCategory first=new ApprovalCategory();first.setId(1L);first.setCode("askForLeave");
+        ApprovalCategory second=new ApprovalCategory();second.setId(2L);second.setCode("askForLeave");
+        when(service.approvalCategoryService.list(org.mockito.ArgumentMatchers.<com.baomidou.mybatisplus.core.conditions.Wrapper<ApprovalCategory>>any())).thenReturn(Arrays.asList(first,second));
+        Map<String,Object> query=new HashMap<>();query.put("shopId",8L);query.put("categoryId",99L);
+        service.pageLeave(query);
+        verify(service).page(argThat((Map<String,Object> p)->Long.valueOf(10).equals(p.get("targetUserId"))
+                && !p.containsKey("shopId") && !p.containsKey("categoryId") && "1,2".equals(p.get("categoryIds"))));
+    }
+    @Test void multipleCategoriesUseInClauseInsteadOfScalarEquality() {
+        Map<String,Object> params=new HashMap<>();params.put("category_ids","1, 2");
+        com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<ApprovalDetail> wrapper=
+            service.buildWrapper(params,new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>());
+        String sql=wrapper.getSqlSegment();
+        assertTrue(sql.contains("category_id IN"),"多门店请假分类应使用 IN 查询");
     }
     @Test void doneStatesDoNotAddContradictoryScalarEquality() {
         Map<String,Object> params=new HashMap<>();params.put("state","3,0");params.put("target_user_id",10L);

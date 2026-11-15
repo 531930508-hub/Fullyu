@@ -53,9 +53,22 @@ class BookingServiceTest {
         }
     }
     private List<OrderDetail> build(Long specified) {
+        return build(specified, null);
+    }
+    private List<OrderDetail> build(Long specified, Integer addType) {
         return service.checkAndBuildOrderList(1L, 2L, start, 60, 1,
                 specified == null ? new ArrayList<>() : new ArrayList<>(Arrays.asList(specified)),
-                new ArrayList<>(), Collections.emptyList(), true, null);
+                new ArrayList<>(), Collections.emptyList(), true, null, addType);
+    }
+    /** 需求：加钟优先原单疗愈师——客户正好在疗愈师下班点接着加钟，仍然排给原疗愈师。 */
+    @Test void addServiceKeepsTherapistStartingAtClosingTime() {
+        shifts.forEach(s -> s.setEndTime(start.toLocalTime()));
+        assertEquals(1L, build(1L, 1).get(0).getMassagistId());
+    }
+    /** 普通下单不能在下班点才开始，加钟的放宽不能外溢到普通预约。 */
+    @Test void normalBookingStillCannotStartAtClosingTime() {
+        shifts.forEach(s -> s.setEndTime(start.toLocalTime()));
+        assertThrows(BusinessException.class, () -> build(1L, 0));
     }
     @Test void foreignStoreSpecifiedPersonIsRejectedNotSilentlyReplaced() {
         BusinessException e = assertThrows(BusinessException.class, () -> build(99L));

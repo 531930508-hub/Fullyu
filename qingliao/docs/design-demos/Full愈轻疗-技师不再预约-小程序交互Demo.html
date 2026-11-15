@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Full愈轻疗 · 疗愈师偏好「收藏 / 暂别」小程序交互 Demo</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#EDEAE5;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;color:#1E1E1D;padding:24px}
+.page-title{text-align:center;font-size:15px;color:#584219;font-weight:600;margin-bottom:6px}
+.page-sub{text-align:center;font-size:12px;color:#8C8B8A;margin-bottom:18px}
+/* 改版规则说明条 */
+.spec{max-width:1280px;margin:0 auto 22px;background:#fff;border-radius:14px;padding:14px 18px;display:flex;gap:18px;flex-wrap:wrap;box-shadow:0 2px 10px rgba(88,66,25,.06)}
+.spec-item{flex:1;min-width:280px;font-size:11.5px;color:#8C8B8A;line-height:1.75}
+.spec-item b{display:block;color:#584219;font-size:12.5px;margin-bottom:3px}
+.spec-item code{background:#F5EFE4;color:#8A6A40;border-radius:3px;padding:0 4px;font-size:11px}
+.stage{display:flex;gap:34px;justify-content:center;flex-wrap:wrap;align-items:flex-start}
+.scene{display:flex;flex-direction:column;align-items:center;gap:10px}
+.scene-label{font-size:13px;color:#584219;font-weight:600}
+.scene-label small{display:block;font-weight:400;color:#8C8B8A;font-size:11px;margin-top:2px;text-align:center;max-width:340px;line-height:1.6}
+/* 手机框 */
+.phone{width:375px;height:760px;background:#F6F4F2;border-radius:44px;border:10px solid #1E1E1D;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(88,66,25,.22)}
+.statusbar{height:44px;display:flex;justify-content:space-between;align-items:center;padding:0 24px;font-size:12px;font-weight:600;position:relative;z-index:5}
+.notch{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:110px;height:26px;background:#1E1E1D;border-radius:14px;z-index:6}
+.scroll{height:calc(100% - 44px);overflow-y:auto;position:relative}
+.scroll::-webkit-scrollbar{display:none}
+.topnav{display:flex;align-items:center;justify-content:center;height:44px;position:relative;font-size:17px;font-weight:600;color:#1E1E1D}
+.back{position:absolute;left:16px;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;font-size:15px;color:#584219;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+/* tab 栏（收藏页同款） */
+.tab-nav{display:flex;background:#fff;padding:0 16px;border-bottom:1px solid #F0F0F0}
+.tab-item{flex:1;text-align:center;padding:12px 0 10px;font-size:14px;color:#666;position:relative;cursor:pointer;transition:color .3s}
+.tab-item.active{color:#584219;font-weight:bold}
+.tab-item.active::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:20px;height:2px;background:#584219;border-radius:1px}
+/* 分段筛选（新增，替代原「第三个 Tab」） */
+.seg-wrap{display:flex;gap:8px;padding:12px 20px 2px}
+.seg{font-size:12px;padding:5px 14px;border-radius:14px;border:1px solid #E5E1DA;background:#fff;color:#8C8B8A;cursor:pointer;transition:all .2s}
+.seg.active{background:#584219;border-color:#584219;color:#fff}
+.note-bar{margin:10px 20px 0;background:#F5EFE4;border-radius:12px;padding:10px 14px;font-size:11px;color:#8A6A40;line-height:1.7}
+/* 卡片 */
+.card{background:#fff;border-radius:16px;margin:10px 20px 0;padding:0 16px;transition:opacity .28s}
+.th-row{display:flex;align-items:center;padding:12px 0 10px;border-bottom:1px dashed #F0F0F0}
+.avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#D9CBB4,#B7A488);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;flex:none}
+.avatar.grey{background:linear-gradient(135deg,#C9C4BC,#A8A29A)}
+.t-info{margin-left:8px;flex:1;min-width:0}
+.t-name{font-size:15px;color:#1E1E1D}
+.t-shop{font-size:12px;color:#8C8B8A;margin-top:2px}
+.t-note{font-size:11px;color:#B3AFA9;margin-top:2px}
+.pref{display:flex;align-items:center;gap:14px;flex:none}
+.mark{display:inline-flex;align-items:center;gap:3px;font-size:13px;cursor:pointer;color:#8A6A40;white-space:nowrap;transition:color .2s;-webkit-tap-highlight-color:transparent}
+.mark i{font-style:normal}
+.mark svg{display:block}
+.mark.fav.on{color:#C4A974}
+.mark.av.on{color:#7A736B}
+.mark:active{opacity:.6}
+.card-foot{min-height:56px;display:flex;justify-content:flex-end;align-items:center;gap:10px}
+.ghost-btn{border:1px solid #584219;background:#fff;color:#584219;font-size:13px;padding:6px 18px;border-radius:6px;cursor:pointer;font-family:inherit}
+.foot-hint{font-size:11px;color:#B3AFA9;margin-right:auto;line-height:1.5}
+.blocked-tag{font-size:10px;color:#8C8B8A;border:1px solid #E5E1DA;border-radius:4px;padding:1px 5px;background:#FAF9F7;margin-left:6px;vertical-align:1px}
+/* 订单详情 */
+.order-card{background:#fff;border-radius:16px;margin:10px 20px 0;padding:16px}
+.card-title{font-size:16px;font-weight:600;margin-bottom:14px;color:#1E1E1D}
+.o-row{display:flex;align-items:center;padding:7px 0;font-size:13px}
+.o-label{color:#8C8B8A;width:33%}
+.o-value{color:#1E1E1D;flex:1;text-align:right}
+.o-value.link{color:#584219;display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap}
+.o-value.link .nm{color:#584219;font-size:13px}
+.pair{display:inline-flex;align-items:center;gap:12px;white-space:nowrap}
+/* 弹窗 */
+.mask{position:absolute;inset:0;background:rgba(30,30,29,.45);z-index:20;display:none;align-items:center;justify-content:center}
+.mask.show{display:flex}
+.dialog{width:300px;background:#fff;border-radius:18px;padding:24px 22px 18px;text-align:center;animation:pop .22s ease}
+@keyframes pop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+.d-title{font-size:17px;font-weight:600;color:#1E1E1D}
+.d-text{font-size:13px;color:#8C8B8A;line-height:1.75;margin:12px 0 20px}
+.d-text b{color:#584219;font-weight:600}
+.d-btns{display:flex;gap:10px}
+.d-btn{flex:1;padding:10px 0;border-radius:22px;font-size:14px;cursor:pointer;border:1px solid #D8D2C8;background:#fff;color:#8C8B8A;font-family:inherit}
+.d-btn.primary{background:#584219;border-color:#584219;color:#fff}
+/* toast */
+.toast{position:absolute;left:50%;top:120px;transform:translateX(-50%);background:rgba(30,30,29,.85);color:#fff;font-size:12px;padding:9px 16px;border-radius:8px;z-index:30;display:none;max-width:320px;text-align:center;line-height:1.6}
+.toast.show{display:block;animation:pop .2s ease}
+/* 空状态 */
+.empty{display:flex;flex-direction:column;align-items:center;padding-top:110px}
+.empty .e-icon{width:100px;height:80px;border-radius:16px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:34px;color:#D8D2C8}
+.empty .e-txt{margin-top:16px;font-size:12px;color:#584219}
+.empty .e-sub{margin-top:6px;font-size:11px;color:#B3AFA9}
+/* 预约页技师选择 */
+.proj-meta{background:#fff;border-radius:16px;margin:10px 20px 0;padding:16px}
+.pm-row{display:flex;justify-content:space-between;font-size:13px;padding:6px 0}
+.pm-row .l{color:#8C8B8A}.pm-row .r{color:#1E1E1D;font-weight:500}
+.pick-title{font-size:15px;font-weight:600;margin:16px 20px 0;display:flex;justify-content:space-between;align-items:center}
+.pick-title small{font-size:11px;color:#8C8B8A;font-weight:400}
+.th-pick{display:flex;align-items:center;background:#fff;border-radius:14px;margin:8px 20px 0;padding:12px 14px;cursor:pointer;border:1.5px solid transparent}
+.th-pick.sel{border-color:#584219;background:#FBF8F2}
+.th-pick.off{opacity:.6}
+.tp-info{flex:1;margin-left:10px}
+.tp-tag{font-size:10px;color:#8A6A40;background:#F5EFE4;border-radius:4px;padding:1px 6px;margin-left:6px}
+.tp-score{font-size:11px;color:#8C8B8A;margin-top:2px}
+.tp-check{width:18px;height:18px;border-radius:50%;border:1.5px solid #D8D2C8;flex:none}
+.th-pick.sel .tp-check{border-color:#584219;background:#584219;position:relative}
+.th-pick.sel .tp-check::after{content:'';position:absolute;left:5px;top:2px;width:4px;height:8px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+.bottom-cta{position:absolute;left:0;right:0;bottom:0;background:#fff;padding:12px 20px 26px;border-top:1px solid #F0F0F0}
+.cta-btn{width:100%;background:#584219;color:#fff;border:none;border-radius:24px;padding:13px 0;font-size:15px;letter-spacing:2px;cursor:pointer;font-family:inherit}
+.hint-banner{margin:10px 20px 0;background:#F5EFE4;border-radius:12px;padding:10px 14px;font-size:11px;color:#8A6A40;line-height:1.7;display:none}
+.hint-banner.show{display:block}
+.demo-note{margin:12px 20px 0;font-size:11px;color:#B3AFA9;text-align:center;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="page-title">Full愈轻疗 · 疗愈师偏好「♥ 收藏 / ☾ 暂别」小程序交互 Demo</div>
+<div class="page-sub">对外只用两个词，不出现「拉黑 / 屏蔽 / 黑名单 / 不再预约」 · 全程可逆 · 技师无感知</div>
+
+<div class="spec">
+  <div class="spec-item">
+    <b>① 同一层面：偏好双标</b>
+    收藏与暂别是<b style="display:inline;color:#8A6A40">一对同规格图标 toggle</b>：30rpx 图标 + 26rpx 文字，紧邻排列，点一下点亮、再点一下熄灭。未点亮同为 <code>#8A6A40</code>（成对、视觉统一）；点亮后 ♥ 走 <code>#C4A974</code>，☾ 走暖灰 <code>#7A736B</code>——明确不用红色，避免惩罚感。互斥时另一个自动熄灭 + 一行轻提示。
+  </div>
+  <div class="spec-item">
+    <b>② 同一条打断规则</b>
+    <b style="display:inline;color:#8A6A40">获得 / 恢复不打断，失去 / 生效才确认</b>：点亮 ♥ 不弹窗（现状）、熄灭 ♥ 弹窗（现状 <code>showModal</code>）；点亮 ☾ 弹窗（影响派单，且承载功能说明）、熄灭 ☾ 不弹窗直接 Toast。两个控件共用一条语法，不再各写一套。
+  </div>
+  <div class="spec-item">
+    <b>③ 管理页与说明落点</b>
+    收藏页 Tab 仍是「疗愈师 / 门店」两个（<b style="display:inline;color:#8A6A40">不新增第三个 Tab</b>），疗愈师 Tab 内加分段筛选 <code>全部 / 想再约 / 暂别</code>，默认停在「想再约」＝今天的列表。说明落在：设为暂别的弹窗正文（主）、暂别筛选态顶部说明条、空状态文案。
+  </div>
+</div>
+
+<div class="stage">
+  <!-- ============ 场景1：订单详情 ============ -->
+  <div class="scene">
+    <div class="scene-label">① 订单详情 · 主入口<small>♥ 与 ☾ 并列在疗愈师行，同尺寸同手感<br>点亮 ☾ 才弹窗，熄灭 ☾ 直接生效</small></div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="statusbar"><span>9:41</span><span>●●●●● 📶 🔋</span></div>
+      <div class="scroll">
+        <div class="topnav"><div class="back">‹</div>订单详情</div>
+        <div class="order-card">
+          <div class="card-title">预约信息</div>
+          <div class="o-row"><text class="o-label">预约项目</text><text class="o-value">头部水疗 60mins</text></div>
+          <div class="o-row"><text class="o-label">开始时间</text><text class="o-value">2026-09-30 14:00</text></div>
+          <div class="o-row"><text class="o-label">结束时间</text><text class="o-value">2026-09-30 15:00</text></div>
+          <div class="o-row" style="padding:9px 0;align-items:flex-start">
+            <view class="o-label" style="width:33%;color:#8C8B8A;font-size:13px;padding-top:2px">服务疗愈师</view>
+            <div class="o-value link">
+              <div class="avatar" style="width:18px;height:18px;font-size:9px">雨</div>
+              <span class="nm">张小雨</span>
+              <span class="pair" id="pair1"></span>
+            </div>
+          </div>
+          <div class="o-row"><text class="o-label">疗愈时长</text><text class="o-value">60 mins / 位</text></div>
+          <div class="o-row"><text class="o-label">支付方式</text><text class="o-value">微信支付</text></div>
+        </div>
+        <div class="order-card">
+          <div class="card-title">门店信息</div>
+          <div class="o-row"><text class="o-label">服务门店</text><text class="o-value">Full愈·西岸店</text></div>
+          <div class="o-row"><text class="o-label">详细地址</text><text class="o-value" style="font-size:12px">龙腾大道 2358 号</text></div>
+        </div>
+        <div class="demo-note">试一试：点 ☾ 暂别 → 弹窗确认 → ♥ 自动熄灭并给轻提示；<br>再点一次 ☾ → 不弹窗，直接「已恢复」。</div>
+        <div style="height:30px"></div>
+      </div>
+      <div class="mask" id="mask1" onclick="if(event.target===this)closeDlg(1)">
+        <div class="dialog">
+          <div class="d-title" id="dTitle1"></div>
+          <div class="d-text" id="dText1"></div>
+          <div class="d-btns">
+            <button class="d-btn" id="dCancel1" onclick="closeDlg(1)">再想想</button>
+            <button class="d-btn primary" id="dOk1" onclick="okDlg(1)">暂时不约</button>
+          </div>
+        </div>
+      </div>
+      <div class="toast" id="toast1"></div>
+    </div>
+  </div>
+
+  <!-- ============ 场景2：我的收藏（分段筛选） ============ -->
+  <div class="scene">
+    <div class="scene-label">② 我的收藏 · 同层管理<small>Tab 不新增，疗愈师 Tab 内用分段筛选承载两类标记<br>在「暂别」里点 ♥ 可直接恢复并转为收藏</small></div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="statusbar"><span>9:41</span><span>●●●●● 📶 🔋</span></div>
+      <div class="scroll">
+        <div class="topnav"><div class="back">‹</div>我的收藏</div>
+        <div class="tab-nav" style="position:sticky;top:0;z-index:4">
+          <div class="tab-item active" onclick="switchTab(this,0)">收藏的疗愈师</div>
+          <div class="tab-item" onclick="switchTab(this,1)">收藏的门店</div>
+        </div>
+
+        <!-- tab0 疗愈师（含分段筛选） -->
+        <div id="tab0">
+          <div class="seg-wrap">
+            <div class="seg" data-seg="all" onclick="setSeg('all')">全部</div>
+            <div class="seg active" data-seg="fav" onclick="setSeg('fav')">想再约</div>
+            <div class="seg" data-seg="avoid" onclick="setSeg('avoid')">暂别</div>
+          </div>
+          <div class="note-bar" id="noteBar" style="display:none">
+            暂别的疗愈师不会出现在你的预约和自动分配里，TA 不会收到任何通知，随时可以解除。
+          </div>
+          <div id="list2"></div>
+          <div id="empty2" style="display:none"></div>
+        </div>
+
+        <!-- tab1 收藏的门店 -->
+        <div id="tab1" style="display:none">
+          <div class="card" style="padding:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;color:#584219;font-weight:500;font-size:14px;border-bottom:1px solid #F0EEEA;padding-bottom:10px">
+              <span>Full愈·西岸店</span><span style="font-size:12px;color:#8A6A40">♥ 收藏</span>
+            </div>
+            <div style="font-size:13px;color:#8C8B8A;padding-top:10px">龙腾大道 2358 号</div>
+            <div style="font-size:13px;color:#8C8B8A;margin-top:8px">电话：021-6468xxxx</div>
+            <div style="display:flex;justify-content:flex-end"><button class="ghost-btn" style="margin-top:10px">预约</button></div>
+          </div>
+          <div class="demo-note">门店只有「收藏」一类标记，不参与分段筛选——<br>这也是 Tab 仍按对象类型分的原因。</div>
+        </div>
+        <div style="height:40px"></div>
+      </div>
+      <div class="mask" id="mask2" onclick="if(event.target===this)closeDlg(2)">
+        <div class="dialog">
+          <div class="d-title" id="dTitle2"></div>
+          <div class="d-text" id="dText2"></div>
+          <div class="d-btns">
+            <button class="d-btn" id="dCancel2" onclick="closeDlg(2)">再想想</button>
+            <button class="d-btn primary" id="dOk2" onclick="okDlg(2)">暂时不约</button>
+          </div>
+        </div>
+      </div>
+      <div class="toast" id="toast2"></div>
+    </div>
+  </div>
+
+  <!-- ============ 场景3：预约页 ============ -->
+  <div class="scene">
+    <div class="scene-label">③ 预约流程 · 自动避开<small>暂别的疗愈师从列表消失（服务端过滤）<br>该页不加 ♥☾ 控件，选择环节不引入负面操作</small></div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="statusbar"><span>9:41</span><span>●●●●● 📶 🔋</span></div>
+      <div class="scroll" style="padding-bottom:90px">
+        <div class="topnav"><div class="back">‹</div>选择项目</div>
+        <div class="proj-meta">
+          <div class="pm-row"><span class="l">服务门店</span><span class="r">Full愈·西岸店</span></div>
+          <div class="pm-row"><span class="l">预约项目</span><span class="r">头部水疗 · 60mins</span></div>
+          <div class="pm-row"><span class="l">预约时间</span><span class="r">今天 14:00</span></div>
+        </div>
+        <div class="hint-banner" id="downgradeHint">你之前把「李敏」设为了暂别，已为你自动切换成门店安排，也可以在下方手动选择其他疗愈师。</div>
+        <div class="pick-title">选择疗愈师 <small id="pickCount">2 位可预约</small></div>
+
+        <div class="th-pick" onclick="pick(this)">
+          <div class="avatar">雨</div>
+          <div class="tp-info">
+            <span class="t-name" style="font-size:14px">张小雨</span><span class="tp-tag">想再约</span>
+            <div class="tp-score">评分 4.9 · 服务 328 次</div>
+          </div>
+          <div class="tp-check"></div>
+        </div>
+        <div class="th-pick" onclick="pick(this)">
+          <div class="avatar">正</div>
+          <div class="tp-info">
+            <span class="t-name" style="font-size:14px">阿正</span>
+            <div class="tp-score">评分 4.8 · 服务 276 次</div>
+          </div>
+          <div class="tp-check"></div>
+        </div>
+        <div class="th-pick off" style="display:none" id="blockedRow">
+          <div class="avatar grey">敏</div>
+          <div class="tp-info">
+            <span class="t-name" style="font-size:14px">李敏</span><span class="blocked-tag">已暂别</span>
+            <div class="tp-score">已自动避开 · 可到「我的收藏 → 暂别」解除</div>
+          </div>
+          <div class="tp-check"></div>
+        </div>
+        <div class="demo-note">← 实际线上：李敏不会出现在此列表（服务端已过滤）<br>此处灰色展示仅为 Demo 说明</div>
+        <div style="height:20px"></div>
+      </div>
+      <div class="bottom-cta">
+        <button class="cta-btn" onclick="toast(3,'预约成功，将为你自动避开暂别的疗愈师')">提交预约</button>
+      </div>
+      <div class="toast" id="toast3"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- 图标（Demo 用内联 SVG 模拟；正式需新增 2 枚线性图标，风格对齐 favorite-therapist.png） ---------- */
+function icoFav(on){
+  return '<svg viewBox="0 0 24 24" width="15" height="15"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="'+(on?'currentColor':'none')+'" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+}
+function icoAv(on){
+  return '<svg viewBox="0 0 24 24" width="15" height="15"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="'+(on?'currentColor':'none')+'" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+}
+function pairHTML(rec,key,scene){
+  return '<span class="mark fav'+(rec.fav?' on':'')+'" onclick="tap(\''+key+'\',\'fav\','+scene+')">'+icoFav(rec.fav)+'<i>'+(rec.fav?'已收藏':'收藏')+'</i></span>'
+       + '<span class="mark av'+(rec.avoid?' on':'')+'" onclick="tap(\''+key+'\',\'av\','+scene+')">'+icoAv(rec.avoid)+'<i>'+(rec.avoid?'已暂别':'暂别')+'</i></span>';
+}
+
+/* ---------- 数据 ---------- */
+var s1={name:'张小雨',fav:true,avoid:false};
+var list=[
+  {key:'t1',name:'张小雨',init:'雨',shop:'Full愈·西岸店',fav:true,avoid:false,note:'评分 4.9 · 服务 328 次'},
+  {key:'t2',name:'阿正',init:'正',shop:'Full愈·前滩店',fav:true,avoid:false,note:'评分 4.8 · 服务 276 次'},
+  {key:'t3',name:'李敏',init:'敏',shop:'Full愈·西岸店',fav:false,avoid:true,note:'由你设置 · 09-28'},
+  {key:'t4',name:'王涛',init:'涛',shop:'Full愈·前滩店',fav:false,avoid:true,note:'由门店设置 · 09-25'}
+];
+var seg='fav';
+
+function getRec(key){
+  if(key==='s1')return s1;
+  for(var i=0;i<list.length;i++){if(list[i].key===key)return list[i];}
+  return null;
+}
+
+/* ---------- 统一交互：获得/恢复不打断，失去/生效才确认 ---------- */
+function tap(key,kind,scene){
+  var rec=getRec(key);if(!rec)return;
+  if(kind==='fav'){
+    if(rec.fav){ askCancelFav(key,scene,rec); }   // 熄灭 → 确认（沿用现状）
+    else { setFav(key,true,scene); }              // 点亮 → 直接
+  }else{
+    if(rec.avoid){ setAvoid(key,false,scene); }   // 熄灭 → 直接
+    else { askAvoid(key,scene,rec); }             // 点亮 → 确认（承载说明）
+  }
+}
+function setFav(key,on,scene){
+  var rec=getRec(key),extra='';
+  rec.fav=on;
+  if(on&&rec.avoid){rec.avoid=false;extra=' · 已同时解除暂别';}
+  render();
+  toast(scene,on?('已收藏'+extra):'已取消收藏');
+}
+function setAvoid(key,on,scene){
+  var rec=getRec(key),extra='';
+  rec.avoid=on;
+  if(on&&rec.fav){rec.fav=false;extra=' · 已同时取消对 TA 的收藏';}
+  render();
+  toast(scene,on?('已设为暂别，之后自动避开 TA'+extra):'已恢复，可以正常预约 TA 了');
+}
+function askAvoid(key,scene,rec){
+  var txt=(rec.fav?'将同时取消对 TA 的收藏，<br>':'')
+        +'之后预约时会自动避开<b>「'+rec.name+'」</b>，<br>TA 不会收到任何通知，<br>随时可以解除。';
+  openDlg(scene,'暂时不约 TA？',txt,'再想想','暂时不约',function(){setAvoid(key,true,scene);});
+}
+function askCancelFav(key,scene,rec){
+  openDlg(scene,'提示','确定要取消对<b>「'+rec.name+'」</b>的收藏吗？','取消','确定',function(){setFav(key,false,scene);});
+}
+
+/* ---------- 弹窗 ---------- */
+var pendingCb={};
+function openDlg(scene,title,text,cancel,ok,cb){
+  document.getElementById('dTitle'+scene).textContent=title;
+  document.getElementById('dText'+scene).innerHTML=text;
+  document.getElementById('dCancel'+scene).textContent=cancel;
+  document.getElementById('dOk'+scene).textContent=ok;
+  pendingCb[scene]=cb;
+  document.getElementById('mask'+scene).classList.add('show');
+}
+function closeDlg(scene){document.getElementById('mask'+scene).classList.remove('show');pendingCb[scene]=null;}
+function okDlg(scene){var cb=pendingCb[scene];closeDlg(scene);if(cb)cb();}
+
+/* ---------- Toast ---------- */
+var toastTimer={};
+function toast(scene,msg){
+  var t=document.getElementById('toast'+scene);
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer[scene]);
+  toastTimer[scene]=setTimeout(function(){t.classList.remove('show')},2000);
+}
+
+/* ---------- 渲染 ---------- */
+function render(){
+  document.getElementById('pair1').innerHTML=pairHTML(s1,'s1',1);
+  renderList();
+}
+function renderList(){
+  var rows=list.filter(function(r){
+    if(seg==='fav')return r.fav;
+    if(seg==='avoid')return r.avoid;
+    return r.fav||r.avoid;
+  });
+  var box=document.getElementById('list2'),html='';
+  rows.forEach(function(r){
+    html+='<div class="card" style="padding-bottom:0">'
+      +'<div class="th-row">'
+      +'<div class="avatar'+(r.avoid?' grey':'')+'">'+r.init+'</div>'
+      +'<div class="t-info"><div class="t-name">'+r.name+(r.avoid?'<span class="blocked-tag">已暂别</span>':'')+'</div>'
+      +'<div class="t-shop">'+r.shop+'</div><div class="t-note">'+r.note+'</div></div>'
+      +'<div class="pref">'+pairHTML(r,r.key,2)+'</div>'
+      +'</div>'
+      +'<div class="card-foot">'
+      +(r.avoid
+        ? '<span class="foot-hint">已自动避开 · 点 ♥ 可直接恢复并转为收藏</span>'
+        : '<button class="ghost-btn" onclick="toast(2,\'Demo：跳转预约\')">预约疗愈师</button>')
+      +'</div></div>';
+  });
+  box.innerHTML=html;
+  var em=document.getElementById('empty2');
+  if(rows.length===0){
+    var txt=seg==='avoid'?'还没有暂别的疗愈师':(seg==='fav'?'还没有收藏的疗愈师':'还没有标记过疗愈师');
+    var sub=seg==='avoid'?'在订单详情或疗愈师卡片上点 ☾ 即可设置':'服务结束后，在订单详情页点 ♥ 即可收藏';
+    em.innerHTML='<div class="empty"><div class="e-icon">🌿</div><div class="e-txt">'+txt+'</div><div class="e-sub">'+sub+'</div></div>';
+    em.style.display='block';
+  }else{em.style.display='none';}
+  document.getElementById('noteBar').style.display=(seg==='avoid'&&rows.length>0)?'block':'none';
+}
+function setSeg(s){
+  seg=s;
+  document.querySelectorAll('.seg').forEach(function(el){el.classList.toggle('active',el.getAttribute('data-seg')===s);});
+  renderList();
+}
+function switchTab(el,idx){
+  document.querySelectorAll('.tab-nav .tab-item').forEach(function(t){t.classList.remove('active')});
+  el.classList.add('active');
+  [0,1].forEach(function(i){document.getElementById('tab'+i).style.display=i===idx?'block':'none';});
+}
+/* ---------- 场景3 ---------- */
+function pick(el){
+  document.querySelectorAll('.th-pick').forEach(function(t){t.classList.remove('sel')});
+  el.classList.add('sel');
+}
+render();
+setTimeout(function(){
+  document.getElementById('downgradeHint').classList.add('show');
+  document.getElementById('blockedRow').style.display='flex';
+},600);
+</script>
+</body>
+</html>

@@ -11,11 +11,6 @@
           <shop-selector v-model="form.shopId" :style="'width: 100%'" filter-status clearable
                          placeholder="请选择所属门店" :force-update="false"></shop-selector>
         </el-form-item>
-<!--        <el-form-item label="所属房间" prop="roomId"
-                      :rules="[{required: true, message: '请选择所属房间', trigger: ['blur', 'change']}]">
-          <room-selector v-model="form.roomId" filter-status :style="'width: 100%'" clearable :shop-id="form.shopId" @selected="selectedRoom"
-                         placeholder="请选择所属房间"></room-selector>
-        </el-form-item>-->
         <el-form-item label="床位名称" prop="name"
                       :rules="[{required: true, message: '请输入床位名称', trigger: ['blur', 'change']}]">
           <el-input v-model="form.name" placeholder="请输入床位名称"></el-input>
@@ -55,11 +50,10 @@
 import {mapGetters} from 'vuex'
 import bedApi from "@/api/shop/bed"
 import ShopSelector from "@/views/shop/shopList/ShopSelector";
-import RoomSelector from "@/views/shop/room/RoomSelector";
 
 export default {
   name: 'BedForm',
-  components: {RoomSelector, ShopSelector},
+  components: {ShopSelector},
   props: {},
   data() {
     return {
@@ -95,14 +89,8 @@ export default {
       this.handleClose()
       this.hideFullLoading()
       this.$notify.success("操作成功")
-      this.$store.dispatch("setRoomList", true)
       this.$emit("submit-success")
     },
-    selectedRoom(room) {
-      if (room) {
-        this.$set(this.form, 'shopId', room.shopId)
-      }
-    }
   }
 }
 </script>

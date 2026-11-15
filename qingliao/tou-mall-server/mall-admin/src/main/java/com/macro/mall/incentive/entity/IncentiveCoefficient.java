@@ -8,7 +8,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 /**
- * 基础接单奖励时长区间。min_minutes 为左闭边界，达到即跳档。
+ * 基础薪资时长档位。min_minutes 为左闭边界，达到即跳档；coefficient 为该档单价（元/分钟）。
  */
 @Getter
 @Setter

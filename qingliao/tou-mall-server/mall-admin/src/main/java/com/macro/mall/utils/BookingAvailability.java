@@ -7,8 +7,15 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
 
-/** 预约数字口径：床位有整理间隔，疗愈师没有；手动排单不使用床位间隔作硬限制。 */
+/**
+ * 预约数字口径：床位有整理间隔，疗愈师没有；手动排单不使用床位间隔作硬限制。
+ * <p>所有冲突判定都以半开区间 [start, end) 比较：上一单结束时刻恰好是下一单开始时刻时不算冲突，
+ * 只有床位在 15 分钟整理期内才算冲突。</p>
+ */
 public final class BookingAvailability {
+    /** 床位服务结束后需要整理的分钟数（唯一口径，所有床位冲突判定都用它）。 */
+    public static final int BED_TURNOVER_MINUTES = 15;
+
     private BookingAvailability() { }
 
     public static boolean overlaps(LocalDateTime start, LocalDateTime end,
@@ -16,6 +23,52 @@ public final class BookingAvailability {
         if (start == null || end == null || otherStart == null || otherEnd == null) return false;
         int minutes = Math.max(0, gap);
         return start.isBefore(otherEnd.plusMinutes(minutes)) && otherStart.isBefore(end.plusMinutes(minutes));
+    }
+
+    /**
+     * 同一客户在同一床位上的连续服务（加钟）：上一段结束不晚于新单开始时，不需要 15 分钟整理期。
+     * 整理期只约束不同客户/不同单之间的床位周转。
+     */
+    public static boolean sameCustomerContinuation(Long customerId, LocalDateTime start, OrderDetail other) {
+        if (customerId == null || start == null || other == null) return false;
+        if (other.getCustomerId() == null || !customerId.equals(other.getCustomerId())) return false;
+        return other.getEndTime() != null && !other.getEndTime().isAfter(start);
+    }
+
+    /** 床位占用判定：默认含 15 分钟整理期，同一客户紧接着的加钟段不占用整理期。 */
+    public static boolean bedOccupied(LocalDateTime start, LocalDateTime end, OrderDetail other, Long customerId) {
+        if (other == null) return false;
+        if (sameCustomerContinuation(customerId, start, other)) return false;
+        return overlaps(start, end, other.getStartTime(), other.getEndTime(), BED_TURNOVER_MINUTES);
+    }
+
+    /**
+     * 剔除已结束的明细，避免取消单、已服务单继续占用未来时段。
+     * 已完成（2）/已取消（3）且开始时间晚于当前时刻的明细不再参与床位与疗愈师占用计算；
+     * 当天已过去的明细保留，便于回看历史占用。
+     */
+    public static List<OrderDetail> withoutFinishedFuture(List<OrderDetail> details) {
+        if (details == null || details.isEmpty()) return details;
+        LocalDateTime now = LocalDateTime.now();
+        List<OrderDetail> kept = new ArrayList<>(details.size());
+        for (OrderDetail d : details) {
+            if (d == null) continue;
+            boolean finished = Objects.equals(d.getState(), 2) || Objects.equals(d.getState(), 3);
+            if (finished && d.getStartTime() != null && d.getStartTime().isAfter(now)) continue;
+            kept.add(d);
+        }
+        return kept;
+    }
+
+    /**
+     * 排班在订单开始日那天的下班时间点（LocalDateTime）。
+     * 下班时间不晚于到店时间说明跨了午夜（比如自动延班后变成 00:29），按次日算；
+     * 否则点单比 22:00 < 21:30 这种比较会算错，加钟顺延后还会回绕。
+     */
+    public static LocalDateTime shiftEnd(MassagistSchedules s, LocalDateTime start) {
+        if (s == null || s.getEndTime() == null || start == null) return null;
+        LocalDateTime end = s.getEndTime().atDate(start.toLocalDate());
+        return end.isAfter(start) ? end : end.plusDays(1);
     }
 
     public static Set<Long> scheduledIds(LocalDateTime start, List<MassagistSchedules> shifts) {

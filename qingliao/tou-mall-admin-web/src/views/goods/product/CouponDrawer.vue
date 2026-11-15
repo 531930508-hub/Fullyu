@@ -1,6 +1,6 @@
 <template>
   <div class="CouponDrawer">
-    <el-drawer :show-close="true" :visible.sync="showDrawer" :z-index="108" append-to-body size="61%" title="卡券列表"
+    <el-drawer :show-close="true" :visible.sync="showDrawer" append-to-body size="61%" title="卡券列表"
                :before-close="close">
       <div style="padding: 20px;">
         <el-button icon="el-icon-plus" @click="showVipCouponForm" type="primary">添加权益卡</el-button>

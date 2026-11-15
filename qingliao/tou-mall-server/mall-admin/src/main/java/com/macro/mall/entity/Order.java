@@ -15,6 +15,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
@@ -36,6 +37,15 @@ public class Order extends BaseEntity {
 
     @TableField(exist = false)
     private String customerPhone;
+
+    @ApiModelProperty("客户称呼（客户备注+先生/女士，无备注时为空）")
+    @TableField(exist = false)
+    private String customerTitle;
+
+    @ApiModelProperty("客户生日（仅展示用，来自客户档案）")
+    @TableField(exist = false)
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate customerBirthday;
 
     @ApiModelProperty("产品id")
     private Long productId;
@@ -89,6 +99,9 @@ public class Order extends BaseEntity {
      */
     @ApiModelProperty("订单状态：0未开始，1进行中，2已完成，3已取消")
     private Integer appointmentState = ServiceState.WAITING.getValue();
+
+    @ApiModelProperty("到店次数：下单时按自然日静态写入，同一客户同一自然日多单共用同一个编号")
+    private Integer visitNo;
 
     @ApiModelProperty("订单备注")
     private String comment;

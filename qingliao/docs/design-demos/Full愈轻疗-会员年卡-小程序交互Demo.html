@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Full愈轻疗 · 会员年卡小程序交互 Demo</title>
+<style>
+:root{
+  --brown:#584219;--brown-2:#8A6A40;--gold:#C4A974;--gold-soft:#E8DFD0;
+  --paper:#FFFFFF;--page:#F6F4F2;--cream:#EAE0D7;--line:#E6E2DC;
+  --muted:#B3AFA9;--ink:#2E2417;--red:#B4483C;--green:#4E6B4A;
+  --serif:"Songti SC","Source Han Serif SC","Noto Serif SC","STSong",serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#EDEAE5;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;color:var(--ink);padding:26px 22px 60px;letter-spacing:.05em}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;letter-spacing:.05em}
+.page-title{text-align:center;font-size:16px;color:var(--brown);font-weight:650;letter-spacing:.06em}
+.page-sub{text-align:center;font-size:12px;color:#8C8B8A;margin-top:6px}
+.spec{max-width:1280px;margin:20px auto 26px;background:#fff;border-radius:14px;padding:15px 19px;display:flex;gap:20px;flex-wrap:wrap;box-shadow:0 2px 10px rgba(88,66,25,.06)}
+.spec-item{flex:1;min-width:250px;font-size:11.5px;color:#8C8B8A;line-height:1.8}
+.spec-item b{display:block;color:var(--brown);font-size:12.5px;margin-bottom:3px;letter-spacing:.06em}
+.spec-item code{background:#F5EFE4;color:var(--brown-2);border-radius:3px;padding:0 4px;font-size:11px}
+.stage{display:flex;gap:30px;justify-content:center;flex-wrap:wrap;align-items:flex-start}
+.scene{display:flex;flex-direction:column;align-items:center;gap:11px}
+.scene-label{font-size:13px;color:var(--brown);font-weight:650;letter-spacing:.06em;text-align:center}
+.scene-label small{display:block;font-weight:400;color:#8C8B8A;font-size:11px;margin-top:3px;line-height:1.65;max-width:340px;letter-spacing:.03em}
+.phone{width:375px;height:760px;background:var(--page);border-radius:44px;border:10px solid #1E1E1D;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(88,66,25,.22)}
+.statusbar{height:44px;display:flex;justify-content:space-between;align-items:center;padding:0 24px;font-size:12px;font-weight:600;position:relative;z-index:8;color:var(--brown)}
+.statusbar.on-dark{color:#F3EADB}
+.notch{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:110px;height:26px;background:#1E1E1D;border-radius:14px;z-index:9}
+.scroll{height:calc(100% - 44px);overflow-y:auto;position:relative}
+.scroll::-webkit-scrollbar{display:none}
+.topnav{display:flex;align-items:center;justify-content:center;height:46px;position:relative;font-size:17px;font-weight:650;color:var(--brown);letter-spacing:.06em}
+.back{position:absolute;left:15px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.back svg{width:14px;height:14px}
+/* ---------- 个人中心 ---------- */
+.uc-hero{height:300px;position:relative;overflow:hidden;background:linear-gradient(160deg,#6B5327,#3E2D12)}
+.uc-hero img{width:100%;height:100%;object-fit:cover;display:block}
+.uc-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(40,28,10,.06),rgba(40,28,10,.28))}
+.uc-body{padding:0 18px;position:relative;z-index:2;margin-top:-152px;padding-bottom:28px}
+.uc-card{background:var(--paper);border-radius:18px;box-shadow:0 4px 14px rgba(88,66,25,.06)}
+.uc-profile{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 13px;border-bottom:1px solid var(--line)}
+.uc-person{display:flex;align-items:center;gap:10px}
+.avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(145deg,#E8DFD0,#C9B58C);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:19px;color:var(--brown);letter-spacing:0}
+.uc-name{font-size:15px;font-weight:650;color:var(--brown)}
+.uc-meta{font-size:10.5px;color:var(--muted);margin-top:2px;letter-spacing:.06em}
+.crown-tag{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--brown-2);border:1px solid var(--gold);border-radius:20px;padding:3px 8px;letter-spacing:.08em}
+.crown-tag svg{width:12px;height:12px}
+.member-strip{margin:13px 14px 0;border-radius:14px;background:linear-gradient(120deg,#F7F0E3 0%,#EFE3CD 100%);border:1px solid #E4D5B8;padding:13px 14px;display:flex;align-items:center;gap:10px;position:relative;overflow:hidden}
+.member-strip::after{content:"";position:absolute;right:-24px;top:-30px;width:96px;height:96px;border-radius:50%;border:1px solid rgba(196,169,116,.5)}
+.ms-left{flex:1;min-width:0}
+.ms-kicker{font-size:9px;letter-spacing:.18em;color:var(--brown-2);text-transform:uppercase}
+.ms-title{font-family:var(--serif);font-size:16.5px;font-weight:650;color:var(--brown);margin-top:2px;letter-spacing:.06em}
+.ms-sub{font-size:10.5px;color:var(--brown-2);margin-top:3px;letter-spacing:.04em}
+.ms-btn{background:var(--brown);color:#F6EFE2;font-size:11px;padding:8px 12px;border-radius:999px;white-space:nowrap}
+.ms-btn.ghost{background:#fff;color:var(--brown);border:1px solid var(--brown)}
+.ms-expire{font-size:10px;color:var(--red);margin-top:3px;letter-spacing:.04em}
+.uc-stats{display:flex;align-items:stretch;padding:15px 6px 16px}
+.stat{flex:1;text-align:center;padding:0 6px}
+.stat+.stat{border-left:1px solid rgba(88,66,25,.1)}
+.stat .num{font-size:22px;font-weight:650;color:var(--brown);letter-spacing:.02em}
+.stat .num small{font-size:11px;font-weight:500;margin-left:2px}
+.stat .label{font-size:10.5px;color:var(--brown-2);margin-top:3px;letter-spacing:.06em}
+.uc-rights{margin-top:10px;padding:0 14px}
+.rights-head{display:flex;align-items:center;justify-content:space-between;height:48px;color:var(--brown);font-size:13px;font-weight:600}
+.rights-head .chev{transition:transform .2s;color:var(--muted);font-size:12px}
+.rights-head.open .chev{transform:rotate(180deg)}
+.rights-body{display:none;border-top:1px solid var(--line);padding:4px 0 8px}
+.rights-body.open{display:block}
+.right-row{display:flex;align-items:center;gap:10px;padding:10px 0}
+.right-row .ico{width:30px;height:30px;border-radius:9px;background:#F4EFE7;display:flex;align-items:center;justify-content:center;color:var(--brown-2)}
+.right-row .ico svg{width:15px;height:15px}
+.right-main{flex:1;min-width:0}
+.right-title{font-size:12.5px;color:var(--brown);font-weight:600}
+.right-sub{font-size:10.5px;color:var(--muted);margin-top:2px}
+.right-action{font-size:10.5px;color:var(--brown-2);border:1px solid var(--line);border-radius:999px;padding:4px 9px;white-space:nowrap}
+.right-fold{font-size:10px;color:var(--muted);padding-left:40px;margin-top:-2px;letter-spacing:.03em}
+.uc-menu{margin-top:10px;padding:0 14px}
+.menu-row{display:flex;align-items:center;gap:10px;height:52px;border-bottom:1px solid var(--line);font-size:13px;color:var(--brown)}
+.menu-row:last-child{border-bottom:none}
+.menu-row .ico{width:22px;display:flex;justify-content:center;color:var(--brown-2)}
+.menu-row .ico svg{width:15px;height:15px}
+.menu-row .arrow{margin-left:auto;color:#CFC8BE;font-size:13px}
+.uc-note{font-size:10px;color:#9A948B;text-align:center;padding:16px 0 4px;letter-spacing:.04em}
+/* ---------- 会员中心 ---------- */
+.member-page{background:var(--page);padding-bottom:96px}
+.mc-wrap{padding:0 18px}
+.mc-card{border-radius:20px;background:
+  radial-gradient(120% 120% at 88% 8%,rgba(196,169,116,.28),transparent 55%),
+  linear-gradient(145deg,#5E4720 0%,#3F2D13 100%);
+  color:#F3EADB;padding:19px 18px 17px;position:relative;overflow:hidden;box-shadow:0 14px 28px rgba(63,45,19,.25);border:1px solid rgba(196,169,116,.55)}
+.mc-card::before{content:"";position:absolute;right:-40px;bottom:-70px;width:190px;height:190px;border-radius:50%;border:1px solid rgba(196,169,116,.25)}
+.mc-card::after{content:"";position:absolute;right:14px;bottom:14px;width:46px;height:46px;border-radius:50%;border:1px solid rgba(196,169,116,.45);display:flex}
+.mc-top{display:flex;align-items:flex-start;justify-content:space-between;position:relative;z-index:2}
+.mc-brand{font-size:9px;letter-spacing:.18em;color:#C4A974;text-transform:uppercase}
+.mc-name{font-family:var(--serif);font-size:22px;font-weight:650;margin-top:5px;letter-spacing:.08em}
+.mc-status{font-size:10px;color:#D8C6A8;margin-top:5px;letter-spacing:.06em}
+.mc-seal{width:38px;height:38px;border-radius:50%;border:1px solid rgba(196,169,116,.7);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:15px;color:#E4D3B3}
+.mc-rates{display:flex;align-items:center;margin-top:22px;position:relative;z-index:2}
+.mc-rate{flex:1}
+.mc-rate+.mc-rate{border-left:1px solid rgba(232,223,208,.22);padding-left:16px}
+.mc-rate b{font-family:var(--serif);font-size:26px;font-weight:650;color:#F6EFE2;letter-spacing:.02em}
+.mc-rate b i{font-size:12px;font-style:normal;font-weight:400;color:#D8C6A8;margin-left:2px;letter-spacing:.04em}
+.mc-rate span{display:block;font-size:10px;color:#C4B496;margin-top:3px;letter-spacing:.08em}
+.mc-foot{display:flex;justify-content:space-between;align-items:flex-end;margin-top:18px;position:relative;z-index:2;font-size:9.5px;color:#B9A886;letter-spacing:.08em}
+.mc-foot b{font-size:10.5px;color:#E4D3B3;font-weight:500;letter-spacing:.06em}
+.example{margin-top:12px;background:#fff;border-radius:14px;padding:13px 14px;box-shadow:0 2px 10px rgba(88,66,25,.04)}
+.example-head{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--brown-2);letter-spacing:.06em}
+.example-head b{color:var(--brown);font-size:11.5px}
+.example-body{display:flex;align-items:flex-end;gap:9px;margin-top:9px}
+.example-old{font-size:11px;color:var(--muted);text-decoration:line-through;padding-bottom:3px}
+.example-new{font-size:25px;font-weight:650;color:var(--brown);letter-spacing:.02em}
+.example-new small{font-size:12px;font-weight:500;margin-left:1px}
+.example-save{margin-left:auto;font-size:10.5px;color:var(--red);background:#FFF4F1;border-radius:999px;padding:4px 9px}
+.benefit-title{font-size:12px;color:var(--brown);font-weight:650;margin:20px 0 9px;letter-spacing:.06em}
+.benefit{display:flex;gap:11px;background:#fff;border-radius:14px;padding:13px 14px;margin-bottom:8px;box-shadow:0 2px 10px rgba(88,66,25,.03)}
+.benefit .bico{width:32px;height:32px;border-radius:10px;background:#F6EFE3;display:flex;align-items:center;justify-content:center;color:var(--brown-2);flex:none}
+.benefit .bico svg{width:16px;height:16px}
+.benefit b{display:block;font-size:12.5px;color:var(--brown);font-weight:600;letter-spacing:.05em}
+.benefit p{font-size:10.5px;color:#918A80;line-height:1.65;margin-top:3px;letter-spacing:.03em}
+.rules{margin-top:10px;background:#fff;border-radius:14px;overflow:hidden}
+.rules-head{display:flex;align-items:center;justify-content:space-between;padding:14px;font-size:12px;color:var(--brown);font-weight:600}
+.rules-head .chev{color:var(--muted);transition:transform .2s}
+.rules-head.open .chev{transform:rotate(180deg)}
+.rules-body{display:none;padding:0 14px 14px;border-top:1px solid var(--line)}
+.rules-body.open{display:block}
+.rules-body li{list-style:none;font-size:10.5px;color:#918A80;line-height:1.8;padding-left:12px;position:relative}
+.rules-body li::before{content:"";position:absolute;left:0;top:9px;width:3px;height:3px;border-radius:50%;background:var(--gold)}
+.mc-bar{position:absolute;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);border-top:1px solid var(--line);padding:12px 18px 22px;display:flex;align-items:center;gap:14px;backdrop-filter:blur(8px);z-index:6}
+.mc-price{flex:1}
+.mc-price .p{font-size:24px;font-weight:650;color:var(--brown);letter-spacing:.02em}
+.mc-price .p small{font-size:11px;font-weight:500;color:var(--brown-2);margin-left:2px}
+.mc-price span{display:block;font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:.04em}
+.mc-cta{background:var(--brown);color:#F6EFE2;border-radius:999px;padding:13px 26px;font-size:14px;font-weight:600;letter-spacing:.08em}
+/* ---------- 半屏 ---------- */
+.sheet-mask{position:absolute;inset:0;background:rgba(30,22,10,.46);z-index:20;display:flex;align-items:flex-end}
+.sheet{width:100%;background:#fff;border-radius:22px 22px 0 0;padding:20px 18px 24px;animation:up .28s ease}
+@keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.sheet-title{text-align:center;font-family:var(--serif);font-size:17px;color:var(--brown);font-weight:650;letter-spacing:.06em}
+.sheet-sub{text-align:center;font-size:10.5px;color:var(--muted);margin-top:4px;letter-spacing:.04em}
+.sheet-price{display:flex;align-items:baseline;justify-content:center;gap:3px;margin:18px 0 4px;color:var(--brown)}
+.sheet-price b{font-size:34px;font-weight:650;letter-spacing:.01em}
+.sheet-price span{font-size:12px;color:var(--brown-2)}
+.sheet-rows{margin-top:14px;border-top:1px solid var(--line)}
+.sheet-row{display:flex;justify-content:space-between;padding:11px 0;font-size:11.5px;color:#8D867C;border-bottom:1px solid var(--line)}
+.sheet-row b{color:var(--brown);font-weight:600}
+.agree{display:flex;align-items:flex-start;gap:8px;margin:14px 0 14px;font-size:10.5px;color:#8D867C;line-height:1.6}
+.checkbox{width:16px;height:16px;border-radius:50%;border:1.5px solid #CFC6B8;flex:none;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:.2s}
+.checkbox.on{background:var(--brown);border-color:var(--brown)}
+.checkbox.on::after{content:"";width:6px;height:6px;border-radius:50%;background:#F6EFE2}
+.agree a{color:var(--brown-2);text-decoration:underline;text-underline-offset:2px}
+.pay-btn{width:100%;background:var(--brown);color:#F6EFE2;border-radius:999px;padding:14px;font-size:14px;font-weight:600;letter-spacing:.08em}
+.pay-btn[disabled]{background:#CFC6B8;cursor:not-allowed}
+/* ---------- 开通成功 ---------- */
+.success{height:100%;background:var(--page);display:flex;flex-direction:column;align-items:center;padding:56px 28px 28px;text-align:center}
+.success .ok{width:64px;height:64px;border-radius:50%;background:#F1EBDF;display:flex;align-items:center;justify-content:center;color:var(--brown)}
+.success .ok svg{width:28px;height:28px}
+.success h1{font-family:var(--serif);font-size:21px;color:var(--brown);margin-top:16px;font-weight:650;letter-spacing:.08em}
+.success p{font-size:11.5px;color:#918A80;margin-top:7px;line-height:1.7;letter-spacing:.04em}
+.success-card{width:100%;margin-top:22px;border-radius:16px;background:#fff;padding:15px 16px;text-align:left;box-shadow:0 2px 12px rgba(88,66,25,.05)}
+.success-row{display:flex;justify-content:space-between;font-size:11.5px;padding:7px 0;color:#918A80}
+.success-row b{color:var(--brown);font-weight:600}
+.success-actions{width:100%;margin-top:auto;display:flex;gap:10px}
+.success-actions .primary{flex:1;background:var(--brown);color:#F6EFE2;border-radius:999px;padding:13px;font-size:13px;font-weight:600}
+.success-actions .ghost{flex:1;border:1px solid var(--brown);color:var(--brown);border-radius:999px;padding:13px;font-size:13px}
+/* ---------- 结算 ---------- */
+.checkout-bg{height:100%;background:var(--page);padding:0 16px}
+.ck-head{padding:16px 2px 12px;font-size:17px;font-weight:650;color:var(--brown);letter-spacing:.06em}
+.ck-card{background:#fff;border-radius:16px;padding:15px 16px;box-shadow:0 2px 12px rgba(88,66,25,.05)}
+.ck-title{font-size:13px;font-weight:650;color:var(--brown);letter-spacing:.05em}
+.ck-row{display:flex;justify-content:space-between;font-size:11.5px;color:#918A80;padding:7px 0}
+.ck-row b{color:var(--brown);font-weight:600}
+.ck-divider{height:1px;background:var(--line);margin:8px 0}
+.pay-mask{position:absolute;inset:0;background:rgba(30,22,10,.42);z-index:20;display:flex;align-items:flex-end}
+.pay-sheet{width:100%;background:#fff;border-radius:22px 22px 0 0;padding:16px 18px 0;max-height:94%;overflow:auto}
+.pay-head{display:flex;align-items:center;justify-content:center;position:relative;padding:4px 0 10px}
+.pay-head b{font-size:16px;color:var(--brown);font-weight:650;letter-spacing:.06em}
+.pay-close{position:absolute;right:0;top:0;width:26px;height:26px;border-radius:50%;background:#F4F1EC;display:flex;align-items:center;justify-content:center;color:#9C958A;font-size:12px}
+.order-line{display:flex;justify-content:space-between;font-size:11px;color:#918A80;padding:8px 0 10px;border-bottom:1px solid var(--line)}
+.order-line b{color:var(--brown)}
+.seg{display:flex;background:#F4F1EC;border-radius:999px;padding:3px;margin:11px 0 4px}
+.seg button{flex:1;border-radius:999px;padding:7px 0;font-size:11px;color:#8D867C;transition:.2s}
+.seg button.on{background:#fff;color:var(--brown);font-weight:650;box-shadow:0 1px 4px rgba(88,66,25,.1)}
+.opt-head{display:flex;justify-content:space-between;align-items:center;margin:13px 0 7px}
+.opt-head b{font-size:12px;color:var(--brown);font-weight:650;letter-spacing:.05em}
+.opt-head span{font-size:9.5px;color:var(--muted);letter-spacing:.03em}
+.option{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:13px;padding:11px 12px;margin-bottom:7px;transition:.16s;cursor:pointer}
+.option.on{border-color:var(--brown);background:#FBF7EF}
+.option.disabled{opacity:.46;cursor:not-allowed}
+.radio{width:17px;height:17px;border-radius:50%;border:1.5px solid #D7CFC2;flex:none;display:flex;align-items:center;justify-content:center}
+.option.on .radio{border-color:var(--brown)}
+.option.on .radio::after{content:"";width:9px;height:9px;border-radius:50%;background:var(--brown)}
+.opt-main{flex:1;min-width:0}
+.opt-name{font-size:12px;color:var(--brown);font-weight:600;display:flex;align-items:center;gap:5px;letter-spacing:.04em}
+.tag-min{font-size:8.5px;font-weight:500;color:#7C5A1E;background:#F3E7CC;border-radius:4px;padding:1px 5px;letter-spacing:.08em}
+.opt-sub{font-size:9.5px;color:var(--muted);margin-top:2px;letter-spacing:.03em}
+.opt-price{text-align:right;flex:none}
+.opt-price b{font-size:14px;color:var(--brown);letter-spacing:.02em}
+.opt-price b small{font-size:9px;font-weight:500}
+.opt-price span{display:block;font-size:9px;color:var(--red);margin-top:1px}
+.opt-price span.grey{color:var(--muted)}
+.tip-line{font-size:9.5px;color:#A39B8F;background:#FAF7F1;border-radius:9px;padding:8px 10px;margin:6px 0 2px;line-height:1.6;letter-spacing:.03em}
+.pay-foot{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);margin:10px -18px 0;padding:12px 18px 22px;display:flex;align-items:center;gap:12px}
+.pay-foot .amount{flex:1;font-size:10.5px;color:#918A80}
+.pay-foot .amount b{display:block;font-size:22px;color:var(--brown);font-weight:650;margin-top:1px;letter-spacing:.01em}
+.pay-foot .amount b small{font-size:10px;font-weight:500}
+.pay-foot button{background:var(--brown);color:#F6EFE2;border-radius:999px;padding:13px 22px;font-size:13px;font-weight:600;letter-spacing:.06em}
+.toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);background:rgba(46,36,23,.92);color:#F6EFE2;font-size:11px;padding:9px 14px;border-radius:999px;z-index:30;opacity:0;pointer-events:none;transition:.2s;white-space:nowrap}
+.toast.show{opacity:1}
+@media(max-width:820px){body{padding:16px 10px 40px}.phone{transform:scale(.92);transform-origin:top center;margin-bottom:-60px}}
+</style>
+</head>
+<body>
+<div class="page-title">Full愈轻疗 · 会员年卡小程序交互 Demo</div>
+<div class="page-sub">基于线上小程序视觉：字号、棕色、米金与留白保持一致；储值卡保留但降级收纳</div>
+
+<div class="spec">
+  <div class="spec-item"><b>核心规则</b>365 元 / 365 天；提前一天及以上预约 <code>78 折</code>，当日预约 <code>88 折</code>；开卡写入费率快照，后续调价不影响已购卡。</div>
+  <div class="spec-item"><b>结算比价</b>年卡价 / 通用折扣 / 积分 / Full愈券<code> 四选一</code>，不叠加；默认现金最低，可手动切换；券不足时置灰。</div>
+  <div class="spec-item"><b>入口变化</b>个人中心主权益位改为年卡；富翁卡（储值卡）收进「我的权益」折叠区，功能不变。</div>
+</div>
+
+<div class="stage">
+
+  <!-- 1 个人中心：未开通 -->
+  <div class="scene">
+    <div class="scene-label">① 个人中心 · 未开通<small>年卡进入主权益位；储值卡默认折叠</small></div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="statusbar"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="scroll">
+        <div class="uc-hero"><img src="docs/designs/assets/member-hero.png" alt="Full愈个人中心"></div>
+        <div class="uc-body">
+          <div class="uc-card">
+            <div class="uc-profile">
+              <div class="uc-person">
+                <div class="avatar">愈</div>
+                <div>
+                  <div class="uc-name">田女士</div>
+                  <div class="uc-meta">FULL YU MEMBER</div>
+                </div>
+              </div>
+              <div class="crown-tag">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 18h16M5 16l-1-8 5 3 3-6 3 6 5-3-1 8z"/></svg>
+                年卡待开通
+              </div>
+            </div>
+            <div class="member-strip">
+              <div class="ms-left">
+                <div class="ms-kicker">FULL YU ANNUAL</div>
+                <div class="ms-title">开通 Full愈年卡</div>
+                <div class="ms-sub">提前预约 78 折 · 当日预约 88 折</div>
+              </div>
+              <button class="ms-btn">去看看</button>
+            </div>
+            <div class="uc-stats">
+              <div class="stat"><div class="num">1,280<small>积分</small></div><div class="label">可抵扣 1,280 元</div></div>
+              <div class="stat"><div class="num">4<small>张</small></div><div class="label">Full愈券</div></div>
+            </div>
+          </div>
+
+          <div class="uc-card uc-rights">
+            <div class="rights-head" onclick="toggleRights(this)">
+              <span>我的权益</span><span class="chev">⌄</span>
+            </div>
+            <div class="rights-body">
+              <div class="right-row">
+                <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M7 15h4"/></svg></div>
+                <div class="right-main"><div class="right-title">富翁卡（储值卡）</div><div class="right-sub">剩余 90 分钟 · 有效期至 12-31</div></div>
+                <div class="right-action">去使用</div>
+              </div>
+              <div class="right-row">
+                <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 9h16v10H4zM3 6h18v3H3zM12 6v13"/></svg></div>
+                <div class="right-main"><div class="right-title">礼品卡</div><div class="right-sub">可兑换、可转赠</div></div>
+                <div class="right-action">查看</div>
+              </div>
+              <div class="right-fold">储值卡继续可用，入口已收纳，不再与年卡并列</div>
+            </div>
+          </div>
+
+          <div class="uc-card uc-menu">
+            <div class="menu-row"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20s-7-4.3-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.7-7 9-7 9z"/></svg></span>我的收藏<span class="arrow">›</span></div>
+            <div class="menu-row"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 9h16v10H4zM12 9v10M8 9c-2 0-3-1-3-2.5S6 4 8 4c2.5 0 4 5 4 5s1.5-5 4-5c2 0 2.5 1 2.5 2.5S17 9 15 9"/></svg></span>邀请有礼<span class="arrow">›</span></div>
+            <div class="menu-row"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="18" height="12" rx="2"/><path d="M7 7V5h10v2"/></svg></span>礼品卡兑换<span class="arrow">›</span></div>
+            <div class="menu-row"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 13a8 8 0 1116 0v4a2 2 0 01-2 2h-2M4 13v4a2 2 0 002 2h2"/></svg></span>联系客服<span class="arrow">›</span></div>
+          </div>
+          <div class="uc-note">Full愈 · 城市微度假</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 会员中心：未开通 -->
+  <div class="scene">
+    <div class="scene-label">② 会员中心 · 未开通<small>权益、示例价格、规则与开通入口同屏</small></div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="statusbar"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="scroll member-page">
+        <div class="topnav"><div class="back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg></div>会员中心</div>
+        <div class="mc-wrap">
+          <div class="mc-card">
+            <div class="mc-top">
+              <div>
+                <div class="mc-brand">FULL YU · ANNUAL</div>
+                <div class="mc-name">Full愈年卡</div>
+                <div class="mc-status">尚未开通 · 365 元 / 年</div>
+              </div>
+              <div class="mc-seal">愈</div>
+            </div>
+            <div class="mc-rates">
+              <div class="mc-rate"><b>78<i>折</i></b><span>提前一天及以上预约</span></div>
+              <div class="mc-rate"><b>88<i>折</i></b><span>当日预约</span></div>
+            </div>
+            <div class="mc-foot"><span>— — — — &nbsp; 8800</span><b>开通后生效</b></div>
+          </div>
+
+          <div class="example">
+            <div class="example-head"><span>以 900 元服务为例</span><b>提前预约</b></div>
+            <div class="example-body">
+              <span class="example-old">¥900</span>
+              <span class="example-new">¥702<small>起</small></span>
+              <span class="example-save">省 ¥198</span>
+            </div>
+          </div>
+
+          <div class="benefit-title">年卡权益</div>
+          <div class="benefit">
+            <div class="bico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v18M5 8l7-5 7 5-7 5z"/></svg></div>
+            <div><b>提前预约 78 折</b><p>提前一天及以上预约服务项目，按原价 78 折结算。</p></div>
+          </div>
+          <div class="benefit">
+            <div class="bico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
+            <div><b>当日预约 88 折</b><p>当天临时起意也不错过，当日预约按 88 折结算。</p></div>
+          </div>
+          <div class="benefit">
+            <div class="bico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7h16v10H4zM8 7V5h8v2M4 12h16"/></svg></div>
+            <div><b>全年有效 · 不限门店</b><p>365 天内所有直营门店通用，仅限服务项目，不与其他优惠叠加。</p></div>
+          </div>
+
+          <div class="rules">
+            <div class="rules-head" onclick="toggleRules(this)"><span>年卡说明</span><span class="chev">⌄</span></div>
+            <div class="rules-body">
+              <li>年卡自开通时起 365 天有效，到期不可延期。</li>
+              <li>年卡折扣仅适用于服务项目订单，不含商品、券包、礼品卡与储值卡充值。</li>
+              <li>年卡价、通用折扣、积分抵扣、Full愈券四种方案不叠加，结算时默认选择最低价。</li>
+              <li>开卡费率以开通时的配置为准，后续调价不影响已开通的权益期。</li>
+              <li>退款需联系门店，退款后年卡立即失效，已产生的订单优惠不追回。</li>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mc-bar">
+        <div class="mc-price"><div class="p">¥365<small>/ 年</small></div><span>折合每天约 1 元</span></div>
+        <button class="mc-cta" onclick="openSheet()">开通年卡</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 开通确认 -->
+  <div class="scene">
+    <div class="scene-label">③ 开通确认<small>金额、有效期、协议与支付；未勾选协议按钮置灰</small></div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="statusbar"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="scroll member-page">
+        <div class="topnav"><div class="back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg></div>会员中心</div>
+        <div class="mc-wrap">
+          <div class="mc-card">
+            <div class="mc-top">
+              <div>
+                <div class="mc-brand">FULL YU · ANNUAL</div>
+                <div class="mc-name">Full愈年卡</div>
+                <div class="mc-status">365 天 · 全年会员价</div>
+              </div>
+              <div class="mc-seal">愈</div>
+            </div>
+            <div class="mc-rates">
+              <div class="mc-rate"><b>78<i>折</i></b><span>提前一天及以上预约</span></div>
+              <div class="mc-rate"><b>88<i>折</i></b><span>当日预约</span></div>
+            </div>
+            <div class="mc-foot"><span>开通后立即生效</span><b>至 2027-11-07</b></div>
+          </div>
+        </div>
+      </div>
+      <div class="sheet-mask">
+        <div class="sheet">
+          <div class="sheet-title">开通 Full愈年卡</div>
+          <div class="sheet-sub">开通后立即生效，365 天内享会员价</div>
+          <div class="sheet-price"><b>¥365</b><span>/ 年</span></div>
+          <div class="sheet-rows">
+            <div class="sheet-row"><span>有效期</span><b>365 天</b></div>
+            <div class="sheet-row"><span>到期时间</span><b>2027-11-07</b></div>
+            <div class="sheet-row"><span>提前预约</span><b>78 折</b></div>
+            <div class="sheet-row"><span>当日预约</span><b>88 折</b></div>
+          </div>
+          <div class="agree" onclick="toggleAgree(this)">
+            <span class="checkbox" id="agreeBox"></span>
+            <span>我已阅读并同意<a href="javascript:;">《Full愈年卡服务说明》</a>，年卡为虚拟权益，开通后不支持无理由退款。</span>
+          </div>
+          <button class="pay-btn" id="openPayBtn" disabled onclick="paySuccess()">微信支付 ¥365</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 开通成功 -->
+  <div class="scene">
+    <div class="scene-label">④ 开通成功<small>展示有效期与两档费率，直接引导去预约</small></div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="statusbar"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="scroll">
+        <div class="success">
+          <div class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+          <h1>年卡已开通</h1>
+          <p>现在预约，提前一天及以上享 78 折<br>当日预约享 88 折</p>
+          <div class="success-card">
+            <div class="success-row"><span>卡号</span><b>8800 2026 1107</b></div>
+            <div class="success-row"><span>生效时间</span><b>2026-11-07 14:20</b></div>
+            <div class="success-row"><span>有效期至</span><b>2027-11-07</b></div>
+            <div class="success-row"><span>提前 / 当日</span><b>78 折 / 88 折</b></div>
+          </div>
+          <div class="success-actions">
+            <button class="ghost">查看年卡</button>
+            <button class="primary">去预约</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 结算比价 -->
+  <div class="scene">
+    <div class="scene-label">⑤ 结算比价 · 可交互<small>切换「提前 / 当日」会重算并自动选最低；点选项可手动切换</small></div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="statusbar"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="scroll checkout-bg">
+        <div class="ck-head">确认订单</div>
+        <div class="ck-card">
+          <div class="ck-title">全感舒筋 · 肩颈深度放松</div>
+          <div class="ck-row"><span>到店时间</span><b>11-08 周日 14:00</b></div>
+          <div class="ck-row"><span>放松时长</span><b>90 分钟</b></div>
+          <div class="ck-row"><span>疗愈师</span><b>阿岚</b></div>
+          <div class="ck-divider"></div>
+          <div class="ck-row"><span>订单原价</span><b id="ckBase">¥900</b></div>
+          <div class="ck-row"><span>本单优惠</span><b id="ckBenefit" style="color:#B4483C">-¥198</b></div>
+        </div>
+      </div>
+
+      <div class="pay-mask">
+        <div class="pay-sheet">
+          <div class="pay-head"><b>选择支付方式</b><div class="pay-close" onclick="toast('原型内关闭')">✕</div></div>
+          <div class="order-line"><span>90 分钟 · 原价 ¥900</span><b>Full愈年卡已生效</b></div>
+          <div class="seg">
+            <button class="on" data-mode="advance" onclick="setMode('advance')">提前预约（明天）</button>
+            <button data-mode="same" onclick="setMode('same')">当日预约</button>
+          </div>
+          <div class="opt-head"><b>优惠方案</b><span>不可叠加 · 已选最低</span></div>
+          <div id="options">
+            <div class="option on" data-source="member" onclick="selectOption(this)">
+              <span class="radio"></span>
+              <div class="opt-main"><div class="opt-name"><span id="memberLabel">年卡提前价（78折）</span><span class="tag-min">最低</span></div><div class="opt-sub">Full愈年卡 · 无需消耗积分或券</div></div>
+              <div class="opt-price"><b id="memberPrice">¥702</b><span id="memberSave">省 ¥198</span></div>
+            </div>
+            <div class="option" data-source="discount" onclick="selectOption(this)">
+              <span class="radio"></span>
+              <div class="opt-main"><div class="opt-name">通用折扣（9折）</div><div class="opt-sub">门店当前通用折扣</div></div>
+              <div class="opt-price"><b>¥810</b><span>省 ¥90</span></div>
+            </div>
+            <div class="option" data-source="points" onclick="selectOption(this)">
+              <span class="radio"></span>
+              <div class="opt-main"><div class="opt-name">积分抵扣（100积分）</div><div class="opt-sub">1 积分抵 1 元，剩余微信支付</div></div>
+              <div class="opt-price"><b>¥800</b><span>省 ¥100</span></div>
+            </div>
+            <div class="option disabled" data-source="coupon" onclick="selectOption(this, true)">
+              <span class="radio"></span>
+              <div class="opt-main"><div class="opt-name">Full愈券支付</div><div class="opt-sub">本单需 3 张，当前可用 1 张</div></div>
+              <div class="opt-price"><b>—</b><span class="grey">还差 2 张</span></div>
+            </div>
+          </div>
+          <div class="tip-line" id="tipLine">年卡价为本单最低方案，已自动选中。优惠方案之间不可叠加。</div>
+          <div class="pay-foot">
+            <div class="amount">需支付<b id="payAmount">¥702</b></div>
+            <button id="payBtn" onclick="confirmPay()">确认支付</button>
+          </div>
+        </div>
+      </div>
+      <div class="toast" id="toast"></div>
+    </div>
+  </div>
+
+  <!-- 6 个人中心：已开通、临期 -->
+  <div class="scene">
+    <div class="scene-label">⑥ 个人中心 · 即将到期<small>30 天内直接提示续费；储值卡仍在折叠区</small></div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="statusbar"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="scroll">
+        <div class="uc-hero"><img src="docs/designs/assets/member-hero.png" alt="Full愈个人中心"></div>
+        <div class="uc-body">
+          <div class="uc-card">
+            <div class="uc-profile">
+              <div class="uc-person">
+                <div class="avatar">愈</div>
+                <div>
+                  <div class="uc-name">田女士</div>
+                  <div class="uc-meta">FULL YU MEMBER</div>
+                </div>
+              </div>
+              <div class="crown-tag">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 18h16M5 16l-1-8 5 3 3-6 3 6 5-3-1 8z"/></svg>
+                年卡生效中
+              </div>
+            </div>
+            <div class="member-strip" style="background:linear-gradient(120deg,#F9EFE8 0%,#F1DFD3 100%);border-color:#E8C9B8">
+              <div class="ms-left">
+                <div class="ms-kicker">FULL YU ANNUAL</div>
+                <div class="ms-title">年卡还有 23 天到期</div>
+                <div class="ms-expire">有效期至 2026-11-30 · 续费后顺延 365 天</div>
+              </div>
+              <button class="ms-btn">续费 365 元</button>
+            </div>
+            <div class="uc-stats">
+              <div class="stat"><div class="num">860<small>积分</small></div><div class="label">可抵扣 860 元</div></div>
+              <div class="stat"><div class="num">2<small>张</small></div><div class="label">Full愈券</div></div>
+            </div>
+          </div>
+
+          <div class="uc-card uc-rights">
+            <div class="rights-head open" onclick="toggleRights(this)">
+              <span>我的权益</span><span class="chev">⌄</span>
+            </div>
+            <div class="rights-body open">
+              <div class="right-row">
+                <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16v14H4zM8 20h8M12 18v2"/></svg></div>
+                <div class="right-main"><div class="right-title">Full愈年卡</div><div class="right-sub">提前 78 折 · 当日 88 折</div></div>
+                <div class="right-action">查看</div>
+              </div>
+              <div class="right-row">
+                <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M7 15h4"/></svg></div>
+                <div class="right-main"><div class="right-title">富翁卡（储值卡）</div><div class="right-sub">剩余 90 分钟 · 已折叠</div></div>
+                <div class="right-action">使用</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="uc-card uc-menu">
+            <div class="menu-row"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20s-7-4.3-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.7-7 9-7 9z"/></svg></span>我的收藏<span class="arrow">›</span></div>
+            <div class="menu-row"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 9h16v10H4zM12 9v10M8 9c-2 0-3-1-3-2.5S6 4 8 4c2.5 0 4 5 4 5s1.5-5 4-5c2 0 2.5 1 2.5 2.5S17 9 15 9"/></svg></span>邀请有礼<span class="arrow">›</span></div>
+            <div class="menu-row"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="18" height="12" rx="2"/><path d="M7 7V5h10v2"/></svg></span>礼品卡兑换<span class="arrow">›</span></div>
+          </div>
+          <div class="uc-note">Full愈 · 城市微度假</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="spec" style="margin-top:26px">
+  <div class="spec-item"><b>状态覆盖</b>未开通、开通确认、开通成功、即将到期、结算比价；生效中与已退款/已过期沿用同一版式，不新增视觉语言。</div>
+  <div class="spec-item"><b>交互验证点</b>协议勾选前后按钮状态、提前/当日切换、最低价自动切换、选项手动切换、券不足置灰、确认支付提示。</div>
+  <div class="spec-item"><b>未做</b>未改生产代码、未接支付、未做推送；等原型确认后再进入实现。</div>
+</div>
+
+<script>
+const BASE = 900;
+const state = { mode: 'advance', selected: 'member', agreed: false, points: 100 };
+
+function money(n){ return '¥' + (Math.round(n * 100) / 100).toFixed(0); }
+
+function memberAmount(){
+  const rate = state.mode === 'advance' ? 0.78 : 0.88;
+  return Math.round(BASE * rate * 100) / 100;
+}
+
+function optionAmounts(){
+  return {
+    member: memberAmount(),
+    discount: 810,
+    points: 800
+  };
+}
+
+function refreshMemberOption(){
+  const amount = memberAmount();
+  const label = state.mode === 'advance' ? '年卡提前价（78折）' : '年卡当日价（88折）';
+  document.getElementById('memberLabel').textContent = label;
+  document.getElementById('memberPrice').textContent = money(amount);
+  document.getElementById('memberSave').textContent = '省 ' + money(BASE - amount);
+}
+
+function autoSelectLowest(){
+  const amounts = optionAmounts();
+  let best = 'member';
+  Object.keys(amounts).forEach(k => { if (amounts[k] < amounts[best]) best = k; });
+  state.selected = best;
+  paintSelection();
+  const names = {member: state.mode === 'advance' ? '年卡提前价' : '年卡当日价', discount: '通用折扣', points: '积分抵扣'};
+  document.getElementById('tipLine').textContent = names[best] + '为本单最低方案，已自动选中。优惠方案之间不可叠加。';
+}
+
+function setMode(mode){
+  state.mode = mode;
+  document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  refreshMemberOption();
+  autoSelectLowest();
+}
+
+function paintSelection(){
+  document.querySelectorAll('#options .option').forEach(el => {
+    el.classList.toggle('on', el.dataset.source === state.selected && !el.classList.contains('disabled'));
+  });
+  const amount = state.selected === 'coupon' ? 0 : optionAmounts()[state.selected];
+  document.getElementById('payAmount').textContent = money(amount);
+  document.getElementById('ckBenefit').textContent = '-' + money(BASE - amount);
+}
+
+function selectOption(el, disabled){
+  if (disabled || el.classList.contains('disabled')) { toast('Full愈券不足，还差 2 张'); return; }
+  state.selected = el.dataset.source;
+  paintSelection();
+  const names = {member: state.mode === 'advance' ? '年卡提前价' : '年卡当日价', discount: '通用折扣', points: '积分抵扣', coupon: 'Full愈券支付'};
+  document.getElementById('tipLine').textContent = '已切换为「' + names[state.selected] + '」，优惠方案之间不可叠加。';
+}
+
+function confirmPay(){
+  const names = {member: state.mode === 'advance' ? '年卡提前价' : '年卡当日价', discount: '通用折扣', points: '积分抵扣', coupon: 'Full愈券支付'};
+  toast('已选择：' + names[state.selected] + '，应付 ' + money(optionAmounts()[state.selected] || 0));
+}
+
+let toastTimer;
+function toast(msg){
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+function toggleAgree(box){
+  state.agreed = !state.agreed;
+  document.getElementById('agreeBox').classList.toggle('on', state.agreed);
+  document.getElementById('openPayBtn').disabled = !state.agreed;
+}
+
+let lastPaid = false;
+function paySuccess(){
+  if (!state.agreed) return;
+  const btn = document.getElementById('openPayBtn');
+  btn.textContent = lastPaid ? '微信支付 ¥365' : '已支付，正在开通…';
+  lastPaid = !lastPaid;
+  setTimeout(() => { btn.textContent = '微信支付 ¥365'; }, 1600);
+}
+
+function openSheet(){
+  document.querySelectorAll('.sheet-mask')[0]?.scrollIntoView({behavior:'smooth'});
+}
+
+function toggleRules(head){
+  head.classList.toggle('open');
+  head.nextElementSibling.classList.toggle('open');
+}
+
+function toggleRights(head){
+  head.classList.toggle('open');
+  head.nextElementSibling.classList.toggle('open');
+}
+
+refreshMemberOption();
+paintSelection();
+</script>
+</body>
+</html>

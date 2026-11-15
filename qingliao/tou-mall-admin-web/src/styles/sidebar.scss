@@ -182,32 +182,21 @@
       width: $sidebar-collapsed-width !important;
     }
 
-    .sidebar-container .el-menu--collapse > .el-menu-item,
-    .sidebar-container .el-menu--collapse > .el-submenu > .el-submenu__title {
-      padding: 0 !important;
-      text-align: center;
-
-      .svg-icon {
-        margin: 0;
-        width: 20px;
-        height: 20px;
-      }
+    // 有子菜单的一级项：收起时只留图标。
+    // 真实 DOM 是 el-menu > .menu-wrapper > el-submenu > .el-submenu__title，
+    // Element 自带的 `.el-menu--collapse > .el-submenu > .el-submenu__title span`
+    // 因中间隔着 .menu-wrapper 选不中，标题文字会露出来，这里补一条。
+    .sidebar-container .el-menu--collapse > .menu-wrapper > .el-submenu > .el-submenu__title {
+      // 与无子菜单项（Element 给的 tooltip 内边距 0 20px）对齐，图标落在同一条竖线上
+      padding: 0 20px !important;
 
       .el-submenu__icon-arrow {
         display: none;
       }
 
       span {
-        height: 0;
-        width: 0;
-        overflow: hidden;
-        visibility: hidden;
-        display: inline-block;
+        display: none !important;
       }
-    }
-
-    .sidebar-container .el-menu--collapse > .el-menu-item.is-active {
-      background: $brand !important;
     }
   }
 
@@ -222,6 +211,7 @@
       width: $sidebar-width !important;
       transition: transform .28s cubic-bezier(.2, .7, .3, 1);
       transform: translate3d(0, 0, 0);
+      pointer-events: auto;
     }
 
     &.hideSidebar {

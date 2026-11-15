@@ -1,0 +1,29 @@
+# 维护页片段（上线/重启期间用）
+#
+# ⚠️ 不要新建第二个 `location /api/ { ... }`：nginx 会报 duplicate location，
+#    nginx -t 失败 → reload 被拒 → 你以为挂了维护页，其实线上一点没变。
+#
+# 正确做法（一次性改 fully.conf，之后每次维护只切文件）：
+#   1) 在 /etc/nginx/conf.d/fully.conf 的 location /api/ { 里，加一行 include：
+#        location /api/ {
+#            include /etc/nginx/maintenance/api-maintenance.conf;   # ← 只加这一行
+#            proxy_pass http://localhost:9929/;
+#            ...
+#        }
+#      然后 nginx -t && nginx -s reload（此时目录里是空文件，行为不变）
+#
+#   2) 开维护：
+#        cp /path/to/this/snippet /etc/nginx/maintenance/api-maintenance.conf
+#        nginx -t && nginx -s reload
+#
+#   3) 撤维护：
+#        : > /etc/nginx/maintenance/api-maintenance.conf    # 清空（别删文件，include 会报错）
+#        nginx -t && nginx -s reload
+#
+# 校验：
+#   curl -s -o /dev/null -w '%{http_code}\n' https://manage.fullytherapy.com/api/product/get/list
+#   维护期应为 503，恢复后应为 200
+
+default_type text/html;
+charset utf-8;
+return 503 '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>系统升级中</title></head><body style="margin:0;font:16px/1.8 -apple-system,BlinkMacSystemFont,&quot;PingFang SC&quot;,&quot;Helvetica Neue&quot;,sans-serif;text-align:center;padding-top:18vh;color:#333"><h2 style="font-weight:500;font-size:20px">系统升级中</h2><p style="color:#888;font-size:14px">预计 5 分钟，请稍后下拉刷新</p></body></html>';

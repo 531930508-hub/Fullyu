@@ -6,7 +6,10 @@ import com.macro.mall.common.api.CommonResult;
 import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.entity.Massagist;
 import com.macro.mall.entity.MassagistLeave;
+import com.macro.mall.enums.approval.FlowCategoryCode;
+import com.macro.mall.incentive.service.IncentiveAccessService;
 import com.macro.mall.model.UmsAdmin;
+import com.macro.mall.service.ApprovalCategoryService;
 import com.macro.mall.service.MassagistLeaveService;
 import com.macro.mall.service.MassagistService;
 import com.macro.mall.service.UmsAdminService;
@@ -35,6 +38,10 @@ public class MassagistLeaveController {
     UmsAdminService adminService;
     @Autowired
     MassagistService massagistService;
+    @Autowired
+    ApprovalCategoryService approvalCategoryService;
+    @Autowired
+    IncentiveAccessService access;
 
     /** 每次写入都重新读取账号，停用或换绑后旧令牌不能继续代人提交。 */
     private UmsAdmin currentAdmin() {
@@ -82,6 +89,26 @@ public class MassagistLeaveController {
     public CommonResult findMassagistLeaveDetailByApprovalId(@RequestParam long approvalId) {
         return CommonResult.success(massagistLeaveService.findMassagistLeaveDetailByApprovalId(approvalId));
     }
+
+    @GetMapping("/defaultCcUsers")
+    @ApiOperation("请假审批流程配置的默认抄送人")
+    public CommonResult defaultCcUsers() {
+        UmsAdmin admin = currentAdmin();
+        Massagist person = linkedPerson(admin);
+        return CommonResult.success(approvalCategoryService
+                .defaultCcIds(FlowCategoryCode.ASK_FOR_LEAVE, person.getShopId()));
+    }
+    @GetMapping("/weekBoard")
+    @ApiOperation("门店周视图休息看板：休息时段与折算休息天数")
+    public CommonResult weekBoard(@RequestParam(required = false) Long shopId,
+                                  @RequestParam String dayStart,
+                                  @RequestParam String dayEnd) {
+        // 门店级数据按授权范围收敛：店长看本店，疗愈师只看自己所在门店
+        Long resolvedShopId = access.resolveShopId(shopId);
+        if (resolvedShopId == null) throw new BusinessException("请选择门店");
+        return CommonResult.success(massagistLeaveService.weekBoard(resolvedShopId, dayStart, dayEnd));
+    }
+
     @GetMapping("/getMessagistShopId")
     @ApiOperation("获取疗愈师真正的店铺Id")
     public CommonResult getMessagistShopId(@RequestParam long massagistId) {

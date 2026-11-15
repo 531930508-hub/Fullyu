@@ -5,7 +5,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 /**
- * 基础接单奖励的服务时长行。
+ * 基础薪资折算用的服务时长行。
  */
 @Data
 public class ServiceDurationRow {

@@ -15,6 +15,12 @@
                 style="width: 220px">
       </el-input>
       <el-table :data="dataList" style="width: 100%;" :row-style="getOrderLabelStyle">
+        <el-table-column label="第几次（天）到店消费" width="140" show-overflow-tooltip>
+          <template slot-scope="scope">
+            <span v-if="scope.row.visitNo">第 {{ scope.row.visitNo }} 次</span>
+            <span v-else class="c-info">—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="所属门店" prop="shopId" show-overflow-tooltip width="150">
           <template slot-scope="scope">
             {{ scope.row.shopId | shopNameFilter }}
@@ -72,6 +78,11 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="审批" width="100" show-overflow-tooltip>
+          <template slot-scope="scope">
+            <el-button type="text" size="mini" @click="showOrderApprovals(scope.row)">查看审批</el-button>
+          </template>
+        </el-table-column>
         <el-table-column label="备注" prop="comment" show-overflow-tooltip>
           <template slot-scope="scope">
             {{ scope.row.comment }}
@@ -96,6 +107,18 @@
       </div>
     </div>
     <order-label-dialog ref="refOrderLabelDialog" @submit-success="fetchData"></order-label-dialog>
+    <!-- 订单可能有多条审批（改单/退款/送券），先列出来再点进完整流程 -->
+    <el-dialog title="订单审批" :visible.sync="approvalDialogVisible" width="420px" append-to-body>
+      <div v-loading="approvalLoading" style="min-height: 60px">
+        <div v-for="item in approvalList" :key="item.id" class="approval-item"
+             @click="openApprovalFlow(item.id)">
+          <span>{{ item.categoryTitle || ('审批#' + item.id) }}</span>
+          <el-tag size="mini" :type="approvalTagType(item.state)">{{ approvalStateText(item.state) }}</el-tag>
+        </div>
+        <div v-if="!approvalLoading && approvalList.length === 0" class="c-info">该订单暂无关联审批</div>
+      </div>
+    </el-dialog>
+    <approval-progress ref="refApprovalProgress"></approval-progress>
   </el-dialog>
 </template>
 
@@ -103,10 +126,12 @@
 import orderApi from "../../api/order/order"
 import dateUtil from "@/utils/dateUtil";
 import OrderLabelDialog from "./OrderLabelDialog"
+import ApprovalProgress from "@/views/order/approval/ApprovalProgress"
+import approvalDetailApi from "@/api/approvalDetail"
 
 export default {
   name: 'OrderHistoryDialog',
-  components: {OrderLabelDialog},
+  components: {OrderLabelDialog, ApprovalProgress},
   props: {},
   data() {
     return {
@@ -122,7 +147,10 @@ export default {
       dataList: [],
       total: 0,
       appointmentRange: [],
-      title: ''
+      title: '',
+      approvalDialogVisible: false,
+      approvalLoading: false,
+      approvalList: []
     }
   },
   methods: {
@@ -168,6 +196,44 @@ export default {
     },
     showAddOrderLabel(order) {
       this.$refs.refOrderLabelDialog.open({orderId: order.id, oil: order.oil, parts: order.parts})
+    },
+    //按订单拉取关联审批；任何失败都只提示空列表，不影响消费记录
+    async showOrderApprovals(row) {
+      if (!row || !row.id) return
+      this.approvalList = []
+      this.approvalDialogVisible = true
+      this.approvalLoading = true
+      try {
+        const res = await approvalDetailApi.byOrder(row.id)
+        this.approvalList = res.data || []
+      } catch (e) {
+        this.approvalList = []
+      } finally {
+        this.approvalLoading = false
+      }
+    },
+    approvalStateText(state) {
+      const map = this.constant.approvalStateMap
+      const textMap = {
+        [map.rejected]: '已拒绝',
+        [map.notSubmit]: '未提交',
+        [map.approving]: '审批中',
+        [map.passed]: '已通过',
+        [map.withdraw]: '已撤回',
+        [map.skipped]: '已跳过',
+      }
+      return textMap[state] || ''
+    },
+    approvalTagType(state) {
+      const map = this.constant.approvalStateMap
+      if (state === map.passed) return 'success'
+      if (state === map.rejected) return 'danger'
+      if (state === map.approving) return 'warning'
+      return 'info'
+    },
+    openApprovalFlow(approvalId) {
+      this.approvalDialogVisible = false
+      if (approvalId) this.$refs.refApprovalProgress.openByApprovalId(approvalId)
     },
     getOrderLabelStyle(data) {
       const order = data.row
@@ -221,6 +287,21 @@ export default {
 
   /deep/ .el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell {
     background: none;
+  }
+
+  .approval-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    border: 1px solid #ebeef5;
+    border-radius: 4px;
+    cursor: pointer;
+
+    &:hover {
+      border-color: #1e6abc;
+    }
   }
 
 }

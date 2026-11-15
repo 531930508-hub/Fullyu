@@ -130,7 +130,8 @@ export default {
   },
   data() {
     return {
-      collapsed: false,
+      // 排班看板空间有限，默认收起为悬浮胶囊，避免遮挡床位/疗愈师排班；点击展开
+      collapsed: true,
       loading: false,
       submitting: false,
       tab: 'pending',

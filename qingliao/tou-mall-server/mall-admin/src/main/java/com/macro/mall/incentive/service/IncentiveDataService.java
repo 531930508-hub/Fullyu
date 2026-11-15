@@ -10,6 +10,8 @@ import com.macro.mall.entity.SalaryOtherAmount;
 import com.macro.mall.entity.SalaryRecord;
 import com.macro.mall.entity.Shop;
 import com.macro.mall.enums.AdjustStatus;
+import com.macro.mall.incentive.calc.BaseMinutesCalculator;
+import com.macro.mall.incentive.calc.BaseSalaryLadder;
 import com.macro.mall.incentive.calc.IncentiveCalculator;
 import com.macro.mall.incentive.calc.IncentiveMath;
 import com.macro.mall.incentive.calc.RepurchaseBatchCalculator;
@@ -39,12 +41,14 @@ import com.macro.mall.incentive.mapper.ShopIncentiveTargetMapper;
 import com.macro.mall.incentive.mapper.TrainingRecordPageMapper;
 import com.macro.mall.incentive.model.AchievementSummary;
 import com.macro.mall.incentive.model.BaseIncentive;
+import com.macro.mall.incentive.model.BaseMinutes;
 import com.macro.mall.incentive.model.CoefficientBand;
 import com.macro.mall.incentive.model.CustomerVisit;
 import com.macro.mall.incentive.model.IncentiveBoard;
 import com.macro.mall.incentive.model.ManagerIncentive;
 import com.macro.mall.incentive.model.ManagerShopReward;
 import com.macro.mall.incentive.model.RepurchaseMetrics;
+import com.macro.mall.incentive.model.SalaryDetailRow;
 import com.macro.mall.incentive.model.ServiceDetailRow;
 import com.macro.mall.incentive.model.SettlementResult;
 import com.macro.mall.incentive.model.TrainingOrder;
@@ -53,6 +57,7 @@ import com.macro.mall.incentive.model.TrainingProjectRule;
 import com.macro.mall.incentive.model.TrainingSection;
 import com.macro.mall.model.UmsAdmin;
 import com.macro.mall.service.AdjustService;
+import com.macro.mall.service.MassagistSchedulesService;
 import com.macro.mall.service.MassagistService;
 import com.macro.mall.service.OrderService;
 import com.macro.mall.service.SalaryOtherAmountService;
@@ -131,6 +136,9 @@ public class IncentiveDataService {
 
     @Autowired
     private ShopService shopService;
+
+    @Autowired
+    private MassagistSchedulesService massagistSchedulesService;
 
     @Autowired
     private AdjustService adjustService;
@@ -266,6 +274,25 @@ public class IncentiveDataService {
     public IncentiveBoard currentTherapistBoard(String month) {
         Long massagistId = accessService.currentMassagistId();
         return boardForMassagist(massagistId, month, null, false);
+    }
+
+    /**
+     * 月度结算快照取数：全部门店、全部合作状态的疗愈师，口径与经营看板一致。
+     * 不做门店范围过滤——调用方（财务生成 / 定时任务）必须自行校验权限。
+     */
+    public List<IncentiveBoard> settlementBoards(String month) {
+        String selected = IncentiveMath.normalizeMonth(month);
+        requireNotFuture(selected);
+        List<Massagist> massagists = massagistService.list();
+        if (massagists.isEmpty()) {
+            return new ArrayList<>();
+        }
+        BoardContext context = loadContext(selected, LocalDate.now(), massagists, null);
+        List<IncentiveBoard> boards = new ArrayList<>();
+        for (Massagist massagist : massagists) {
+            boards.add(buildBoard(context, massagist, false));
+        }
+        return boards;
     }
 
     public List<IncentiveShopOption> shopOptions() {
@@ -830,7 +857,10 @@ public class IncentiveDataService {
         csv.append("数据月份,").append(csv(dashboard.getMonth()))
                 .append(",数据截止,").append(csv(String.valueOf(dashboard.getCutoff())))
                 .append('\n');
-        csv.append("门店,疗愈师,合作状态,加入天数,服务时长(分钟),基础系数,基础接单奖励,店长奖励,培训补贴,复购激励,复购潜力,其他调整,激励合计,税前预估,个税预估,结算预估\n");
+        csv.append("门店,疗愈师,合作状态,加入天数,折算时长(分钟),基础薪资单价(元/分钟),基础薪资,店长奖励,")
+                .append("考核通过部位,培训补贴,复购激励,复购潜力,老客60天留存率(%),可观察老客到店人次,")
+                .append("新客30天复购率(%),新客人数,新客10天复购(单),")
+                .append("其他调整,激励合计,税前预估,个税预估,结算预估\n");
         for (IncentiveBoard board : dashboard.getTherapists()) {
             csv.append(csv(board.getShopName())).append(',')
                     .append(csv(board.getMassagistName())).append(',')
@@ -840,9 +870,20 @@ public class IncentiveDataService {
                     .append(board.getBase().getCoefficient()).append(',')
                     .append(board.getBase().getAmount()).append(',')
                     .append(board.getManager().getTotalAmount()).append(',')
+                    .append(csv(certifiedParts(board))).append(',')
                     .append(board.getTraining().getEarnedAmount()).append(',')
                     .append(board.getRepurchase().getTotalAmount()).append(',')
                     .append(board.getRepurchase().getPotentialAmount()).append(',')
+                    .append(rateCell(board.getRepurchase().getRetentionRate(),
+                            board.getRepurchase().getRetentionSample())).append(',')
+                    .append(board.getRepurchase().getRetentionSample() == null
+                            ? "" : board.getRepurchase().getRetentionSample()).append(',')
+                    .append(rateCell(board.getRepurchase().getConversionRate(),
+                            board.getRepurchase().getNewCustomerCount())).append(',')
+                    .append(board.getRepurchase().getNewCustomerCount() == null
+                            ? "" : board.getRepurchase().getNewCustomerCount()).append(',')
+                    .append(board.getRepurchase().getTenDayHeadCount() == null
+                            ? "" : board.getRepurchase().getTenDayHeadCount()).append(',')
                     .append(board.getSettlement().getAdjustment()).append(',')
                     .append(board.getSettlement().getSubtotal()).append(',')
                     .append(board.getSettlement().getPreTax()).append(',')
@@ -860,6 +901,7 @@ public class IncentiveDataService {
         context.month = month;
         context.asOf = asOf;
         context.cutoff = IncentiveMath.cutoff(month, asOf);
+        context.tenDayThrough = context.cutoff;
         context.scopeShopIds = scopeShopIds;
         context.scopeShopId = scopeShopIds != null && scopeShopIds.size() == 1
                 ? scopeShopIds.get(0) : null;
@@ -885,13 +927,6 @@ public class IncentiveDataService {
         boolean noShop = scopeShopIds != null && scopeShopIds.isEmpty();
 
         if (windowOpen && !noShop) {
-            List<ServiceDetailRow> details = queryMapper.selectServiceDetails(
-                    scopeShopIds, filterMassagistId,
-                    monthStart.atStartOfDay(), context.cutoff.plusDays(1).atStartOfDay());
-            for (ServiceDetailRow row : details) {
-                context.detailsByMassagist.computeIfAbsent(row.getMassagistId(), k -> new ArrayList<>()).add(row);
-            }
-
             LambdaQueryWrapper<Adjust> adjustQuery = new LambdaQueryWrapper<Adjust>()
                     .eq(Adjust::getStatus, AdjustStatus.DOING.getValue())
                     .in(Adjust::getMassagistId, massagistIds)
@@ -906,6 +941,8 @@ public class IncentiveDataService {
                 }
                 context.adjustmentsByMassagist.merge(adjust.getMassagistId(), BigDecimal.valueOf(signed), BigDecimal::add);
             }
+
+            loadBaseMinutes(context, massagistIds, monthStart);
         }
 
         List<MassagistTrainingCert> certs = certMapper.selectList(
@@ -1015,7 +1052,16 @@ public class IncentiveDataService {
         YearMonth selected = IncentiveMath.parseMonth(context.month);
         LocalDate retentionStart = selected.minusMonths(retentionOffset + retentionMonths - 1L).atDay(1);
         // 历史月份统计到该月月末，当前月份统计到今天，避免用后续月份的数据回算历史看板。
-        LocalDate visitEnd = context.cutoff.plusDays(1);
+        LocalDate cutoff = context.cutoff;
+        // 10 天复购的第二次到店允许落在次月：历史月份补算到“月末 + 10 天”，当月不超过今天。
+        int tenDayDays = positive(bundle.getRule().getTenDayDays(), 10);
+        LocalDate tenDayEnd = selected.atEndOfMonth().plusDays(tenDayDays);
+        context.tenDayThrough = tenDayEnd.isAfter(context.asOf) ? context.asOf : tenDayEnd;
+        if (context.tenDayThrough.isBefore(cutoff)) {
+            context.tenDayThrough = cutoff;
+        }
+        LocalDate visitEnd = (context.tenDayThrough.isAfter(cutoff) ? context.tenDayThrough : cutoff)
+                .plusDays(1);
         if (retentionStart.isAfter(context.cutoff)) {
             return;
         }
@@ -1106,11 +1152,18 @@ public class IncentiveDataService {
 
         BaseIncentive base = baseIncentive(context, massagist);
         board.setBase(base);
+        if (Boolean.TRUE.equals(base.getReceptionCapApplied())
+                && base.getReceptionExcessMinutes() != null
+                && base.getReceptionExcessMinutes().signum() > 0) {
+            board.getWarnings().add("接待工时超过排班上限 " + plain(base.getReceptionCapMinutes())
+                    + " 分钟，超出 " + plain(base.getReceptionExcessMinutes())
+                    + " 分钟未计入基础薪资（接待不影响接待上限内的正常计提）。");
+        }
         TrainingSection training = trainingSection(context, massagist);
         board.setTraining(training);
         RepurchaseMetrics repurchase = repurchaseCalculator.calculate(
                 massagist.getId(), context.scopeShopId, context.visits, null,
-                context.bundle.getRule(), context.month, context.cutoff);
+                context.bundle.getRule(), context.month, context.cutoff, context.tenDayThrough);
         board.setRepurchase(repurchase);
         ManagerIncentive manager = managerRewardFor(context, massagist);
         board.setManager(manager);
@@ -1137,42 +1190,90 @@ public class IncentiveDataService {
         return board;
     }
 
-    private BaseIncentive baseIncentive(BoardContext context, Massagist massagist) {
-        BigDecimal minutes = BigDecimal.ZERO;
-        List<ServiceDetailRow> details = context.detailsByMassagist
-                .getOrDefault(massagist.getId(), new ArrayList<>());
-        for (ServiceDetailRow row : details) {
-            if (row.getDuration() == null) {
+    /**
+     * 基础薪资口径有效订单：不要求客户手机号，只要订单已支付、明细服务完成即计入。
+     * 接待工时按门店排班时长比例封顶，避免接待占用服务时间虚增工时。
+     */
+    private void loadBaseMinutes(BoardContext context, List<Long> massagistIds, LocalDate monthStart) {
+        List<SalaryDetailRow> rows = queryMapper.selectSalaryDetails(
+                context.scopeShopIds, null,
+                monthStart.atStartOfDay(), context.cutoff.plusDays(1).atStartOfDay());
+        if (rows == null) {
+            rows = new ArrayList<>();
+        }
+        for (SalaryDetailRow row : rows) {
+            context.salaryDetailsByMassagist
+                    .computeIfAbsent(row.getMassagistId(), k -> new ArrayList<>()).add(row);
+        }
+        if (context.salaryDetailsByMassagist.isEmpty()) {
+            return;
+        }
+        for (Long massagistId : massagistIds) {
+            if (!context.salaryDetailsByMassagist.containsKey(massagistId)) {
                 continue;
             }
-            BigDecimal coefficient = row.getProjectCoefficient() == null
-                    ? BigDecimal.ONE : row.getProjectCoefficient();
-            minutes = minutes.add(coefficient.multiply(BigDecimal.valueOf(row.getDuration())));
+            Map<Long, Integer> minutes = massagistSchedulesService == null
+                    ? new HashMap<>()
+                    : massagistSchedulesService.workMinutesByShop(
+                    monthStart.toString(), context.cutoff.toString(), massagistId);
+            context.scheduleMinutesByMassagist.put(massagistId, minutes == null ? new HashMap<>() : minutes);
         }
+        context.shopCapPercent = shopCapPercentMap();
+    }
+
+    /** 门店接待工时上限百分比，未配置的门店使用默认 20%。 */
+    private Map<Long, Integer> shopCapPercentMap() {
+        Map<Long, Integer> result = new HashMap<>();
+        if (shopService == null) {
+            return result;
+        }
+        List<Shop> shops = shopService.list();
+        if (CollectionUtils.isEmpty(shops)) {
+            return result;
+        }
+        for (Shop shop : shops) {
+            if (shop == null || shop.getId() == null) {
+                continue;
+            }
+            result.put(shop.getId(), shop.getReceptionCapPercent() == null
+                    ? BaseMinutesCalculator.DEFAULT_RECEPTION_CAP_PERCENT
+                    : shop.getReceptionCapPercent());
+        }
+        return result;
+    }
+
+    private BaseIncentive baseIncentive(BoardContext context, Massagist massagist) {
+        BaseMinutes detail = BaseMinutesCalculator.calculate(
+                context.salaryDetailsByMassagist.getOrDefault(massagist.getId(), new ArrayList<>()),
+                context.scheduleMinutesByMassagist.getOrDefault(massagist.getId(), new HashMap<>()),
+                context.shopCapPercent);
         BigDecimal adjustment = context.adjustmentsByMassagist
                 .getOrDefault(massagist.getId(), BigDecimal.ZERO);
-        minutes = IncentiveMath.nonNegative(minutes.add(adjustment));
+        BigDecimal minutes = IncentiveMath.nonNegative(detail.countedWeightedMinutes().add(adjustment));
 
         boolean newPartner = isNewPartner(massagist, context.month);
-        BigDecimal coefficient = context.bundle.getRule().coefficientFor(minutes, newPartner);
+        BaseSalaryLadder ladder = BaseSalaryLadder.of(context.bundle.getRule().getCoefficients());
+        BigDecimal unitPrice = ladder.unitPriceFor(minutes, newPartner,
+                context.bundle.getRule().getNewCoefficient());
         BaseIncentive base = new BaseIncentive();
         base.setMinutes(IncentiveMath.money(minutes));
-        base.setCoefficient(coefficient);
-        base.setAmount(IncentiveMath.money(minutes.multiply(coefficient)));
+        base.setCoefficient(unitPrice);
+        base.setAmount(ladder.amountFor(minutes, newPartner, context.bundle.getRule().getNewCoefficient()));
         base.setNewPartner(newPartner);
-        base.setBands(context.bundle.getRule().getCoefficients());
+        base.setBands(ladder.getBands());
+        base.setServiceMinutes(IncentiveMath.money(detail.getServiceMinutes()));
+        base.setServiceWeightedMinutes(IncentiveMath.money(detail.getServiceWeightedMinutes()));
+        base.setServiceOrderCount(detail.getServiceOrderCount());
+        base.setReceptionMinutes(IncentiveMath.money(detail.getReceptionMinutes()));
+        base.setReceptionCountedMinutes(IncentiveMath.money(detail.getReceptionCountedMinutes()));
+        base.setReceptionExcessMinutes(IncentiveMath.money(detail.getReceptionExcessMinutes()));
+        base.setReceptionCapMinutes(IncentiveMath.money(detail.getReceptionCapMinutes()));
+        base.setReceptionCapApplied(detail.getReceptionCapApplied());
+        base.setReceptionOrderCount(detail.getReceptionOrderCount());
+        base.setAdjustMinutes(IncentiveMath.money(adjustment));
 
-        List<CoefficientBand> bands = context.bundle.getRule().getCoefficients();
-        CoefficientBand current = null;
-        CoefficientBand next = null;
-        for (CoefficientBand band : bands) {
-            if (minutes.longValue() >= band.getMinMinutes()) {
-                current = band;
-            } else {
-                next = band;
-                break;
-            }
-        }
+        CoefficientBand current = ladder.currentBand(minutes);
+        CoefficientBand next = ladder.nextBand(minutes);
         if (current != null) {
             base.setCurrentBandMinutes(current.getMinMinutes());
             base.setCurrentBandCoefficient(current.getCoefficient());
@@ -1183,17 +1284,30 @@ public class IncentiveDataService {
             BigDecimal needed = BigDecimal.valueOf(next.getMinMinutes()).subtract(minutes);
             base.setMinutesToNextBand(IncentiveMath.money(IncentiveMath.nonNegative(needed)));
             base.setNextBandHint(newPartner
-                    ? "新人合作期按 " + coefficient.stripTrailingZeros().toPlainString()
-                    + " 计算；累计 " + base.getMinutesToNextBand().stripTrailingZeros().toPlainString()
-                    + " 分钟进入下一档"
+                    ? "新人合作期按 " + priceText(unitPrice) + " 计算；累计 "
+                    + base.getMinutesToNextBand().stripTrailingZeros().toPlainString()
+                    + " 分钟可进入下一档（" + priceText(next.getCoefficient()) + "）"
                     : "再累计 " + base.getMinutesToNextBand().stripTrailingZeros().toPlainString()
-                    + " 分钟，系数进入 " + next.getCoefficient().stripTrailingZeros().toPlainString());
+                    + " 分钟，基础薪资单价进入 " + priceText(next.getCoefficient()));
         } else {
             base.setNextBandHint(newPartner
-                    ? "新人合作期系数 " + coefficient.stripTrailingZeros().toPlainString()
-                    : "已达最高时长档位，系数 " + coefficient.stripTrailingZeros().toPlainString());
+                    ? "新人合作期单价 " + priceText(unitPrice) + "，暂不参与档位累加"
+                    : "已达最高时长档位，基础薪资单价 " + priceText(unitPrice));
         }
         return base;
+    }
+
+    /**
+     * 基础薪资单价展示：保留两位小数并带单位，例如 1.20 元/分钟。
+     */
+    private String priceText(BigDecimal unitPrice) {
+        BigDecimal value = unitPrice == null ? BigDecimal.ONE : unitPrice;
+        return value.setScale(2, IncentiveMath.MONEY_ROUNDING).toPlainString() + " 元/分钟";
+    }
+
+    /** 分钟数展示：去掉无意义的小数 0。 */
+    private String plain(BigDecimal value) {
+        return value == null ? "0" : value.stripTrailingZeros().toPlainString();
     }
 
     private TrainingSection trainingSection(BoardContext context, Massagist massagist) {
@@ -1334,6 +1448,10 @@ public class IncentiveDataService {
         RepurchaseMetrics metrics = board.getRepurchase();
         if (metrics.getRetentionSample() == null || metrics.getRetentionSample() == 0) {
             board.getWarnings().add("老客留存暂无样本，复购激励暂不计入。");
+        } else if (metrics.getMinRetentionSample() != null
+                && metrics.getRetentionSample() < metrics.getMinRetentionSample()) {
+            board.getWarnings().add("老客留存样本不足 " + metrics.getMinRetentionSample()
+                    + " 人次，留存率仅供参考，复购激励暂不计入。");
         } else if (!Boolean.TRUE.equals(metrics.getRetentionEligible())) {
             board.getWarnings().add("老客 60 天留存未达门槛，复购激励暂不计入，潜力金额仅供参考。");
         }
@@ -1421,17 +1539,57 @@ public class IncentiveDataService {
         return "\"" + safe + "\"";
     }
 
+    /**
+     * 百分比单元格：没有样本时留空，避免把“无数据”写成 0%。
+     */
+    private static String rateCell(BigDecimal percent, Integer sample) {
+        if (percent == null || sample == null || sample <= 0) {
+            return "";
+        }
+        return percent.setScale(1, java.math.RoundingMode.HALF_UP).toPlainString();
+    }
+
+    /**
+     * 截至数据月份的考核通过部位，多个部位用顿号连接；未通过考核的项目不计入。
+     */
+    private static String certifiedParts(IncentiveBoard board) {
+        if (board.getTraining() == null || board.getTraining().getProjects() == null) {
+            return "";
+        }
+        Set<String> parts = new LinkedHashSet<>();
+        for (TrainingProgress project : board.getTraining().getProjects()) {
+            if (project == null
+                    || TrainingCalculator.STATUS_UNCERTIFIED.equals(project.getStatus())
+                    || TrainingCalculator.STATUS_UPCOMING.equals(project.getStatus())) {
+                continue;
+            }
+            String partName = project.getPartName() == null ? "" : project.getPartName().trim();
+            String label = project.getDurationMinutes() == null && !partName.isEmpty()
+                    ? partName : project.getProjectName();
+            if (label != null && !label.trim().isEmpty()) {
+                parts.add(label.trim());
+            }
+        }
+        return String.join("、", parts);
+    }
+
     private static class BoardContext {
         private String month;
         private LocalDate asOf;
         private LocalDate cutoff;
+        /** 10 天复购的观察截止日，历史月份可到月末 + 10 天。 */
+        private LocalDate tenDayThrough;
         private Long scopeShopId;
         private List<Long> scopeShopIds;
         private IncentiveConfigBundle bundle;
         private List<Massagist> massagists = new ArrayList<>();
         private Map<Long, String> massagistNames = new HashMap<>();
         private Map<Long, String> shopNames = new HashMap<>();
-        private Map<Long, List<ServiceDetailRow>> detailsByMassagist = new HashMap<>();
+                /** 算薪口径有效订单（不要求手机号）。 */
+        private Map<Long, List<SalaryDetailRow>> salaryDetailsByMassagist = new HashMap<>();
+        /** 疗愈师 → 门店排班分钟，用于接待工时封顶。 */
+        private Map<Long, Map<Long, Integer>> scheduleMinutesByMassagist = new HashMap<>();
+        private Map<Long, Integer> shopCapPercent = new HashMap<>();
         private Map<Long, BigDecimal> adjustmentsByMassagist = new HashMap<>();
         private Map<String, MassagistTrainingCert> certsByKey = new HashMap<>();
         private Map<Long, List<TrainingOrder>> trainingOrdersByMassagist = new HashMap<>();

@@ -6,6 +6,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created by oahnus on 2025/6/17
@@ -31,4 +32,10 @@ public class CheckoutData {
     private Integer selectedPriceSource;
     private BigDecimal benefitAmount;
     private List<MemberCardPriceOption> priceOptions;
+
+    /**
+     * 结算页「顺手续年卡」信息（{@code MemberCardService.renewalView}）：
+     * hasCard / endTime / annualPrice / advanceText 等；勾选续费后走合并支付。
+     */
+    private Map<String, Object> memberCard;
 }

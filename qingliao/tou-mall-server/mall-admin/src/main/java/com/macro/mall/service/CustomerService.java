@@ -12,6 +12,7 @@ import com.macro.mall.common.service.RedisService;
 import com.macro.mall.config.wx.WxMaConfiguration;
 import com.macro.mall.consts.RedisKey;
 import com.macro.mall.dto.CustomerExportDto;
+import com.macro.mall.crm.brand.BrandMemberProfileSync;
 import com.macro.mall.entity.Customer;
 import com.macro.mall.entity.CustomerTag;
 import com.macro.mall.entity.Integration;
@@ -85,6 +86,9 @@ public class CustomerService extends BaseService<CustomerMapper, Customer> imple
     @Autowired
     @Lazy
     com.macro.mall.crm.CrmSyncService crmSyncService;
+    @Autowired
+    @Lazy
+    com.macro.mall.crm.brand.BrandMemberProfileSync brandMemberProfileSync;
 
     @Override
     protected QueryWrapper<Customer> buildWrapper(Map<String, Object> params, QueryWrapper<Customer> queryWrapper) {
@@ -172,6 +176,9 @@ public class CustomerService extends BaseService<CustomerMapper, Customer> imple
         if (crmSyncService.isActive()) {
             crmBalance = crmSyncService.ensureIdentity(customer);
         }
+        // 登录后确认过会员身份，顺手把 CRM 的称呼/头像/性别/生日拉回本地；
+        // 先拉再发 token，小程序端拿到的登录态就是最新资料。
+        brandMemberProfileSync.refreshQuietly(customer);
 
         try {
             AdminUserDetails adminUserDetails = new AdminUserDetails(customer, Collections.emptyList());
@@ -240,7 +247,8 @@ public class CustomerService extends BaseService<CustomerMapper, Customer> imple
             throw new BusinessException("手机号码格式错误，请提供：11位中国大陆号码或国际号码（以'+'开头）");
         }
         Customer customer = new Customer();
-        customer.setNickname("用户" + phone);
+        //默认昵称不再拼手机号：历史「用户+手机号」等同于变相保留号码，改成随机中文昵称
+        customer.setNickname(NicknameGenerator.randomNickname());
         customer.setPhone(phone);
         customer.setOpenId(openId);
         customer.setInvitationCode(invitationCode());
@@ -298,11 +306,7 @@ public class CustomerService extends BaseService<CustomerMapper, Customer> imple
      * @param avatar
      */
     public Customer updateAvatar(Long id, String avatar) {
-        Customer customer = getById(id);
-        customer.setAvatar(avatar);
-        updateById(customer);
-        buildCustomerDetail(customer);
-        return customer;
+        return updateProfile(id, profile -> profile.setAvatar(avatar));
     }
 
     /**
@@ -312,11 +316,83 @@ public class CustomerService extends BaseService<CustomerMapper, Customer> imple
      * @param nickname
      */
     public Customer updateNickname(Long id, String nickname) {
+        String value = nickname == null ? null : nickname.trim();
+        if (value == null || value.isEmpty()
+                || value.codePointCount(0, value.length()) > BrandMemberProfileSync.NICKNAME_MAX) {
+            throw new BusinessException("昵称需在 1-" + BrandMemberProfileSync.NICKNAME_MAX + " 个字之间");
+        }
+        return updateProfile(id, profile -> profile.setNickname(value));
+    }
+
+    /**
+     * 顾客个人中心统一改资料（昵称/头像/性别/生日）。
+     *
+     * <p>资料以 CRM 为唯一归档：CRM 推成功才落本地，推失败（版本冲突 / 服务不可用）
+     * 直接把异常抛给前端，绝不让顾客以为改好了而实际两边不一致。</p>
+     */
+    public Customer updateProfile(Long id, java.util.function.Consumer<Customer> editor) {
         Customer customer = getById(id);
-        customer.setNickname(nickname);
-        updateById(customer);
+        if (customer == null) {
+            throw new BusinessException("客户不存在");
+        }
+        editor.accept(customer);
+        if (brandMemberProfileSync.isActive()) {
+            // CRM 是唯一归档：先推成功（版本号同步回来）再结束请求
+            brandMemberProfileSync.pushOrThrow(customer);
+        } else {
+            super.updateById(customer);
+        }
         buildCustomerDetail(customer);
         return customer;
+    }
+
+    /**
+     * 个人中心读取资料：先从 CRM 拉一次（CRM 版本更新则覆盖本地），CRM 不可用时保留本地。
+     */
+    public Customer getProfile(Long id) {
+        Customer customer = getById(id);
+        if (customer == null) {
+            throw new BusinessException("客户不存在");
+        }
+        brandMemberProfileSync.refreshQuietly(customer);
+        buildCustomerDetail(customer);
+        return customer;
+    }
+
+    /**
+     * 个人中心回包把头像换成可直出的地址：库里存的是 OSS key，
+     * 小程序 image 组件拿到 key 显示不出头像，这里统一转成公共读地址。
+     */
+    private Customer displayAvatar(Customer customer) {
+        if (customer != null) {
+            customer.setAvatar(ossService.publicUrl(customer.getAvatar()));
+        }
+        return customer;
+    }
+
+    /**
+     * 后台改客户资料：本地照常保存，CRM 同步失败只提示、不阻塞。
+     *
+     * @return 同步失败时的提示语；成功或未开会员中心返回 null
+     */
+    public String updateWithProfileSync(Customer customer) {
+        Customer before = customer.getId() == null ? null : getById(customer.getId());
+        super.updateById(customer);
+        return brandMemberProfileSync.afterLocalChangeStrict(before, customer);
+    }
+
+    /**
+     * 资料写入口的兜底同步：后台预约、品牌卡开通等顺带改了称呼/性别/生日时，
+     * 只要资料四项有变化就尽力推一次 CRM；本地保存不受影响。
+     */
+    @Override
+    public boolean updateById(Customer entity) {
+        Customer before = entity != null && entity.getId() != null ? getById(entity.getId()) : null;
+        boolean updated = super.updateById(entity);
+        if (updated && before != null) {
+            brandMemberProfileSync.afterLocalChange(before, entity);
+        }
+        return updated;
     }
 
     /**
@@ -464,6 +540,7 @@ public class CustomerService extends BaseService<CustomerMapper, Customer> imple
             }
             s.setCustomerTagList(tagMap.get(s.getId()));
         });
+        customerList.forEach(this::displayAvatar);
     }
 
     public String getCustomerVipLevel(Long customerId) {

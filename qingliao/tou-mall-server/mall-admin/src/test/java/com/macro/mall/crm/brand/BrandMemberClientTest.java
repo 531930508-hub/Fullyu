@@ -286,4 +286,56 @@ class BrandMemberClientTest {
         assertEquals(6000, report.path("savedCents").asInt());
         assertEquals("/api/v1/brand-member/orders/refund", captured.get(1).path);
     }
+
+    @Test
+    void profileUpdateSendsPatchWithVersionAndNoPhone() throws Exception {
+        nextBody = "{\"member\":{\"memberNo\":\"FY-TEST-000042\",\"profileVersion\":8,"
+                + "\"profile\":{\"nickname\":\"林晚\",\"avatarUrl\":\"https://img.test/a.png\","
+                + "\"gender\":2,\"birthday\":\"1995-06-18\"}}}";
+        BrandMemberClient client = new BrandMemberClient(properties());
+
+        JsonNode node = client.updateProfile("42", 7L, "林晚",
+                "https://img.test/a.png", 2, "1995-06-18");
+        assertEquals(8L, node.path("member").path("profileVersion").asLong());
+
+        Captured sent = captured.get(0);
+        assertEquals("PATCH", sent.method);
+        assertEquals("/api/v1/brand-member/profile", sent.path);
+        assertEquals(KEY_ID, sent.key);
+        JsonNode body = new ObjectMapper().readTree(sent.body);
+        assertEquals(BUSINESS, body.path("business").asText());
+        assertEquals("42", body.path("localUserId").asText());
+        assertEquals(7L, body.path("profileVersion").asLong());
+        assertEquals("林晚", body.path("nickname").asText());
+        assertEquals("https://img.test/a.png", body.path("avatarUrl").asText());
+        assertEquals(2, body.path("gender").asInt());
+        assertEquals("1995-06-18", body.path("birthday").asText());
+        // 手机号是 CRM 侧身份唯一键，资料同步不能带
+        assertFalse(body.has("phone"));
+        // 签名覆盖实际发送的 body（PATCH 也必须签对，否则 CRM 直接 401）
+        assertEquals(BrandMemberClient.sign(SECRET, sent.timestamp, sent.nonce, "PATCH", sent.path, sent.body),
+                sent.signature);
+
+        // 未传的字段整个省略：CRM 按"没动"处理，不会把已填资料清空
+        client.updateProfile("42", 8L, null, null, null, null);
+        JsonNode minimal = new ObjectMapper().readTree(captured.get(1).body);
+        assertFalse(minimal.has("nickname"));
+        assertFalse(minimal.has("avatarUrl"));
+        assertFalse(minimal.has("gender"));
+        assertFalse(minimal.has("birthday"));
+    }
+
+    @Test
+    void profileConflictAsksCustomerToRefresh() {
+        BrandMemberClient client = new BrandMemberClient(properties());
+        nextStatus = 409;
+        nextBody = "{\"error\":\"PROFILE_CONFLICT\",\"message\":\"profileVersion mismatch\"}";
+
+        BrandMemberException conflict = assertThrows(BrandMemberException.class,
+                () -> client.updateProfile("42", 3L, "林晚", null, null, null));
+        assertEquals(409, conflict.getStatus());
+        assertEquals("PROFILE_CONFLICT", conflict.getCode());
+        assertTrue(conflict.getMessage().contains("刷新"));
+        assertFalse(conflict.getMessage().contains("mismatch"));
+    }
 }

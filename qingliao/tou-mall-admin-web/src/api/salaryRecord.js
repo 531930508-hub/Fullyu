@@ -30,5 +30,25 @@ export default {
       method: 'get',
       params: {massagistId}
     })
+  },
+  monthCodes() {
+    return request({
+      url: '/salaryRecord/monthCodes',
+      method: 'get'
+    })
+  },
+  monthSummary(params) {
+    return request({
+      url: '/salaryRecord/monthSummary',
+      method: 'get',
+      params
+    })
+  },
+  monthRows(params) {
+    return request({
+      url: '/salaryRecord/monthRows',
+      method: 'get',
+      params
+    })
   }
 }

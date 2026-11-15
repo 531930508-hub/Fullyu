@@ -1,10 +1,14 @@
 import Cookies from 'js-cookie'
 import approvalTodoApi from '@/api/approvalTodo'
 
+// 侧边栏两种形态：展开（236px）/ 收起为图标栏（72px，opened=false）
+// 移动端同一条 opened 走抽屉开合，关闭时不写入桌面端偏好
+const readSidebarOpenedFromCookie = () => !+Cookies.get('sidebarStatus')
+
 const app = {
   state: {
     sidebar: {
-      opened: !+Cookies.get('sidebarStatus'),
+      opened: readSidebarOpenedFromCookie(),
       withoutAnimation: false
     },
     device: 'desktop',
@@ -16,16 +20,21 @@ const app = {
       state.todoCount = Number(count) || 0
     },
     TOGGLE_SIDEBAR: state => {
-      if (state.sidebar.opened) {
-        Cookies.set('sidebarStatus', 1)
-      } else {
-        Cookies.set('sidebarStatus', 0)
+      const sidebar = state.sidebar
+      sidebar.opened = !sidebar.opened
+      sidebar.withoutAnimation = false
+      // 移动端抽屉开关不覆盖桌面端偏好
+      if (state.device !== 'mobile') {
+        Cookies.set('sidebarStatus', sidebar.opened ? 0 : 1)
       }
-      state.sidebar.opened = !state.sidebar.opened
     },
     CLOSE_SIDEBAR: (state, withoutAnimation) => {
-      Cookies.set('sidebarStatus', 1)
+      // 移动端抽屉关闭 / 窄屏自动收起，不覆盖用户桌面端偏好
       state.sidebar.opened = false
+      state.sidebar.withoutAnimation = withoutAnimation
+    },
+    RESTORE_SIDEBAR: (state, withoutAnimation) => {
+      state.sidebar.opened = readSidebarOpenedFromCookie()
       state.sidebar.withoutAnimation = withoutAnimation
     },
     TOGGLE_DEVICE: (state, device) => {
@@ -38,6 +47,9 @@ const app = {
     },
     CloseSideBar({ commit }, { withoutAnimation }) {
       commit('CLOSE_SIDEBAR', withoutAnimation)
+    },
+    RestoreSideBar({ commit }, { withoutAnimation }) {
+      commit('RESTORE_SIDEBAR', withoutAnimation)
     },
     ToggleDevice({ commit }, device) {
       commit('TOGGLE_DEVICE', device)

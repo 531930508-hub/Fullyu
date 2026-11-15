@@ -133,6 +133,13 @@
             <if test="shopId != null and shopId != ''">
                 AND shopId=#{shopId}
             </if>
+            <!-- 服务端门店作用域：受限账号只允许看授权门店 -->
+            <if test="shopIds != null and shopIds.size() > 0">
+                AND shopId IN
+                <foreach collection="shopIds" item="scopeShopId" open="(" separator="," close=")">
+                    #{scopeShopId}
+                </foreach>
+            </if>
             <if test="payState != null and payState != ''">
                 AND payState=#{payState}
             </if>
@@ -372,6 +379,13 @@
             <if test="shopId != null and shopId != ''">
                 AND shopId=#{shopId}
             </if>
+            <!-- 服务端门店作用域：受限账号只允许看授权门店 -->
+            <if test="shopIds != null and shopIds.size() > 0">
+                AND shopId IN
+                <foreach collection="shopIds" item="scopeShopId" open="(" separator="," close=")">
+                    #{scopeShopId}
+                </foreach>
+            </if>
             <if test="payState != null and payState != ''">
                 AND payState=#{payState}
             </if>
@@ -589,6 +603,13 @@
             </if>
             <if test="shopId != null and shopId != ''">
                 AND shopId=#{shopId}
+            </if>
+            <!-- 服务端门店作用域：受限账号只允许看授权门店 -->
+            <if test="shopIds != null and shopIds.size() > 0">
+                AND shopId IN
+                <foreach collection="shopIds" item="scopeShopId" open="(" separator="," close=")">
+                    #{scopeShopId}
+                </foreach>
             </if>
             <if test="payState != null and payState != ''">
                 AND payState=#{payState}

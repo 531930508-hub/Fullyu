@@ -25,8 +25,8 @@ import org.springframework.stereotype.Component;
 public class PrintUtilNew {
     public static final String baseUri = "https://open.spyun.net/v1/";
 
-    private String appid = com.macro.mall.common.utils.Env.get("PRINT_APPID");
-    private String appsecret = com.macro.mall.common.utils.Env.get("PRINT_APPSECRET");
+    private String appid="sp6972e32c161cd";
+    private String appsecret="bf92c827272b2cbbbe3b421d44c2f36d";
 
 /*    public PrintUtilNew(String appid, String appsecret) {
         this.appid = appid;

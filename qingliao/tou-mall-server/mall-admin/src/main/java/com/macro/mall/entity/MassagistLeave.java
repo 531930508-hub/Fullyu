@@ -62,4 +62,9 @@ public class MassagistLeave extends BaseEntity{
     @TableField(exist = false)
     private String[] dates;
 
+    /** 抄送人：null 表示沿用审批流程配置，空列表表示不抄送；实际存入审批抄送明细。 */
+    @ApiModelProperty("抄送人id列表")
+    @TableField(exist = false)
+    private List<Long> ccIdList;
+
 }

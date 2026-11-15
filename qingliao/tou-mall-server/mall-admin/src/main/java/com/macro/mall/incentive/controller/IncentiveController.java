@@ -1,5 +1,6 @@
 package com.macro.mall.incentive.controller;
 
+import com.macro.mall.annotation.ExportLog;
 import com.macro.mall.common.api.CommonResult;
 import com.macro.mall.incentive.calc.IncentiveMath;
 import com.macro.mall.incentive.dto.IncentiveConfigBundle;
@@ -7,6 +8,8 @@ import com.macro.mall.incentive.dto.IncentiveConfigSaveRequest;
 import com.macro.mall.incentive.dto.IncentiveDashboard;
 import com.macro.mall.incentive.dto.IncentiveMassagistOption;
 import com.macro.mall.incentive.dto.IncentiveShopOption;
+import com.macro.mall.incentive.dto.InternalAccountSaveRequest;
+import com.macro.mall.incentive.dto.InternalAccountView;
 import com.macro.mall.incentive.dto.ShopTargetSaveRequest;
 import com.macro.mall.incentive.dto.ShopTargetView;
 import com.macro.mall.incentive.dto.ReasonRequest;
@@ -22,6 +25,7 @@ import com.macro.mall.incentive.model.IncentiveBoard;
 import com.macro.mall.incentive.service.IncentiveAccessService;
 import com.macro.mall.incentive.service.IncentiveConfigService;
 import com.macro.mall.incentive.service.IncentiveDataService;
+import com.macro.mall.incentive.service.InternalAccountService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +60,9 @@ public class IncentiveController {
 
     @Autowired
     private IncentiveAccessService accessService;
+
+    @Autowired
+    private InternalAccountService internalAccountService;
 
     @GetMapping("/mine")
     @ApiOperation("疗愈师本人按月查看接单奖励与培训进度")
@@ -185,6 +192,7 @@ public class IncentiveController {
 
     @GetMapping("/training-assessments/export")
     @ApiOperation("导出内训考核明细 CSV")
+    @ExportLog(module = "incentive_training_assessment", value = "内训考核明细")
     public void exportAssessments(@RequestParam(required = false) String month,
                                   @RequestParam(required = false) Long shopId,
                                   @RequestParam(required = false) Long trainerId,
@@ -201,6 +209,7 @@ public class IncentiveController {
 
     @GetMapping("/training-certifications/export")
     @ApiOperation("导出培训认证台账 CSV")
+    @ExportLog(module = "incentive_training_certification", value = "培训认证台账")
     public void exportCertifications(@RequestParam(required = false) String month,
                                      @RequestParam(required = false) Long shopId,
                                      HttpServletResponse response) throws IOException {
@@ -247,8 +256,29 @@ public class IncentiveController {
         return CommonResult.success(dataService.saveTarget(request), "门店目标已保存");
     }
 
+    @GetMapping("/internal-accounts")
+    @ApiOperation("查询统计排除的内部账号手机号（仅运营/财务）")
+    public CommonResult<List<InternalAccountView>> internalAccounts() {
+        return CommonResult.success(internalAccountService.list());
+    }
+
+    @PostMapping("/internal-accounts")
+    @ApiOperation("新增或修改统计排除手机号（仅运营/财务）")
+    public CommonResult<InternalAccountView> saveInternalAccount(
+            @RequestBody InternalAccountSaveRequest request) {
+        return CommonResult.success(internalAccountService.save(request), "排除名单已保存");
+    }
+
+    @DeleteMapping("/internal-accounts/{id}")
+    @ApiOperation("删除统计排除手机号（仅运营/财务）")
+    public CommonResult<Void> deleteInternalAccount(@PathVariable Long id) {
+        internalAccountService.delete(id);
+        return CommonResult.success(null, "已删除");
+    }
+
     @GetMapping("/export")
     @ApiOperation("导出按月接单奖励明细 CSV（仅运营/财务）")
+    @ExportLog(module = "incentive_monthly_reward", value = "接单奖励明细")
     public void export(@RequestParam(required = false) String month,
                        @RequestParam(required = false) Long shopId,
                        @RequestParam(defaultValue = "1") Integer status,

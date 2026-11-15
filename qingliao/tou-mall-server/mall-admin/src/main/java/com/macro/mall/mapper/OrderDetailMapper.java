@@ -24,15 +24,15 @@ public interface OrderDetailMapper extends BaseMapper<OrderDetail> {
      * @return
      */
     //luxin新增
-    @Select("SELECT d.* from s_order o LEFT JOIN  oms_order_detail d on d.order_id = o.id where o.type in (0,2) and o.state not in(3,4) and d.state in(0,1,2) and DATE(d.start_time) = #{startDate} and d.shop_id = #{shopId};")
+    @Select("SELECT d.* from s_order o LEFT JOIN  oms_order_detail d on d.order_id = o.id where o.type in (0,2) and o.state in (0,1,2) and d.state in(0,1,2) and DATE(d.start_time) = #{startDate} and d.shop_id = #{shopId};")
     List<OrderDetail> findSimpleListByStartDateAndShopId(String startDate,long shopId);
-    @Select("SELECT d.* from s_order o LEFT JOIN  oms_order_detail d on d.order_id = o.id where o.type in (0,2) and o.state not in(3,4) and d.state in(0,1,2) and DATE(d.start_time) = #{startDate};")
+    @Select("SELECT d.* from s_order o LEFT JOIN  oms_order_detail d on d.order_id = o.id where o.type in (0,2) and o.state in (0,1,2) and d.state in(0,1,2) and DATE(d.start_time) = #{startDate};")
     List<OrderDetail> findSimpleListByStartDate(String startDate);
 
-    @Select("SELECT d.* from s_order o LEFT JOIN  oms_order_detail d on d.order_id = o.id where o.type in (0,2) and o.state not in(3,4) and d.state in(0,1,2) and DATE(d.start_time) = #{startDate} and  o.shop_id = #{shopId} and d.project_id = #{projectId}")
+    @Select("SELECT d.* from s_order o LEFT JOIN  oms_order_detail d on d.order_id = o.id where o.type in (0,2) and o.state in (0,1,2) and d.state in(0,1,2) and DATE(d.start_time) = #{startDate} and  o.shop_id = #{shopId} and d.project_id = #{projectId}")
     List<OrderDetail> findSimpleListByStartDateAndShopAndProject(String startDate, Long shopId, Long projectId);
 
-    @Select("SELECT d.* from s_order o LEFT JOIN  oms_order_detail d on d.order_id = o.id where o.type in (0,2) and o.state not in(3,4) and d.state in(0,1,2) and DATE(d.start_time) = #{startDate} and  o.shop_id = #{shopId}")
+    @Select("SELECT d.* from s_order o LEFT JOIN  oms_order_detail d on d.order_id = o.id where o.type in (0,2) and o.state in (0,1,2) and d.state in(0,1,2) and DATE(d.start_time) = #{startDate} and  o.shop_id = #{shopId}")
     List<OrderDetail> findSimpleListByStartDateAndShop(String startDate, Long shopId);
 
     List<OrderDetail> listBySchedulingParam(SchedulingParam schedulingParam);

@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Full愈后台 · 会员卡管理 Demo</title>
+<style>
+:root{
+  --primary:#6750A4;--primary-hover:#584589;--primary-soft:#F2EEFA;
+  --success:#67C23A;--warning:#E6A23C;--danger:#F56C6C;--info:#909399;
+  --text:#303133;--text-2:#606266;--text-3:#909399;--border:#EBEEF5;--border-2:#DCDFE6;
+  --bg:#F0F2F5;--side:#304156;--side-active:#263445;--side-text:#BFCBD9;
+  --gold:#C4A974;--brown:#584219;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Helvetica Neue",Helvetica,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;font-size:14px;color:var(--text);background:#E9EBEF;letter-spacing:.02em}
+button,input,select{font:inherit;color:inherit;letter-spacing:.02em}
+button{cursor:pointer;border:none;background:none}
+.note{max-width:1480px;margin:16px auto 12px;background:#fff;border-radius:8px;padding:12px 16px;display:flex;gap:22px;flex-wrap:wrap;box-shadow:0 2px 8px rgba(48,65,86,.06)}
+.note div{flex:1;min-width:260px;font-size:12px;color:#7A8493;line-height:1.75}
+.note b{display:block;color:var(--brown);font-size:12.5px;margin-bottom:2px;letter-spacing:.04em}
+.note code{background:#F4F0E8;color:#8A6A40;border-radius:3px;padding:0 4px;font-size:11px}
+.shell{position:relative;max-width:1480px;margin:0 auto 30px;height:820px;display:flex;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 10px 30px rgba(48,65,86,.14)}
+/* sidebar */
+.side{width:210px;background:var(--side);color:var(--side-text);flex:none;display:flex;flex-direction:column}
+.logo{height:58px;display:flex;align-items:center;gap:9px;padding:0 17px;color:#fff;border-bottom:1px solid rgba(255,255,255,.06)}
+.logo-mark{width:28px;height:28px;border-radius:8px;background:linear-gradient(145deg,#7B5E2E,#4A3516);display:flex;align-items:center;justify-content:center;font-family:"Songti SC",serif;font-size:14px;color:#F0E3C8;border:1px solid rgba(196,169,116,.5)}
+.logo b{font-size:14.5px;font-weight:600;letter-spacing:.06em}
+.logo small{display:block;font-size:9px;color:#8FA0B3;letter-spacing:.14em;margin-top:1px}
+.nav-group{padding:12px 0 4px}
+.nav-title{font-size:10.5px;color:#7D8EA3;padding:0 20px 7px;letter-spacing:.12em}
+.nav-item{display:flex;align-items:center;gap:10px;height:46px;padding:0 20px;font-size:13px;color:var(--side-text);cursor:pointer;border-left:3px solid transparent;transition:.15s}
+.nav-item:hover{background:#2A3A4D;color:#fff}
+.nav-item.on{background:var(--side-active);color:#fff;border-left-color:var(--gold)}
+.nav-item .ni{width:17px;height:17px;display:flex;align-items:center;justify-content:center;opacity:.9}
+.nav-item .ni svg{width:15px;height:15px}
+.nav-sub{height:39px;padding-left:47px;font-size:12.5px}
+.side-foot{margin-top:auto;padding:14px 18px;font-size:10px;color:#74869B;border-top:1px solid rgba(255,255,255,.06);line-height:1.7}
+/* main */
+.main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
+.topbar{height:58px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:14px;flex:none}
+.crumb{font-size:13px;color:var(--text-3)}
+.crumb b{color:var(--text);font-weight:500}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--text-2)}
+.avatar-sm{width:29px;height:29px;border-radius:50%;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.content{flex:1;overflow:auto;padding:18px 20px 28px}
+.view{display:none}
+.view.on{display:block}
+.card{background:#fff;border-radius:6px;box-shadow:0 1px 4px rgba(48,65,86,.05);padding:18px 18px 20px}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:14px}
+.page-head h2{font-size:18px;font-weight:600;color:var(--text);letter-spacing:.03em}
+.page-head p{font-size:12px;color:var(--text-3);margin-top:5px;letter-spacing:.02em}
+.head-actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{height:32px;padding:0 14px;border-radius:4px;border:1px solid var(--border-2);background:#fff;color:var(--text-2);font-size:12.5px;display:inline-flex;align-items:center;gap:5px;transition:.15s;white-space:nowrap}
+.btn:hover{color:var(--primary);border-color:#C6B8E6;background:var(--primary-soft)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);color:#fff}
+.btn.danger{color:var(--danger);border-color:#FBC4C4}
+.btn.danger:hover{background:#FEF0F0;color:var(--danger);border-color:#F56C6C}
+.btn.sm{height:26px;padding:0 9px;font-size:11.5px;border-radius:3px}
+.btn.text{border:none;background:none;padding:0 5px;height:24px;color:var(--primary);white-space:nowrap}
+.btn.text:hover{background:var(--primary-soft)}
+.btn.text.danger{color:var(--danger);background:none}
+.btn.text.danger:hover{background:#FEF0F0}
+.metrics{display:flex;gap:12px;margin-bottom:14px}
+.metric{flex:1;background:#fff;border:1px solid var(--border);border-radius:6px;padding:13px 15px;position:relative;overflow:hidden}
+.metric .m-label{font-size:11.5px;color:var(--text-3);letter-spacing:.04em}
+.metric .m-num{font-size:24px;font-weight:600;color:var(--text);margin-top:5px;letter-spacing:.01em;font-variant-numeric:tabular-nums}
+.metric .m-num small{font-size:12px;font-weight:400;color:var(--text-3);margin-left:3px}
+.metric .m-sub{font-size:10.5px;color:var(--text-3);margin-top:4px}
+.metric .m-bar{position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold)}
+.metric.p .m-bar{background:var(--primary)}
+.metric.w .m-bar{background:var(--warning)}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.field{height:32px;border:1px solid var(--border-2);border-radius:4px;padding:0 10px;font-size:12.5px;background:#fff;outline:none;color:var(--text-2)}
+.field:focus{border-color:var(--primary)}
+.field.w180{width:180px}.field.w150{width:150px}.field.w120{width:120px}
+.search-wrap{display:flex}
+.search-wrap .field{border-radius:4px 0 0 4px;width:210px}
+.search-wrap .sbtn{width:34px;height:32px;border:1px solid var(--border-2);border-left:none;border-radius:0 4px 4px 0;background:#F5F7FA;color:var(--text-3);display:flex;align-items:center;justify-content:center}
+.search-wrap .sbtn:hover{color:var(--primary)}
+.table-wrap{border:1px solid var(--border);border-radius:4px;overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead th{background:#FAFAFA;color:var(--text-2);font-weight:600;text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;font-size:12px}
+tbody td{padding:11px 12px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#FAF9FD}
+.cust{display:flex;align-items:center;gap:8px}
+.cust .ca{width:27px;height:27px;border-radius:50%;background:#F3EEE4;color:var(--brown);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex:none}
+.cust b{display:block;color:var(--text);font-weight:500;font-size:12.5px}
+.cust small{display:block;color:var(--text-3);font-size:10.5px;margin-top:1px}
+.mono{font-variant-numeric:tabular-nums;font-size:12px}
+.tag{display:inline-flex;align-items:center;height:21px;padding:0 7px;border-radius:3px;font-size:10.5px;line-height:1;border:1px solid transparent;white-space:nowrap}
+.tag.success{color:#529B2E;background:#F0F9EB;border-color:#E1F3D8}
+.tag.warning{color:#B88230;background:#FDF6EC;border-color:#FAECD8}
+.tag.info{color:#73767A;background:#F4F4F5;border-color:#E9E9EB}
+.tag.danger{color:#C45656;background:#FEF0F0;border-color:#FDE2E2}
+.tag.purple{color:#6750A4;background:#F2EEFA;border-color:#E5DCF7}
+.tag.gold{color:#8A6A40;background:#FBF5E9;border-color:#EFE1C6}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:1px}
+.pager{display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:13px 2px 0;font-size:12px;color:var(--text-2)}
+.pager .pg{min-width:26px;height:26px;padding:0 7px;border:1px solid var(--border-2);border-radius:3px;background:#fff;display:flex;align-items:center;justify-content:center}
+.pager .pg.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.pager .total{margin-right:auto;color:var(--text-3);font-size:11.5px}
+.empty-hint{padding:26px;text-align:center;color:var(--text-3);font-size:12px;display:none}
+/* drawer */
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,.35);z-index:40;display:none}
+.overlay.on{display:block}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:520px;background:#fff;z-index:41;transform:translateX(102%);transition:transform .28s ease;display:flex;flex-direction:column;box-shadow:-8px 0 24px rgba(0,0,0,.12)}
+.drawer.on{transform:none}
+.drawer-head{height:54px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:10px;flex:none}
+.drawer-head b{font-size:15px;font-weight:600}
+.drawer-head .x{margin-left:auto;font-size:16px;color:var(--text-3);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.drawer-head .x:hover{background:#F5F7FA;color:var(--text)}
+.drawer-body{flex:1;overflow:auto;padding:18px}
+.drawer-foot{height:62px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:flex-end;gap:9px;padding:0 18px;flex:none;background:#fff}
+.form-row{margin-bottom:16px}
+.form-row label{display:block;font-size:12.5px;color:var(--text-2);margin-bottom:7px}
+.form-row label em{color:var(--danger);font-style:normal;margin-right:3px}
+.form-row .field{width:100%;height:36px}
+.form-row textarea{width:100%;height:78px;border:1px solid var(--border-2);border-radius:4px;padding:8px 10px;font:inherit;font-size:12.5px;color:var(--text-2);resize:vertical;outline:none}
+.form-row textarea:focus{border-color:var(--primary)}
+.form-tip{font-size:11px;color:var(--text-3);line-height:1.7;margin-top:6px}
+.form-tip.warn{color:#B88230;background:#FDF6EC;border:1px solid #FAECD8;border-radius:4px;padding:8px 10px}
+.readonly{background:#F5F7FA;color:var(--text-3);cursor:not-allowed}
+.card-snip{background:linear-gradient(135deg,#FBF7EE,#F2E9D6);border:1px solid #E8DCC4;border-radius:8px;padding:14px 15px;margin-bottom:18px}
+.card-snip .cs-top{display:flex;justify-content:space-between;align-items:center}
+.card-snip .cs-name{font-family:"Songti SC",serif;font-size:16px;color:var(--brown);font-weight:600;letter-spacing:.05em}
+.card-snip .cs-no{font-size:10.5px;color:#9B8A66;margin-top:4px;letter-spacing:.08em}
+.card-snip .cs-row{display:flex;justify-content:space-between;font-size:11px;color:#8E7C56;margin-top:10px}
+.card-snip .cs-row b{color:var(--brown)}
+.detail-block{margin-bottom:20px}
+.detail-block h3{font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:10px;padding-left:8px;border-left:3px solid var(--primary);line-height:1.2}
+.desc{display:grid;grid-template-columns:96px 1fr;row-gap:10px;font-size:12.5px;color:var(--text-2)}
+.desc dt{color:var(--text-3)}
+.desc dd{color:var(--text)}
+.mini-table{width:100%;border:1px solid var(--border);border-radius:4px;border-collapse:collapse;font-size:11.5px}
+.mini-table th{background:#FAFAFA;padding:8px 9px;text-align:left;color:var(--text-2);font-weight:600;border-bottom:1px solid var(--border)}
+.mini-table td{padding:8px 9px;border-bottom:1px solid var(--border);color:var(--text-2)}
+.mini-table tr:last-child td{border-bottom:none}
+/* dialog */
+.dialog-mask{position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:50;display:none;align-items:flex-start;justify-content:center;padding-top:120px}
+.dialog-mask.on{display:flex}
+.dialog{width:440px;background:#fff;border-radius:6px;box-shadow:0 12px 32px rgba(0,0,0,.18);animation:pop .18s ease}
+@keyframes pop{from{transform:scale(.97)}to{transform:none}}
+.dialog-head{padding:16px 18px 0;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.dialog-head .warn-ico{width:20px;height:20px;border-radius:50%;background:#FDF6EC;color:var(--warning);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.dialog-body{padding:16px 18px}
+.dialog-body .warn-box{background:#FDF6EC;border:1px solid #FAECD8;border-radius:4px;padding:9px 11px;font-size:11.5px;color:#B88230;line-height:1.7;margin-bottom:14px}
+.dialog-foot{padding:0 18px 18px;display:flex;justify-content:flex-end;gap:9px}
+.toast{position:absolute;left:50%;top:76px;transform:translateX(-50%) translateY(-12px);background:#F0F9EB;border:1px solid #E1F3D8;color:#529B2E;border-radius:4px;padding:9px 15px;font-size:12.5px;z-index:60;opacity:0;pointer-events:none;transition:.22s;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+.toast.on{opacity:1;transform:translateX(-50%)}
+.toast.err{background:#FEF0F0;border-color:#FDE2E2;color:#C45656}
+/* config */
+.config-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px 26px;max-width:900px}
+.config-grid .full{grid-column:1/-1}
+.config-grid label{display:block;font-size:12.5px;color:var(--text-2);margin-bottom:7px}
+.config-grid .field{width:100%;height:36px}
+.config-grid .unit{position:relative}
+.config-grid .unit span{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-size:11.5px;color:var(--text-3)}
+.config-note{background:#F4F0FA;border:1px solid #E5DCF7;border-radius:4px;padding:10px 12px;font-size:11.5px;color:#6750A4;line-height:1.75;margin-bottom:18px}
+.preview{background:#FAFAFA;border:1px dashed var(--border-2);border-radius:6px;padding:13px 15px;font-size:12px;color:var(--text-2);line-height:1.9}
+.preview b{color:var(--brown)}
+.section-title{font-size:13px;font-weight:600;color:var(--text);margin:6px 0 12px;padding-left:8px;border-left:3px solid var(--primary);line-height:1.2}
+@media(max-width:1100px){.shell{margin:0 12px}.note{margin:12px}.side{width:180px}.metrics{flex-wrap:wrap}.metric{min-width:45%}}
+</style>
+</head>
+<body>
+
+<div class="note">
+  <div><b>批次二 · 会员卡管理</b>年卡 365 元 / 365 天；开卡费率快照；提前 78 折、当日 88 折；调整配置只影响之后新开或新续的权益期。</div>
+  <div><b>本页覆盖</b>会员卡列表、手工开通、详情、强制退款、配置；到期 ≤30 天在列表内直接标记「即将到期」。</div>
+  <div><b>视觉基线</b>沿用后台 Element UI 与 <code>#6750A4</code> 主色；侧栏、表头、标签、抽屉均为现有组件语言，不新增设计系统。</div>
+</div>
+
+<div class="shell" id="shell">
+  <!-- 侧栏 -->
+  <aside class="side">
+    <div class="logo">
+      <div class="logo-mark">愈</div>
+      <div><b>Full愈</b><small>OPERATIONS</small></div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-title">经营</div>
+      <div class="nav-item"><span class="ni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 11l8-7 8 7v9H4z"/></svg></span>首页</div>
+      <div class="nav-item"><span class="ni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg></span>预约看板</div>
+      <div class="nav-item"><span class="ni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 4h12v16H6zM9 8h6M9 12h6"/></svg></span>订单管理</div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-title">客户</div>
+      <div class="nav-item"><span class="ni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/></svg></span>客户列表</div>
+      <div class="nav-item on" onclick="switchView('list', this)"><span class="ni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h5"/></svg></span>会员卡</div>
+      <div class="nav-item nav-sub" onclick="switchView('config', this)">会员卡配置</div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-title">门店</div>
+      <div class="nav-item"><span class="ni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20V9l8-5 8 5v11M9 20v-6h6v6"/></svg></span>门店管理</div>
+      <div class="nav-item"><span class="ni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg></span>疗愈师</div>
+    </div>
+    <div class="side-foot">Full愈轻疗 · 城市微度假<br>原型仅用于交互确认</div>
+  </aside>
+
+  <!-- 主区 -->
+  <main class="main">
+    <div class="topbar">
+      <div class="crumb">客户 / <b>会员卡</b></div>
+      <div class="top-right">
+        <span>杭州 · 湖滨店</span>
+        <span style="color:#DCDFE6">|</span>
+        <span>店长</span>
+        <div class="avatar-sm">田</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- 列表 -->
+      <section class="view on" id="view-list">
+        <div class="metrics">
+          <div class="metric p"><div class="m-bar"></div><div class="m-label">当前生效</div><div class="m-num">1,286<small>张</small></div><div class="m-sub">较上月 +86</div></div>
+          <div class="metric w"><div class="m-bar"></div><div class="m-label">30 天内到期</div><div class="m-num">73<small>张</small></div><div class="m-sub">待续费提醒</div></div>
+          <div class="metric"><div class="m-bar"></div><div class="m-label">本月新开</div><div class="m-num">124<small>张</small></div><div class="m-sub">含后台手工 9 张</div></div>
+          <div class="metric"><div class="m-bar"></div><div class="m-label">本月退款</div><div class="m-num">3<small>张</small></div><div class="m-sub">金额 ¥1,095</div></div>
+        </div>
+
+        <div class="card">
+          <div class="page-head">
+            <div><h2>会员卡</h2><p>管理年卡权益期、手工开通与退款；折扣按开卡时费率快照执行。</p></div>
+            <div class="head-actions">
+              <button class="btn" onclick="switchView('config')">会员卡配置</button>
+              <button class="btn primary" onclick="openDrawer('issue')">＋ 手工开通</button>
+            </div>
+          </div>
+
+          <div class="filters">
+            <div class="search-wrap">
+              <input class="field" id="kw" placeholder="手机号 / 昵称 / 卡号" oninput="applyFilter()">
+              <button class="sbtn" onclick="applyFilter()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></button>
+            </div>
+            <select class="field w150" id="statusFilter" onchange="applyFilter()">
+              <option value="">全部状态</option>
+              <option value="1">生效中</option>
+              <option value="0">待生效</option>
+              <option value="2">已过期</option>
+              <option value="3">已退款</option>
+            </select>
+            <select class="field w150">
+              <option>全部渠道</option><option>小程序</option><option>后台手工</option>
+            </select>
+            <input class="field w180" type="text" value="2026-11-01 至 2026-11-30" onfocus="this.type='text'">
+            <button class="btn" onclick="applyFilter()">筛选</button>
+            <button class="btn" onclick="resetFilter()">重置</button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:190px">客户</th>
+                  <th style="width:150px">卡号</th>
+                  <th>当前权益期</th>
+                  <th style="width:120px">到期时间</th>
+                  <th style="width:90px">状态</th>
+                  <th style="width:90px">渠道</th>
+                  <th style="width:90px">开卡金额</th>
+                  <th style="width:205px">操作</th>
+                </tr>
+              </thead>
+              <tbody id="tbody">
+                <tr data-status="1" data-key="田悦 13800138001 fy26011001">
+                  <td><div class="cust"><div class="ca">田</div><div><b>田悦</b><small>138 0013 8001</small></div></div></td>
+                  <td class="mono">FY26011001</td>
+                  <td class="mono">2026-01-10 → 2027-01-09</td>
+                  <td class="mono">2027-01-09</td>
+                  <td><span class="tag success"><span class="dot" style="background:#67C23A"></span>生效中</span></td>
+                  <td><span class="tag info">小程序</span></td>
+                  <td class="mono">¥365</td>
+                  <td><button class="btn text" onclick="openDrawer('detail', 0)">详情</button><button class="btn text" onclick="openDrawer('renew', 0)">续费</button><button class="btn text danger" onclick="openRefund(0)">强制退款</button></td>
+                </tr>
+                <tr data-status="1" data-key="周薇 13700137002 fy25120112">
+                  <td><div class="cust"><div class="ca">周</div><div><b>周薇</b><small>137 0013 7002</small></div></div></td>
+                  <td class="mono">FY25120112</td>
+                  <td class="mono">2025-12-01 → 2026-11-30</td>
+                  <td class="mono">2026-11-30</td>
+                  <td><span class="tag warning"><span class="dot" style="background:#E6A23C"></span>即将到期</span></td>
+                  <td><span class="tag info">小程序</span></td>
+                  <td class="mono">¥365</td>
+                  <td><button class="btn text" onclick="openDrawer('detail', 1)">详情</button><button class="btn text" onclick="openDrawer('renew', 1)">续费</button><button class="btn text danger" onclick="openRefund(1)">强制退款</button></td>
+                </tr>
+                <tr data-status="0" data-key="陈叙 13600136003 fy26110121">
+                  <td><div class="cust"><div class="ca">陈</div><div><b>陈叙</b><small>136 0013 6003</small></div></div></td>
+                  <td class="mono">FY26110121</td>
+                  <td class="mono">2026-12-01 → 2027-11-30</td>
+                  <td class="mono">2027-11-30</td>
+                  <td><span class="tag purple">待生效</span></td>
+                  <td><span class="tag gold">后台手工</span></td>
+                  <td class="mono">¥0</td>
+                  <td><button class="btn text" onclick="openDrawer('detail', 2)">详情</button><button class="btn text danger" onclick="openRefund(2)">强制退款</button></td>
+                </tr>
+                <tr data-status="1" data-key="许岚 13500135004 fy26031508">
+                  <td><div class="cust"><div class="ca">许</div><div><b>许岚</b><small>135 0013 5004</small></div></div></td>
+                  <td class="mono">FY26031508</td>
+                  <td class="mono">2026-03-15 → 2027-03-14</td>
+                  <td class="mono">2027-03-14</td>
+                  <td><span class="tag success"><span class="dot" style="background:#67C23A"></span>生效中</span></td>
+                  <td><span class="tag info">小程序</span></td>
+                  <td class="mono">¥365</td>
+                  <td><button class="btn text" onclick="openDrawer('detail', 3)">详情</button><button class="btn text" onclick="openDrawer('renew', 3)">续费</button><button class="btn text danger" onclick="openRefund(3)">强制退款</button></td>
+                </tr>
+                <tr data-status="2" data-key="沈禾 13400134005 fy24112009">
+                  <td><div class="cust"><div class="ca">沈</div><div><b>沈禾</b><small>134 0013 4005</small></div></div></td>
+                  <td class="mono">FY24112009</td>
+                  <td class="mono">2024-11-20 → 2025-11-19</td>
+                  <td class="mono">2025-11-19</td>
+                  <td><span class="tag info">已过期</span></td>
+                  <td><span class="tag info">小程序</span></td>
+                  <td class="mono">¥365</td>
+                  <td><button class="btn text" onclick="openDrawer('detail', 4)">详情</button><button class="btn text" onclick="openDrawer('renew', 4)">重新开通</button></td>
+                </tr>
+                <tr data-status="3" data-key="林晚 13300133006 fy25080203">
+                  <td><div class="cust"><div class="ca">林</div><div><b>林晚</b><small>133 0013 3006</small></div></div></td>
+                  <td class="mono">FY25080203</td>
+                  <td class="mono">2025-08-02 → 2026-08-01</td>
+                  <td class="mono">2026-08-01</td>
+                  <td><span class="tag danger">已退款</span></td>
+                  <td><span class="tag info">小程序</span></td>
+                  <td class="mono">¥365</td>
+                  <td><button class="btn text" onclick="openDrawer('detail', 5)">详情</button></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="empty-hint" id="emptyHint">没有符合条件的会员卡</div>
+          </div>
+
+          <div class="pager">
+            <span class="total" id="totalText">共 1,286 条</span>
+            <button class="pg">‹</button><button class="pg on">1</button><button class="pg">2</button><button class="pg">3</button><button class="pg">…</button><button class="pg">65</button><button class="pg">›</button>
+            <select class="field" style="height:26px;margin-left:6px"><option>20 条/页</option><option>50 条/页</option></select>
+          </div>
+        </div>
+      </section>
+
+      <!-- 配置 -->
+      <section class="view" id="view-config">
+        <div class="card">
+          <div class="page-head">
+            <div><h2>会员卡配置</h2><p>调整价格、费率与有效期；保存后仅对之后新开或新续的权益期生效。</p></div>
+            <div class="head-actions"><button class="btn" onclick="switchView('list')">返回列表</button><button class="btn primary" onclick="saveConfig()">保存配置</button></div>
+          </div>
+
+          <div class="config-note">
+            费率调整不会改变已售出的年卡。例：2026-11-07 前开通的客户继续按 78 折 / 88 折执行；11-07 之后新开或续费的权益期采用新费率。
+          </div>
+
+          <div class="section-title">基础信息</div>
+          <div class="config-grid">
+            <div><label>年卡名称</label><input class="field" value="Full愈年卡"></div>
+            <div><label>售价</label><div class="unit"><input class="field" id="cfgPrice" value="365" oninput="updatePreview()"><span>元 / 年</span></div></div>
+            <div><label>提前预约折扣</label><div class="unit"><input class="field" id="cfgAdvance" value="78" oninput="updatePreview()"><span>%（即 78 折）</span></div></div>
+            <div><label>当日预约折扣</label><div class="unit"><input class="field" id="cfgSame" value="88" oninput="updatePreview()"><span>%（即 88 折）</span></div></div>
+            <div><label>权益期</label><div class="unit"><input class="field" value="365" readonly class="readonly"><span>天</span></div></div>
+            <div><label>到期提醒</label><div class="unit"><input class="field" value="30" readonly class="readonly"><span>天前</span></div></div>
+          </div>
+
+          <div class="section-title" style="margin-top:24px">文案与规则</div>
+          <div class="config-grid">
+            <div class="full"><label>购买说明</label><textarea class="form-row" style="margin:0;width:100%;height:70px;border:1px solid var(--border-2);border-radius:4px;padding:8px 10px;font-size:12.5px;color:var(--text-2)">开通后 365 天内，服务项目提前一天及以上预约享 78 折，当日预约享 88 折。不与其他优惠叠加。</textarea></div>
+            <div class="full"><label>退款说明</label><textarea style="width:100%;height:70px;border:1px solid var(--border-2);border-radius:4px;padding:8px 10px;font-size:12.5px;color:var(--text-2)">年卡为虚拟权益，退款需联系门店。退款后年卡立即失效，已产生的订单优惠不追回。</textarea></div>
+          </div>
+
+          <div class="section-title" style="margin-top:24px">前台预览</div>
+          <div class="preview" id="cfgPreview">
+            当前配置：<b>Full愈年卡</b> · <b>¥365 / 365 天</b> · 提前 <b>78 折</b> · 当日 <b>88 折</b> · 到期前 <b>30 天</b>提示续费。<br>
+            以 900 元服务为例：提前预约 <b>¥702</b>，当日预约 <b>¥792</b>。
+          </div>
+
+          <div class="section-title" style="margin-top:24px">生效概况</div>
+          <div class="metrics">
+            <div class="metric"><div class="m-label">当前生效</div><div class="m-num">1,286<small>张</small></div></div>
+            <div class="metric"><div class="m-label">本月新开</div><div class="m-num">124<small>张</small></div></div>
+            <div class="metric"><div class="m-label">本月退款</div><div class="m-num">3<small>张</small></div></div>
+            <div class="metric"><div class="m-label">续费率（近 30 天）</div><div class="m-num">41<small>%</small></div></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- 遮罩 / 抽屉 / 弹窗 -->
+  <div class="overlay" id="overlay" onclick="closeAll()"></div>
+
+  <aside class="drawer" id="drawer">
+    <div class="drawer-head"><b id="drawerTitle">详情</b><button class="x" onclick="closeAll()">✕</button></div>
+    <div class="drawer-body" id="drawerBody"></div>
+    <div class="drawer-foot" id="drawerFoot"></div>
+  </aside>
+
+  <div class="dialog-mask" id="refundDialog">
+    <div class="dialog">
+      <div class="dialog-head"><span class="warn-ico">!</span>强制退款</div>
+      <div class="dialog-body">
+        <div class="warn-box">退款后年卡立即失效，已产生的订单优惠不追回。请确认退款金额与原因，提交后将调用原支付通道退款。</div>
+        <div class="form-row"><label>卡信息</label><input class="field readonly" id="refundCardInfo" value="田悦 · FY26011001 · ¥365" readonly></div>
+        <div class="form-row"><label><em>*</em>退款金额</label><input class="field" id="refundAmount" value="365"><div class="form-tip">默认全额退款，可按协商结果修改；修改后需填写原因。</div></div>
+        <div class="form-row" style="margin-bottom:0"><label><em>*</em>退款原因</label><textarea id="refundReason" placeholder="例：客户开通后未使用，协商全额退款"></textarea></div>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn" onclick="closeAll()">取消</button>
+        <button class="btn danger" onclick="confirmRefund()">确认退款</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+const shell = document.getElementById('shell');
+
+function switchView(name, el){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
+  document.getElementById('view-' + name).classList.add('on');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('on'));
+  const target = el || document.querySelector('.nav-item[onclick*="' + name + '"]');
+  if (target) target.classList.add('on');
+  const crumb = document.querySelector('.crumb');
+  crumb.innerHTML = name === 'config' ? '客户 / 会员卡 / <b>会员卡配置</b>' : '客户 / <b>会员卡</b>';
+}
+
+function openDrawer(type, idx){
+  const data = [
+    {name:'田悦', phone:'138 0013 8001', no:'FY26011001', period:'2026-01-10 → 2027-01-09', status:'生效中', statusClass:'success', channel:'小程序', amount:'¥365', paid:'微信支付', created:'2026-01-10 14:22', days:'63'},
+    {name:'周薇', phone:'137 0013 7002', no:'FY25120112', period:'2025-12-01 → 2026-11-30', status:'即将到期', statusClass:'warning', channel:'小程序', amount:'¥365', paid:'微信支付', created:'2025-12-01 10:08', days:'23'},
+    {name:'陈叙', phone:'136 0013 6003', no:'FY26110121', period:'2026-12-01 → 2027-11-30', status:'待生效', statusClass:'purple', channel:'后台手工', amount:'¥0', paid:'赠送', created:'2026-11-06 17:40', days:'—'},
+    {name:'许岚', phone:'135 0013 5004', no:'FY26031508', period:'2026-03-15 → 2027-03-14', status:'生效中', statusClass:'success', channel:'小程序', amount:'¥365', paid:'微信支付', created:'2026-03-15 19:12', days:'127'},
+    {name:'沈禾', phone:'134 0013 4005', no:'FY24112009', period:'2024-11-20 → 2025-11-19', status:'已过期', statusClass:'info', channel:'小程序', amount:'¥365', paid:'微信支付', created:'2024-11-20 11:30', days:'—'},
+    {name:'林晚', phone:'133 0013 3006', no:'FY25080203', period:'2025-08-02 → 2026-08-01', status:'已退款', statusClass:'danger', channel:'小程序', amount:'¥365', paid:'已退 ¥365', created:'2025-08-02 16:45', days:'—'}
+  ];
+  const d = data[idx || 0];
+  const title = {detail:'会员卡详情', renew:'手工续费', issue:'手工开通'}[type] || '会员卡';
+  document.getElementById('drawerTitle').textContent = title;
+  const body = document.getElementById('drawerBody');
+  const foot = document.getElementById('drawerFoot');
+
+  if (type === 'issue') {
+    body.innerHTML = `
+      <div class="form-row"><label><em>*</em>客户</label><input class="field" placeholder="输入手机号搜索客户"><div class="form-tip">支持手机号或昵称搜索；已开通客户再次开通将生成待生效权益期。</div></div>
+      <div class="form-row"><label><em>*</em>开始时间</label><input class="field" value="2026-11-07 14:20"><div class="form-tip">默认当前时间；选择未来时间将生成「待生效」权益期。</div></div>
+      <div class="form-row"><label>权益期</label><input class="field readonly" value="365 天（至 2027-11-07）" readonly></div>
+      <div class="form-row"><label><em>*</em>开卡金额</label><input class="field" value="365"><div class="form-tip">可改为 0 用于赠送；金额为 0 时支付单标记为赠送。</div></div>
+      <div class="form-row"><label>开通原因 / 备注</label><textarea placeholder="例：线下收款开通；门店赠送"></textarea></div>
+      <div class="form-row" style="margin-bottom:0"><label>费率快照</label><input class="field readonly" value="提前 78 折 · 当日 88 折" readonly><div class="form-tip">按当前配置写入，后续调价不影响本权益期。</div></div>`;
+    foot.innerHTML = `<button class="btn" onclick="closeAll()">取消</button><button class="btn primary" onclick="submitIssue()">确认开通</button>`;
+  } else if (type === 'renew') {
+    body.innerHTML = `
+      <div class="card-snip"><div class="cs-top"><div><div class="cs-name">Full愈年卡</div><div class="cs-no">${d.no} · ${d.name}</div></div><span class="tag ${d.statusClass}">${d.status}</span></div><div class="cs-row"><span>当前权益期</span><b>${d.period}</b></div></div>
+      <div class="form-row"><label>续费方式</label><input class="field readonly" value="新权益期从当前到期日顺延 365 天" readonly></div>
+      <div class="form-row"><label>新权益期</label><input class="field readonly" value="${d.period.split(' → ')[1]} → 顺延 365 天" readonly></div>
+      <div class="form-row"><label><em>*</em>续费金额</label><input class="field" value="365"></div>
+      <div class="form-row"><label>收款方式</label><select class="field"><option>线下收款</option><option>微信支付</option><option>赠送</option></select></div>
+      <div class="form-row" style="margin-bottom:0"><label>备注</label><textarea placeholder="选填"></textarea></div>`;
+    foot.innerHTML = `<button class="btn" onclick="closeAll()">取消</button><button class="btn primary" onclick="submitRenew('${d.name}')">确认续费</button>`;
+  } else {
+    body.innerHTML = `
+      <div class="card-snip">
+        <div class="cs-top"><div><div class="cs-name">Full愈年卡</div><div class="cs-no">${d.no} · ${d.name}</div></div><span class="tag ${d.statusClass}">${d.status}</span></div>
+        <div class="cs-row"><span>当前权益期</span><b>${d.period}</b></div>
+        <div class="cs-row"><span>提前 / 当日</span><b>78 折 / 88 折</b></div>
+      </div>
+      <div class="detail-block"><h3>客户信息</h3><dl class="desc"><dt>客户</dt><dd>${d.name}</dd><dt>手机号</dt><dd class="mono">${d.phone}</dd><dt>开通渠道</dt><dd>${d.channel}</dd><dt>剩余天数</dt><dd>${d.days === '—' ? '—' : d.days + ' 天'}</dd></dl></div>
+      <div class="detail-block"><h3>权益期记录</h3>
+        <table class="mini-table"><thead><tr><th>权益期</th><th>费率快照</th><th>金额</th><th>状态</th></tr></thead><tbody>
+          <tr><td class="mono">${d.period}</td><td>78% / 88%</td><td>${d.amount}</td><td>${d.status}</td></tr>
+          ${d.status === '生效中' ? '<tr><td class="mono">续费待生效</td><td>78% / 88%</td><td>¥365</td><td><span class="tag purple">待生效</span></td></tr>' : ''}
+        </tbody></table>
+      </div>
+      <div class="detail-block"><h3>开卡支付单</h3><dl class="desc"><dt>支付方式</dt><dd>${d.paid}</dd><dt>开卡时间</dt><dd class="mono">${d.created}</dd><dt>支付单号</dt><dd class="mono">MC${d.no.slice(2)}0921</dd><dt>退款记录</dt><dd>${d.status === '已退款' ? '2026-08-01 已退 ¥365 · 客户协商退款' : '无'}</dd></dl></div>`;
+    foot.innerHTML = `<button class="btn" onclick="closeAll()">关闭</button>${d.status === '已退款' ? '' : `<button class="btn" onclick="openDrawer('renew', ${idx})">续费</button><button class="btn danger" onclick="closeAll();openRefund(${idx})">强制退款</button>`}`;
+  }
+
+  document.getElementById('overlay').classList.add('on');
+  document.getElementById('drawer').classList.add('on');
+}
+
+function openRefund(idx){
+  const cards = [
+    '田悦 · FY26011001 · ¥365',
+    '周薇 · FY25120112 · ¥365',
+    '陈叙 · FY26110121 · ¥0（赠送）',
+    '许岚 · FY26031508 · ¥365',
+    '沈禾 · FY24112009 · ¥365',
+    '林晚 · FY25080203 · ¥365'
+  ];
+  document.getElementById('refundCardInfo').value = cards[idx || 0];
+  document.getElementById('refundDialog').classList.add('on');
+  document.getElementById('overlay').classList.add('on');
+}
+
+function confirmRefund(){
+  const reason = document.getElementById('refundReason').value.trim();
+  if (!reason) { showToast('请填写退款原因', true); return; }
+  closeAll();
+  showToast('退款已提交，年卡已失效');
+}
+
+function submitIssue(){
+  closeAll();
+  showToast('手工开通成功，已生成权益期');
+}
+
+function submitRenew(name){
+  closeAll();
+  showToast(name + ' 续费成功，新权益期待生效');
+}
+
+function closeAll(){
+  document.getElementById('overlay').classList.remove('on');
+  document.getElementById('drawer').classList.remove('on');
+  document.getElementById('refundDialog').classList.remove('on');
+}
+
+function applyFilter(){
+  const kw = document.getElementById('kw').value.trim().toLowerCase();
+  const status = document.getElementById('statusFilter').value;
+  let visible = 0;
+  document.querySelectorAll('#tbody tr').forEach(tr => {
+    const matchKw = !kw || tr.dataset.key.toLowerCase().includes(kw);
+    const matchStatus = !status || tr.dataset.status === status;
+    const show = matchKw && matchStatus;
+    tr.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.getElementById('emptyHint').style.display = visible ? 'none' : 'block';
+  document.getElementById('totalText').textContent = '共 ' + visible + ' 条' + (kw || status ? '（已筛选）' : '');
+}
+
+function resetFilter(){
+  document.getElementById('kw').value = '';
+  document.getElementById('statusFilter').value = '';
+  applyFilter();
+}
+
+function updatePreview(){
+  const price = Number(document.getElementById('cfgPrice').value) || 365;
+  const adv = Number(document.getElementById('cfgAdvance').value) || 78;
+  const same = Number(document.getElementById('cfgSame').value) || 88;
+  const advAmount = Math.round(900 * adv / 100);
+  const sameAmount = Math.round(900 * same / 100);
+  document.getElementById('cfgPreview').innerHTML =
+    '当前配置：<b>Full愈年卡</b> · <b>¥' + price + ' / 365 天</b> · 提前 <b>' + adv + ' 折</b> · 当日 <b>' + same + ' 折</b> · 到期前 <b>30 天</b>提示续费。<br>' +
+    '以 900 元服务为例：提前预约 <b>¥' + advAmount + '</b>，当日预约 <b>¥' + sameAmount + '</b>。';
+}
+
+function saveConfig(){
+  closeAll();
+  showToast('配置已保存，仅影响之后新开或新续的权益期');
+}
+
+let toastTimer;
+function showToast(msg, err){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.toggle('err', !!err);
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), 2200);
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+
+// 便于评审直接打开指定状态：?view=config / ?panel=issue / ?panel=detail / ?panel=refund / &fit=1（整页截图）
+const qs = new URLSearchParams(location.search);
+if (qs.get('fit') === '1') document.querySelector('.shell').style.height = 'auto';
+if (qs.get('view') === 'config') switchView('config');
+if (qs.get('panel') === 'issue') openDrawer('issue');
+if (qs.get('panel') === 'detail') openDrawer('detail', 1);
+if (qs.get('panel') === 'refund') openRefund(1);
+</script>
+</body>
+</html>

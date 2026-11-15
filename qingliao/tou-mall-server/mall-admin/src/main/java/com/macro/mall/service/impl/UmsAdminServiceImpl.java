@@ -211,14 +211,14 @@ public class UmsAdminServiceImpl extends BaseService<UmsAdminMapper, UmsAdmin> i
         if (!ObjectUtils.isEmpty(umsAdmins)) {
             List<Long> umsAdminIds = umsAdmins.stream().map(UmsAdmin::getId).collect(Collectors.toList());
             List<Massagist> massagists = massagistService.listByUmsAdminIds(umsAdminIds);
-            Map<Long, Massagist> collect = massagists.stream().collect(Collectors.toMap(Massagist::getUmsAdminId, Function.identity()));
+            Map<Long, Massagist> collect = massagists.stream().collect(Collectors.toMap(Massagist::getUmsAdminId, Function.identity(), (a, b) -> a));
             umsAdmins.forEach(e -> {
                 if (!ObjectUtils.isEmpty(collect.get(e.getId()))) {
                     e.setMassagistId(collect.get(e.getId()).getId());
                     e.setMassagistName(collect.get(e.getId()).getName());
                 }
 
-                if(!e.getShopIdArr().isEmpty()){
+                if(!StrUtil.isEmpty(e.getShopIdArr())){
                     String[] shopIdArr=e.getShopIdArr().replace("[","").replace("]","").replace(" ","").split(",");
                     String ShopName="";
                     for(int i=0;i<shopIdArr.length;i++){

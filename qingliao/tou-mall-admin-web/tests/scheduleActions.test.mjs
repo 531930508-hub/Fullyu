@@ -3,15 +3,19 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 const source = await readFile(new URL('../src/views/massagist/schedules/index.vue',import.meta.url),'utf8');
-const script=source.match(/<script>([\s\S]*?)<\/script>/)[1]
-  .replace(/\bimport\s+[^;\n]*(?:;|\n)/g,'').replace('export default','this.options =');
+const scriptSource=source.match(/<script>([\s\S]*?)<\/script>/)[1];
+// 脚本里的默认导入会被剥离，按导入名补占位，避免页面新增子组件后用例直接 ReferenceError
+function toScript(raw,context) {
+  for (const [,name] of raw.matchAll(/import\s+(\w+)\s+from/g)) if (!(name in context)) context[name] = {};
+  return raw.replace(/\bimport\s+[^;\n]*(?:;|\n)/g,'').replace('export default','this.options =');
+}
 function setup(cancel=false) {
   const calls=[];
   const context=vm.createContext({mapGetters:()=>({}),MassagistSortDrawer:{},MassagistSelector:{},ShopSelector:{},
     MassagistSchedulesForm:{},MassagistForm:{},MassagistSchedulesTargetShopForm:{},console:{log(){}},
     massagistSchedulesApi:{clearFuture: async (id,shopId)=>{calls.push({id,shopId}); return {data:2};},
       changeLogs:async params=>{calls.push(params);return {data:{list:[{action:'编辑排班'}],total:1}};}}});
-  vm.runInContext(script,context);
+  vm.runInContext(toScript(scriptSource,context),context);
   const state=context.options.data();
   Object.assign(state,context.options.methods,{$confirm:async()=>{if(cancel) throw 'cancel';},
     $message:{warning(){},success(){}},notifySuccess(){},searchData(){},shopId:1});
@@ -82,7 +86,7 @@ function listState(page) {
   const context=vm.createContext({mapGetters:()=>({}),MassagistSortDrawer:{},MassagistSelector:{},ShopSelector:{},
     MassagistSchedulesForm:{},MassagistForm:{},MassagistSchedulesTargetShopForm:{},console:{log(){}},
     massagistSchedulesApi:{page}});
-  vm.runInContext(script,context);
+  vm.runInContext(toScript(scriptSource,context),context);
   return Object.assign(context.options.data(),context.options.methods,{$message:{warning(){},success(){},error(){}},shopId:1});
 }
 const later=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
@@ -98,5 +102,5 @@ test('failed schedule list clears stale rows and shows retryable error',async()=
   state.dataList=[{id:9,shopId:1}];state.total=1;
   await state.fetchData();
   assert.equal(state.dataList.length,0);assert.equal(state.total,0);assert.match(state.listError,/加载失败/);assert.equal(state.listLoading,false);
-  assert.match(source.slice(0,source.indexOf('<script>')),/v-if="listError"[\s\S]*?@click="fetchData"/);
+  assert.match(source.slice(0,source.indexOf('<script>')),/v-if="listError[^"]*"[\s\S]*?@click="fetchData"/);
 });

@@ -13,14 +13,17 @@ import java.util.List;
  * 会员年卡结算比价引擎。
  *
  * <p>四种优惠互斥、不叠加；默认选中现金最低的一种，同价按
- * 年卡（提前价 &gt; 当日价）→ 通用折扣 → 积分 → 券 的顺序，
- * 避免无谓消耗积分和券。</p>
+ * 年卡提前价 → 通用折扣 → 积分 → 券 的顺序，避免无谓消耗积分和券。</p>
+ *
+ * <p>会员价只保留提前价：服务日期晚于今天才产生年卡选项，当日预约按原价结算。</p>
  *
  * @date 2026/11/07
  */
 public final class MemberCardPriceEngine {
 
     public static final int SOURCE_CARD_ADVANCE = 1;
+    /** 历史订单的当日价标记，仅供读取旧数据，结算不再生成。 */
+    @Deprecated
     public static final int SOURCE_CARD_SAME_DAY = 2;
     public static final int SOURCE_DISCOUNT = 3;
     public static final int SOURCE_POINTS = 4;
@@ -39,7 +42,6 @@ public final class MemberCardPriceEngine {
         private LocalDate today = LocalDate.now();
         private boolean hasActiveCard;
         private BigDecimal advanceRate;
-        private BigDecimal sameDayRate;
         /** 通用折扣（含新客折扣）应付金额；无折扣传 null */
         private BigDecimal discountPayAmount;
         private String discountLabel;
@@ -69,20 +71,15 @@ public final class MemberCardPriceEngine {
         LocalDate serviceDate = input.getAppointmentDate() == null ? today : input.getAppointmentDate();
         result.setAppointmentDate(serviceDate);
 
-        // 以服务开始日期与今天比较：今天约今天为当日价，明天及以后为提前价
+        // 以服务开始日期与今天比较：今天约今天不享会员价，明天及以后才享提前价
         boolean advance = serviceDate.isAfter(today);
         result.setAdvance(advance);
 
         List<MemberCardPriceOption> options = new ArrayList<>();
 
-        if (input.isHasActiveCard()) {
-            if (advance && input.getAdvanceRate() != null) {
-                options.add(cardOption(SOURCE_CARD_ADVANCE, base, input.getAdvanceRate(),
-                        "年卡提前价（" + discountText(input.getAdvanceRate()) + "）"));
-            } else if (!advance && input.getSameDayRate() != null) {
-                options.add(cardOption(SOURCE_CARD_SAME_DAY, base, input.getSameDayRate(),
-                        "年卡当日价（" + discountText(input.getSameDayRate()) + "）"));
-            }
+        if (input.isHasActiveCard() && advance && input.getAdvanceRate() != null) {
+            options.add(cardOption(SOURCE_CARD_ADVANCE, base, input.getAdvanceRate(),
+                    "大会员提前价（" + discountText(input.getAdvanceRate()) + "）"));
         }
 
         if (input.getDiscountPayAmount() != null) {

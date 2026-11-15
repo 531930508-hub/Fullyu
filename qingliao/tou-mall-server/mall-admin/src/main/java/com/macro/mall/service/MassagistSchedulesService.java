@@ -59,6 +59,8 @@ public class MassagistSchedulesService extends BaseService<MassagistSchedulesMap
                 .equal("massagist_id")
                 .equal("target_shop_id")
                 .equal("day")
+                // 周视图按区间取一周排班：dayStart/dayEnd（含首尾），与单日 day 互斥使用
+                .between("day", params.get("day_start"), params.get("day_end"))
                 .getQueryWrapper();
     }
 
@@ -680,29 +682,59 @@ public class MassagistSchedulesService extends BaseService<MassagistSchedulesMap
         if (!CollectionUtils.isEmpty(massagistIds)) {
             lqw.in(MassagistSchedules::getMassagistId, massagistIds);
         }
-        List<MassagistSchedules> list = list(lqw);
         Map<String, Integer> result = new HashMap<>();
-        if (CollectionUtils.isEmpty(list)) {
-            return result;
-        }
-        list.forEach(schedule -> {
-            LocalTime start = schedule.getStartTime();
-            LocalTime end = schedule.getEndTime();
-            if (schedule.getDay() == null || schedule.getMassagistId() == null
-                    || start == null || end == null || end.isBefore(start)) {
-                return;
+        for (MassagistSchedules schedule : list(lqw)) {
+            Integer minutes = workMinutes(schedule);
+            Long shopId = workShopId(schedule);
+            if (minutes == null || shopId == null) {
+                continue;
             }
-            Long shopId = schedule.getTargetShopId() != null && schedule.getTargetShopId() > 0
-                    ? schedule.getTargetShopId()
-                    : schedule.getShopId();
-            if (shopId == null) {
-                return;
-            }
-            int minutes = (int) DateUtil.diffMinutes(start, end);
             String key = DateUtil.toYYYYMM(schedule.getDay()) + "|" + schedule.getMassagistId() + "|" + shopId;
             result.merge(key, minutes, Integer::sum);
-        });
+        }
         return result;
+    }
+
+    /**
+     * 按「疗愈师 → 门店」统计排班在岗分钟数，用于基础薪资的接待工时封顶。
+     *
+     * @return key = 门店 id，value = 该疗愈师在该门店的排班分钟数
+     */
+    public Map<Long, Integer> workMinutesByShop(String startTime, String endTime, Long massagistId) {
+        Map<Long, Integer> result = new HashMap<>();
+        if (massagistId == null) {
+            return result;
+        }
+        LambdaQueryWrapper<MassagistSchedules> lqw = new LambdaQueryWrapper<>();
+        lqw.between(MassagistSchedules::getDay, startTime, endTime);
+        lqw.eq(MassagistSchedules::getMassagistId, massagistId);
+        for (MassagistSchedules schedule : list(lqw)) {
+            Integer minutes = workMinutes(schedule);
+            Long shopId = workShopId(schedule);
+            if (minutes == null || shopId == null) {
+                continue;
+            }
+            result.merge(shopId, minutes, Integer::sum);
+        }
+        return result;
+    }
+
+    /** 调店排班计入目标门店；未调店计入所属门店。 */
+    private Long workShopId(MassagistSchedules schedule) {
+        return schedule.getTargetShopId() != null && schedule.getTargetShopId() > 0
+                ? schedule.getTargetShopId()
+                : schedule.getShopId();
+    }
+
+    /** 单条排班在岗分钟；排班信息不完整时返回 null。 */
+    private Integer workMinutes(MassagistSchedules schedule) {
+        LocalTime start = schedule.getStartTime();
+        LocalTime end = schedule.getEndTime();
+        if (schedule.getDay() == null || schedule.getMassagistId() == null
+                || start == null || end == null || end.isBefore(start)) {
+            return null;
+        }
+        return (int) DateUtil.diffMinutes(start, end);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -710,7 +742,10 @@ public class MassagistSchedulesService extends BaseService<MassagistSchedulesMap
         return batchTargetShop(value);
     }
 
-    /** 临时调店仅作用于所选当天：清原店整天排班，未来其它日期不动。 */
+    /**
+     * 临时调店：只把所选时段调到目标店，原店其余时段照常排班；调店前的原店排班存快照，可一键恢复。
+     * 例如原店 09:00-22:00、调店时段 14:00-18:00，则原店保留 09:00-14:00、18:00-22:00 两段。
+     */
     @Transactional(rollbackFor = Exception.class)
     public MassagistSchedules batchTargetShop(MassagistSchedules value) {
         synchronized (NormalConst.bookingLockKey.intern()) {
@@ -726,22 +761,31 @@ public class MassagistSchedulesService extends BaseService<MassagistSchedulesMap
                     || !Objects.equals(before.getMassagistId(),value.getMassagistId())
                     || !Objects.equals(before.getShopId(),value.getShopId())))
                 throw new BusinessException("编辑调店不可变更日期、疗愈师或所属门店");
+            if (before != null && !Objects.equals(before.getSchedulesType(),1L))
+                throw new BusinessException("该排班不是调店记录，请使用调店入口");
             LambdaQueryWrapper<MassagistSchedules> conflict = new LambdaQueryWrapper<MassagistSchedules>()
                     .eq(MassagistSchedules::getMassagistId,value.getMassagistId())
                     .eq(MassagistSchedules::getDay,value.getDay()).eq(MassagistSchedules::getSchedulesType,1L);
             if (value.getId() != null) conflict.ne(MassagistSchedules::getId,value.getId());
             if (getOnlyOne(conflict) != null) throw new BusinessException("该疗愈师当天已有临时调店，请编辑原记录");
-            List<MassagistSchedules> original = list(new LambdaQueryWrapper<MassagistSchedules>()
-                    .eq(MassagistSchedules::getMassagistId,value.getMassagistId())
-                    .eq(MassagistSchedules::getShopId,value.getShopId())
-                    .eq(MassagistSchedules::getDay,value.getDay()).eq(MassagistSchedules::getSchedulesType,0L));
-            original = original.stream().filter(s -> Objects.equals(s.getMassagistId(),value.getMassagistId())
-                    && Objects.equals(s.getShopId(),value.getShopId()) && Objects.equals(s.getDay(),value.getDay())
-                    && !Objects.equals(s.getSchedulesType(),1L)).collect(Collectors.toList());
-            JSONObject snapshot = new JSONObject(); snapshot.put("transfer",before); snapshot.put("originalDay",original);
-            if (!original.isEmpty() && !removeByIds(original.stream().map(MassagistSchedules::getId).collect(Collectors.toList())))
+            // 基准班次 = 调店前的原店排班：新增取当天普通排班，编辑取上次保存的快照（当天普通排班已被切分）
+            List<MassagistSchedules> base = before == null ? new ArrayList<>() : parseOriginSchedules(before.getOriginSchedules());
+            if (base.isEmpty()) base = listOriginalShifts(value.getMassagistId(), value.getShopId(), value.getDay());
+            if (base.isEmpty() && before != null) base.add(copyOriginalShift(before, before.getStartTime(), before.getEndTime()));
+            if (base.isEmpty()) throw new BusinessException("当天原店没有可调出的排班，请先排班再调店");
+            LocalTime windowStart = value.getStartTime();
+            LocalTime windowEnd = value.getEndTime();
+            boolean covered = base.stream().anyMatch(s -> s.getStartTime() != null && s.getEndTime() != null
+                    && !windowStart.isBefore(s.getStartTime()) && !windowEnd.isAfter(s.getEndTime()));
+            if (!covered) throw new BusinessException("调店时段需完整落在当天原店排班时间内");
+            JSONObject snapshot = new JSONObject(); snapshot.put("transfer",before); snapshot.put("originalDay",base);
+            // 先清掉当天原店（含上次切分产物），再按窗口重建剩余时段
+            if (!removeOriginalShifts(value.getMassagistId(), value.getShopId(), value.getDay()))
                 throw new BusinessException("清除原店当天排班失败");
+            for (MassagistSchedules shift : splitAroundWindow(base, windowStart, windowEnd))
+                if (!save(shift)) throw new BusinessException("保存原店剩余排班失败");
             value.setSchedulesType(1L);
+            value.setOriginSchedules(JSONArray.toJSONString(snapshotOf(base)));
             if (!saveOrUpdate(value)) throw new BusinessException("保存调店排班失败");
             recordScheduleChange("临时调店",value.getShopId(),value.getMassagistId(),snapshot,value);
             clearMassgistSortMap(value.getShopId()); clearMassgistSortMap(value.getTargetShopId());
@@ -753,6 +797,132 @@ public class MassagistSchedulesService extends BaseService<MassagistSchedulesMap
             }
             return value;
         }
+    }
+
+    /** 撤销调店：删除调店记录，并按快照把原店排班恢复到调店前的样子。 */
+    @Transactional(rollbackFor = Exception.class)
+    public MassagistSchedules restoreTransfer(Long id) {
+        synchronized (NormalConst.bookingLockKey.intern()) {
+            MassagistSchedules transfer = id == null ? null : getById(id);
+            if (transfer == null) throw new BusinessException("调店记录不存在");
+            if (!Objects.equals(transfer.getSchedulesType(), 1L)) throw new BusinessException("仅调店记录支持恢复原排班");
+            if (transfer.getDay() == null || transfer.getDay().isBefore(LocalDate.now()))
+                throw new BusinessException("历史调店记录不可恢复，请手动调整排班");
+            List<MassagistSchedules> base = parseOriginSchedules(transfer.getOriginSchedules());
+            if (base.isEmpty()) base.add(copyOriginalShift(transfer, transfer.getStartTime(), transfer.getEndTime()));
+            if (base.isEmpty() || base.get(0).getStartTime() == null) throw new BusinessException("调店记录缺少原排班快照，请手动补排班");
+            for (com.macro.mall.entity.OrderDetail d : orderDetailService.getBaseMapper()
+                    .findSimpleListByStartDateAndShop(DateUtil.toYYYYMMDD(transfer.getDay()), transfer.getTargetShopId())) {
+                if (!Objects.equals(d.getMassagistId(), transfer.getMassagistId())
+                        || d.getStartTime() == null || d.getEndTime() == null) continue;
+                LocalTime orderStart = d.getStartTime().toLocalTime();
+                LocalTime orderEnd = d.getEndTime().toLocalTime();
+                if (orderStart.isBefore(transfer.getEndTime()) && orderEnd.isAfter(transfer.getStartTime()))
+                    throw new BusinessException("目标门店该时段已有该疗愈师的订单，请先改派后再恢复");
+            }
+            if (!removeById(transfer.getId())) throw new BusinessException("删除调店记录失败");
+            if (!removeOriginalShifts(transfer.getMassagistId(), transfer.getShopId(), transfer.getDay()))
+                throw new BusinessException("清除原店当天排班失败");
+            for (MassagistSchedules shift : base) if (!save(shift)) throw new BusinessException("恢复原店排班失败");
+            recordScheduleChange("恢复原排班", transfer.getShopId(), transfer.getMassagistId(), transfer, base);
+            clearMassgistSortMap(transfer.getShopId());
+            if (transfer.getTargetShopId() != null && transfer.getTargetShopId() > 0) clearMassgistSortMap(transfer.getTargetShopId());
+            resetUnstartedRound(transfer.getDay(), transfer.getShopId());
+            resetUnstartedRound(transfer.getDay(), transfer.getTargetShopId());
+            return transfer;
+        }
+    }
+
+    /** 当天原店普通排班（未被调店切分前）。 */
+    private List<MassagistSchedules> listOriginalShifts(Long massagistId, Long shopId, LocalDate day) {
+        return list(new LambdaQueryWrapper<MassagistSchedules>()
+                .eq(MassagistSchedules::getMassagistId, massagistId)
+                .eq(MassagistSchedules::getShopId, shopId)
+                .eq(MassagistSchedules::getDay, day)
+                .eq(MassagistSchedules::getSchedulesType, 0L))
+                .stream().filter(s -> Objects.equals(s.getTargetShopId(), 0L) || s.getTargetShopId() == null)
+                .collect(Collectors.toList());
+    }
+
+    /** 删除当天原店普通排班；没有可删记录也视为成功。 */
+    private boolean removeOriginalShifts(Long massagistId, Long shopId, LocalDate day) {
+        List<MassagistSchedules> rows = listOriginalShifts(massagistId, shopId, day);
+        if (rows.isEmpty()) return true;
+        return removeByIds(rows.stream().map(MassagistSchedules::getId).collect(Collectors.toList()));
+    }
+
+    /** 把基准班次按调店窗口切开，返回窗口之外仍需保留的原店班次。 */
+    private List<MassagistSchedules> splitAroundWindow(List<MassagistSchedules> base, LocalTime windowStart, LocalTime windowEnd) {
+        List<MassagistSchedules> result = new ArrayList<>();
+        for (MassagistSchedules s : base) {
+            LocalTime start = s.getStartTime();
+            LocalTime end = s.getEndTime();
+            if (start == null || end == null) continue;
+            boolean overlap = windowStart.isBefore(end) && windowEnd.isAfter(start);
+            if (!overlap) { result.add(copyOriginalShift(s, start, end)); continue; }
+            if (start.isBefore(windowStart)) {
+                LocalTime leftEnd = windowStart.isBefore(end) ? windowStart : end;
+                if (leftEnd.isAfter(start)) result.add(copyOriginalShift(s, start, leftEnd));
+            }
+            if (end.isAfter(windowEnd)) {
+                LocalTime rightStart = windowEnd.isAfter(start) ? windowEnd : start;
+                if (end.isAfter(rightStart)) result.add(copyOriginalShift(s, rightStart, end));
+            }
+        }
+        return result;
+    }
+
+    /** 复制成一条新的原店普通排班（不继承 id，避免覆盖原记录）。 */
+    private MassagistSchedules copyOriginalShift(MassagistSchedules source, LocalTime start, LocalTime end) {
+        MassagistSchedules row = new MassagistSchedules();
+        row.setShopId(source.getShopId());
+        row.setMassagistId(source.getMassagistId());
+        row.setDay(source.getDay());
+        row.setStartTime(start);
+        row.setEndTime(end);
+        row.setSchedulesType(0L);
+        row.setTargetShopId(0L);
+        return row;
+    }
+
+    /** 快照只保留恢复排班必需的字段，避免整实体序列化带出派生字段。 */
+    private List<Map<String, Object>> snapshotOf(List<MassagistSchedules> rows) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (MassagistSchedules s : rows) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("shopId", s.getShopId());
+            item.put("massagistId", s.getMassagistId());
+            item.put("day", s.getDay() == null ? null : s.getDay().toString());
+            item.put("startTime", s.getStartTime() == null ? null : s.getStartTime().toString());
+            item.put("endTime", s.getEndTime() == null ? null : s.getEndTime().toString());
+            list.add(item);
+        }
+        return list;
+    }
+
+    private List<MassagistSchedules> parseOriginSchedules(String json) {
+        List<MassagistSchedules> rows = new ArrayList<>();
+        if (!StringUtils.hasText(json)) return rows;
+        JSONArray array;
+        try {
+            array = JSONArray.parseArray(json);
+        } catch (Exception e) {
+            return rows;
+        }
+        for (int i = 0; i < array.size(); i++) {
+            JSONObject item = array.getJSONObject(i);
+            if (item == null || item.getString("startTime") == null || item.getString("endTime") == null) continue;
+            MassagistSchedules row = new MassagistSchedules();
+            row.setShopId(item.getLong("shopId"));
+            row.setMassagistId(item.getLong("massagistId"));
+            row.setDay(item.getString("day") == null ? null : LocalDate.parse(item.getString("day")));
+            row.setStartTime(LocalTime.parse(item.getString("startTime")));
+            row.setEndTime(LocalTime.parse(item.getString("endTime")));
+            row.setSchedulesType(0L);
+            row.setTargetShopId(0L);
+            rows.add(row);
+        }
+        return rows;
     }
 
     public List<MassagistSchedules> listNoPageNew(Map<String, Object> params) {

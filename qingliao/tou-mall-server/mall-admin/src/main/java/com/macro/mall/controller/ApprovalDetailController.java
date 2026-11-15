@@ -51,6 +51,20 @@ public class ApprovalDetailController {
         return CommonResult.success(detailService.countTodo(admin == null ? null : admin.getId()));
     }
 
+    @GetMapping("/tabCounts")
+    @ApiOperation("待办中心各页签数量：我的待办 / 我的已办 / 我提交的 / 抄送我的")
+    public CommonResult tabCounts() {
+        UmsAdmin admin = currentAdmin();
+        return CommonResult.success(detailService.tabCounts(admin == null ? null : admin.getId()));
+    }
+
+    @GetMapping("/pageSubmitted")
+    @ApiOperation("我提交的审批（按发起人查询，任意状态）")
+    public CommonResult pageSubmitted(@RequestParam Map<String, Object> params) {
+        UmsAdmin admin = currentAdmin();
+        return CommonResult.success(detailService.pageSubmitted(admin == null ? null : admin.getId(), params));
+    }
+
     private UmsAdmin currentAdmin() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof AdminUserDetails) {
@@ -76,6 +90,18 @@ public class ApprovalDetailController {
     @ApiOperation("审批关联的业务详情")
     public CommonResult businessDetail(@RequestParam Long approvalId) {
         return CommonResult.success(detailService.detail(approvalId));
+    }
+
+    @GetMapping("/flow")
+    @ApiOperation("只读查看完整审批流程（订单/消费记录/排班日志回溯）")
+    public CommonResult flow(@RequestParam Long approvalId) {
+        return CommonResult.success(detailService.flow(approvalId));
+    }
+
+    @GetMapping("/byOrder")
+    @ApiOperation("按订单查询关联审批")
+    public CommonResult byOrder(@RequestParam Long orderId) {
+        return CommonResult.success(detailService.listByOrderId(orderId));
     }
 
     @ApiOperation("拒绝审批")

@@ -86,11 +86,11 @@ export default {
       params: params
     })
   },
-  timeList(date, personCount, projectId, durationMinutes, shopId, massagistId) {
+  timeList(date, personCount, projectId, durationMinutes, shopId, massagistId, phone, orderId) {
     return request({
       url: '/order/timeListlx',
       method: 'get',
-      params: {date, personCount, projectId, durationMinutes, shopId, massagistId}
+      params: {date, personCount, projectId, durationMinutes, shopId, massagistId, phone, orderId}
     })
   },
   //luxin新增
@@ -115,11 +115,11 @@ export default {
       params: {dateTime, personCount, durationMinutes, shopId,projectId,phone}
     })
   },
-  bedList(dateTime, projectId, durationMinutes, shopId) {
+  bedList(dateTime, projectId, durationMinutes, shopId, orderId, phone) {
     return request({
       url: '/order/bedList',
       method: 'get',
-      params: {dateTime, projectId, durationMinutes, shopId}
+      params: {dateTime, projectId, durationMinutes, shopId, orderId, phone}
     })
   },
   bookingDates(yyyyMMdd = null, shopId = 1) {

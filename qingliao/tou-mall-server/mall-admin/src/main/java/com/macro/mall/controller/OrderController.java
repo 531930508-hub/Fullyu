@@ -1,25 +1,34 @@
 package com.macro.mall.controller;
 
 import com.alibaba.fastjson2.JSONObject;
+import com.macro.mall.annotation.ExportLog;
 import com.macro.mall.aspect.FullLog;
+import com.macro.mall.bo.AdminUserDetails;
 import com.macro.mall.common.api.CommonResult;
+import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.config.ContextMixin;
 import com.macro.mall.dto.*;
 import com.macro.mall.entity.Order;
+import com.macro.mall.model.UmsAdmin;
+import com.macro.mall.model.UmsRole;
 import com.macro.mall.service.BotChatRecordService;
 import com.macro.mall.service.MassagistSchedulesService;
 import com.macro.mall.service.OrderService;
+import com.macro.mall.service.UmsAdminService;
 import com.macro.mall.utils.DateUtil;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.validation.Valid;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,6 +48,26 @@ public class OrderController implements ContextMixin {
     @Autowired
     @Lazy
     MassagistSchedulesService massagistSchedulesService;
+    @Autowired
+    private UmsAdminService umsAdminService;
+
+    /** 导出文件含客户完整手机号，仅超级管理员可用（与前端按钮可见性保持一致） */
+    private void requireSuperAdminForExport() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || !(auth.getPrincipal() instanceof AdminUserDetails)) {
+            throw new BusinessException("请先登录后台");
+        }
+        UmsAdmin admin = ((AdminUserDetails) auth.getPrincipal()).getUmsAdmin();
+        if (admin == null || admin.getId() == null) {
+            throw new BusinessException("请先登录后台");
+        }
+        List<UmsRole> roles = umsAdminService.getRoleList(admin.getId());
+        boolean superAdmin = roles != null && roles.stream()
+                .anyMatch(role -> role.getName() != null && "超级管理员".equals(role.getName().trim()));
+        if (!superAdmin) {
+            throw new BusinessException("仅超级管理员可导出订单");
+        }
+    }
 
 
     @PostMapping("/chat/reply")
@@ -68,7 +97,9 @@ public class OrderController implements ContextMixin {
 
     @GetMapping("/export")
     @ApiOperation("导出")
+    @ExportLog(module = "order", value = "订单列表")
     public void orderExport(@RequestParam Map<String, Object> params) {
+        requireSuperAdminForExport();
         service.orderExport(params);
     }
 
@@ -220,10 +251,10 @@ public class OrderController implements ContextMixin {
     }
 
     @GetMapping("/timeListlx")
-    @ApiOperation("获取到店时间列表")
-    public CommonResult timeListlx(@RequestParam String date, @RequestParam Integer personCount, @RequestParam Long projectId, @RequestParam Integer durationMinutes, Long shopId, Long massagistId) {
-        //return CommonResult.success(service.findArriveTimeList(date, personCount, projectId, durationMinutes, shopId, massagistId));//有验证的返回时间
-        return CommonResult.success(service.findArriveTimeList0410(date, personCount, projectId, durationMinutes, shopId, massagistId));//无验证的返回时间
+    @ApiOperation("获取到店时间列表（后台建单：按疗愈师技能/床位/真实可服务人数校验，不可用时段置灰）")
+    public CommonResult timeListlx(@RequestParam String date, @RequestParam Integer personCount, @RequestParam Long projectId, @RequestParam Integer durationMinutes, Long shopId, Long massagistId,
+                                   Long orderId, String phone) {
+        return CommonResult.success(service.findArriveTimeListForPc(date, personCount, projectId, durationMinutes, shopId, massagistId, orderId, phone));
     }
 
     @GetMapping("/timeList")
@@ -233,10 +264,9 @@ public class OrderController implements ContextMixin {
     }
 
     @GetMapping("/timeListEdit")
-    @ApiOperation("获取到店时间列表,编辑的时候用")
+    @ApiOperation("获取到店时间列表,编辑的时候用（按技能/床位/人数校验，不可用时段置灰）")
     public CommonResult timeListEdit(@RequestParam String date, @RequestParam Integer personCount, @RequestParam Long projectId, @RequestParam Integer durationMinutes, Long shopId, Long orderId, Long massagistId) {
-        //return CommonResult.success(service.findArriveTimeListEdit(date, personCount, projectId, durationMinutes, shopId, orderId, massagistId));//有验证的返回时间
-        return CommonResult.success(service.findArriveTimeListEdit0410(date, personCount, projectId, durationMinutes, shopId, orderId, massagistId));//无验证的返回时间
+        return CommonResult.success(service.findArriveTimeListEditForPc(date, personCount, projectId, durationMinutes, shopId, orderId, massagistId));
     }
 
     @GetMapping("/massagistList")
@@ -264,9 +294,13 @@ public class OrderController implements ContextMixin {
 
     @GetMapping("/bedList")
     @ApiOperation("获取床位列表(带空闲状态)")
-    public CommonResult findAvailableMassagistList(@RequestParam String dateTime, @RequestParam Long projectId, @RequestParam Integer durationMinutes, @RequestParam Long shopId) {
+    public CommonResult findAvailableMassagistList(@RequestParam String dateTime, @RequestParam Long projectId, @RequestParam Integer durationMinutes, @RequestParam Long shopId,
+                                                   Long orderId, String phone) {
         LocalDateTime startTime = DateUtil.string2DateTime(dateTime);
-        return CommonResult.success(service.findAvailableBedList(shopId, startTime, durationMinutes, projectId));
+        //改单弹窗传 orderId、建单/加钟传 phone：同一客户接着做的下一段不占用 15 分钟整理期，
+        //否则自己的床位会显示为"占用"而被迫换床
+        Long customerId = orderId != null ? service.customerIdOfOrder(orderId) : service.customerIdOfPhone(phone);
+        return CommonResult.success(service.findAvailableBedList(shopId, startTime, durationMinutes, projectId, customerId));
     }
 
     @GetMapping("/checkout")

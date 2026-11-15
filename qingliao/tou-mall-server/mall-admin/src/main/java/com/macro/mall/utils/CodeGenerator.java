@@ -26,8 +26,8 @@ public class CodeGenerator {
 
     private static final String PACKAGE_NAME = "com.macro";
     private static final String DB_URL = "jdbc:mysql://rm-bp127cdsipvc7dtseno.mysql.rds.aliyuncs.com:3306/" + DB_NAME;
-    private static final String DB_USERNAME = com.macro.mall.common.utils.Env.get("DB_USERNAME", "fully");
-    private static final String DB_PASSWORD = com.macro.mall.common.utils.Env.get("DB_PASSWORD");
+    private static final String DB_USERNAME = "fully";
+    private static final String DB_PASSWORD = "jhSd3#623ha(sdjf8HsyiT23e";
 
     public static void main(String[] args) {
         String propertyName = System.getProperty("user.dir");

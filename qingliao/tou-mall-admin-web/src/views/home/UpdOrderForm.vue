@@ -271,7 +271,8 @@ export default {
     },
     async fetchBedList() {
       try {
-        let res = await orderApi.bedList(this.form.date + " " + this.form.time + ":00", this.projectId, this.form.durationMinutes, this.form.shopId)
+        //带上 orderId：自己这张单/同客户加钟段占用床位时按同客户口径放宽整理期
+        let res = await orderApi.bedList(this.form.date + " " + this.form.time + ":00", this.projectId, this.form.durationMinutes, this.form.shopId, this.form.orderId)
         this.bedList = res.data || []
       } catch (e) {
         this.bedList = []

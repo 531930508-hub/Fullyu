@@ -7,6 +7,7 @@ import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.model.UmsAdmin;
 import com.macro.mall.service.AdminNoticeBindingService;
 import com.macro.mall.service.AdminApprovalNoticeService;
+import com.macro.mall.service.AdminNoticeOAuthService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,6 +19,7 @@ import java.util.Map;
 public class AdminNoticeController {
     @Autowired AdminNoticeBindingService bindings;
     @Autowired AdminApprovalNoticeService notices;
+    @Autowired AdminNoticeOAuthService oauth;
     private Long currentAdmin(){
         Authentication auth=SecurityContextHolder.getContext().getAuthentication();
         if(auth==null||!auth.isAuthenticated()||!(auth.getPrincipal() instanceof AdminUserDetails))throw new BusinessException("请先登录后台");
@@ -29,6 +31,10 @@ public class AdminNoticeController {
     @PostMapping("/binding/begin") public CommonResult begin(){return CommonResult.success(bindings.begin(currentAdmin()));}
     @IgnoreLog
     @PostMapping("/binding/confirm") public CommonResult confirm(@RequestBody Map<String,String> body){return CommonResult.success(bindings.confirm(currentAdmin(),body==null?null:body.get("nonce")));}
+    @IgnoreLog
+    @PostMapping("/binding/oauth-url") public CommonResult oauthUrl(){return CommonResult.success(oauth.authorize(currentAdmin()));}
+    @IgnoreLog
+    @PostMapping("/binding/test-send") public CommonResult testSend(){return CommonResult.success(notices.sendTest(currentAdmin()));}
     @IgnoreLog
     @PostMapping("/binding/unlink") public CommonResult unlink(){bindings.unlink(currentAdmin());return CommonResult.success();}
     @GetMapping("/logs") public CommonResult logs(@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="10") int size){return CommonResult.success(notices.logs(currentAdmin(),page,size));}

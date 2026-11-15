@@ -1,7 +1,6 @@
 <template>
   <div>
   <el-drawer :visible.sync="showDrawer" :title="`${title}-评价明细`" size="60%"
-  z-index="900"
   >
     <el-select v-model="searchForm.rating" @change="searchData" placeholder="请选择评分" clearable class="m-r-10">
       <el-option value="5" label="5分"></el-option>

@@ -50,19 +50,29 @@
         <div class="config-layout">
           <section class="config-card">
             <div class="card-title">
-              <h3>基础接单奖励</h3>
-              <span>左闭右开，达到起点即跳档；按单一档位系数计算，不分段累加。</span>
+              <h3>基础薪资</h3>
+              <span>基础薪资 = 当月折算分钟 × 当前档位单价（元/分钟）；左闭右开，达到起点即跳档，整月单一档位、不分段累加。</span>
             </div>
-            <el-form :inline="true" size="small" label-width="118px" class="base-form">
-              <el-form-item label="新人合作期系数">
-                <el-input-number v-model="form.newCoefficient" :min="0.01" :max="9.99" :step="0.1" :precision="2"/>
+            <el-form :inline="true" size="small" label-width="152px" class="base-form">
+              <el-form-item label="新人合作期单价">
+                <el-input-number
+                  v-model="form.newCoefficient"
+                  :min="0.8"
+                  :max="1.5"
+                  :step="0.05"
+                  :precision="2"/>
+                <span class="unit">元/分钟</span>
               </el-form-item>
               <el-form-item label="折算分钟起点">
                 <span class="form-static">{{ coefficientStart }}</span>
               </el-form-item>
             </el-form>
+            <p class="card-hint">
+              单价限定 1.00–1.50 元/分钟（即 60–90 元/小时），按 120/140/160 小时等时长阶梯递增；
+              新人合作期单价 0.80–1.50 元/分钟，期间不参与档位累加。
+            </p>
             <el-table :data="form.coefficients" size="mini" border>
-              <el-table-column label="起始分钟（含）" width="190">
+              <el-table-column label="起始分钟（含）" width="170">
                 <template slot-scope="scope">
                   <el-input-number
                     v-model="scope.row.minMinutes"
@@ -71,26 +81,30 @@
                     :precision="0"
                     size="mini"
                     controls-position="right"
-                    style="width: 150px"/>
+                    style="width: 140px"/>
                 </template>
               </el-table-column>
-              <el-table-column label="基础系数" width="160">
+              <el-table-column label="折合小时" width="90" align="right">
+                <template slot-scope="scope">{{ decimal(numberValue(scope.row.minMinutes) / 60) }} h</template>
+              </el-table-column>
+              <el-table-column label="单价（元/分钟）" width="170">
                 <template slot-scope="scope">
                   <el-input-number
                     v-model="scope.row.coefficient"
-                    :min="0.01"
-                    :max="9.99"
-                    :step="0.1"
+                    :min="1"
+                    :max="1.5"
+                    :step="0.05"
                     :precision="2"
                     size="mini"
                     controls-position="right"
-                    style="width: 125px"/>
+                    style="width: 135px"/>
                 </template>
               </el-table-column>
               <el-table-column label="说明">
                 <template slot-scope="scope">
                   <span class="row-hint">
-                    {{ scope.row.minMinutes }} 分钟起 × {{ decimal(scope.row.coefficient) }}
+                    {{ decimal(scope.row.coefficient) }} 元/分钟 · 达到起点即
+                    ¥{{ money(numberValue(scope.row.minMinutes) * numberValue(scope.row.coefficient), 0) }}
                   </span>
                 </template>
               </el-table-column>
@@ -100,7 +114,23 @@
                 </template>
               </el-table-column>
             </el-table>
-            <el-button class="add-row" size="mini" icon="el-icon-plus" @click="addCoefficient">增加时长档位</el-button>
+            <div class="row-actions">
+              <el-button class="add-row" size="mini" icon="el-icon-plus" @click="addCoefficient">增加时长档位</el-button>
+              <el-button class="add-row" size="mini" icon="el-icon-refresh-left" @click="applyStandardLadder">套用 120/140/160 小时阶梯</el-button>
+            </div>
+            <div class="salary-preview">
+              <el-form :inline="true" size="small" label-width="110px" class="base-form">
+                <el-form-item label="折算分钟试算">
+                  <el-input-number v-model="previewMinutes" :min="0" :step="600" :precision="0" size="mini" controls-position="right" style="width: 140px"/>
+                </el-form-item>
+                <el-form-item label="适用单价">
+                  <span class="form-static">{{ decimal(previewUnitPrice) }} 元/分钟</span>
+                </el-form-item>
+                <el-form-item label="基础薪资">
+                  <span class="form-static preview-amount">¥{{ money(previewAmount) }}</span>
+                </el-form-item>
+              </el-form>
+            </div>
           </section>
 
           <section class="config-card">
@@ -108,6 +138,11 @@
               <h3>新客复购奖励</h3>
               <span>老客 60 天留存率达门槛后计入；30 天取最高档，不叠加；10 天按斐波那契单价逐位递增。</span>
             </div>
+            <p class="card-hint">
+              留存率按“到店人次”计算：窗口内本店由该伙伴服务过的老客到店（非首单）各算一次，
+              同客户同日多单只算一次；任一次到店后 60 天内再次到店即算留存；
+              未满 60 天观察期的到店不计入；样本不足 30 人次时仅展示、不判定合格。
+            </p>
             <el-form :inline="true" size="small" label-width="128px" class="base-form">
               <el-form-item label="老客留存门槛">
                 <el-input-number v-model="form.retentionThreshold" :min="0" :max="100" :step="1" :precision="0"/>
@@ -344,6 +379,47 @@
           </template>
         </el-table>
       </el-tab-pane>
+
+      <el-tab-pane v-if="isGlobal" label="统计排除" name="internal">
+        <div class="target-toolbar">
+          <div>
+            <h3>统计排除的内部账号</h3>
+            <p>名单内手机号不参与接单奖励统计（订单、复购与留存口径同时排除）；停用后恢复参与。</p>
+          </div>
+          <el-button
+            size="small"
+            type="primary"
+            icon="el-icon-plus"
+            :disabled="!isGlobal"
+            @click="openInternal()">
+            新增手机号
+          </el-button>
+        </div>
+        <el-table v-loading="loadingInternal" :data="internalAccounts" border stripe>
+          <el-table-column label="手机号" prop="phone" width="140"/>
+          <el-table-column label="状态" width="90" align="center">
+            <template slot-scope="scope">
+              <el-switch
+                :value="scope.row.enabled === 1"
+                :disabled="!isGlobal"
+                @change="toggleInternal(scope.row, $event)"/>
+            </template>
+          </el-table-column>
+          <el-table-column label="备注" prop="remark" min-width="200" show-overflow-tooltip/>
+          <el-table-column label="添加时间" width="165">
+            <template slot-scope="scope">{{ formatDateTime(scope.row.createTime) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="120" align="center">
+            <template slot-scope="scope">
+              <el-button type="text" size="mini" :disabled="!isGlobal" @click="openInternal(scope.row)">编辑</el-button>
+              <el-button type="text" size="mini" :disabled="!isGlobal" class="danger-text" @click="removeInternal(scope.row)">删除</el-button>
+            </template>
+          </el-table-column>
+          <template slot="empty">
+            <div class="table-empty">暂无排除账号，内部账号会正常计入统计</div>
+          </template>
+        </el-table>
+      </el-tab-pane>
     </el-tabs>
 
     <el-dialog :visible.sync="targetDialogVisible" width="480px" title="门店业绩目标" @closed="resetTarget">
@@ -383,6 +459,22 @@
       <span slot="footer">
         <el-button size="small" @click="targetDialogVisible = false">取消</el-button>
         <el-button size="small" type="primary" :loading="savingTarget" @click="saveTarget">保存</el-button>
+      </span>
+    </el-dialog>
+
+    <el-dialog :visible.sync="internalDialogVisible" width="440px" title="统计排除手机号" @closed="resetInternal">
+      <el-form label-width="90px" size="small">
+        <el-form-item label="手机号" required>
+          <el-input v-model="internalForm.phone" maxlength="11" placeholder="11 位手机号"/>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="internalForm.remark" type="textarea" :rows="2" maxlength="255" show-word-limit placeholder="如：内部测试账号 / 员工本人"/>
+        </el-form-item>
+      </el-form>
+      <div class="dialog-hint">保存后即时生效，历史月份看板与导出同样不再统计该手机号。</div>
+      <span slot="footer">
+        <el-button size="small" @click="internalDialogVisible = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="savingInternal" @click="saveInternal">保存</el-button>
       </span>
     </el-dialog>
 
@@ -455,6 +547,7 @@ export default {
         tiers: [],
         trainingProjects: []
       },
+      previewMinutes: 7200,
       loading: false,
       savingConfig: false,
       targets: [],
@@ -472,7 +565,17 @@ export default {
       },
       historyVisible: false,
       loadingHistory: false,
-      history: []
+      history: [],
+      internalAccounts: [],
+      loadingInternal: false,
+      internalDialogVisible: false,
+      savingInternal: false,
+      internalForm: {
+        id: null,
+        phone: '',
+        remark: '',
+        enabled: 1
+      }
     }
   },
   computed: {
@@ -483,7 +586,27 @@ export default {
     },
     coefficientStart() {
       const zero = this.form.coefficients.find(item => Number(item.minMinutes) === 0)
-      return zero ? `0 分钟 × ${decimal(zero.coefficient)}` : '缺少 0 分钟档位'
+      return zero ? `0 分钟 × ${decimal(zero.coefficient)} 元/分钟` : '缺少 0 分钟档位'
+    },
+    /** 试算：与后端同口径，取起点不超过折算分钟的最深档位单价。 */
+    previewUnitPrice() {
+      const minutes = numberValue(this.previewMinutes)
+      const bands = (this.form.coefficients || [])
+        .slice()
+        .sort((a, b) => numberValue(a.minMinutes) - numberValue(b.minMinutes))
+      if (!bands.length) {
+        return 0
+      }
+      let price = numberValue(bands[0].coefficient)
+      bands.forEach(band => {
+        if (minutes >= numberValue(band.minMinutes)) {
+          price = numberValue(band.coefficient)
+        }
+      })
+      return price
+    },
+    previewAmount() {
+      return numberValue(this.previewMinutes) * this.previewUnitPrice
     }
   },
   created() {
@@ -493,10 +616,93 @@ export default {
     money,
     percent,
     decimal,
+    numberValue,
     async bootstrap() {
       const shopsRes = await incentiveApi.shops()
       this.shops = shopsRes.data || []
-      await this.loadAll()
+      await Promise.all([this.loadAll(), this.loadInternalAccounts()])
+    },
+    async loadInternalAccounts() {
+      if (!this.isGlobal) {
+        this.internalAccounts = []
+        return
+      }
+      this.loadingInternal = true
+      try {
+        const res = await incentiveApi.internalAccounts()
+        this.internalAccounts = res.data || []
+      } catch (error) {
+        // 名单接口异常不阻塞参数与目标页签。
+        this.internalAccounts = []
+      } finally {
+        this.loadingInternal = false
+      }
+    },
+    openInternal(row) {
+      if (!this.isGlobal) {
+        return
+      }
+      this.internalForm = row
+        ? {id: row.id, phone: row.phone, remark: row.remark || '', enabled: row.enabled}
+        : {id: null, phone: '', remark: '', enabled: 1}
+      this.internalDialogVisible = true
+    },
+    resetInternal() {
+      this.internalForm = {id: null, phone: '', remark: '', enabled: 1}
+    },
+    async saveInternal() {
+      if (!this.isGlobal) {
+        return
+      }
+      const phone = (this.internalForm.phone || '').trim()
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        this.$message.warning('请输入 11 位手机号')
+        return
+      }
+      this.savingInternal = true
+      try {
+        const res = await incentiveApi.saveInternalAccount({
+          id: this.internalForm.id,
+          phone,
+          remark: this.internalForm.remark,
+          enabled: this.internalForm.enabled
+        })
+        this.$message.success(res.message || '排除名单已保存')
+        this.internalDialogVisible = false
+        await this.loadInternalAccounts()
+      } finally {
+        this.savingInternal = false
+      }
+    },
+    async toggleInternal(row, enabled) {
+      if (!this.isGlobal) {
+        return
+      }
+      try {
+        await incentiveApi.saveInternalAccount({
+          id: row.id,
+          phone: row.phone,
+          remark: row.remark,
+          enabled: enabled ? 1 : 0
+        })
+        this.$message.success(enabled ? '已启用，重新计入统计' : '已停用，不再计入统计')
+      } finally {
+        // 无论切换成功与否都重载，保持开关与后端一致。
+        await this.loadInternalAccounts()
+      }
+    },
+    async removeInternal(row) {
+      if (!this.isGlobal) {
+        return
+      }
+      try {
+        await this.$confirm(`确认删除 ${row.phone}？删除后该账号会重新计入统计。`, '提示', {type: 'warning'})
+      } catch (error) {
+        return
+      }
+      const res = await incentiveApi.deleteInternalAccount(row.id)
+      this.$message.success(res.message || '已删除')
+      await this.loadInternalAccounts()
     },
     async loadAll() {
       this.loading = true
@@ -563,7 +769,22 @@ export default {
       const max = this.form.coefficients.reduce((result, item) => {
         return Math.max(result, numberValue(item.minMinutes))
       }, 0)
-      this.form.coefficients.push({minMinutes: max + 600, coefficient: 1})
+      const lastPrice = this.form.coefficients.reduce((result, item) => {
+        return Math.max(result, numberValue(item.coefficient))
+      }, 0)
+      this.form.coefficients.push({
+        minMinutes: max + 600,
+        coefficient: Math.min(1.5, Number((lastPrice + 0.1).toFixed(2)))
+      })
+    },
+    /** 一键套用标准阶梯：120/140/160 小时分别对应 1.20/1.30/1.50 元/分钟。 */
+    applyStandardLadder() {
+      this.form.coefficients = [
+        {minMinutes: 0, coefficient: 1},
+        {minMinutes: 7200, coefficient: 1.2},
+        {minMinutes: 8400, coefficient: 1.3},
+        {minMinutes: 9600, coefficient: 1.5}
+      ]
     },
     removeCoefficient(index) {
       this.form.coefficients.splice(index, 1)
@@ -581,6 +802,9 @@ export default {
       if (!this.form.coefficients.length) {
         throw new Error('至少配置一个时长档位')
       }
+      if (numberValue(this.form.newCoefficient) < 0.8 || numberValue(this.form.newCoefficient) > 1.5) {
+        throw new Error('新人合作期单价须在 0.80–1.50 元/分钟之间')
+      }
       const minutes = {}
       let hasZero = false
       this.form.coefficients.forEach(item => {
@@ -594,8 +818,9 @@ export default {
         if (numberValue(item.minMinutes) === 0) {
           hasZero = true
         }
-        if (numberValue(item.coefficient) <= 0) {
-          throw new Error('基础系数必须大于 0')
+        const price = numberValue(item.coefficient)
+        if (price < 1 || price > 1.5) {
+          throw new Error('基础薪资单价须在 1.00–1.50 元/分钟之间')
         }
       })
       if (!hasZero) {
@@ -934,8 +1159,37 @@ export default {
   color: #79747E;
 }
 
+.card-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #79747E;
+}
+
 .add-row {
   margin-top: 10px;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.salary-preview {
+  margin-top: 14px;
+  padding: 10px 12px 2px;
+  border-radius: 10px;
+  background: rgba(103, 80, 164, 0.06);
+
+  .base-form {
+    margin-bottom: 0;
+  }
+}
+
+.preview-amount {
+  font-weight: 600;
+  color: #1D1B20;
 }
 
 .fib-row {
@@ -1015,6 +1269,10 @@ export default {
   font-size: 11px;
   color: #79747E;
   line-height: 1.7;
+}
+
+::v-deep .danger-text {
+  color: #F56C6C;
 }
 
 @media (max-width: 1280px) {

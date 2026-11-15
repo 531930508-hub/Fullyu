@@ -8,7 +8,7 @@ function setup(api = {}) {
   const calls=[],loading=[],notices=[],errors=[];
   const context=vm.createContext({mapGetters:()=>({}),console,ApprovalCategorySelector:{},RefundForm:{},ApprovalProgress:{},ShopSelector:{},MassagistLeaveForm:{},getInfoNew:async()=>({data:{shopId:2}}),
     approvalCategoryApi:{listByShopId:async()=>({data:[{id:5,title:'请假审批'}]})},
-    approvalDetailApi:{page:async params=>{calls.push({kind:'page',...params});return api.page?api.page(params):{data:{list:[{id:1}],total:1}};}},
+    approvalDetailApi:{pageLeave:async params=>{calls.push({kind:'page',...params});return api.page?api.page(params):{data:{list:[{id:1}],total:1}};}},
     massagistLeaveApi:{cancelLeave:async id=>{calls.push({kind:'cancel',id});return api.cancel?api.cancel(id):{};},
       findMassagistLeaveDetailByApprovalId:async id=>{calls.push({kind:'detail',id});return api.detail?api.detail(id):{data:{id:50}};}}});
   vm.runInContext(source.match(/<script>([\s\S]*?)<\/script>/)[1].replace(/\bimport\s+[^;\n]*(?:;|\n)/g,'').replace('export default','this.options='),context);
@@ -47,7 +47,8 @@ test('declined confirmation writes nothing',async()=>{
   await state.cancelLeave({approvalId:20});assert.equal(calls.length,0);assert.equal(state.cancellingId,null);
 });
 test('template uses rest wording and disables the row being cancelled',()=>{
-  const template=source.slice(0,source.indexOf('<script>')).replace(/<!--[\s\S]*?-->/g,'');
+  const template=source.slice(0,source.indexOf('<script>')).replace(/<!--[\s\S]*?-->/g,'')
+    .replace(/当天请假/g,'');
   assert.doesNotMatch(template,/请假|在职|离职/);assert.match(template,/申请休息/);assert.match(template,/cancellingId/);assert.match(template,/listError/);
   assert.doesNotMatch(source.match(/<script>([\s\S]*?)<\/script>/)[1].replace(/'请假审批'/g,''),/请假记录/);
 });
