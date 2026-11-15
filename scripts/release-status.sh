@@ -48,4 +48,5 @@ done
 echo ""
 echo "全部生产 tag（新→旧，最多 10 条）："
 git tag -l 'prod-*' --sort=-creatordate | head -10 | sed 's/^/  /'
-[ -z "$(git tag -l 'prod-*' | head -1)" ] && echo "  （暂无）"
+if [ -z "$(git tag -l 'prod-*' | head -1)" ]; then echo "  （暂无）"; fi
+exit 0
