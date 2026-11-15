@@ -28,16 +28,16 @@ describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
     const res = await h.api('get', '/brand-cards', admin);
     expect(res.status).toBe(200);
     const annual = res.body.products.find((p: { code: string }) => p.code === 'FY_ANNUAL');
-    expect(annual.name).toBe('Full愈年卡');
+    expect(annual.name).toBe('Full愈大会员');
     expect(annual.currentVersion).toBe(1);
-    expect(annual.current.priceCents).toBe(29900);
+    expect(annual.current.priceCents).toBe(36500);
     expect(annual.current.validDays).toBe(365);
     expect(annual.current.benefits).toHaveLength(3);
     expect(annual.current.pointsSpend.ql).toBe('1_point_1_yuan');
     expect(annual.current.pointsSpend.sx).toBe('display_only');
     const month = res.body.products.find((p: { code: string }) => p.code === 'FY_MONTH');
-    expect(month.current.priceCents).toBe(4500);
-    expect(month.current.validDays).toBe(30);
+    expect(month.current.priceCents).toBe(9900);
+    expect(month.current.validDays).toBe(90);
   });
 
   it('业务卡目录：在场畅练卡只读、不可在 CRM 售卖；内部键与对外键同时返回', async () => {
@@ -73,7 +73,7 @@ describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
 
     const before = await h.api('get', '/brand-cards/FY_ANNUAL', admin);
     expect(before.body.currentVersion).toBe(1);
-    expect(before.body.current.priceCents).toBe(29900);
+    expect(before.body.current.priceCents).toBe(36500);
 
     const activated = await h.api('post', '/brand-cards/FY_ANNUAL/versions/2/activate', ops);
     expect(activated.status).toBe(201);
@@ -95,7 +95,7 @@ describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
 
   it('版本校验：价格/天数/权益/积分模式非法均 400，客服不能建版本', async () => {
     const base = {
-      priceCents: 29900,
+      priceCents: 36500,
       validDays: 365,
       benefits: BENEFITS,
       pointsSpend: { ql: '1_point_1_yuan' }
@@ -154,6 +154,30 @@ describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
     const activated = await h.api('post', '/brand-cards/FY_TEST/versions/1/activate', admin);
     expect(activated.status).toBe(201);
     expect(activated.body.current.version).toBe(1);
+  });
+
+  it('权益文案可原地改：只动文案，价格与卡期不变；客服无权限', async () => {
+    const updated = await h.api('patch', '/brand-cards/FY_TEST/benefits', ops, {
+      benefits: [
+        { business: 'sx', title: '时叙 · 会员茶饮权益', desc: '会员价以门店公告为准' },
+        { business: 'ql', title: '轻疗 · 项目会员价', desc: '提前预约享会员价' }
+      ]
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body.current.priceCents).toBe(100);
+    expect(updated.body.current.validDays).toBe(1);
+    expect(updated.body.current.benefits).toHaveLength(2);
+    expect(updated.body.current.benefits[0].title).toBe('时叙 · 会员茶饮权益');
+
+    const empty = await h.api('patch', '/brand-cards/FY_TEST/benefits', ops, { benefits: [] });
+    expect(empty.status).toBe(400);
+    const denied = await h.api('patch', '/brand-cards/FY_TEST/benefits', cs, {
+      benefits: [{ business: 'sx', title: 'x' }]
+    });
+    expect(denied.status).toBe(403);
+
+    const audit = await h.api('get', `/audit?action=${encodeURIComponent('更新会员权益文案')}`, admin);
+    expect(audit.body.logs.some((log: { target: string }) => log.target === 'FY_TEST v1')).toBe(true);
   });
 
   it('业务卡目录：仅可改展示字段；只读/售卖归属不可改；客服无编辑权限', async () => {

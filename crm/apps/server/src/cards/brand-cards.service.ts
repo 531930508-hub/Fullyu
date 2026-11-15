@@ -207,7 +207,34 @@ export class BrandCardsService {
     return this.toVersionDto(row);
   }
 
-  /** 激活后旧版本立即归档；已生效版本不提供原地修改接口。 */
+  /**
+   * 激活后旧版本立即归档；价格与卡期不提供原地修改。
+   * 权益文案是展示内容，允许直接改当前生效版本，三端下次读取即生效。
+   */
+  async updateBenefits(code: string, input: { benefits?: BenefitInput[] }, actor: StaffContext) {
+    const product = await this.prisma.brandCardProduct.findUnique({ where: { code } });
+    if (!product) throw notFound('大会员卡产品不存在');
+    if (!product.currentVersion) throw conflict('尚未激活任何版本');
+    const benefits = normalizeBenefits(input.benefits);
+    const version = await this.prisma.brandCardVersion.findUnique({
+      where: { productCode_version: { productCode: code, version: product.currentVersion } }
+    });
+    if (!version || version.status !== 'ACTIVE') throw conflict('当前版本未生效，请先激活版本');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.brandCardVersion.update({
+        where: { id: version.id },
+        data: { benefitsJson: JSON.stringify(benefits) }
+      });
+      await audit(tx, {
+        actor,
+        action: '更新会员权益文案',
+        target: `${code} v${version.version}`,
+        detail: benefits.map((benefit) => `${benefit.business}：${benefit.title}`).join('；')
+      });
+    });
+    return this.detail(code);
+  }
   async activate(code: string, versionNumber: number, actor: StaffContext) {
     const product = await this.prisma.brandCardProduct.findUnique({ where: { code } });
     if (!product) throw notFound('大会员卡产品不存在');

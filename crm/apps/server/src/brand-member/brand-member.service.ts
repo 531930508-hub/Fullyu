@@ -121,6 +121,30 @@ const benefitsOf = (raw: string): BenefitRow[] => {
   return rows;
 };
 
+/**
+ * 会员权益文案只认「当前生效版本」，后台改字即刻生效；
+ * 版本缺失或文案为空时才退回开卡时锁定的快照，保证页面不会空着。
+ */
+const liveBenefitsOf = (
+  prisma: PrismaService,
+  productCode: string,
+  snapshotJson: string
+) => prisma.brandCardProduct
+  .findUnique({ where: { code: productCode } })
+  .then((product) => {
+    if (!product || !product.currentVersion) return null;
+    return prisma.brandCardVersion.findUnique({
+      where: {
+        productCode_version: { productCode, version: product.currentVersion }
+      }
+    });
+  })
+  .then((version) => {
+    if (!version || version.status !== 'ACTIVE') return benefitsOf(snapshotJson);
+    const rows = benefitsOf(version.benefitsJson);
+    return rows.length ? rows : benefitsOf(snapshotJson);
+  });
+
 const spendOf = (raw: string): Record<string, PointsSpendMode> => {
   const parsed = readJson(raw);
   const source = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
@@ -264,7 +288,9 @@ export class BrandMemberService {
       prizes: { pending: gameState.pendingPrizes },
       savedCents,
       renewal,
-      benefits: active ? benefitsOf(active.card.benefitsJson) : [],
+      benefits: active
+        ? await liveBenefitsOf(this.prisma, active.card.productCode, active.card.benefitsJson)
+        : [],
       perks: perksOf(active ? active.card.perksJson : '{}'),
       vouchers: vouchers.map(voucherView),
       notices: notices.map((row) => ({

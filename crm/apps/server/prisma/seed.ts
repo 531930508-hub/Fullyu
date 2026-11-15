@@ -186,10 +186,10 @@ async function main() {
   const brandProducts = [
     {
       code: 'FY_MONTH',
-      name: 'Full愈月卡',
+      name: 'Full愈月会员',
       sort: 1,
-      priceCents: 4500,
-      validDays: 30,
+      priceCents: 9900,
+      validDays: 90,
       gameEnabled: true,
       gifts: [] as { title: string; desc: string; valueCents: number }[],
       benefits: [
@@ -200,12 +200,12 @@ async function main() {
     },
     {
       code: 'FY_ANNUAL',
-      name: 'Full愈年卡',
+      name: 'Full愈大会员',
       sort: 2,
-      priceCents: 29900,
+      priceCents: 36500,
       validDays: 365,
       gameEnabled: true,
-      // 年卡实物礼：付费开卡后发提货券，任意门店人工核销（内容为占位，经营确认后在后台改版本）
+      // 会员实物礼：付费开卡后发提货券，任意门店人工核销（内容为占位，经营确认后在后台改版本）
       gifts: [
         { title: '时叙 · 茶礼一份', desc: '凭券到任意门店领取', valueCents: 6800 },
         { title: '轻疗 · 10ml 舒缓精油', desc: '凭券到任意门店领取', valueCents: 5800 }
@@ -270,7 +270,7 @@ async function main() {
       business: 'ql',
       cardCode: 'RETREAT_LEGACY_CARD',
       name: '轻疗历史年卡',
-      benefit: '历史卡到期前继续有效，续费走 Full愈年卡',
+      benefit: '历史卡到期前继续有效，续费走 Full愈大会员',
       description: '轻疗旧卡升级为品牌卡后的只读目录项，不在 CRM 单独售卖。',
       sourceSystem: 'retreat',
       managePath: '/pages/user/member-card/member-card',
@@ -282,7 +282,7 @@ async function main() {
     await prisma.businessCardCatalog.create({ data: card });
   }
 
-  // 1C：给林小满一张生效中的年卡与骰子进度，供三端联调读取真实卡期。
+  // 1C：给林小满一张生效中的会员卡与骰子进度，供三端联调读取真实卡期。
   const annualVersion = await prisma.brandCardVersion.findUniqueOrThrow({
     where: { productCode_version: { productCode: 'FY_ANNUAL', version: 1 } }
   });
@@ -295,7 +295,7 @@ async function main() {
       memberId: 'm-lin',
       productCode: 'FY_ANNUAL',
       version: 1,
-      productName: 'Full愈年卡',
+      productName: 'Full愈大会员',
       priceCents: annualVersion.priceCents,
       validDays: annualVersion.validDays,
       validFrom,
@@ -313,7 +313,7 @@ async function main() {
       perksJson: annualVersion.perksJson
     }
   });
-  // 年卡实物礼券：一张已核销、一张待领取，供后台核销页联调。
+  // 会员实物礼券：一张已核销、一张待领取，供后台核销页联调。
   await prisma.pickupVoucher.create({
     data: {
       id: 'pv-seed-lin-1',

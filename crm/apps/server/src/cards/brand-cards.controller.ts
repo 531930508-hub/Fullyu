@@ -1,5 +1,14 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
-import { BrandCardsService, type VersionInput } from './brand-cards.service';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  UseGuards
+} from '@nestjs/common';
+import { BrandCardsService, type BenefitInput, type VersionInput } from './brand-cards.service';
 import { RequirePerm, Staff } from '../auth/decorators';
 import { StaffGuard } from '../auth/staff.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -29,6 +38,16 @@ export class BrandCardsController {
     @Staff() staff: StaffContext
   ) {
     return this.cards.createProduct(body, staff);
+  }
+
+  @Patch(':code/benefits')
+  @RequirePerm('crm:card:edit')
+  updateBenefits(
+    @Param('code') code: string,
+    @Body() body: { benefits?: BenefitInput[] },
+    @Staff() staff: StaffContext
+  ) {
+    return this.cards.updateBenefits(code, body, staff);
   }
 
   @Post(':code/versions')

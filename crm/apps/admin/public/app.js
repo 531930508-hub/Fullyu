@@ -54,7 +54,7 @@
     { id: 'members', label: '会员', group: '会员与积分', perm: 'crm:member:view' },
     { id: 'ledger', label: '积分流水', group: '会员与积分', perm: 'crm:member:view' },
     { id: 'adjustments', label: '调整审批', group: '会员与积分', any: ['crm:adjust:create', 'crm:adjust:approve', 'crm:adjust:batch'] },
-    { id: 'brand-cards', label: '品牌年卡', group: '卡与规则', perm: 'crm:card:view' },
+    { id: 'brand-cards', label: '品牌会员', group: '卡与规则', perm: 'crm:card:view' },
     { id: 'issued-cards', label: '会员卡台账', group: '卡与规则', perm: 'crm:card:view' },
     { id: 'business-cards', label: '业务会员卡', group: '卡与规则', perm: 'crm:card:view' },
     { id: 'rules', label: '规则配置', group: '卡与规则', perm: 'crm:config:edit' },
@@ -808,7 +808,7 @@
       <div class="grid cols-3">
         <div class="stat"><div class="label">可用积分</div><div class="value">${detail.balance}</div><div class="sub">1 分 = ¥1 · 按到期最早先扣</div></div>
         <div class="stat"><div class="label">愈行骰子</div><div class="value">${detail.game.dice}</div><div class="sub">${esc(STATIONS[detail.game.station] || '起点')} · 第 ${detail.game.lap + 1} 圈</div></div>
-        <div class="stat"><div class="label">待交付礼物</div><div class="value">${detail.game.pendingPrizes}</div><div class="sub">${gameEnabled ? '年卡权益可用' : '没有生效中的年卡'}</div></div>
+        <div class="stat"><div class="label">待交付礼物</div><div class="value">${detail.game.pendingPrizes}</div><div class="sub">${gameEnabled ? '会员权益可用' : '没有生效中的会员卡'}</div></div>
       </div>
 
       <div class="panel">
@@ -1214,10 +1214,10 @@
     }
   }
 
-  /* ---------------------------------------------------------------- 品牌年卡 */
+  /* ---------------------------------------------------------------- 品牌会员 */
 
   async function pageBrandCards(ctx) {
-    ctx.setTitle('品牌年卡', '版本化配置；激活新版本立即归档旧版本，已售卡按购买时快照执行');
+    ctx.setTitle('品牌会员', '版本化配置；价格按购买时快照，权益文案随当前生效版本实时下发');
     const data = await api('/brand-cards');
     ctx.view.innerHTML = `
       ${
@@ -1269,6 +1269,26 @@
                 .join('')}
             </tbody>
           </table></div>
+          ${
+            can('crm:card:edit') && product.current
+              ? `<form class="benefit-form" data-code="${esc(product.code)}" style="margin-top:16px">
+              <div class="panel-head"><h2>会员权益文案</h2><span class="help">三端小程序直连展示，保存后立即生效；只改文案，不动价格与卡期。</span></div>
+              <div class="form-grid">
+                ${[0, 1, 2]
+                  .map((index) => {
+                    const row = product.current.benefits[index] || {};
+                    return `<div class="toolbar" style="margin-bottom:8px">
+                      <div class="field"><label>业务</label><select name="biz${index}">${options(BUSINESS_OPTIONS, row.business || '')}</select></div>
+                      <div class="field" style="flex:1"><label>标题</label><input name="title${index}" maxlength="40" value="${esc(row.title || '')}" /></div>
+                      <div class="field" style="flex:1"><label>说明</label><input name="desc${index}" maxlength="120" value="${esc(row.desc || '')}" /></div>
+                    </div>`;
+                  })
+                  .join('')}
+                <div class="full row-actions"><button class="btn small" type="submit">保存权益文案</button><span class="help">标题留空即删除该条，至少保留一条。改字不影响已购卡的交易记录。</span></div>
+              </div>
+            </form>`
+              : ''
+          }
           <div id="version-form-${esc(product.code)}" style="display:none;margin-top:16px">
             <form class="version-form" data-code="${esc(product.code)}">
               <div class="form-grid">
@@ -1415,6 +1435,36 @@
         }
       });
     });
+    // 权益文案走独立接口：只改当前生效版本的展示文字，三端下次拉取即生效。
+    ctx.view.querySelectorAll('.benefit-form').forEach((form) => {
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const values = formValues(form);
+        const benefits = [];
+        for (const index of [0, 1, 2]) {
+          const title = (values[`title${index}`] || '').trim();
+          if (!title) continue;
+          benefits.push({
+            business: values[`biz${index}`],
+            title,
+            desc: (values[`desc${index}`] || '').trim()
+          });
+        }
+        if (!benefits.length) return toast('至少保留一条权益标题', 'error');
+        try {
+          await guard(event.submitter, async () => {
+            await api(`/brand-cards/${form.dataset.code}/benefits`, {
+              method: 'PATCH',
+              body: { benefits }
+            });
+            toast('权益文案已更新，三端即时生效');
+            route();
+          });
+        } catch (error) {
+          reportError(error);
+        }
+      });
+    });
     ctx.view.querySelectorAll('[data-activate]').forEach((button) => {
       button.addEventListener('click', async () => {
         const [code, version] = button.dataset.activate.split(':');
@@ -1537,7 +1587,7 @@
               <td class="mono">v${row.version}</td>
               <td>${statusPill(row.status)}</td>
               <td class="small">${fmt(row.effectiveFrom, false)}</td>
-              <td class="small">每 ${row.rules.centsPerPoint} 分钱 1 分 · ${row.rules.rounding === 'floor' ? '向下取整' : '四舍五入'} · 年卡 ×${row.rules.cardMultiplier} · 新会员 ${row.rules.newMember} · 冻结 ${row.rules.holdTtlMinutes} 分钟</td>
+              <td class="small">每 ${row.rules.centsPerPoint} 分钱 1 分 · ${row.rules.rounding === 'floor' ? '向下取整' : '四舍五入'} · 会员卡 ×${row.rules.cardMultiplier} · 新会员 ${row.rules.newMember} · 冻结 ${row.rules.holdTtlMinutes} 分钟</td>
               <td class="small">${esc(row.reason)}<div class="help">${esc(row.createdByName)}</div></td>
               <td class="small">${fmt(row.createdAt)}</td>
               <td>${row.status === 'SCHEDULED' ? `<button class="btn danger small" data-cancel="points:${esc(row.scope)}:${row.version}">撤销</button>` : ''}</td>
@@ -2676,7 +2726,7 @@
   const STORE_KEY = 'fullyu.crm.redeemStore';
 
   async function pageVouchers(ctx) {
-    ctx.setTitle('提货核销', '年卡实物礼：会员出示提货码，任意门店核销一次；重复核销会被拒绝');
+    ctx.setTitle('提货核销', '会员实物礼：会员出示提货码，任意门店核销一次；重复核销会被拒绝');
     const params = new URLSearchParams(location.hash.split('?')[1] || '');
     const code = (params.get('code') || '').trim().toUpperCase();
     let result = null;
@@ -3197,7 +3247,7 @@
     const nowMonth = shanghaiMonth();
     const params = new URLSearchParams(location.hash.split('?')[1] || '');
     const month = params.get('month') || nowMonth;
-    ctx.setTitle('月度对账', '只出事实数据：年卡售卖、积分发行/消耗、骰子发放/消耗');
+    ctx.setTitle('月度对账', '只出事实数据：会员卡售卖、积分发行/消耗、骰子发放/消耗');
     const report = await api(`/reports/monthly${query({ month })}`);
     const businesses = ['teahour', 'retreat', 'presence'];
     ctx.view.innerHTML = `
@@ -3214,7 +3264,7 @@
         <div class="stat"><div class="label">本月发放骰子</div><div class="value">${businesses.reduce((sum, key) => sum + (report.dice.issued[key] || 0), 0)}</div><div class="sub">已掷出 ${report.dice.rolled} · 退款收回 ${report.dice.refunded}</div></div>
       </div>
       <div class="panel" style="margin-top:16px">
-        <div class="panel-head"><h2>年卡售卖</h2><span class="help">按购买时售卖端归属</span></div>
+        <div class="panel-head"><h2>会员卡售卖</h2><span class="help">按购买时售卖端归属</span></div>
         <div class="table-wrap"><table>
           <thead><tr><th>售卖端</th><th>售出</th><th>实收</th><th>退款卡数</th></tr></thead>
           <tbody>${businesses
