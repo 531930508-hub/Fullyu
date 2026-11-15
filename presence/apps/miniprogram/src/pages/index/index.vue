@@ -41,7 +41,7 @@
         <view v-if="isTrainer" class="view-switch"><button :class="{ active: activeView === 'student' }" @tap="setView('student')">{{ tr('学员视角', 'Student') }}</button><button :class="{ active: activeView === 'trainer' }" @tap="setView('trainer')">{{ tr('导师视角', 'Trainer') }}</button></view>
         <view v-if="!userStore.isLoggedIn" class="guest-card"><view><text class="entry-title">{{ tr('登录，开启你的在场体验', 'Sign in to begin your practice') }}</text><text class="muted">{{ tr('查看预约、会员卡与积分', 'See bookings, membership and points') }}</text></view><button class="btn-primary" @tap="goProfile">{{ tr('去登录', 'Sign in') }}</button></view>
         <view v-else class="entry-grid">
-          <button class="entry-card" @tap="activeView === 'trainer' ? goTrainerWorkspace() : goBrand()"><PresenceIcon :name="activeView === 'trainer' ? 'chart' : 'card'" :size="42" /><text class="entry-title">{{ activeView === 'trainer' ? tr('导师工作台', 'Trainer Studio') : brandActive ? tr('我的会员卡', 'My membership') : tr('Full愈大会员', 'Full Yu Member') }}</text><text class="muted">{{ activeView === 'trainer' ? tr('查看课程与合作记录', 'Classes and collaborations') : brandActive ? tr(`积分 ${brandPoints} · 有效至 ${brandValidUntil}`, `${brandPoints} points · valid until ${brandValidUntil}`) : tr('一卡三店 · 会员价与积分', 'One card · member prices across three stores') }}</text></button>
+          <button class="entry-card" @tap="activeView === 'trainer' ? goTrainerWorkspace() : goBrand()"><PresenceIcon :name="activeView === 'trainer' ? 'chart' : 'card'" :size="42" /><text class="entry-title">{{ activeView === 'trainer' ? tr('导师工作台', 'Trainer Studio') : brandActive ? tr('我的会员卡', 'My membership') : tr('Full愈大会员', 'Full Yu Member') }}</text><text class="muted">{{ activeView === 'trainer' ? tr('查看课程与合作记录', 'Classes and collaborations') : brandActive ? tr(`积分 ${brandPoints} · 有效至 ${brandValidUntil}`, `${brandPoints} points · valid until ${brandValidUntil}`) : tr('一卡三店 · 会员价与积分', 'One card · member prices across three stores') }}</text><view v-if="showRenewHint" class="renew-row" role="button" tabindex="0" :aria-label="tr('续费会员卡', 'Renew membership')" @tap.stop="openRenew" @keydown.enter.stop="openRenew"><text class="renew-note">{{ brandRenewNote }}</text><text class="renew-pill">{{ tr('续费', 'Renew') }}</text></view></button>
           <button class="entry-card light" @tap="activeView === 'trainer' ? goCommunityMine() : goBookings()"><PresenceIcon :name="activeView === 'trainer' ? 'users' : 'calendar'" :size="42" /><text class="entry-title">{{ activeView === 'trainer' ? tr('我的社群', 'My communities') : tr('我的预约', 'My bookings') }}</text><text class="muted">{{ activeView === 'trainer' ? tr('与学员保持连接', 'Stay connected with students') : tr('课程安排与待支付订单', 'Schedule and pending orders') }}</text></button>
         </view>
       </view>
@@ -97,6 +97,7 @@
         <button v-if="venuesError" class="city-retry" @tap="loadVenues">{{ tr('重新读取场地', 'Reload venues') }}</button>
       </view>
     </BottomSheet>
+    <BrandPurchaseSheet :show="renewOpen" :member="brandMember" :products="brandProducts" :active="brandActive" @close="renewOpen = false" @paid="onRenewed" />
     <view class="tabbar-space"></view><FloatingTabBar active="home" />
   </view>
 </template>
@@ -112,7 +113,7 @@ import { listVenues, type VenueItem } from '@/api/venue'
 import { fetchCommunities, fetchMine, type Community } from '@/api/skool'
 import { courseTagLabel } from '@/utils/course-labels'
 import { communityCategoryLabel } from '@/utils/community-labels'
-import { loadBrandMember, type BrandMemberData } from '@/api/brandMember'
+import { loadBrandMember, type BrandCardProduct, type BrandMemberData } from '@/api/brandMember'
 import { fetchNextCourse } from '@/api/order'
 import { updateTabBarLanguage, tr, isEnglish } from '@/locale'
 import { coursePhaseLabel } from '@fullyu/shared'
@@ -123,6 +124,7 @@ import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
 import PageState from '@/components/PageState.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
+import BrandPurchaseSheet from '@/components/BrandPurchaseSheet.vue'
 import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 
 const userStore = useUserStore()
@@ -324,6 +326,44 @@ const brandMember = ref<BrandMemberData | null>(null)
 const brandActive = computed(() => ['ACTIVE', 'EXPIRING', 'PENDING'].includes(brandMember.value?.card?.state || ''))
 const brandPoints = computed(() => brandMember.value?.points?.balance || 0)
 const brandValidUntil = computed(() => brandMember.value?.card?.validUntil || '')
+const brandProducts = computed<BrandCardProduct[]>(() => (Array.isArray(brandMember.value?.products) ? brandMember.value!.products! : []))
+/** 首页续费入口的提示阈值：到期前 30 天内露出「仅剩 xx 天」与续费按钮。 */
+const RENEW_HINT_DAYS = 30
+/** 剩余天数以 CRM 的 remainingDays 为准；缺失时按 validUntil 的日期算，不凭前端猜测。 */
+const brandDaysLeft = computed<number | null>(() => {
+  const card = brandMember.value?.card
+  if (!brandActive.value || !card) return null
+  if (typeof card.remainingDays === 'number' && Number.isFinite(card.remainingDays)) return Math.max(0, Math.floor(card.remainingDays))
+  const matched = /^(\d{4})-(\d{2})-(\d{2})/.exec(card.validUntil || '')
+  if (!matched) return null
+  const end = new Date(Number(matched[1]), Number(matched[2]) - 1, Number(matched[3]), 23, 59, 59).getTime()
+  return Math.max(0, Math.ceil((end - Date.now()) / 86400000))
+})
+const brandRenewNote = computed(() => {
+  const days = brandDaysLeft.value
+  if (days === null) return ''
+  return days <= 0 ? tr('今日到期', 'Expires today') : tr(`仅剩 ${days} 天`, `${days} days left`)
+})
+const showRenewHint = computed(() => {
+  // 只对已生效/临期的卡提示续费；待生效（PENDING）不催续费。
+  const state = brandMember.value?.card?.state
+  return activeView.value === 'student' && (state === 'ACTIVE' || state === 'EXPIRING') && brandDaysLeft.value !== null && brandDaysLeft.value <= RENEW_HINT_DAYS
+})
+const renewOpen = ref(false)
+function openRenew() {
+  if (!brandActive.value) return
+  // 卡型目录没读到就没有金额，先去补数据，不拉起一张价格未知的单。
+  if (!brandProducts.value.length) {
+    uni.showToast({ title: tr('卡型加载失败，请稍后重试', 'Could not load the plans. Please try again.'), icon: 'none' })
+    void loadAccount()
+    return
+  }
+  renewOpen.value = true
+}
+async function onRenewed() {
+  renewOpen.value = false
+  await loadAccount()
+}
 const nextCourse = ref<any>(null)
 async function loadAccount() {
   if (!uni.getStorageSync('token')) { brandMember.value = null; nextCourse.value = null; return }
@@ -421,6 +461,10 @@ onShareTimeline(() => brandShareTimeline(shareTitle()))
 .entry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20rpx; }
 .entry-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10rpx; width: 100%; margin: 0; padding: 28rpx; border-radius: var(--radius-card); background: var(--c-card-2); text-align: left; line-height: 1.5; }
 .entry-card.light { background: var(--c-card); }
+/* 临期提醒：整行可点直接拉续费确认层，卡片其余区域仍进入会员身份页 */
+.renew-row { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; width: 100%; margin-top: 6rpx; padding-top: 14rpx; border-top: 1rpx solid var(--line-soft); }
+.renew-note { font-size: 22rpx; color: var(--c-primary); }
+.renew-pill { flex-shrink: 0; padding: 6rpx 22rpx; border-radius: 999rpx; background: var(--c-primary); color: #fffaf0; font-size: 21rpx; line-height: 1.6; }
 .guest-card { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; background: var(--c-card); border-radius: var(--radius-card); padding: 28rpx; }
 .guest-card .btn-primary { flex-shrink: 0; margin: 0; padding: 16rpx 24rpx; }
 .view-switch { display: flex; padding: 6rpx; background: var(--c-card-2); border-radius: 24rpx; margin-bottom: 24rpx; }
