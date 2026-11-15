@@ -88,12 +88,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { submitCommunity, SETTLEMENT_AGREEMENT_VERSION } from '@/api/skool'
 import { tr, isEnglish } from '@/locale'
 import { communityCategoryLabel, communityTagLabel } from '@/utils/community-labels'
-import { dictItemText, loadDict, DICT_COMMUNITY_CATEGORY, DICT_COMMUNITY_TAG, type DictItem } from '@/utils/dict'
+import { dictItems, dictItemText, loadDict, DICT_COMMUNITY_CATEGORY, DICT_COMMUNITY_TAG } from '@/utils/dict'
 import { readCapsuleLayout } from '@/utils/capsule'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
@@ -105,20 +105,13 @@ const capsule = readCapsuleLayout()
 const statusBarHeight = capsule.statusBarHeight
 const headerTop = capsule.headerTop
 const guest = ref(!uni.getStorageSync('token'))
-/** 分类 / 标签选项来自后台值集，前端不再写死 */
-const categoryItems = ref<DictItem[]>([])
-const tagItems = ref<DictItem[]>([])
+/** 分类 / 标签选项来自后台值集，读 reactive 缓存：启动强刷到达后页面自动更新 */
+const categoryItems = computed(() => dictItems(DICT_COMMUNITY_CATEGORY))
+const tagItems = computed(() => dictItems(DICT_COMMUNITY_TAG))
 async function loadOptions() {
   try {
-    const [cats, tags] = await Promise.all([
-      loadDict(DICT_COMMUNITY_CATEGORY),
-      loadDict(DICT_COMMUNITY_TAG),
-    ])
-    categoryItems.value = cats
-    tagItems.value = tags
-    const values = cats.map((c) => c.value)
-    // 当前选择已被运营下线时，回落到第一个分类
-    if (!values.includes(form.value.category)) form.value.category = values[0] || ''
+    // 缓存 24h 内直接复用；过期或启动强刷进行中时会自动拉最新值集
+    await Promise.all([loadDict(DICT_COMMUNITY_CATEGORY), loadDict(DICT_COMMUNITY_TAG)])
   } catch {
     // 拉取失败保留上次缓存；两者都为空时页面给出提示，提交前仍会校验分类
   }
@@ -127,6 +120,14 @@ onShow(() => { guest.value = !uni.getStorageSync('token'); loadOptions() })
 const stepLabels = computed(() => [tr('基本信息', 'Basics'), tr('收费与介绍', 'Pricing & intro'), tr('预览提交', 'Review & submit')])
 const step = ref(1)
 const form = ref({ name: '', slogan: '', category: '', tags: [] as string[], feeMode: 'free' as 'free' | 'paid', feeYuan: '', description: '', settlementAgreed: false })
+/** 值集刷新后，已下线/被删的选项要从当前选择里剔除 */
+watch(categoryItems, (items) => {
+  if (!items.some((i) => i.value === form.value.category)) form.value.category = items[0]?.value || ''
+}, { immediate: true })
+watch(tagItems, (items) => {
+  const values = items.map((i) => i.value)
+  form.value.tags = form.value.tags.filter((t) => values.includes(t))
+}, { immediate: true })
 const validationError = ref('')
 const submitError = ref('')
 const submitting = ref(false)

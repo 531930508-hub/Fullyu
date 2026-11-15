@@ -61,7 +61,7 @@ import { onShow, onUnload, onShareAppMessage, onShareTimeline } from '@dcloudio/
 import { fetchCommunities, fetchMine, type Community, type CommunitySort } from '@/api/skool'
 import { tr } from '@/locale'
 import { communityCategoryLabel, communityTagLabel } from '@/utils/community-labels'
-import { loadDict, DICT_COMMUNITY_CATEGORY, type DictItem } from '@/utils/dict'
+import { dictItems, loadDict, DICT_COMMUNITY_CATEGORY } from '@/utils/dict'
 import { readCapsuleLayout } from '@/utils/capsule'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
@@ -74,15 +74,13 @@ const statusBarHeight = capsule.statusBarHeight
 const headerTop = capsule.headerTop
 /** 筛选项「全部」是前端哨兵值，不入值集 */
 const ALL_CATEGORY = '全部'
-const categoryItems = ref<DictItem[]>([])
+/** 分类来自后台值集，读 reactive 缓存：启动强刷到达后筛选条自动更新 */
+const categoryItems = computed(() => dictItems(DICT_COMMUNITY_CATEGORY))
 const categories = computed(() => [ALL_CATEGORY, ...categoryItems.value.map((i) => i.value)])
-/** 分类来自后台值集；接口失败时保留上次缓存（App 启动已 hydrate），至少还有「全部」 */
 async function loadCategories() {
   try {
-    categoryItems.value = await loadDict(DICT_COMMUNITY_CATEGORY)
-    if (currentCat.value !== ALL_CATEGORY && !categoryItems.value.some((i) => i.value === currentCat.value)) {
-      currentCat.value = ALL_CATEGORY
-    }
+    // 缓存 24h 内直接复用；过期或启动强刷进行中时会自动拉最新值集
+    await loadDict(DICT_COMMUNITY_CATEGORY)
   } catch {
     // 静默：筛选条退化为仅「全部」，不影响列表浏览
   }
@@ -93,6 +91,12 @@ const sorts = computed<{ label: string; value: CommunitySort }[]>(() => [
   { label: tr('热门', 'Popular'), value: 'hot' },
 ])
 const currentCat = ref('全部')
+/** 值集刷新后，已下线/被删的分类要退回「全部」 */
+watch(categoryItems, (items) => {
+  if (currentCat.value !== ALL_CATEGORY && !items.some((i) => i.value === currentCat.value)) {
+    currentCat.value = ALL_CATEGORY
+  }
+})
 const currentSort = ref<CommunitySort>('recommend')
 const keyword = ref('')
 const communities = ref<Community[]>([])

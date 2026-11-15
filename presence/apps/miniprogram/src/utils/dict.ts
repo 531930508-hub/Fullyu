@@ -3,6 +3,7 @@
  *
  * - 内存缓存（reactive，值集到达后引用它的页面会自动重渲染）+ 本地存储双缓存：
  *   冷启动先吃上一次成功结果，避免首屏闪回中文默认值；
+ * - 缓存 24h 过期；启动时强制静默刷新一次，运营增删选项后老设备也能自动同步；
  * - 同一 code 并发请求会合并，页面各自 onShow 里调用也不会重复打接口；
  * - 拉取失败时退回上次缓存（没有缓存则返回空数组），由页面自行兜底展示。
  *
@@ -23,13 +24,22 @@ export const DICT_COMMUNITY_TAG = 'community_tag'
 /** 启动时预热的常用值集 */
 const WARMUP_CODES = [DICT_COMMUNITY_CATEGORY, DICT_COMMUNITY_TAG]
 
+/** 缓存有效期：超过后读取会重新拉取，失败仍回退旧缓存 */
+const DICT_TTL_MS = 24 * 60 * 60 * 1000
+
 const EMPTY: DictItem[] = []
 /** 用 reactive 存，值集晚到时已渲染的页面（标签、分类等）会自动更新 */
 const cache = reactive<Record<string, DictItem[]>>({})
+/** 每个 code 最近一次成功拉取的时间；老版本没有时间戳的缓存记为 0（视为过期） */
+const cachedAt = new Map<string, number>()
 const inflight = new Map<string, Promise<DictItem[]>>()
 
 function storageKey(code: string) {
   return `dict:${code}`
+}
+
+function storageAtKey(code: string) {
+  return `dict:${code}:at`
 }
 
 function readStorage(code: string): DictItem[] {
@@ -41,12 +51,29 @@ function readStorage(code: string): DictItem[] {
   }
 }
 
+function readStorageAt(code: string): number {
+  try {
+    const at = Number(uni.getStorageSync(storageAtKey(code)))
+    return Number.isFinite(at) ? at : 0
+  } catch {
+    return 0
+  }
+}
+
+function isFresh(code: string): boolean {
+  const at = cachedAt.get(code) || 0
+  return at > 0 && Date.now() - at < DICT_TTL_MS
+}
+
 /** 同步吃本地缓存（App onLaunch 调用，让首屏就能拿到上次的选项） */
 export function hydrateDicts(codes: string[] = WARMUP_CODES) {
   for (const code of codes) {
     if (cache[code]) continue
     const cached = readStorage(code)
-    if (cached.length) cache[code] = cached
+    if (cached.length) {
+      cache[code] = cached
+      cachedAt.set(code, readStorageAt(code))
+    }
   }
 }
 
@@ -55,19 +82,22 @@ export function dictItems(code: string): DictItem[] {
   return cache[code] || EMPTY
 }
 
-/** 拉取值集（默认走缓存；force=true 强制刷新，失败仍有缓存兜底） */
+/** 拉取值集（缓存 24h 内直接复用；force=true 强制刷新，失败仍有缓存兜底） */
 export function loadDict(code: string, force = false): Promise<DictItem[]> {
   const cached = cache[code]
-  if (cached?.length && !force) return Promise.resolve(cached)
+  if (cached && !force && isFresh(code)) return Promise.resolve(cached)
   const pending = inflight.get(code)
   if (pending) return pending
 
   const task = getDictItems(code)
     .then((items) => {
       const list = (items || []).filter((i) => i && i.value)
+      const now = Date.now()
       cache[code] = list
+      cachedAt.set(code, now)
       try {
         uni.setStorageSync(storageKey(code), list)
+        uni.setStorageSync(storageAtKey(code), now)
       } catch {
         // 存储写满等异常不影响本次展示
       }
@@ -98,9 +128,9 @@ export function dictText(code: string, value: string): string {
   return item ? dictItemText(item) : value
 }
 
-/** App 启动时静默预热，失败不打扰用户 */
+/** App 启动时静默强刷一次：先用本地缓存渲染，再拉最新值集覆盖；失败不打扰用户 */
 export function warmupDicts() {
   for (const code of WARMUP_CODES) {
-    loadDict(code).catch(() => undefined)
+    loadDict(code, true).catch(() => undefined)
   }
 }
