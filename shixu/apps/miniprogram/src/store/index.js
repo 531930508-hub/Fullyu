@@ -18,6 +18,8 @@ export const state = reactive({
   categories: [],
   products: [],
   retail: [],
+  /** 自带杯政策：只在结算页做提示，线上单不自动抵扣，减免由门店柜台当面确认。 */
+  byoCup: { enabled: false, perCupCents: 0 },
   /** 后台配置的首页轮播与系列图覆盖；未配置时页面回落到内置图。 */
   home: { banners: [], series: {} },
   freshCart: [],
@@ -362,6 +364,9 @@ function applyCatalog(boot, opts = {}) {
   state.categories = boot.categories || [];
   state.products = boot.products || [];
   state.retail = boot.retail || [];
+  state.byoCup = boot.byoCup && boot.byoCup.enabled
+    ? { enabled: true, perCupCents: Math.max(0, Number(boot.byoCup.perCupCents) || 0) }
+    : { enabled: false, perCupCents: 0 };
   state.home = {
     banners: (boot.home && boot.home.banners) || [],
     series: (boot.home && boot.home.series) || {}

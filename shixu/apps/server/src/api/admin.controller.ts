@@ -16,6 +16,7 @@ import { AdminService } from '../admin/admin.service';
 import { CatalogService } from '../catalog/catalog.service';
 import { ContentService } from '../content/content.service';
 import { CouponsService } from '../coupons/coupons.service';
+import { CouponRulesService } from '../coupons/coupon-rules.service';
 
 const rangeSchema = z.object({
   range: z.string().optional(),
@@ -100,19 +101,23 @@ const seatQrSchema = z.object({
 });
 
 const staffCreateSchema = z.object({
-  name: z.string().min(1).max(30),
-  username: z.string().min(6).max(20),
-  password: z.string().min(8).max(72),
-  roleIds: z.array(z.string()).min(1),
+  name: z.string().trim().min(1, '请填写姓名').max(30, '姓名最多 30 个字'),
+  username: z
+    .string()
+    .trim()
+    .regex(/^\d{6,20}$/, '登录账号需为 6–20 位数字手机号'),
+  // 密码不设长度下限（后台由总部发放初始密码，允许短口令）；仅限制 bcrypt 会截断的 72 字节。
+  password: z.string().min(1, '请填写初始密码').max(72, '密码最多 72 位'),
+  roleIds: z.array(z.string()).min(1, '请至少选择一个角色'),
   storeIds: z.array(z.string()).optional(),
   allStores: z.boolean().optional(),
   active: z.boolean().optional()
 });
 
 const staffUpdateSchema = z.object({
-  name: z.string().min(1).max(30),
-  password: z.string().min(8).max(72).optional(),
-  roleIds: z.array(z.string()).min(1),
+  name: z.string().trim().min(1, '请填写姓名').max(30, '姓名最多 30 个字'),
+  password: z.string().min(1, '请填写密码').max(72, '密码最多 72 位').optional(),
+  roleIds: z.array(z.string()).min(1, '请至少选择一个角色'),
   storeIds: z.array(z.string()).optional(),
   allStores: z.boolean().optional(),
   active: z.boolean().optional()
@@ -136,17 +141,78 @@ const mappingSchema = z.object({
 
 const couponCreateSchema = z.object({
   title: z.string().trim().min(1).max(40),
-  scope: z.enum(['all', 'category']).default('all'),
+  scope: z.enum(['all', 'category', 'product']).default('all'),
   categoryId: z.string().trim().max(40).nullable().optional(),
+  productId: z.string().trim().max(40).nullable().optional(),
   amountCents: z.number().int().min(1).max(1_000_000),
   minSpendCents: z.number().int().min(0).max(10_000_000).default(0),
   validFrom: z.string().trim().min(10).max(10),
   validTo: z.string().trim().min(10).max(10),
+  /** 0=固定区间；>0=发放/领取后 N 天有效（且不晚于活动截止日）。 */
+  validDays: z.number().int().min(0).max(365).default(0),
+  claimable: z.boolean().default(false),
+  claimLimit: z.number().int().min(1).max(99).default(1),
   note: z.string().max(200).optional()
 });
 
+const couponRuleSchema = z.object({
+  couponId: z.string().trim().min(1).max(40),
+  // 取值与 CouponRulesService 的 CouponRuleKind 一一对应；前端若写错枚举要给出中文提示。
+  kind: z.enum(['birthday', 'welcome', 'winback'], {
+    errorMap: () => ({ message: '规则类型不支持，可选生日关怀 / 新客欢迎 / 沉睡唤回' })
+  }),
+  enabled: z.boolean().optional(),
+  tier: z
+    .enum(['all', 'standard', 'annual'], { errorMap: () => ({ message: '会员层级不支持' }) })
+    .optional(),
+  config: z
+    .object({
+      daysBefore: z.number().int().min(0).max(30).optional(),
+      withinDays: z.number().int().min(1).max(30).optional(),
+      inactiveDays: z.number().int().min(7).max(365).optional(),
+      minOrders: z.number().int().min(0).max(100).optional()
+    })
+    .strict({ message: '规则配置包含未知字段' })
+    .optional(),
+  note: z.string().trim().max(200).optional()
+});
+
 const couponIssueSchema = z.object({
-  phones: z.array(z.string().trim().min(1).max(20)).min(1).max(200)
+  phones: z.array(z.string().trim().min(1).max(20)).min(1).max(200),
+  /** 幂等键：前端每次打开发放弹窗生成一次，重复提交不会重复发券。 */
+  requestKey: z.string().trim().min(8).max(64).optional(),
+  note: z.string().trim().max(100).optional()
+});
+
+const couponSegmentSchema = z.object({
+  tier: z.enum(['all', 'standard', 'annual']).default('all'),
+  registeredFrom: z.string().trim().length(10).optional(),
+  registeredTo: z.string().trim().length(10).optional()
+});
+
+const couponSegmentIssueSchema = couponSegmentSchema.extend({
+  requestKey: z.string().trim().min(8).max(64).optional(),
+  note: z.string().trim().max(100).optional()
+});
+
+const couponRecordQuerySchema = z.object({
+  couponId: z.string().trim().max(40).optional(),
+  batchId: z.string().trim().max(40).optional(),
+  status: z.enum(['available', 'pending', 'reserved', 'used', 'expired', 'inactive', 'revoked']).optional(),
+  q: z.string().trim().max(40).optional(),
+  from: z.string().trim().length(10).optional(),
+  to: z.string().trim().length(10).optional(),
+  page: z.coerce.number().int().min(1).max(100000).default(1),
+  pageSize: z.coerce.number().int().min(10).max(200).default(20)
+});
+
+const couponBatchQuerySchema = z.object({
+  couponId: z.string().trim().max(40).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50)
+});
+
+const couponRevokeSchema = z.object({
+  reason: z.string().trim().min(2).max(200)
 });
 
 @Controller('admin')
@@ -161,7 +227,8 @@ export class AdminController {
     private readonly admin: AdminService,
     private readonly catalog: CatalogService,
     private readonly content: ContentService,
-    private readonly coupons: CouponsService
+    private readonly coupons: CouponsService,
+    private readonly couponRules: CouponRulesService
   ) {}
 
   private async allStoreIds(): Promise<string[]> {
@@ -300,6 +367,7 @@ export class AdminController {
   async approvalList(@Query() query: unknown, @Staff() staff: StaffContext) {
     const input = parseInput(
       z.object({
+        view: z.enum(['todo', 'done', 'all']).optional(),
         status: z.string().optional(),
         kind: z.string().optional(),
         limit: z.coerce.number().optional()
@@ -307,14 +375,25 @@ export class AdminController {
       query ?? {}
     );
     const storeIds = await this.financeScope(staff);
+    // 兼容旧调用：显式传 status（如 status=all）视为查全部记录；新前端用 view 三页签。
+    const view = input.view || (input.status ? 'all' : 'todo');
+    // 待我审批只收敛到当前账号真有审批权限的类型；无审批权限时为空，而不是展示点不动的按钮。
+    const kinds = [
+      ...(hasPerm(staff, 'order:refund:approve') ? ['REFUND'] : []),
+      ...(hasPerm(staff, 'loss:approve') ? ['LOSS'] : []),
+      ...(hasPerm(staff, 'attendance:approve') ? ['ATTENDANCE'] : [])
+    ];
+    const approvals = await this.approvals.list(
+      view === 'all'
+        ? { storeIds, status: input.status, kind: input.kind, limit: input.limit }
+        : view === 'done'
+          ? { storeIds, decidedBy: staff.id, status: input.status, kind: input.kind, limit: input.limit }
+          : { storeIds, status: 'pending', kind: input.kind, kinds, limit: input.limit }
+    );
     return {
-      approvals: await this.approvals.list({
-        storeIds,
-        status: input.status,
-        kind: input.kind,
-        limit: input.limit
-      }),
-      counts: await this.approvals.counts(storeIds)
+      view,
+      approvals,
+      counts: await this.approvals.tabCounts(staff, storeIds, kinds)
     };
   }
 
@@ -609,10 +688,17 @@ export class AdminController {
   @RequirePerm('coupon:manage')
   async createCoupon(@Body() body: unknown, @Staff() staff: StaffContext) {
     const input = parseInput(couponCreateSchema, body);
-    // zod 的 default 在类型上可能被推断成可选，这里补齐后交给服务层，运行时仍是 'all' / 0。
+    // zod 的 default 在类型上可能被推断成可选，这里补齐后交给服务层，运行时仍是默认值。
     return {
       coupon: await this.coupons.createTemplate(
-        { ...input, scope: input.scope ?? 'all', minSpendCents: input.minSpendCents ?? 0 },
+        {
+          ...input,
+          scope: input.scope ?? 'all',
+          minSpendCents: input.minSpendCents ?? 0,
+          validDays: input.validDays ?? 0,
+          claimable: input.claimable ?? false,
+          claimLimit: input.claimLimit ?? 1
+        },
         staff
       )
     };
@@ -622,7 +708,12 @@ export class AdminController {
   @RequirePerm('coupon:manage')
   async updateCoupon(@Param('id') id: string, @Body() body: unknown, @Staff() staff: StaffContext) {
     const input = parseInput(
-      z.object({ active: z.boolean().optional(), note: z.string().max(200).optional() }),
+      z.object({
+        active: z.boolean().optional(),
+        note: z.string().max(200).optional(),
+        claimable: z.boolean().optional(),
+        claimLimit: z.number().int().min(1).max(99).optional()
+      }),
       body ?? {}
     );
     return { coupon: await this.coupons.updateTemplate(id, input, staff) };
@@ -632,7 +723,127 @@ export class AdminController {
   @RequirePerm('coupon:manage')
   async issueCoupon(@Param('id') id: string, @Body() body: unknown, @Staff() staff: StaffContext) {
     const input = parseInput(couponIssueSchema, body);
-    return this.coupons.issue(id, input.phones, staff);
+    return this.coupons.issue(id, input.phones, staff, {
+      requestKey: input.requestKey,
+      note: input.note
+    });
+  }
+
+  /** 会员条件发放：先预览人数，再按同一条件发放；全量发放即 tier=all 且不带日期。 */
+  @Post('coupons/:id/preview')
+  @RequirePerm('coupon:view')
+  async previewCouponSegment(@Param('id') id: string, @Body() body: unknown) {
+    const input = parseInput(couponSegmentSchema, body ?? {});
+    return this.coupons.previewSegment(id, {
+      tier: input.tier ?? 'all',
+      registeredFrom: input.registeredFrom,
+      registeredTo: input.registeredTo
+    });
+  }
+
+  @Post('coupons/:id/issue-segment')
+  @RequirePerm('coupon:manage')
+  async issueCouponSegment(@Param('id') id: string, @Body() body: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(couponSegmentIssueSchema, body ?? {});
+    return this.coupons.issueSegment(
+      id,
+      {
+        tier: input.tier ?? 'all',
+        registeredFrom: input.registeredFrom,
+        registeredTo: input.registeredTo
+      },
+      staff,
+      { requestKey: input.requestKey, note: input.note }
+    );
+  }
+
+  /** 发券记录：分页 + 券/批次/状态/关键词/时间筛选，汇总数字跟随筛选。 */
+  @Get('coupons/records')
+  @RequirePerm('coupon:view')
+  async couponRecords(@Query() query: Record<string, unknown>) {
+    const input = parseInput(couponRecordQuerySchema, query ?? {});
+    return this.coupons.listRecords(input);
+  }
+
+  @Get('coupons/batches')
+  @RequirePerm('coupon:view')
+  async couponBatches(@Query() query: Record<string, unknown>) {
+    const input = parseInput(couponBatchQuerySchema, query ?? {});
+    return this.coupons.listBatches(input);
+  }
+
+  /** 单张作废：只回收未使用的券，必须填原因并写审计日志。 */
+  @Post('coupons/records/:id/revoke')
+  @RequirePerm('coupon:manage')
+  async revokeCouponRecord(@Param('id') id: string, @Body() body: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(couponRevokeSchema, body ?? {});
+    return this.coupons.revoke(id, input.reason, staff);
+  }
+
+  /** 批次作废：整批回收未使用的券，已用与锁单中的券不受影响。 */
+  @Post('coupons/batches/:id/revoke')
+  @RequirePerm('coupon:manage')
+  async revokeCouponBatch(@Param('id') id: string, @Body() body: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(couponRevokeSchema, body ?? {});
+    return this.coupons.revokeBatch(id, input.reason, staff);
+  }
+
+  /** 自动发券规则：生日 / 新客 / 沉睡；预览看今日命中人数，执行走与人工发放同一套事务。 */
+  @Get('coupons/rules')
+  @RequirePerm('coupon:view')
+  async couponRuleList() {
+    return this.couponRules.listRules();
+  }
+
+  @Post('coupons/rules')
+  @RequirePerm('coupon:manage')
+  async createCouponRule(@Body() body: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(couponRuleSchema, body);
+    return this.couponRules.createRule(
+      {
+        couponId: input.couponId,
+        kind: input.kind,
+        enabled: input.enabled,
+        tier: input.tier,
+        config: input.config,
+        note: input.note
+      },
+      staff
+    );
+  }
+
+  @Patch('coupons/rules/:id')
+  @RequirePerm('coupon:manage')
+  async updateCouponRule(@Param('id') id: string, @Body() body: unknown, @Staff() staff: StaffContext) {
+    const input = parseInput(
+      z.object({
+        enabled: z.boolean().optional(),
+        tier: z.enum(['all', 'standard', 'annual']).optional(),
+        config: couponRuleSchema.shape.config,
+        note: z.string().trim().max(200).optional()
+      }),
+      body ?? {}
+    );
+    return this.couponRules.updateRule(id, input, staff);
+  }
+
+  @Delete('coupons/rules/:id')
+  @RequirePerm('coupon:manage')
+  async deleteCouponRule(@Param('id') id: string, @Staff() staff: StaffContext) {
+    return this.couponRules.deleteRule(id, staff);
+  }
+
+  @Post('coupons/rules/:id/preview')
+  @RequirePerm('coupon:view')
+  async previewCouponRule(@Param('id') id: string) {
+    return this.couponRules.previewRule(id);
+  }
+
+  /** 立即执行单条规则：手动执行不受「今天已跑过」限制，券侧仍按天幂等。 */
+  @Post('coupons/rules/:id/run')
+  @RequirePerm('coupon:manage')
+  async runCouponRule(@Param('id') id: string, @Staff() staff: StaffContext) {
+    return { result: await this.couponRules.runRule(id, staff) };
   }
 
   @Get('me')

@@ -1,8 +1,6 @@
 import type {
   DeviceStatus,
   LabelPrinter,
-  MemberBenefit,
-  MemberProvider,
   MiniProgramAuthProvider,
   MiniProgramSession,
   PaymentGateway,
@@ -93,16 +91,6 @@ export class DisabledPlatformConnector implements PlatformConnector {
 
   async acknowledge(_externalId: string): Promise<boolean> {
     throw refuse('外卖平台');
-  }
-}
-
-export class DisabledMemberProvider implements MemberProvider {
-  readonly name = '会员体系未接入';
-  readonly mode = 'disabled';
-
-  async verify(_code: string): Promise<MemberBenefit | null> {
-    // 验证失败按「无权益」处理：不给折扣是安全方向的失败。
-    return null;
   }
 }
 

@@ -1408,7 +1408,17 @@ uni-page-body .profile-edit-link .app-icon { display: inline-block; vertical-ali
   font-variant-numeric: tabular-nums;
 }
 .coupon-title { display: block; font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+/* 券卡正文里说明行可能有两三行（范围、有效期、不可领原因），逐行占位避免拼成一段。 */
+.coupon-card .grow .tiny { display: block; }
 .coupon-card .pill { flex-shrink: 0; }
+.section-label {
+  display: block;
+  margin: 18px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted, #8a8378);
+}
 .coupon-order-note { display: block; margin-top: 2px; }
 .coupon-row-card .card-title { margin-bottom: 2px; }
 
@@ -1704,6 +1714,32 @@ uni-page-body .profile-edit-link .app-icon { display: inline-block; vertical-ali
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+/* 顾客可编辑的文本字段：外形与日期选择一致。 */
+.form-row .form-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  background: var(--card);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 42px;
+  color: var(--art-ink);
+}
+/* 只读资料（例如 CRM 统一用户名）：外形与输入框一致，但底色区分「不可编辑」。 */
+.form-row .form-static {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  background: var(--canvas);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 42px;
+  color: var(--muted);
 }
 
 .member-code-sheet { text-align: center; padding: 4px 0; }

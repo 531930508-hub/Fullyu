@@ -82,7 +82,6 @@ export class StoreController {
       retail: await this.catalog.retailAvailability(),
       hardware: {
         payment: this.hardware.payment.mode,
-        member: this.hardware.member.mode,
         printer: this.hardware.printer.mode,
         teaMachine: this.hardware.teaMachine.mode
       }
@@ -147,6 +146,8 @@ export class StoreController {
         /** 顾客付款码：只透传给渠道，不落库、不写日志。 */
         authCode: z.string().trim().min(6).max(64).optional(),
         memberCode: z.string().max(40).optional(),
+        /** 自带杯杯数：营业台与顾客确认后填写，按杯减免，服务端再校验上限与适用范围。 */
+        byoCups: z.number().int().min(0).max(10).optional(),
         // 营业台断网/双击重试时用同一个键：同键同内容返回原单，同键异内容 409。
         idempotencyKey: z.string().trim().min(4).max(64).optional()
       }),
@@ -161,16 +162,20 @@ export class StoreController {
     assertStoreAccess(staff, input.storeId);
     const business = input.business ?? 'fresh';
     let memberDiscountPerCupCents = 0;
+    let memberCustomerId: string | null = null;
     if (input.memberCode && business === 'fresh') {
       const benefit = await this.auth.memberBenefitByCode(input.memberCode);
       if (!benefit) throw badRequest('会员码无效，请重新扫码或改为标准价收款');
       memberDiscountPerCupCents = benefit.discountPerCupCents;
+      // 关联顾客身份，订单上报 CRM 时才能按 localUserId 记录会员节省。
+      memberCustomerId = benefit.customerId;
     }
     const result = await this.orders.createOrder({
       ...input,
       business,
       channel: 'assisted',
       ownerKind: 'guest',
+      customerId: memberCustomerId,
       memberDiscountPerCupCents,
       actor: staff,
       clientIp: req.ip
@@ -202,7 +207,16 @@ export class StoreController {
     const input = parseInput(z.object({ code: z.string().trim().min(1).max(40) }), body);
     const benefit = await this.auth.memberBenefitByCode(input.code);
     if (!benefit) throw badRequest('会员码无效，请重新扫码或改为标准价收款');
-    return { benefit, mode: 'db' };
+    return {
+      benefit: {
+        code: benefit.code,
+        tier: benefit.tier,
+        discountPerCupCents: benefit.discountPerCupCents,
+        name: benefit.name,
+        memberUntil: benefit.memberUntil
+      },
+      mode: 'db'
+    };
   }
 
   @Get('orders/:id')

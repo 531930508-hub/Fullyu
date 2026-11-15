@@ -29,6 +29,7 @@ type FakeGateway = PaymentGateway & {
   nativePay: jest.Mock;
   micropay: jest.Mock;
   query: jest.Mock<Promise<PaymentQueryResult>, [unknown]>;
+  close: jest.Mock;
   handleCallback: jest.Mock<Promise<PaymentCallbackResult>, [unknown]>;
 };
 
@@ -59,6 +60,7 @@ function fakeGateway(): FakeGateway {
     })),
     micropay: jest.fn(async () => ({ ok: true, status: 'paid' as const, providerRef: 'HF-MICRO-1' })),
     query: jest.fn(async () => ({ ok: true, status: 'pending' as const })),
+    close: jest.fn(async () => ({ ok: true, status: 'closed' as const })),
     handleCallback: jest.fn(async () => ({ ok: true })),
     merchantFor: (storeId: string) => (storeId === 'sh' ? 'MER-SH' : '')
   } as unknown as FakeGateway;
@@ -102,6 +104,34 @@ describe('异步支付渠道订单链路（汇付模式）', () => {
     h.api('post', '/store/orders', managerToken, { ...freshOrderBody(), ...extra });
 
   const payCallback = (body: unknown) => h.api('post', `/hooks/payment/${gateway.name}`, null, body);
+
+  let couponSeq = 0;
+  const issueCoupon = async (customerId: string, amountCents: number): Promise<string> => {
+    couponSeq += 1;
+    const now = Date.now();
+    const coupon = await h.prisma.coupon.create({
+      data: {
+        id: `CP-ASYNC-${process.pid}-${couponSeq}`,
+        title: '0 元单测试券',
+        scope: 'all',
+        amountCents,
+        minSpendCents: 0,
+        validFrom: new Date(now - 60_000),
+        validTo: new Date(now + 86_400_000)
+      }
+    });
+    const held = await h.prisma.customerCoupon.create({
+      data: {
+        id: `CC-ASYNC-${process.pid}-${couponSeq}`,
+        couponId: coupon.id,
+        customerId,
+        status: 'available',
+        validFrom: coupon.validFrom,
+        validTo: coupon.validTo
+      }
+    });
+    return held.id;
+  };
 
   it('小程序建单保持未支付，prepay 返回渠道参数，回调后才落账且重复回调不重复记账', async () => {
     const created = await h.api('post', '/customer/orders', customerToken, freshOrderBody());
@@ -148,6 +178,51 @@ describe('异步支付渠道订单链路（汇付模式）', () => {
     expect(again.status).toBe(200);
     expect(again.body.applied).toBe(true);
     expect(await h.prisma.financeEntry.count({ where: { orderId, type: 'SALE' } })).toBe(1);
+  });
+
+  it('券全额抵扣的 0 元单：不向渠道发起支付，建单即落账', async () => {
+    const customer = await h.prisma.customer.findUnique({ where: { phone: '13700000123' } });
+    if (!customer) throw new Error('测试顾客未落库');
+    const couponId = await issueCoupon(customer.id, 2000);
+
+    const created = await h.api('post', '/customer/orders', customerToken, freshOrderBody({ couponId }));
+    expect(created.status).toBe(201);
+    const orderId = created.body.order.id as string;
+    expect(created.body.order.totalCents).toBe(0);
+    expect(created.body.order.paymentStatus).toBe('paid');
+    expect(created.body.payment).toEqual({ kind: 'none', status: 'paid' });
+    // 0 元没有可扣金额：渠道一把都不能调，否则会以「支付金额不正确」拒绝。
+    expect(gateway.charge).not.toHaveBeenCalled();
+    expect(gateway.prepay).not.toHaveBeenCalled();
+    expect(gateway.nativePay).not.toHaveBeenCalled();
+    expect(gateway.micropay).not.toHaveBeenCalled();
+
+    const intent = await h.prisma.paymentIntent.findFirst({ where: { orderId } });
+    expect(intent?.status).toBe('succeeded');
+    expect(await h.prisma.financeEntry.count({ where: { orderId, type: 'SALE' } })).toBe(1);
+
+    // 旧客户端或重复点击仍可能调 prepay：已到账就直接返回，不再让微信收银台拉起 0 元支付。
+    const prepay = await h.api('post', `/customer/orders/${orderId}/prepay`, customerToken);
+    expect(prepay.status).toBe(201);
+    expect(prepay.body.paid).toBe(true);
+    expect(prepay.body.prepayMode).toBe('none');
+    expect(gateway.prepay).not.toHaveBeenCalled();
+  });
+
+  it('历史 0 元未支付单：prepay 直接补落账，不再向渠道下发 0 元支付参数', async () => {
+    const created = await h.api('post', '/customer/orders', customerToken, freshOrderBody());
+    const orderId = created.body.order.id as string;
+    // 模拟上线前已生成、金额被券抵成 0 却仍停在待支付的历史单。
+    await h.prisma.order.update({ where: { id: orderId }, data: { totalCents: 0 } });
+
+    const prepay = await h.api('post', `/customer/orders/${orderId}/prepay`, customerToken);
+    expect(prepay.status).toBe(201);
+    expect(prepay.body).toMatchObject({ paid: true, prepayMode: 'none' });
+    expect(gateway.prepay).not.toHaveBeenCalled();
+
+    const row = await h.prisma.order.findUnique({ where: { id: orderId } });
+    expect(row?.paymentStatus).toBe('paid');
+    expect(row?.paymentRef).toBe(`ZERO-${orderId}`);
   });
 
   it('回调金额与订单应付不一致：拒绝落账、订单保持未支付并留痕', async () => {
@@ -334,5 +409,64 @@ describe('异步支付渠道订单链路（汇付模式）', () => {
     expect(line?.refundedQty).toBe(1);
     expect(line?.pendingRefundQty).toBe(0);
     expect(await h.prisma.financeEntry.count({ where: { orderId, type: 'REFUND' } })).toBe(1);
+  });
+
+  it('并发落账（回调 + 查单同时到）只认一个写入者：不撞杯标唯一键、不重复记账', async () => {
+    const created = await h.api('post', '/customer/orders', customerToken, freshOrderBody());
+    expect(created.status).toBe(201);
+    const orderId = created.body.order.id as string;
+    await h.api('post', `/customer/orders/${orderId}/prepay`, customerToken);
+
+    const orders = h.app.get(OrdersService);
+    const settled = await Promise.allSettled([
+      orders.markPaid(orderId, 'HF-RACE-1'),
+      orders.markPaid(orderId, 'HF-RACE-2'),
+      orders.markPaid(orderId, 'HF-RACE-3')
+    ]);
+    // 并发落账任何一次都不许抛错（历史故障：后到者插同一批杯标撞唯一键，回调 500）。
+    const outcomes = settled.map((r) => (r.status === 'fulfilled' ? r.value : `rejected:${String(r.reason)}`));
+    expect(outcomes.filter((x) => x === 'applied')).toHaveLength(1);
+    expect(outcomes.filter((x) => x === 'duplicate')).toHaveLength(2);
+
+    const item = await h.prisma.orderItem.findFirst({ where: { orderId } });
+    expect(await h.prisma.orderUnit.count({ where: { orderId } })).toBe(item?.qty ?? 1);
+    expect(await h.prisma.financeEntry.count({ where: { orderId, type: 'SALE' } })).toBe(1);
+  });
+
+  it('未支付单取消后到渠道关单，悬挂的支付意图不再卡在处理中', async () => {
+    const created = await h.api('post', '/customer/orders', customerToken, freshOrderBody());
+    expect(created.status).toBe(201);
+    const orderId = created.body.order.id as string;
+    await h.api('post', `/customer/orders/${orderId}/prepay`, customerToken);
+    expect(await h.prisma.paymentIntent.count({ where: { orderId, status: 'processing' } })).toBe(1);
+
+    gateway.close.mockResolvedValueOnce({ ok: true, status: 'closed' });
+    const cancelled = await h.api('post', `/customer/orders/${orderId}/cancel`, customerToken);
+    expect(cancelled.status).toBeLessThan(300);
+
+    expect(gateway.close).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId, storeId: 'sh', method: 'wechat' })
+    );
+    const intent = await h.prisma.paymentIntent.findFirst({ where: { orderId } });
+    expect(intent?.status).toBe('failed');
+    expect(intent?.failReason).toContain('关单');
+  });
+
+  it('关单时渠道报告原单已支付：意图保持 unknown，订单不复活，留给对账', async () => {
+    const created = await h.api('post', '/customer/orders', customerToken, freshOrderBody());
+    expect(created.status).toBe(201);
+    const orderId = created.body.order.id as string;
+    await h.api('post', `/customer/orders/${orderId}/prepay`, customerToken);
+
+    gateway.close.mockResolvedValueOnce({ ok: false, status: 'paid', error: '原交易已支付，无法关单' });
+    const cancelled = await h.api('post', `/customer/orders/${orderId}/cancel`, customerToken);
+    expect(cancelled.status).toBeLessThan(300);
+
+    const intent = await h.prisma.paymentIntent.findFirst({ where: { orderId } });
+    expect(intent?.status).toBe('unknown');
+    expect(intent?.failReason).toContain('已支付');
+    const order = await h.prisma.order.findUnique({ where: { id: orderId } });
+    expect(order?.status).toBe('cancelled');
+    expect(order?.paymentStatus).toBe('failed');
   });
 });

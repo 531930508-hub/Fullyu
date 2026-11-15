@@ -1,6 +1,7 @@
 import { createHarness, type Harness } from '../testing/harness';
 import { startFakeBrandCrm, type FakeBrandCrm } from '../testing/brand-crm-fake';
 import { BrandOrderReporter } from './brand-order.reporter';
+import { BrandCardPaymentService } from './brand-card-payment.service';
 
 const ENV_KEYS = [
   'CRM_ENABLED',
@@ -48,6 +49,12 @@ describe('顾客品牌会员代理', () => {
     expect(fake.requests).toHaveLength(0);
   });
 
+  it('未登录也能读取公开产品目录，价格只来自 CRM', async () => {
+    const res = await h.api('get', '/brand-member/products');
+    expect(res.status).toBe(200);
+    expect(res.body.products[1]).toMatchObject({ code: 'FY_ANNUAL', priceCents: 36500 });
+  });
+
   it('身份页使用登录顾客的本地 id，不把手机号或密钥带到前端', async () => {
     const customer = await h.customer('品牌会员茶客');
     const res = await h.api('get', '/customer/brand-member/me', customer.token);
@@ -68,14 +75,14 @@ describe('顾客品牌会员代理', () => {
     const customer = await h.customer('报价茶客');
     const products = await h.api('get', '/customer/brand-member/products', customer.token);
     expect(products.status).toBe(200);
-    expect(products.body.products[1]).toMatchObject({ code: 'FY_ANNUAL', priceCents: 29900 });
+    expect(products.body.products[1]).toMatchObject({ code: 'FY_ANNUAL', priceCents: 36500 });
 
     const quote = await h.api('post', '/customer/brand-member/quote', customer.token, {
       productCode: 'FY_ANNUAL',
       priceCents: 1
     });
     expect(quote.status).toBe(201);
-    expect(quote.body.priceCents).toBe(29900);
+    expect(quote.body.priceCents).toBe(36500);
 
     const body = JSON.parse(fake.requests[fake.requests.length - 1].body) as Record<string, unknown>;
     expect(body).toMatchObject({
@@ -86,15 +93,53 @@ describe('顾客品牌会员代理', () => {
     expect(body).not.toHaveProperty('priceCents');
   });
 
-  it('支付通道未接入时明确拒绝开通，不调用 CRM 开卡', async () => {
+  it('没有微信支付身份的顾客不能发起购卡，也不会惊动 CRM 开卡', async () => {
     const customer = await h.customer('购买茶客');
     const before = fake.requests.length;
     const res = await h.api('post', '/customer/brand-member/purchase', customer.token, {
       productCode: 'FY_ANNUAL'
     });
-    expect(res.status).toBe(501);
-    expect(res.body.error).toBe('PAYMENT_NOT_ENABLED');
+    expect(res.status).toBe(400);
     expect(fake.requests.length).toBe(before);
+    expect(await h.prisma.brandCardOrder.count({ where: { customerId: customer.id } })).toBe(0);
+  });
+
+  it('支付通道为模拟时只建待付单：不扣款、不调 CRM 开卡', async () => {
+    const customer = await h.customer('模拟支付茶客');
+    await h.prisma.customer.update({ where: { id: customer.id }, data: { openId: `o-mock-${customer.id}` } });
+    const res = await h.api('post', '/customer/brand-member/purchase', customer.token, {
+      productCode: 'FY_ANNUAL'
+    });
+    expect(res.status).toBe(201);
+    // 金额来自 CRM 报价，预下单走模拟渠道。
+    expect(res.body.order).toMatchObject({ amountCents: 36500, payStatus: 'pending', issueStatus: 'idle' });
+    expect(res.body.prepayMode).toBe('mock');
+    // 没收到钱就绝不调开卡：CRM 侧不应出现 issue 请求。
+    expect(fake.requests.some((item) => item.path.startsWith('/api/v1/brand-member/issue'))).toBe(false);
+  });
+
+  it('钱到账后按报价开卡：开卡请求带商户单号与实付金额，卡号记回本地单', async () => {
+    const customer = await h.customer('开卡茶客');
+    await h.prisma.customer.update({ where: { id: customer.id }, data: { openId: `o-issue-${customer.id}` } });
+    const purchase = await h.api('post', '/customer/brand-member/purchase', customer.token, {
+      productCode: 'FY_ANNUAL'
+    });
+    const orderId = purchase.body.order.id as string;
+
+    const outcome = await h.app.get(BrandCardPaymentService).settle({
+      reference: orderId,
+      providerRef: 'HF-ISSUE-1',
+      amountCents: 36500,
+      status: 'paid'
+    });
+    expect(outcome).toBe('applied');
+
+    const issue = fake.requests.filter((item) => item.path.startsWith('/api/v1/brand-member/issue')).pop();
+    expect(issue?.signatureOk).toBe(true);
+    expect(JSON.parse(issue!.body)).toMatchObject({ orderRef: orderId, paidCents: 36500 });
+
+    const row = await h.prisma.brandCardOrder.findUnique({ where: { id: orderId } });
+    expect(row).toMatchObject({ payStatus: 'paid', issueStatus: 'issued', crmCardId: 'MBC-TEST-1' });
   });
 
   it('愈行之旅票据由服务端换取；无有效卡时不伪造可玩', async () => {
@@ -198,7 +243,7 @@ describe('顾客品牌会员代理', () => {
     };
     await h.prisma.order.createMany({
       data: [
-        { ...base, id: 'ORD-RPT-1', number: 'RPT-1', totalCents: 18000, customerId: buyer.id },
+        { ...base, id: 'ORD-RPT-1', number: 'RPT-1', totalCents: 18000, memberDiscountCents: 2000, customerId: buyer.id },
         { ...base, id: 'ORD-RPT-2', number: 'RPT-2', totalCents: 4200, refundedCents: 1200, customerId: buyer.id },
         { ...base, id: 'ORD-RPT-3', number: 'RPT-3', totalCents: 0, customerId: buyer.id, parentOrderId: 'ORD-RPT-1' },
         { ...base, id: 'ORD-RPT-4', number: 'RPT-4', totalCents: 3000, paymentStatus: 'unpaid', paidAt: null, customerId: buyer.id },
@@ -212,7 +257,12 @@ describe('顾客品牌会员代理', () => {
     expect(down.failed).toBeGreaterThanOrEqual(1);
 
     for (let i = 0; i < 6; i += 1) await reporter.runOnce(now);
-    expect(fake.orders.get('ORD-RPT-1')).toMatchObject({ localUserId: buyer.id, paidCents: 18000, refundCents: 0 });
+    expect(fake.orders.get('ORD-RPT-1')).toMatchObject({
+      localUserId: buyer.id,
+      paidCents: 18000,
+      savedCents: 2000,
+      refundCents: 0
+    });
     expect(fake.orders.get('ORD-RPT-2')).toMatchObject({ paidCents: 4200, refundCents: 1200 });
     expect(fake.orders.has('ORD-RPT-3')).toBe(false);
     expect(fake.orders.has('ORD-RPT-4')).toBe(false);

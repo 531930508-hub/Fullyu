@@ -1,13 +1,28 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
+import { buildTsplJob, type PrintJobPayload } from '@teahour/integrations';
 import { PrismaService } from '../common/prisma.service';
 import { HardwareService } from '../hardware/hardware.module';
 import { newId } from '../common/ids';
 import { logAction } from '../common/logs';
+import { servicePhone, tsplLabelStyle } from '../config/config';
 
 /** 重试上限：超过后转死信，等待人工补打（补打会重建任务并留痕）。 */
 const MAX_ATTEMPTS = 3;
 /** 处理租约：领取超时未回写视为节点崩溃，可被安全恢复。 */
 const LEASE_MS = 5 * 60_000;
+
+/** 交给门店打印代理的一张标签：TSPL 已经渲染好，代理只负责转码与写 USB。 */
+export type AgentLabel = { label: string; tspl: string };
+
+/** 代理领取到的任务。label 与杯贴码一一对应，避免打错杯。 */
+export type AgentPrintJob = {
+  jobId: string;
+  orderId: string;
+  orderNumber: string;
+  storeId: string;
+  reprint: boolean;
+  labels: AgentLabel[];
+};
 
 @Injectable()
 export class PrintingService implements OnModuleInit {
@@ -16,8 +31,15 @@ export class PrintingService implements OnModuleInit {
     private readonly hardware: HardwareService
   ) {}
 
+  /** 芯烨 XP-420B 这类 USB 机只能由门店代理领取，服务端不推指令。 */
+  get agentTransport(): boolean {
+    return this.hardware.printer.transport === 'agent';
+  }
+
   /** 启动时恢复积压任务：崩溃/离线遗留的 queued 与超时 processing 都会被重新认领。 */
   async onModuleInit(): Promise<void> {
+    // agent 模式下没有任何可推的通道，积压交给门店代理领取，不做空转重试。
+    if (this.agentTransport) return;
     await this.resumeQueued().catch(() => undefined);
   }
 
@@ -33,7 +55,12 @@ export class PrintingService implements OnModuleInit {
     const printable = order.units.filter((unit) => unit.status !== 'refunded');
     if (!printable.length) return null;
     const store = await this.prisma.store.findUnique({ where: { id: order.storeId } });
-    const payload = {
+    // 称呼只取昵称，绝不把手机号或全名印在吧台人人可见的杯贴上。
+    const customer = order.customerId
+      ? await this.prisma.customer.findUnique({ where: { id: order.customerId }, select: { name: true } })
+      : null;
+    const orderedAt = (order.paidAt || order.createdAt).toISOString();
+    const payload: PrintJobPayload = {
       orderId: order.id,
       orderNumber: order.number,
       storeId: order.storeId,
@@ -41,13 +68,20 @@ export class PrintingService implements OnModuleInit {
       labels: printable.map((unit) => ({
         label: unit.label,
         orderNumber: order.number,
-        storeName: store?.name || order.storeId,
+        // 杯贴只印门店名，不带城市前缀：「西岸店」而不是「上海·西岸店」。
+        // 城市在纸上是废话——杯贴永远只在本店出，省下的宽度留给店名本身。
+        storeName: store?.short || store?.name || order.storeId,
         productName: unit.item.name,
         temp: unit.item.temp,
         ice: unit.item.ice,
         cupIndex: order.units.findIndex((x) => x.id === unit.id) + 1,
         cupTotal: order.units.length,
-        printedAt: new Date().toISOString()
+        printedAt: new Date().toISOString(),
+        pickupCode: order.pickupCode || undefined,
+        series: unit.item.series,
+        customerName: customer?.name || undefined,
+        storePhone: servicePhone() || undefined,
+        orderedAt
       }))
     };
     // 稳定业务键：同一订单的自动出票任务只允许一条（TX-06 outbox 口径）；
@@ -79,6 +113,9 @@ export class PrintingService implements OnModuleInit {
   }
 
   async process(jobId: string): Promise<{ ok: boolean; error?: string }> {
+    // agent 模式（芯烨 XP-420B）：任务留在 queued，等门店打印代理用令牌领取。
+    // 这里绝不返回「已打印」——吧台没出纸之前，订单 printStatus 必须还是 queued。
+    if (this.agentTransport) return { ok: true };
     // 租约恢复：卡在 processing 且租约过期的任务先回到队列。
     await this.prisma.printJob.updateMany({
       where: { id: jobId, status: 'processing', claimedAt: { lt: new Date(Date.now() - LEASE_MS) } },
@@ -162,6 +199,7 @@ export class PrintingService implements OnModuleInit {
 
   /** 扫描恢复：把排队/租约过期的任务重新处理一遍（启动时与必要时手动触发）。 */
   async resumeQueued(): Promise<number> {
+    if (this.agentTransport) return 0;
     const jobs = await this.prisma.printJob.findMany({
       where: { status: { in: ['queued', 'processing'] } },
       orderBy: { createdAt: 'asc' },
@@ -173,6 +211,86 @@ export class PrintingService implements OnModuleInit {
       if (result.ok) recovered += 1;
     }
     return recovered;
+  }
+
+  /**
+   * 门店打印代理领取一张待打杯贴（芯烨 XP-420B 走这里）。
+   *
+   * - 只领本店任务；服务端把 TSPL 渲染好，代理只做转码 + 写 USB，避免两端版本漂移；
+   * - 认领是原子的（queued → processing），多个收银工位同时轮询不会重复出纸；
+   * - 租约过期（代理崩溃/关机）的任务会被这家店的代理重新领走，不需要人工介入。
+   */
+  async claimForAgent(storeId: string): Promise<AgentPrintJob | null> {
+    await this.prisma.printJob.updateMany({
+      where: {
+        status: 'processing',
+        claimedAt: { lt: new Date(Date.now() - LEASE_MS) },
+        order: { storeId }
+      },
+      data: { status: 'queued', claimedAt: null, updatedAt: new Date() }
+    });
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const job = await this.prisma.printJob.findFirst({
+        where: { status: 'queued', order: { storeId } },
+        orderBy: { createdAt: 'asc' }
+      });
+      if (!job) return null;
+      const claimed = await this.prisma.printJob.updateMany({
+        where: { id: job.id, status: 'queued' },
+        data: { status: 'processing', claimedAt: new Date(), updatedAt: new Date() }
+      });
+      if (!claimed.count) continue; // 被同店另一个工位抢走了，继续找下一张
+
+      const order = await this.prisma.order.findUnique({ where: { id: job.orderId } });
+      if (!order) {
+        await this.failJob(job.id, '订单不存在', true);
+        continue;
+      }
+      const payload = JSON.parse(job.payloadJson) as PrintJobPayload;
+      return {
+        jobId: job.id,
+        orderId: order.id,
+        orderNumber: order.number,
+        storeId: order.storeId,
+        reprint: job.kind === 'reprint',
+        labels: buildTsplJob(payload, tsplLabelStyle())
+      };
+    }
+    return null;
+  }
+
+  /** 代理回执「已出纸」：只有这一步会把订单标成 printed；只认领自己门店的任务。 */
+  async complete(jobId: string, storeId: string): Promise<{ ok: boolean; error?: string }> {
+    const job = await this.prisma.printJob.findUnique({
+      where: { id: jobId },
+      include: { order: { select: { id: true, storeId: true } } }
+    });
+    if (!job) return { ok: false, error: '打印任务不存在' };
+    if (job.order.storeId !== storeId) return { ok: false, error: '该任务不属于本门店' };
+    await this.prisma.printJob.update({
+      where: { id: jobId },
+      data: {
+        status: 'printed',
+        attempts: { increment: 1 },
+        claimedAt: null,
+        lastError: null,
+        updatedAt: new Date()
+      }
+    });
+    await this.prisma.order.update({ where: { id: job.orderId }, data: { printStatus: 'printed' } });
+    return { ok: true };
+  }
+
+  /** 代理回执「打不出来」：按退避重试，三次后转死信等人工补打。 */
+  async reject(jobId: string, message: string, storeId: string): Promise<{ ok: boolean; error: string }> {
+    const job = await this.prisma.printJob.findUnique({
+      where: { id: jobId },
+      include: { order: { select: { storeId: true } } }
+    });
+    if (!job) return { ok: false, error: '打印任务不存在' };
+    if (job.order.storeId !== storeId) return { ok: false, error: '该任务不属于本门店' };
+    return this.failJob(jobId, message.slice(0, 300));
   }
 
   async list(storeId?: string) {

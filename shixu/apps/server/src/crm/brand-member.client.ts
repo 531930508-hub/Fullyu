@@ -80,6 +80,8 @@ export type BrandProduct = {
   priceCents: number;
   validDays: number;
   benefits: Array<{ business: string; title: string; desc: string }>;
+  /** 各业态权益参数（如 teahour.perCupCents），由 CRM 卡版本下发。 */
+  perks?: Record<string, unknown>;
   pointsSpend: Record<string, string>;
   gameEnabled: boolean;
 };

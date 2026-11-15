@@ -181,6 +181,39 @@ describe('报损与审批', () => {
     expect(counts.body.counts.rejected).toBeGreaterThanOrEqual(1);
   });
 
+  it('审批中心三个页签按「待我审批 / 我已处理 / 全部记录」分流', async () => {
+    const todo = await h.api('get', '/admin/approvals?view=todo', financeToken);
+    expect(todo.status).toBe(200);
+    expect(todo.body.view).toBe('todo');
+    expect(todo.body.approvals.every((x: { status: string }) => x.status === 'pending')).toBe(true);
+    expect(todo.body.counts.pending).toBe(todo.body.approvals.length);
+
+    const done = await h.api('get', '/admin/approvals?view=done', financeToken);
+    expect(done.status).toBe(200);
+    expect(done.body.approvals.length).toBeGreaterThanOrEqual(1);
+    expect(done.body.approvals.every((x: { decidedBy: string | null }) => !!x.decidedBy)).toBe(true);
+    expect(done.body.counts.done).toBe(done.body.approvals.length);
+
+    const all = await h.api('get', '/admin/approvals?view=all', financeToken);
+    expect(all.status).toBe(200);
+    expect(all.body.approvals.length).toBeGreaterThanOrEqual(done.body.approvals.length);
+    expect(all.body.counts.total).toBeGreaterThanOrEqual(all.body.approvals.length);
+
+    // 只有查看权限、没有审批权限的账号：「待我审批」为空，但全部记录仍可回查。
+    const auditToken = await h.login(ACCOUNTS.audit);
+    const auditTodo = await h.api('get', '/admin/approvals?view=todo', auditToken);
+    expect(auditTodo.status).toBe(200);
+    expect(auditTodo.body.approvals).toHaveLength(0);
+    expect(auditTodo.body.counts.pending).toBe(0);
+    const auditAll = await h.api('get', '/admin/approvals?view=all', auditToken);
+    expect(auditAll.status).toBe(200);
+    expect(auditAll.body.approvals.length).toBeGreaterThanOrEqual(1);
+
+    // 门店店长没有 approval:view，不能进入审批中心。
+    const denied = await h.api('get', '/admin/approvals?view=all', managerToken);
+    expect(denied.status).toBe(403);
+  });
+
   it('报损规则只有总部能改，参数越界会被拒绝', async () => {
     const updated = await h.api('put', '/admin/loss-policy', superToken, {
       monthlyRatio: 5,

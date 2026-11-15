@@ -46,7 +46,6 @@ describe('门店、菜单与库存', () => {
     expect(res.body.categories).toHaveLength(8);
     expect(res.body.hardware).toEqual({
       payment: 'mock',
-      member: 'mock',
       printer: 'mock',
       teaMachine: 'mock'
     });

@@ -13,12 +13,13 @@ describe('账号、角色、门店配置与操作记录', () => {
     await h.close();
   });
 
-  it('权限目录包含 33 个权限点，内置角色齐全', async () => {
+  it('权限目录包含 38 个权限点，内置角色齐全', async () => {
     const permissions = await h.api('get', '/admin/permissions', superToken);
     expect(permissions.status).toBe(200);
-    expect(permissions.body.codes).toHaveLength(33);
+    expect(permissions.body.codes).toHaveLength(38);
     expect(permissions.body.codes).toContain('pos:use');
-    expect(permissions.body.modules.length).toBeGreaterThanOrEqual(9);
+    expect(permissions.body.codes).toContain('attendance:clock');
+    expect(permissions.body.modules.length).toBeGreaterThanOrEqual(10);
 
     const roles = await h.api('get', '/admin/roles', superToken);
     expect(roles.status).toBe(200);
@@ -65,6 +66,58 @@ describe('账号、角色、门店配置与操作记录', () => {
       roleIds: ['r-region']
     });
     expect(noStore.status).toBe(400);
+    expect(noStore.body.message).toContain('门店');
+
+    // 校验失败要指明是哪一项：泛化的“请求参数不完整或格式不正确”会让后台用户无从下手。
+    const shortName = await h.api('post', '/admin/staff', superToken, {
+      name: '短账号',
+      username: '12345',
+      password: '12345678',
+      roleIds: ['r-region'],
+      storeIds: ['bj']
+    });
+    expect(shortName.status).toBe(400);
+    expect(shortName.body.message).toContain('6–20 位数字');
+
+    // 密码不设长度下限（总部发放的初始密码允许短口令），但仍要拦住超长口令。
+    const shortPassword = await h.api('post', '/admin/staff', superToken, {
+      name: '短密码',
+      username: '13900000012',
+      password: '1234',
+      roleIds: ['r-region'],
+      storeIds: ['bj']
+    });
+    expect(shortPassword.status).toBe(201);
+
+    const longPassword = await h.api('post', '/admin/staff', superToken, {
+      name: '超长密码',
+      username: '13900000014',
+      password: 'x'.repeat(73),
+      roleIds: ['r-region'],
+      storeIds: ['bj']
+    });
+    expect(longPassword.status).toBe(400);
+    expect(longPassword.body.message).toContain('密码最多 72 位');
+
+    const emptyPassword = await h.api('post', '/admin/staff', superToken, {
+      name: '空密码',
+      username: '13900000015',
+      password: '',
+      roleIds: ['r-region'],
+      storeIds: ['bj']
+    });
+    expect(emptyPassword.status).toBe(400);
+    expect(emptyPassword.body.message).toContain('密码');
+
+    const noRole = await h.api('post', '/admin/staff', superToken, {
+      name: '无角色',
+      username: '13900000013',
+      password: '12345678',
+      roleIds: [],
+      storeIds: ['bj']
+    });
+    expect(noRole.status).toBe(400);
+    expect(noRole.body.message).toContain('角色');
 
     const created = await h.api('post', '/admin/staff', superToken, {
       name: '北京店长',

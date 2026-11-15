@@ -5,9 +5,8 @@
       <button hover-class="none" class="bm-back" :aria-label="tt('返回', 'Back')" @click="goBack">
         <AppIcon name="chevronLeft" :size="20" />
       </button>
-      <text class="bm-nav-title">{{ tt('Full愈会员卡', 'Full Yuk member card') }}</text>
-      <text v-if="isMock" class="bm-dev">{{ tt('合成数据', 'Mock data') }}</text>
-      <view v-else class="bm-nav-tail" />
+      <text class="bm-nav-title">{{ tt('Full愈大会员', 'Full Yu Membership') }}</text>
+      <view class="bm-nav-tail" />
     </view>
 
     <scroll-view scroll-y class="bm-scroll">
@@ -24,14 +23,14 @@
         </view>
 
         <template v-else-if="data">
-          <!-- 会员卡：身份、本年已省、三业态权益与续费都在这张卡里 -->
+          <!-- 会员卡：身份、本卡期已省、全平台权益与续费都在这张卡里 -->
           <MemberCard
             :data="data"
             :active="active"
-            @purchase="openPurchase(selectedCode)"
             @detail="openDetail"
             @rules="openRules"
             @gift="openGift"
+            @renew="openPurchase(selectedCode)"
           />
 
           <!-- 01 社区黑板报：门店公告与会员故事贴在同一块板上，置顶公告排最前 -->
@@ -145,7 +144,7 @@
             </view>
           </view>
 
-          <!-- 03 礼物与兑换：年卡礼提货码与会员码收在同一组 -->
+          <!-- 03 礼物与兑换：会员礼提货码与会员码收在同一组 -->
           <view v-if="vouchers.length || active" class="bm-section bm-panel bm-panel--gift">
             <view class="bm-panel-head">
               <text class="bm-panel-index">03</text>
@@ -175,7 +174,7 @@
 
           <view class="bm-foot">
             <text>{{ tt('放松有道　自在生活', 'Rest, with intention') }}</text>
-            <text class="bm-foot-sub">{{ tt('Full愈 · 时叙', 'Full Yuk · 时叙') }}</text>
+            <text class="bm-foot-sub">{{ tt('Full愈 · 时叙', 'Full Yu · 时叙') }}</text>
           </view>
         </template>
       </view>
@@ -183,7 +182,7 @@
 
     <BottomSheet
       v-if="purchaseOpen"
-      :title="active ? tt('续费 Full愈会员', 'Renew Full Yuk membership') : tt('开通 Full愈会员', 'Join Full Yuk membership')"
+      :title="active ? tt('续费 Full愈大会员', 'Renew Full Yu Membership') : tt('开通 Full愈大会员', 'Join Full Yu Membership')"
       @close="closePurchase"
     >
       <view class="bm-confirm">
@@ -206,30 +205,29 @@
           </button>
         </view>
         <view class="bm-confirm-row"><text>{{ active ? tt('续费账户', 'Renew for') : tt('开卡账户', 'Open for') }}</text><text>{{ data.member.name }} · {{ data.member.phoneMasked }}</text></view>
-        <view class="bm-confirm-row"><text>{{ tt('包含', 'Includes') }}</text><text>{{ tt('全业态会员价 · 愈行之旅', 'Member prices · Healing Journey') }}</text></view>
+        <view v-if="benefitSummary" class="bm-confirm-row"><text>{{ tt('包含', 'Includes') }}</text><text>{{ benefitSummary }}</text></view>
         <view class="bm-confirm-row"><text>{{ tt('卡类型', 'Card type') }}</text><text>{{ tt('服务权益卡（非储值，不可提现）', 'Service benefit card (not stored value, not withdrawable)') }}</text></view>
         <view class="bm-confirm-row"><text>{{ tt('收款方', 'Payee') }}</text><text>{{ tt('时叙（本小程序）', '时叙 (this mini program)') }}</text></view>
-        <view v-if="isMock" class="bm-mock-note">{{ tt(`本地联调：不会发起真实扣款，${active ? '续费' : '开通'}只更新本页状态。`, 'Local mock: no real charge is made; this only updates the page state.') }}</view>
-        <view v-else class="bm-mock-note">{{ tt('线上支付接入中，本页暂不会发起扣款；已购卡权益与愈行之旅不受影响。', 'Online payment is being connected; no charge is made here. Existing card benefits are unaffected.') }}</view>
+        <view class="bm-mock-note">{{ payError || tt('付款后会员立即生效；若支付成功但页面仍显示未开通，刷新一次即可，款项不会重复扣。服务权益卡非储值，不可提现。', 'Your membership starts right after payment. If it still shows inactive, refresh once — you will not be charged twice. This is a benefit card, not stored value.') }}</view>
         <button hover-class="none" class="bm-btn primary full" :disabled="paying" @click="confirmPurchase">
-          {{ paying ? tt('处理中…', 'Processing…') : active ? tt('确认续费', 'Confirm renewal') : tt('确认开通', 'Confirm and join') }}
+          {{ paying ? tt('正在支付…', 'Processing…') : active ? tt('确认续费', 'Confirm renewal') : tt('确认开通', 'Confirm and join') }}
         </button>
         <button hover-class="none" class="bm-text-btn" @click="closePurchase">{{ tt('再想想', 'Not now') }}</button>
       </view>
     </BottomSheet>
 
-    <BottomSheet v-if="detailOpen" :title="tt('本年已省', 'Saved this year')" @close="closeDetail">
+    <BottomSheet v-if="detailOpen" :title="tt('本卡期已省', 'Saved this term')" @close="closeDetail">
       <view class="bm-confirm">
         <view class="bm-confirm-head">
           <view>
-            <text class="bm-confirm-name serif">{{ tt(`本年已省 ¥${formatYuan(data.savedCents)}`, `Saved ¥${formatYuan(data.savedCents)} this year`) }}</text>
-            <text class="bm-confirm-desc">{{ tt('按各业态会员价结算累计', 'Accumulated from member-price settlements') }}</text>
+            <text class="bm-confirm-name serif">{{ tt(`本卡期已省 ¥${formatYuan(data.savedCents)}`, `Saved ¥${formatYuan(data.savedCents)} this term`) }}</text>
+            <text class="bm-confirm-desc">{{ tt('按全平台会员价结算累计', 'Accumulated from member-price settlements') }}</text>
           </view>
         </view>
         <view class="bm-confirm-row"><text>{{ tt('计入范围', 'Scope') }}</text><text>{{ tt('时叙 · 轻疗 · 在场 全门店', '时叙 · 轻疗 · 在场, all stores') }}</text></view>
         <view class="bm-confirm-row"><text>{{ tt('统计口径', 'Basis') }}</text><text>{{ tt('会员价与原价差额，按订单实付结算', 'Difference between member and list price, per paid order') }}</text></view>
         <view class="bm-confirm-row"><text>{{ tt('退款订单', 'Refunded orders') }}</text><text>{{ tt('退款后对应节省金额同步扣减', 'Savings are deducted when an order is refunded') }}</text></view>
-        <text class="bm-fine">{{ tt('分业态明细与逐笔记录以门店小票为准；需要核对时联系门店店员。', 'Per-store breakdowns and individual records follow the printed receipts; ask in store if you need a check.') }}</text>
+        <text class="bm-fine">{{ tt('各店明细与逐笔记录以门店小票为准；需要核对时联系门店店员。', 'Per-store breakdowns and individual records follow the printed receipts; ask in store if you need a check.') }}</text>
         <button hover-class="none" class="bm-btn primary full" @click="closeDetail">{{ tt('知道了', 'Got it') }}</button>
       </view>
     </BottomSheet>
@@ -295,23 +293,21 @@ import AppIcon from '@/components/AppIcon.vue';
 import BottomSheet from '@/components/BottomSheet.vue';
 import MemberCard from '@/components/MemberCard.vue';
 import {
-  CARD_PRODUCTS,
   formatDate,
   formatYuan,
-  isMock,
-  issueBrandCard,
   loadBrandMember,
-  purchaseMode,
-  quoteBrandCard,
   requestGameTicket,
-  setMockCardState,
   claimGiftCode,
   parseGiftScene,
   stashPendingGift,
   submitFeedback,
   loadStories,
-  voucherStatusLabel
+  voucherStatusLabel,
+  purchaseCard,
+  closeCardOrder,
+  confirmCardOrder
 } from '@/lib/brandMember';
+import { IS_WEIXIN_MP, requestPayment } from '@/lib/wechat';
 import { useLocale } from '@/lib/useLocale';
 
 const { locale, tt, syncLocale } = useLocale();
@@ -322,31 +318,23 @@ const error = ref('');
 const data = ref(null);
 const purchaseOpen = ref(false);
 const paying = ref(false);
+const payError = ref('');
 const openingGame = ref(false);
 const selectedCode = ref('FY_ANNUAL');
 const detailOpen = ref(false);
 
-// 价格只展示 CRM 当前生效的产品版本；目录读取失败时回落到内置展示值，
-// 但真正的金额仍以服务端报价为准。
+// 价格只展示 CRM 当前生效的产品版本；目录读取失败时保持空态，
+// 不用本地价目表补位，也不在前端预期金额。
 const products = computed(() => {
   const rows = data.value && data.value.products;
-  return Array.isArray(rows) && rows.length ? rows : CARD_PRODUCTS;
+  return Array.isArray(rows) ? rows : [];
 });
-const annual = computed(
-  () => products.value.find((item) => item.code === 'FY_ANNUAL') || CARD_PRODUCTS[1]
-);
-const month = computed(
-  () => products.value.find((item) => item.code === 'FY_MONTH') || CARD_PRODUCTS[0]
-);
-const selectedProduct = computed(
-  () => products.value.find((item) => item.code === selectedCode.value) || annual.value
-);
 const active = computed(() => {
   const state = data.value && data.value.card && data.value.card.state;
   return state === 'ACTIVE' || state === 'EXPIRING' || state === 'PENDING';
 });
 const gameReady = computed(() => Boolean(data.value && data.value.game && data.value.game.enabled));
-// 骰子进度、续费提醒与年卡礼都由 CRM 计算；页面只展示，不在前端推算金额。
+// 骰子进度、续费提醒与会员礼都由 CRM 计算；页面只展示，不在前端推算金额。
 const progress = computed(() => (data.value && data.value.dice && data.value.dice.progress) || null);
 // 退款可能把骰子扣成负数；欠账先补回，进度文案由 CRM 一并计算。
 const diceDebt = computed(() => {
@@ -354,6 +342,12 @@ const diceDebt = computed(() => {
   return balance < 0 ? Math.abs(balance) : 0;
 });
 const vouchers = computed(() => (data.value && Array.isArray(data.value.vouchers) ? data.value.vouchers : []));
+// 开通确认里的「包含」只报 CRM 下发的权益标题；CRM 没给权益时退回一句通用描述。
+const benefitSummary = computed(() => {
+  const rows = data.value && Array.isArray(data.value.benefits) ? data.value.benefits : [];
+  const titles = rows.map((item) => item && item.title).filter(Boolean);
+  return titles.length ? titles.join(locale.value === 'en' ? ', ' : ' · ') : tt('全平台会员价 · 愈行之旅', 'Member prices · Healing Journey');
+});
 // 公告、故事都只对有效会员返回；前端不做额外推断。
 const notices = computed(() => (data.value && Array.isArray(data.value.notices) ? data.value.notices : []));
 // 黑板报首屏只贴 3 条，其余由会员手动展开；排序（置顶优先）由 CRM 决定。
@@ -451,14 +445,6 @@ async function load() {
     const system = uni.getSystemInfoSync();
     statusBarHeight.value = (system && system.statusBarHeight) || 20;
     data.value = await loadBrandMember();
-    // 本地联调：允许用缓存把身份页切到未开通态，方便核对开通前后两套视觉。
-    if (isMock) {
-      const forced = uni.getStorageSync('fy.brand.mockCard');
-      if (forced === 'NONE' || forced === 'ACTIVE') {
-        data.value = setMockCardState(forced);
-        uni.removeStorageSync('fy.brand.mockCard');
-      }
-    }
   } catch (err) {
     error.value = tt('请稍后重试，会员状态不会被误判为未开通。', 'Please try again shortly; your card will not be treated as inactive.');
   } finally {
@@ -578,7 +564,14 @@ function closeDetail() {
 }
 
 function openPurchase(code) {
-  selectedCode.value = code;
+  // 没有读到 CRM 产品目录时不展示可购买的时长，避免用本地价目表补位。
+  if (!products.value.length) {
+    uni.showToast({ title: tt('会员产品暂时没读到，请稍后再试', 'Membership plans are unavailable — please try again'), icon: 'none' });
+    return;
+  }
+  payError.value = '';
+  // 产品目录由 CRM 决定，时长可能增删；传入的编码不在目录里就退回第一个时长。
+  selectedCode.value = products.value.some((product) => product.code === code) ? code : products.value[0].code;
   purchaseOpen.value = true;
 }
 
@@ -587,26 +580,61 @@ function closePurchase() {
   purchaseOpen.value = false;
 }
 
+/**
+ * 确认开通/续费：服务端按 CRM 实时报价下单并预下单，前端只负责唤起微信支付。
+ * 卡是否开通只认服务端状态：回调没到之前不提示成功，也不在前端推算卡期。
+ */
 async function confirmPurchase() {
   if (paying.value) return;
-  if (purchaseMode !== 'mock') {
-    // 支付通道接入前不进入扣款流程，也不允许跳过后台直接开卡。
-    uni.showToast({ title: tt('线上支付接入中，暂不能在此开通', 'Online payment is not connected yet'), icon: 'none' });
+  if (!IS_WEIXIN_MP) {
+    uni.showToast({ title: tt('请在微信小程序内完成支付', 'Please pay inside the WeChat mini program'), icon: 'none' });
     return;
   }
   paying.value = true;
+  payError.value = '';
   try {
-    const quote = await quoteBrandCard(selectedProduct.value.code);
-    await issueBrandCard({
-      quote,
-      orderRef: `teahour:brand-card:${Date.now()}`,
-      paidCents: quote.priceCents
-    });
+    const prepared = await purchaseCard(selectedCode.value);
+    const order = (prepared && prepared.order) || null;
+    const prepayMode = (prepared && (prepared.prepayMode || prepared.mode)) || 'mock';
+    if (prepayMode === 'mock') {
+      // 支付通道是模拟的：没有真实扣款就不开卡，顺手关掉这张待付单，不留悬空订单。
+      if (order && order.id) await closeCardOrder(order.id).catch(() => {});
+      purchaseOpen.value = false;
+      uni.showToast({ title: tt('线上支付暂未开通，本单未扣款', 'Online payment is unavailable — nothing charged'), icon: 'none' });
+      return;
+    }
+
+    const paid = await requestPayment(prepared && prepared.payment);
+    if (!paid.ok) {
+      // 取消/失败：关闭本单（未扣款）。若其实已付款，迟到的回调仍会照常开卡。
+      if (order && order.id) await closeCardOrder(order.id).catch(() => {});
+      const cancelled = /cancel/i.test(String(paid.error || ''));
+      uni.showToast({
+        title: cancelled
+          ? tt('已取消支付，本单未扣款', 'Payment cancelled — nothing charged')
+          : tt(`支付未完成：${paid.error || '请稍后重试'}`, `Payment not completed: ${paid.error || 'please retry'}`),
+        icon: 'none'
+      });
+      return;
+    }
+
+    const confirmed = await confirmCardOrder(order && order.id);
     purchaseOpen.value = false;
     await load();
-    uni.showToast({ title: tt('已开通（本地联调）', 'Card opened (local mock)'), icon: 'none' });
+    if (confirmed && confirmed.issueStatus === 'issued') {
+      uni.showToast({ title: tt('已开通，权益立即生效', 'Membership is active'), icon: 'none' });
+    } else if (confirmed && confirmed.payStatus === 'paid') {
+      // 钱已到账但开卡还没返回：服务端会自动重开，如实说明，不假装已开通。
+      uni.showToast({
+        title: tt('已付款，正在自动开卡，稍后刷新即可', 'Paid. Your card is being activated automatically'),
+        icon: 'none'
+      });
+    } else {
+      uni.showToast({ title: tt('支付结果确认中，请稍后刷新会员页', 'Confirming payment — refresh in a moment'), icon: 'none' });
+    }
   } catch (err) {
-    uni.showToast({ title: (err && err.message) || tt('开通失败，请稍后重试', 'Could not open the card — please try again'), icon: 'none' });
+    payError.value = (err && err.message) || tt('下单失败，请稍后重试', 'Could not start the payment');
+    uni.showToast({ title: payError.value, icon: 'none' });
   } finally {
     paying.value = false;
   }
@@ -1492,7 +1520,7 @@ onShow(() => {
   padding: 10px 12px;
   border-radius: 10px;
   background: #f4efe6;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.6;
   color: var(--muted);
 }

@@ -6,7 +6,7 @@ import { ApiError, badRequest, notImplemented } from '../common/errors';
 import { parseInput } from '../common/zod';
 import { CustomerGuard } from '../auth/customer.guard';
 import { Customer } from '../auth/decorators';
-import { AuthService, annualDiscountCents } from '../auth/auth.service';
+import { AuthService } from '../auth/auth.service';
 import type { CustomerContext } from '../common/auth.types';
 import { CatalogService } from '../catalog/catalog.service';
 import { ContentService } from '../content/content.service';
@@ -38,7 +38,8 @@ const orderSchema = z.object({
 
 const profileSchema = z
   .object({
-    name: z.string().max(40).optional(),
+    // 昵称由顾客自填，同时回写 CRM 统一账号；1–20 字，去首尾空白后校验。
+    name: z.string().trim().min(1, '请填写昵称').max(20, '昵称不能超过 20 个字').optional(),
     // 1=男 2=女 null=未填写，与在场一致
     gender: z.union([z.literal(1), z.literal(2), z.null()]).optional(),
     birthday: z.union([z.string().max(10), z.null()]).optional()
@@ -129,12 +130,13 @@ export class CustomerController {
       store: catalog.store,
       categories: catalog.categories,
       products: catalog.products,
+      // 自带杯政策：小程序结算页据此提示「自带杯到柜台每杯立减」，金额仍以服务端结算为准。
+      byoCup: catalog.byoCup,
       retail: await this.catalog.retailAvailability(),
       // 首页轮播与系列图覆盖；后台未配置时小程序回落到内置图。
       home: await this.content.publicHome(),
       hardware: {
         payment: this.hardware.payment.mode,
-        member: this.hardware.member.mode,
         printer: this.hardware.printer.mode,
         teaMachine: this.hardware.teaMachine.mode
       }
@@ -203,7 +205,7 @@ export class CustomerController {
     return this.auth.bindWechatPhone(customer.id, input);
   }
 
-  /** 个人资料维护：姓名、性别、生日。字段口径与在场一致。 */
+  /** 个人资料维护：昵称、性别、生日；昵称同时同步会员中心统一账号。字段口径与在场一致。 */
   @Put('profile')
   @UseGuards(CustomerGuard)
   async updateProfile(@Body() body: unknown, @Customer() customer: CustomerContext) {
@@ -269,7 +271,7 @@ export class CustomerController {
     if (!row?.phone) throw badRequest('请先使用微信手机号登录');
     // 折扣只认当前登录账号的库内会籍：客户端传来的 memberCode 不参与判定，
     // 避免普通会员或他人的会员码被误当成折扣凭证。
-    const discount = input.business === 'fresh' ? annualDiscountCents(row) : 0;
+    const discount = input.business === 'fresh' ? await this.auth.annualDiscountFor(row) : 0;
     const result = await this.orders.createOrder({
       storeId: input.storeId,
       business: input.business,
@@ -292,11 +294,29 @@ export class CustomerController {
     };
   }
 
-  /** 我的券：可用在前，含已使用与已过期，状态由服务端按有效期计算。 */
+  /** 我的券：可用在前，含已使用与已过期，状态由服务端按每张券的有效期计算。 */
   @Get('coupons')
   @UseGuards(CustomerGuard)
   async myCoupons(@Customer() customer: CustomerContext) {
     return this.coupons.listForCustomer(customer.id);
+  }
+
+  /** 可领券中心：只列开放领取、活动期内且本人还能领的模板。 */
+  @Get('coupons/claimable')
+  @UseGuards(CustomerGuard)
+  async claimableCoupons(@Customer() customer: CustomerContext) {
+    return this.coupons.listClaimable(customer.id);
+  }
+
+  /** 自助领取：服务端校验活动期、领取上限与「同款只持有一张未使用」。 */
+  @Post('coupons/:id/claim')
+  @UseGuards(CustomerGuard)
+  async claimCoupon(@Param('id') id: string, @Customer() customer: CustomerContext) {
+    return this.coupons.claim(id, {
+      id: customer.id,
+      name: customer.name,
+      phone: customer.phone
+    });
   }
 
   @Get('orders')

@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { api, ApiError } from '../lib/api';
+import { api, ApiError, type QueuePayload } from '../lib/api';
 import { useApi, useNow, useStoredState } from '../lib/hooks';
 import { useStaffAuth } from '../lib/auth';
 import { StaffShell } from '../components/StaffShell';
 import { CameraScanButton, CameraScanner } from '../components/CameraScanner';
 import { visibleNav } from '../lib/nav';
-import { Icon } from '../components/Icons';
+import { Icon, type IconName } from '../components/Icons';
 import {
   Badge,
   Drawer,
@@ -35,17 +35,40 @@ import {
   minutesAgo,
   timeText
 } from '../lib/format';
-import type { Loss, Order, Product, StockItem, Store } from '../lib/types';
+import type { DeviceStatus, Loss, Order, Product, StockItem, Store, WorkSession } from '../lib/types';
+import {
+  SESSION_LABEL,
+  currentPosition,
+  elapsedText,
+  minutesText as durationText,
+  sessionTone,
+  shiftText,
+  shanghaiWallClock,
+  wallClockToMs,
+  type GeoFix
+} from '../lib/attendance';
 import { ICE_OPTIONS, changeLineTemp, resolveLineOptions } from '../lib/lineOptions';
 import { memberCodeFromScan, pickupCodeFromScan } from '../lib/scan';
 import { classifyScanGunKey, isPlausibleGunCode, normalizeGunCode } from '../lib/scanGun';
 import { IdempotencyKeys } from '../lib/idempotency';
 import { qrDataUrl } from '../lib/qr';
+import { playNewOrderChime, primeChime } from '../lib/chime';
+import { matchesQueueFilter, newPendingOrders, pendingOrderIds, type QueueFilter } from '../lib/queue';
 
-type Section = 'workbench' | 'assisted' | 'retail' | 'orders' | 'inventory' | 'losses' | 'devices' | 'logs';
+type Section =
+  | 'workbench'
+  | 'attendance'
+  | 'assisted'
+  | 'retail'
+  | 'orders'
+  | 'inventory'
+  | 'losses'
+  | 'devices'
+  | 'logs';
 
 const SECTION_TITLE: Record<Section, string> = {
   workbench: '营业台',
+  attendance: '到店确认',
   assisted: '帮客人点单',
   retail: '零售提取',
   orders: '订单记录',
@@ -58,6 +81,7 @@ const SECTION_TITLE: Record<Section, string> = {
 /** 门店页面的权限映射；菜单本身来自 lib/nav.ts 的统一导航。 */
 const SECTION_PERM: Record<Section, string> = {
   workbench: 'pos:use',
+  attendance: 'attendance:clock',
   assisted: 'pos:use',
   retail: 'retail:handover',
   orders: 'order:view',
@@ -87,7 +111,7 @@ export function StoreApp() {
   const section: Section | undefined =
     SECTION_PERM[segment] && can(SECTION_PERM[segment])
       ? segment
-      : (['workbench', 'assisted', 'retail', 'orders', 'inventory', 'losses', 'devices'] as Section[]).find((key) =>
+      : (['workbench', 'attendance', 'assisted', 'retail', 'orders', 'inventory', 'losses', 'devices'] as Section[]).find((key) =>
           can(SECTION_PERM[key])
         );
   const allowed = Boolean(section);
@@ -150,6 +174,7 @@ export function StoreApp() {
       {allowed && section === 'workbench' ? (
         <Workbench store={store} can={can} version={version} onOpenOrder={setOrderId} onNavigate={handleNavigate} />
       ) : null}
+      {allowed && section === 'attendance' ? <AttendanceSection store={store} /> : null}
       {allowed && section === 'assisted' ? (
         <AssistedOrder store={store} can={can} staffId={staff.id} onCompleted={refresh} />
       ) : null}
@@ -193,25 +218,117 @@ function Workbench({
 }) {
   const notify = useToast();
   const confirm = useConfirm();
-  const now = useNow(20000);
+  const now = useNow(5000);
   const overview = useApi(() => api.storeOverview(store.id), [store.id, version]);
   const [scan, setScan] = useState('');
   const [scanBusy, setScanBusy] = useState(false);
   const [scanNotice, setScanNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [gunMode, setGunMode] = useStoredState<'on' | 'off'>('teahour.scanGun', 'off', ['on', 'off']);
-  const [filter, setFilter] = useState<'all' | 'dine' | 'takeaway' | 'delivery'>('all');
+  const [filter, setFilter] = useState<QueueFilter>('all');
   const [queueTab, setQueueTab] = useState<'making' | 'ready'>('making');
+  const [chime, setChime] = useStoredState<'on' | 'off'>('teahour.orderChime', 'on', ['on', 'off']);
+  const [arrivedIds, setArrivedIds] = useState<string[]>([]);
+  const [live, setLive] = useState<{ at: number; paused: boolean }>({ at: 0, paused: false });
+  /** 上一轮已见过的待制作订单 id；为 null 表示还没拿到首轮数据，此时不提示「新订单」。 */
+  const seenPending = useRef<Set<string> | null>(null);
+  const chimeRef = useRef(chime);
+  chimeRef.current = chime;
   const gunBuffer = useRef('');
   const gunTimer = useRef<number | null>(null);
   const scanInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') overview.reload({ silent: true }).catch(() => undefined);
-    }, 20000);
-    return () => window.clearInterval(timer);
-  }, [overview.reload]);
+    // 浏览器要求先有用户手势才允许出声：进入营业台后第一次点击/按键时解锁提示音。
+    const unlock = () => primeChime();
+    document.addEventListener('pointerdown', unlock, { once: true });
+    document.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      document.removeEventListener('pointerdown', unlock);
+      document.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
+  /** 轮询到新队列后并入页面数据，并挑出新出现的待制作订单做提示。 */
+  const applyQueue = useCallback(
+    (queue: QueuePayload) => {
+      overview.setData((prev) => (prev ? { ...prev, queue } : prev));
+      setLive({ at: Date.now(), paused: document.visibilityState !== 'visible' });
+      const previous = seenPending.current;
+      seenPending.current = pendingOrderIds(queue.fresh);
+      const arrivals = newPendingOrders(previous, queue.fresh);
+      if (!arrivals.length) return;
+      const cups = arrivals.reduce((sum, order) => sum + order.units.length, 0);
+      notify(`新订单 ${arrivals.map((order) => order.number).join('、')} 进入待制作 · ${cups} 杯`, 'ok');
+      if (chimeRef.current === 'on') playNewOrderChime();
+      setArrivedIds(arrivals.map((order) => order.id));
+      // 新单可能落在当前筛选之外或「待取餐」页签：强制切回看得见的位置。
+      setQueueTab('making');
+      if (arrivals.every((order) => !matchesQueueFilter(order, filter))) setFilter('all');
+    },
+    [filter, notify, overview.setData]
+  );
+
+  useEffect(() => {
+    if (!arrivedIds.length) return;
+    const timer = window.setTimeout(() => setArrivedIds([]), 12000);
+    return () => window.clearTimeout(timer);
+  }, [arrivedIds]);
+
+  // 首屏整包数据就是「历史队列」的基准：先记下已经存在的待制作单，之后轮询到的新单才算新单。
+  // 否则页面刚打开、第一次轮询前下进来的订单会被当成历史数据，既不响铃也不提示。
+  useEffect(() => {
+    if (!overview.data || seenPending.current) return;
+    seenPending.current = pendingOrderIds(overview.data.queue.fresh);
+    setLive((prev) => (prev.at ? prev : { ...prev, at: Date.now() }));
+  }, [overview.data]);
+
+  useEffect(() => {
+    let stopped = false;
+    // 队列本身很轻：4 秒一次，只取待制作/待取餐，保证新单 5 秒内出现在营业台。
+    const pullQueue = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const queue = await api.storeQueue(store.id);
+        if (!stopped) applyQueue(queue);
+      } catch {
+        // 网络抖动交给下一轮；持续失败会由整包刷新把错误显示出来。
+      }
+    };
+    /** 整包刷新后立刻再拉一次队列：整包请求路上可能已经变成旧数据，队列以最新一次为准。 */
+    const refreshSummaryAndQueue = async () => {
+      try {
+        await overview.reload({ silent: true });
+      } catch {
+        // 错误状态由 useApi 记录并在页内提示，队列轮询继续跑。
+      }
+      await pullQueue();
+    };
+    const onWake = () => {
+      if (document.visibilityState !== 'visible') return;
+      setLive((prev) => ({ ...prev, paused: false }));
+      void refreshSummaryAndQueue();
+    };
+    const onHide = () => {
+      if (document.visibilityState !== 'visible') setLive((prev) => ({ ...prev, paused: true }));
+    };
+    const queueTimer = window.setInterval(() => void pullQueue(), 4000);
+    // 营业额、支出、审批数变化慢，30 秒整包刷新一次即可，不用跟着队列轮询。
+    const overviewTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshSummaryAndQueue();
+    }, 30000);
+    document.addEventListener('visibilitychange', onWake);
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('focus', onWake);
+    return () => {
+      stopped = true;
+      window.clearInterval(queueTimer);
+      window.clearInterval(overviewTimer);
+      document.removeEventListener('visibilitychange', onWake);
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('focus', onWake);
+    };
+  }, [store.id, applyQueue, overview.reload]);
 
   const submitScanCode = async (raw?: string) => {
     const code = (raw ?? scan).trim().toUpperCase();
@@ -286,11 +403,7 @@ function Workbench({
   const pendingOrders = queue.fresh.filter((order) => order.status === 'pending');
   const readyOrders = queue.fresh.filter((order) => order.status === 'ready');
   const tabOrders = queueTab === 'making' ? pendingOrders : readyOrders;
-  const freshFiltered = tabOrders.filter((order) => {
-    if (filter === 'all') return true;
-    if (filter === 'delivery') return order.type === 'delivery' || order.channel === 'meituan' || order.channel === 'taobao';
-    return order.type === filter;
-  });
+  const freshFiltered = tabOrders.filter((order) => matchesQueueFilter(order, filter));
 
   const handleScan = (event: React.FormEvent) => {
     event.preventDefault();
@@ -357,10 +470,17 @@ function Workbench({
         description="逐杯扫码出餐，全部完成后自动变为可交付。扫码与输入杯号两种方式都会直接更新这一杯的状态。"
         meta={
           <span className="workbench-status">
-            <span className="pill pill-ok"><i />接单中</span>
+            <span className={`pill ${live.paused ? 'pill-warn' : 'pill-ok'}`}>
+              <i />
+              {live.paused ? '页面在后台 · 已暂停刷新' : '接单中'}
+            </span>
             <span>{store.hours}</span>
             <span>·</span>
             <span>{store.waitMinutes} 分钟预计等待</span>
+            <span>·</span>
+            <span title="每 4 秒自动检查一次新订单">
+              {live.at ? `${Math.max(0, Math.round((now - live.at) / 1000))} 秒前同步` : '正在同步队列'}
+            </span>
             <span className="right">{dateTimeText(Date.now())}</span>
           </span>
         }
@@ -371,6 +491,26 @@ function Workbench({
                 <Icon name="check" size={14} /> 审批中心
               </Link>
             ) : null}
+            <button
+              type="button"
+              className={`btn btn-sm ${chime === 'on' ? 'btn-outline' : 'btn-ghost'}`}
+              aria-pressed={chime === 'on'}
+              title={chime === 'on' ? '新订单提示音：开（点击关闭）' : '新订单提示音：关（点击开启）'}
+              onClick={() => {
+                if (chime === 'on') {
+                  setChime('off');
+                  notify('已关闭新订单提示音', 'info');
+                } else {
+                  setChime('on');
+                  primeChime();
+                  playNewOrderChime();
+                  notify('已开启新订单提示音', 'ok');
+                }
+              }}
+            >
+              <Icon name={chime === 'on' ? 'bell' : 'bellOff'} size={14} />
+              {chime === 'on' ? '提示音开' : '提示音关'}
+            </button>
             <button
               type="button"
               className={`btn btn-sm ${gunMode === 'on' ? 'btn-primary' : 'btn-outline'}`}
@@ -494,10 +634,13 @@ function Workbench({
           ) : (
             <div className="queue-grid">
               {freshFiltered.map((order) => (
-                <article className="queue-card" key={order.id}>
+                <article className={`queue-card ${arrivedIds.includes(order.id) ? 'just-arrived' : ''}`} key={order.id}>
                   <div className="queue-card-head">
                     <div>
-                      <div className="queue-no">{order.number}</div>
+                      <div className="queue-no">
+                        {order.number}
+                        {arrivedIds.includes(order.id) ? <span className="queue-new-tag">新单</span> : null}
+                      </div>
                       <div className="queue-meta">
                         <Badge tone={order.channel === 'mini' ? 'neutral' : order.channel === 'assisted' ? 'accent' : 'warn'}>
                           {CHANNEL_LABEL[order.channel]}
@@ -619,6 +762,36 @@ function Workbench({
 /* ------------------------------ assisted order ------------------------------ */
 
 type CartLine = { productId: string; qty: number; temp: string | null; ice: string | null };
+type MemberBenefit = { code: string; discountPerCupCents: number; name?: string };
+
+/**
+ * 自带杯减免（与后端同一口径）：按购物袋顺序逐杯分配，单杯减免取「政策每杯金额」与
+ * 「该行会员价后单价」的较小值——先减会员权益再减自带杯，叠加后不会低于 0。
+ */
+function byoCupDiscountOf(
+  cart: CartLine[],
+  products: Product[],
+  member: MemberBenefit | null,
+  cups: number,
+  perCupCents: number
+) {
+  const requested = Math.max(0, Math.min(10, Math.floor(Number.isFinite(cups) ? cups : 0)));
+  let remaining = requested;
+  let cents = 0;
+  for (const line of cart) {
+    if (remaining <= 0) break;
+    const product = products.find((item) => item.id === line.productId);
+    if (!product || product.kind !== 'tea') continue;
+    const unitAfterMember =
+      member && product.memberEligible
+        ? product.priceCents - Math.min(member.discountPerCupCents, product.priceCents)
+        : product.priceCents;
+    const take = Math.min(line.qty, remaining);
+    remaining -= take;
+    cents += Math.min(perCupCents, Math.max(0, unitAfterMember)) * take;
+  }
+  return { cups: requested - remaining, cents };
+}
 
 /**
  * 代点草稿：只存购物袋与结算选项，按「门店 + 账号」隔离。
@@ -636,6 +809,7 @@ type PosDraft = {
   seat: string;
   note: string;
   payment: 'wechat' | 'alipay' | 'cash';
+  byoCups?: number;
 };
 
 function readDraft(key: string): PosDraft | null {
@@ -662,7 +836,8 @@ function readDraft(key: string): PosDraft | null {
       orderType: parsed.orderType === 'takeaway' ? 'takeaway' : 'dine',
       seat: typeof parsed.seat === 'string' ? parsed.seat : '',
       note: typeof parsed.note === 'string' ? parsed.note.slice(0, 200) : '',
-      payment: parsed.payment === 'alipay' || parsed.payment === 'cash' ? parsed.payment : 'wechat'
+      payment: parsed.payment === 'alipay' || parsed.payment === 'cash' ? parsed.payment : 'wechat',
+      byoCups: Math.max(0, Math.min(10, Math.round(Number(parsed.byoCups) || 0)))
     };
   } catch (error) {
     return null;
@@ -705,12 +880,8 @@ function AssistedOrder({
   const [seat, setSeat] = useState('');
   const [note, setNote] = useState('');
   const [payment, setPayment] = useState<'wechat' | 'alipay' | 'cash'>('wechat');
-  const [member, setMember] = useState<{
-    code: string;
-    discountPerCupCents: number;
-    name?: string;
-    birthday?: string | null;
-  } | null>(null);
+  const [member, setMember] = useState<MemberBenefit | null>(null);
+  const [byoCups, setByoCups] = useState(0);
   const [memberOpen, setMemberOpen] = useState(false);
   const [memberCameraOpen, setMemberCameraOpen] = useState(false);
   const [memberCode, setMemberCode] = useState('');
@@ -754,6 +925,7 @@ function AssistedOrder({
     setOrderType('dine');
     setPayment('wechat');
     setMember(null);
+    setByoCups(0);
     setError(null);
     setSuccess(null);
     setScanAuthCode('');
@@ -779,7 +951,13 @@ function AssistedOrder({
         return sum + Math.min(member.discountPerCupCents, product.priceCents) * line.qty;
       }, 0)
     : 0;
-  const total = grossTotal - memberDiscount;
+  const byoCupPolicy = menu.data?.byoCup;
+  const byoCup = byoCupPolicy?.enabled
+    ? byoCupDiscountOf(cart, products, member, byoCups, byoCupPolicy.perCupCents)
+    : { cups: 0, cents: 0 };
+  const total = grossTotal - memberDiscount - byoCup.cents;
+  const cupCount = cart.reduce((n, line) => n + line.qty, 0);
+  const byoCupMax = Math.min(10, cupCount);
   const cashChange = payment === 'cash' ? Math.round(Number(cashReceived || 0) * 100) - total : 0;
 
   // 菜单到位后恢复本店本账号的草稿；下架或售罄的商品不再带出，会员码必须重新核验。
@@ -810,6 +988,7 @@ function AssistedOrder({
     setSeat(draft.orderType === 'dine' && positions.includes(draft.seat) ? draft.seat : '');
     setNote(draft.note);
     setPayment(draft.payment);
+    setByoCups(Math.min(draft.byoCups || 0, lines.reduce((n, line) => n + line.qty, 0)));
     notify('已恢复未完成的代点单，会员权益需重新扫码核验', 'info');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menu.data, draftKey]);
@@ -827,8 +1006,8 @@ function AssistedOrder({
     restoreAtRef.current = null;
     const at = restoredAt ?? Date.now();
     if (!restoredAt) idleAtRef.current = at;
-    writeDraft(draftKey, { at, cart, orderType, seat, note, payment });
-  }, [cart, orderType, seat, note, payment, draftKey]);
+    writeDraft(draftKey, { at, cart, orderType, seat, note, payment, byoCups });
+  }, [cart, orderType, seat, note, payment, byoCups, draftKey]);
 
   // 常驻过期复查（UI-07）：页面停留期间每分钟校验一次，回前台（重新可见）时立即校验；
   // 过期即清空内存与草稿并明确提示，而不是等下一次提交才暴露。
@@ -840,6 +1019,7 @@ function AssistedOrder({
       setCart([]);
       setNote('');
       setMember(null);
+      setByoCups(0);
       idleAtRef.current = 0;
       clearDraft(draftKey);
       notify('代点单已闲置超过 90 分钟，为保价格与权益准确已自动清空，请重新点单', 'warn');
@@ -927,6 +1107,7 @@ function AssistedOrder({
     setCart([]);
     setNote('');
     setMember(null);
+    setByoCups(0);
     setScanAuthCode('');
     clearDraft(draftKey);
     onCompleted();
@@ -1004,6 +1185,7 @@ function AssistedOrder({
       setCart([]);
       setNote('');
       setMember(null);
+      setByoCups(0);
       idleAtRef.current = 0;
       clearDraft(draftKey);
       setPayOpen(false);
@@ -1041,6 +1223,7 @@ function AssistedOrder({
           payment,
           memberCode: member?.code ?? null,
           note,
+          byoCups: byoCup.cups,
           lines
         })
       );
@@ -1053,6 +1236,7 @@ function AssistedOrder({
         note,
         paymentMethod: payment,
         memberCode: member?.code,
+        byoCups: byoCup.cups || undefined,
         idempotencyKey
       };
       if (payment !== 'cash') {
@@ -1344,16 +1528,60 @@ function AssistedOrder({
             </div>
           </div>
 
-          {memberDiscount ? (
+          {byoCupPolicy?.enabled ? (
+            <div className="pos-member-box" style={{ marginTop: 10 }}>
+              <div className="flex between">
+                <div className="grow">
+                  <strong>自带杯</strong>
+                  <p className="tiny muted">
+                    {byoCup.cups
+                      ? `${byoCup.cups} 杯用自带杯 · 每杯减 ${money(byoCupPolicy.perCupCents)}`
+                      : `顾客自带杯可享每杯减 ${money(byoCupPolicy.perCupCents)}`}
+                  </p>
+                </div>
+                {byoCupMax ? (
+                  <div className="qty">
+                    <button
+                      type="button"
+                      aria-label="减少自带杯"
+                      disabled={!byoCups}
+                      onClick={() => setByoCups((current) => Math.max(0, current - 1))}
+                    >
+                      <Icon name="minus" size={13} />
+                    </button>
+                    <span>{byoCup.cups}</span>
+                    <button
+                      type="button"
+                      aria-label="增加自带杯"
+                      disabled={byoCup.cups >= byoCupMax}
+                      onClick={() => setByoCups((current) => Math.min(byoCupMax, current + 1))}
+                    >
+                      <Icon name="plus" size={13} />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {memberDiscount || byoCup.cents ? (
             <>
               <div className="bill-line flex between tiny muted" style={{ marginTop: 6 }}>
                 <span>商品原价</span>
                 <span>{money(grossTotal)}</span>
               </div>
-              <div className="bill-line flex between tiny muted">
-                <span>会员减免</span>
-                <span>-{money(memberDiscount)}</span>
-              </div>
+              {memberDiscount ? (
+                <div className="bill-line flex between tiny muted">
+                  <span>会员减免</span>
+                  <span>-{money(memberDiscount)}</span>
+                </div>
+              ) : null}
+              {byoCup.cents ? (
+                <div className="bill-line flex between tiny muted">
+                  <span>自带杯减免 · {byoCup.cups} 杯</span>
+                  <span>-{money(byoCup.cents)}</span>
+                </div>
+              ) : null}
             </>
           ) : null}
 
@@ -2053,6 +2281,12 @@ function OrderDrawer({
               <div className="kv"><span>支付状态</span><strong>{order.paymentStatus === 'paid' ? '已支付' : order.paymentStatus}</strong></div>
               <div className="kv"><span>支付方式</span><strong>{order.paymentMethod === 'cash' ? '现金' : order.paymentMethod === 'alipay' ? '支付宝' : order.paymentMethod === 'wechat' ? '微信支付' : order.paymentMethod || '—'}</strong></div>
               <div className="kv"><span>杯贴打印</span><strong><StatusPill status={order.printStatus} /></strong></div>
+              {order.byoCupCups ? (
+                <div className="kv">
+                  <span>自带杯</span>
+                  <strong>{order.byoCupCups} 杯 · 减 {money(order.byoCupDiscountCents || 0)}</strong>
+                </div>
+              ) : null}
               <div className="kv"><span>已退款</span><strong>{money(order.refundedCents)}</strong></div>
               {order.note ? <div className="kv"><span>备注</span><strong>{order.note}</strong></div> : null}
             </Panel>
@@ -2627,6 +2861,561 @@ function LossesSection({ store }: { store: Store }) {
   );
 }
 
+/* ------------------------------ attendance ------------------------------ */
+
+/**
+ * 到店确认。
+ *
+ * 页面结构刻意做成「一件事」：上方是此刻的状态与唯一主按钮，下面才是记录与补签。
+ * 定位在读页面时就取一次并展示到店距离，让店员在按下按钮前就知道会不会通过——
+ * 按下去才报「超出范围」的做法会让他在门口反复试。
+ */
+function AttendanceSection({ store }: { store: Store }) {
+  const notify = useToast();
+  const confirm = useConfirm();
+  const [fix, setFix] = useState<GeoFix | null>(null);
+  const data = useApi(() => api.attendanceMine(store.id, fix), [store.id]);
+  const now = useNow(1000);
+  const [locating, setLocating] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const [backfillOpen, setBackfillOpen] = useState(false);
+  const [backfillIn, setBackfillIn] = useState('');
+  const [backfillOut, setBackfillOut] = useState('');
+  const [backfillReason, setBackfillReason] = useState('');
+  const [closing, setClosing] = useState<WorkSession | null>(null);
+  const [closeAt, setCloseAt] = useState('');
+  const [closeReason, setCloseReason] = useState('');
+
+  const locate = useCallback(async () => {
+    setLocating(true);
+    setGeoError(null);
+    try {
+      setFix(await currentPosition());
+    } catch (error) {
+      setFix(null);
+      setGeoError(error instanceof Error ? error.message : '定位失败，请重试');
+    } finally {
+      setLocating(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // 换门店要重新定位：拿上一家店的坐标去判定，必然超出范围
+    void locate();
+  }, [locate, store.id]);
+
+  const mine = data.data;
+  // 定位读数变化后重新问一次服务端：距离与围栏判定只在服务端算
+  useEffect(() => {
+    if (fix) data.reload({ silent: true }).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fix]);
+
+  const preview = mine?.preview || null;
+  const open = mine?.open || null;
+  // 进行中的那段由上面的主按钮处理，这里只列真正「卡住」的：往天忘点离店的、等审批的
+  const unfinished = (mine?.unresolved || []).filter((item) => item.status !== 'open');
+  const todayMinutes = (mine?.sessions || []).reduce((sum, item) => sum + item.minutes, 0);
+
+  const fixText = (() => {
+    if (geoError) return geoError;
+    if (locating || !fix) return '正在获取定位…';
+    if (!preview) return '正在核对与门店的距离…';
+    if (preview.reason === 'untrusted_accuracy') {
+      return `定位精度 ${Math.round(fix.accuracyM || 0)}m，太模糊了。走到店门口或靠窗处再定位一次`;
+    }
+    if (preview.reason === 'no_location') return '还没有拿到定位，请允许浏览器获取位置后重试';
+    if (preview.reason === 'ok') {
+      return `距「${store.name}」约 ${preview.distanceM}m，在 ${preview.limitM}m 围栏内`;
+    }
+    return `距「${store.name}」约 ${preview.distanceM}m，超出 ${preview.limitM}m 围栏；请到店后再确认`;
+  })();
+
+  const clockIn = async () => {
+    if (!fix) {
+      void locate();
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      const result = await api.attendanceClockIn({
+        storeId: store.id,
+        lat: fix.lat,
+        lng: fix.lng,
+        accuracyM: fix.accuracyM
+      });
+      notify(
+        result.replay
+          ? '刚才已经确认过一次，继续计时'
+          : `到店确认完成 · ${timeText(result.session.clockInAt)} 起算`,
+        'ok'
+      );
+      data.reload({ silent: true }).catch(() => undefined);
+    } catch (error) {
+      setActionError(error instanceof ApiError ? error.message : '到店确认失败，请重试');
+      // 多半是站在门外或信号飘了：立刻重新定位，让他看到新的距离
+      void locate();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clockOut = async () => {
+    const ok = await confirm({
+      title: '确认离店？',
+      message: '离店后这段时间会立即计入工时。再次到店需要重新确认位置。',
+      confirmText: '确认离店'
+    });
+    if (!ok) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const result = await api.attendanceClockOut({
+        lat: fix?.lat ?? null,
+        lng: fix?.lng ?? null,
+        accuracyM: fix?.accuracyM ?? null
+      });
+      notify(
+        result.voided
+          ? '在店不足 1 分钟，按误点处理，不计工时'
+          : `离店确认完成 · 本次 ${durationText(result.minutes)}`,
+        result.voided ? 'warn' : 'ok'
+      );
+      data.reload({ silent: true }).catch(() => undefined);
+    } catch (error) {
+      setActionError(error instanceof ApiError ? error.message : '离店确认失败，请重试');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openBackfill = () => {
+    const stamp = Date.now();
+    setBackfillIn(shanghaiWallClock(stamp - 4 * 3600_000));
+    setBackfillOut(shanghaiWallClock(stamp));
+    setBackfillReason('');
+    setActionError(null);
+    setBackfillOpen(true);
+  };
+
+  const submitBackfill = async () => {
+    const inMs = wallClockToMs(backfillIn);
+    const outMs = wallClockToMs(backfillOut);
+    if (inMs == null || outMs == null) {
+      setActionError('请选择完整的到店与离店时间');
+      return;
+    }
+    if (outMs <= inMs) {
+      setActionError('离店时间必须晚于到店时间');
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      const result = await api.attendanceRequestBackfill({
+        storeId: store.id,
+        clockInAt: inMs,
+        clockOutAt: outMs,
+        reason: backfillReason
+      });
+      notify(`补签申请已提交（${durationText(result.minutes)}），等待总部审批`, 'ok');
+      setBackfillOpen(false);
+      data.reload({ silent: true }).catch(() => undefined);
+    } catch (error) {
+      setActionError(error instanceof ApiError ? error.message : '补签提交失败，请重试');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openClose = (session: WorkSession) => {
+    setCloseAt(shanghaiWallClock(Math.max(session.clockInAt + 60_000, Date.now())));
+    setCloseReason('');
+    setActionError(null);
+    setClosing(session);
+  };
+
+  const submitClose = async () => {
+    if (!closing) return;
+    const outMs = wallClockToMs(closeAt);
+    if (outMs == null) {
+      setActionError('请选择离店时间');
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      await api.attendanceRequestClose({
+        sessionId: closing.id,
+        clockOutAt: outMs,
+        reason: closeReason
+      });
+      notify('补离店申请已提交，等待总部审批', 'ok');
+      setClosing(null);
+      data.reload({ silent: true }).catch(() => undefined);
+    } catch (error) {
+      setActionError(error instanceof ApiError ? error.message : '补离店提交失败，请重试');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelRequest = async (session: WorkSession) => {
+    if (!session.pendingApprovalId) return;
+    const ok = await confirm({
+      title: '撤回这条补签申请？',
+      message: '撤回后这一段会回到「待补签」，可以按正确的时间重新提交。',
+      confirmText: '撤回',
+      tone: 'danger'
+    });
+    if (!ok) return;
+    try {
+      await api.attendanceCancelRequest(session.pendingApprovalId);
+      notify('已撤回，可以重新填写时间', 'ok');
+      data.reload({ silent: true }).catch(() => undefined);
+    } catch (error) {
+      setActionError(error instanceof ApiError ? error.message : '撤回失败，请重试');
+    }
+  };
+
+  // 只有首屏加载失败才整页报错；静默刷新失败时保留页面，别把人正在看的计时盖掉
+  if (!mine) {
+    if (data.error) return <InlineError message={data.error} />;
+    return <Spinner label="正在读取在店记录" />;
+  }
+
+  const closeMinutes =
+    closing && wallClockToMs(closeAt) != null
+      ? Math.max(0, Math.round((wallClockToMs(closeAt)! - closing.clockInAt) / 60_000))
+      : null;
+
+  return (
+    <>
+      <PageHead
+        eyebrow="Clock in"
+        title="到店确认"
+        description="到店时确认一次位置开始计时，离店时再确认一次结束。工时按「已结束」的时段累加，忘点时用补签申请修正。"
+        actions={
+          <Badge tone={mine.unresolvedCount ? 'warn' : 'ok'}>
+            {mine.unresolvedCount ? `${mine.unresolvedCount} 段待处理` : '没有待处理'}
+          </Badge>
+        }
+      />
+
+      <Panel
+        title={open ? '在店中' : '准备到店'}
+        description={
+          open
+            ? '离店时点「离店确认」结束这一段。如果忘了点，第二天可以在下方用补签申请修正。'
+            : `站在「${store.name}」附近点「到店确认」开始计时。`
+        }
+        actions={open ? <Badge tone="ok">计时中</Badge> : null}
+      >
+        <div className="attendance-hero">
+          <div className="attendance-clock">
+            {open ? (
+              <>
+                <strong>{elapsedText(open.clockInAt, now)}</strong>
+                <span className="muted small">
+                  {timeText(open.clockInAt)} 到店 · 距店 {open.inDistanceM ?? '—'}m · 今日累计 {durationText(todayMinutes)}
+                </span>
+              </>
+            ) : (
+              <>
+                <strong>未在店</strong>
+                <span className="muted small">
+                  {mine.sessions.length ? '上一段已结束，下次到店请重新确认位置' : '今天还没有到店记录'}
+                </span>
+              </>
+            )}
+          </div>
+          <div className="attendance-actions">
+            {open ? (
+              <button type="button" className="btn btn-primary btn-lg" onClick={clockOut} disabled={busy}>
+                {busy ? '确认中…' : '离店确认'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary btn-lg"
+                onClick={clockIn}
+                disabled={busy || locating}
+              >
+                {busy ? '确认中…' : locating ? '正在定位…' : '到店确认'}
+              </button>
+            )}
+            <button type="button" className="btn btn-ghost" onClick={() => void locate()} disabled={locating}>
+              <Icon name="pin" size={15} />
+              {locating ? '定位中…' : '重新定位'}
+            </button>
+          </div>
+        </div>
+
+        {mine.shift ? (
+          <div className="attendance-shift">
+            <Icon name="calendar" size={15} />
+            <span>
+              今日计划 <strong className="mono">{shiftText(mine.shift.startMin, mine.shift.endMin)}</strong>
+              {' · '}
+              {durationText(mine.shift.endMin - mine.shift.startMin)}
+              {mine.shift.note ? ` · ${mine.shift.note}` : ''}
+            </span>
+          </div>
+        ) : null}
+
+        {!open ? (
+          <div className={`attendance-fix attendance-fix-${preview?.reason || 'none'}`}>
+            <Icon name={preview?.reason === 'ok' ? 'check' : 'pin'} size={15} />
+            <span>{fixText}</span>
+          </div>
+        ) : null}
+
+        {actionError ? (
+          <div style={{ marginTop: 10 }}>
+            <InlineError message={actionError} />
+          </div>
+        ) : null}
+      </Panel>
+
+      {unfinished.length ? (
+        <Panel
+          title="需要处理"
+          description="这些时段没结束，暂时都不计入工时。补离店或撤回后，可按正确时间重新提交。"
+          flush
+        >
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>到店</th>
+                  <th>状态</th>
+                  <th>说明</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {unfinished.map((item) => (
+                  <tr key={item.id}>
+                    <td className="tiny">{dateTimeText(item.clockInAt)}</td>
+                    <td>
+                      <Badge tone={sessionTone(item.status)}>{SESSION_LABEL[item.status] || item.status}</Badge>
+                    </td>
+                    <td className="tiny muted">{item.note || '—'}</td>
+                    <td className="tiny">
+                      {item.status === 'pending_close' ? (
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => void cancelRequest(item)}>
+                          撤回申请
+                        </button>
+                      ) : (
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openClose(item)}>
+                          补离店
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      ) : null}
+
+      <div className="stat-grid">
+        <Stat label="今日在店" value={durationText(todayMinutes)} hint={`${mine.sessions.length} 段 · 只算已结束`} icon="clock" />
+        <Stat label="本月合计" value={durationText(mine.month.minutes)} hint={`${mine.month.days} 天有计时`} />
+        <Stat
+          label="待处理"
+          value={mine.unresolvedCount}
+          hint={mine.pendingCount ? `${mine.pendingCount} 段在等审批` : '没有待审批的补签'}
+          tone={mine.unresolvedCount ? 'soft' : 'plain'}
+        />
+        <Stat label="门店围栏" value={`${mine.policy.radiusM} m`} hint="定位精度不足时按上限补偿" icon="pin" />
+      </div>
+
+      <Panel
+        title="今日时间轴"
+        description="今天的记录流水。只有「已结束」的时段计入工时；没结束的在上面「需要处理」里修正。"
+        flush
+        actions={
+          <button type="button" className="btn btn-ghost" onClick={openBackfill}>
+            <Icon name="plus" size={15} /> 补签到店
+          </button>
+        }
+      >
+        {!mine.sessions.length ? (
+          <EmptyState
+            icon="clock"
+            title="今天还没有记录"
+            description="到店时点一次「到店确认」就会出现在这里；如果已经干了一段时间才想起来，用「补签到店」提交申请。"
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>到店</th>
+                  <th>离店</th>
+                  <th className="num">时长</th>
+                  <th>距店</th>
+                  <th>状态</th>
+                  <th>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mine.sessions.map((item) => (
+                  <tr key={item.id}>
+                    <td className="tiny">{timeText(item.clockInAt)}</td>
+                    <td className="tiny">{item.clockOutAt ? timeText(item.clockOutAt) : '—'}</td>
+                    <td className="num">
+                      {item.status === 'open' ? (
+                        <span className="muted">{durationText(item.liveMinutes)}（计时中）</span>
+                      ) : item.status === 'closed' ? (
+                        durationText(item.minutes)
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                    <td className="tiny muted">{item.inDistanceM != null ? `${item.inDistanceM}m` : '—'}</td>
+                    <td>
+                      <Badge tone={sessionTone(item.status)}>{SESSION_LABEL[item.status] || item.status}</Badge>
+                    </td>
+                    <td className="tiny muted">{item.note || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <div className="notice">
+        <Icon name="info" size={15} />
+        <span>
+          补签会进入总部审批，通过后才计入工时；驳回后这一段回到「待补签」，改对时间可以重新提交。
+          离店漏点超过 16 小时的时段会自动转为待补签，不会按 16 小时计算。
+        </span>
+      </div>
+
+      <Drawer
+        open={backfillOpen}
+        title="补签到店"
+        subtitle="忘记点「到店确认」时使用。提交后由总部审批，通过才计入工时。"
+        onClose={() => setBackfillOpen(false)}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setBackfillOpen(false)}>
+              取消
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => void submitBackfill()} disabled={busy}>
+              {busy ? '提交中…' : '提交申请'}
+            </button>
+          </>
+        }
+      >
+        <form
+          className="form-grid"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitBackfill();
+          }}
+        >
+          <Field label="到店时间">
+            <input
+              type="datetime-local"
+              value={backfillIn}
+              max={shanghaiWallClock(now)}
+              onChange={(event) => setBackfillIn(event.target.value)}
+              required
+            />
+          </Field>
+          <Field label="离店时间">
+            <input
+              type="datetime-local"
+              value={backfillOut}
+              max={shanghaiWallClock(now)}
+              onChange={(event) => setBackfillOut(event.target.value)}
+              required
+            />
+          </Field>
+          <Field label="原因" className="span-2">
+            <input
+              value={backfillReason}
+              onChange={(event) => setBackfillReason(event.target.value)}
+              placeholder="例如：开门就直接备料，忘了点；审批人会看到这句话"
+              maxLength={200}
+            />
+          </Field>
+        </form>
+        {actionError ? (
+          <div style={{ marginTop: 10 }}>
+            <InlineError message={actionError} />
+          </div>
+        ) : null}
+        <div className="notice" style={{ marginTop: 12 }}>
+          <Icon name="info" size={15} />
+          <span>时间按北京时间填写。补签不能和已有记录重叠——同一时间段只能有一段计时。</span>
+        </div>
+      </Drawer>
+
+      <Modal
+        open={Boolean(closing)}
+        title="补离店"
+        description={
+          closing
+            ? `${timeText(closing.clockInAt)} 到店 · 未点离店。填上实际离开的时间，经总部审批后计入工时。`
+            : ''
+        }
+        onClose={() => setClosing(null)}
+        size="sm"
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setClosing(null)}>
+              取消
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => void submitClose()} disabled={busy}>
+              {busy ? '提交中…' : '提交申请'}
+            </button>
+          </>
+        }
+      >
+        <div className="form-grid">
+          <Field label="离店时间" className="span-2">
+            <input
+              type="datetime-local"
+              value={closeAt}
+              min={closing ? shanghaiWallClock(closing.clockInAt) : undefined}
+              max={shanghaiWallClock(now)}
+              onChange={(event) => setCloseAt(event.target.value)}
+            />
+          </Field>
+          <Field label="原因" className="span-2">
+            <input
+              value={closeReason}
+              onChange={(event) => setCloseReason(event.target.value)}
+              placeholder="例如：打烊忘了点，22:30 离开"
+              maxLength={200}
+            />
+          </Field>
+        </div>
+        {closeMinutes != null ? (
+          <p className="tiny muted" style={{ marginTop: 8 }}>
+            这一段将计入 {durationText(closeMinutes)}
+          </p>
+        ) : null}
+        {actionError ? (
+          <div style={{ marginTop: 10 }}>
+            <InlineError message={actionError} />
+          </div>
+        ) : null}
+      </Modal>
+    </>
+  );
+}
+
 /* ------------------------------ devices ------------------------------ */
 
 function DevicesSection({ store }: { store: Store }) {
@@ -2635,30 +3424,33 @@ function DevicesSection({ store }: { store: Store }) {
   if (data.loading && !data.data) return <Spinner label="正在读取设备" />;
   if (data.error) return <InlineError message={data.error} />;
   const devices = data.data!.devices;
-  const cards = [
-    { ...devices.printer, name: '云标签打印机', icon: 'printer' as const },
-    { ...devices.payment, name: '支付网关', icon: 'card' as const },
-    ...devices.machines.map((machine, index) => ({
-      ...machine,
-      name: `泡茶机 ${index + 1}`,
-      icon: 'cup' as const
-    }))
+  // 扫码器走蓝牙 HID 键盘模式，iPad 配对即用，不经过服务端接入，因此只做说明、不参与「待接入」统计。
+  const cards: Array<DeviceStatus & { name: string; icon: IconName }> = [
+    { ...devices.printer, name: '云标签打印机', icon: 'printer' },
+    { ...devices.payment, name: '支付网关', icon: 'card' },
+    {
+      name: '扫码器',
+      icon: 'scan',
+      mode: 'hid',
+      detail: '新大陆 FR42-BT，蓝牙 HID 键盘模式；iPad 系统设置里配对即可扫码出餐。'
+    }
   ];
   // mode 是适配层返回的驱动标识，这里翻译成门店能看懂的接入状态。
   const modeLabel = (mode?: string) => {
+    if (mode === 'hid') return '免接入';
     if (mode === 'local') return '本地';
     if (mode === 'noop') return '未启用';
     if (!mode || mode === 'mock') return '未接入';
     return mode.toUpperCase();
   };
-  const pendingCount = cards.filter((card) => !card.mode || card.mode === 'mock').length;
+  const pendingCount = cards.filter((card) => card.mode !== 'hid' && (!card.mode || card.mode === 'mock')).length;
 
   return (
     <>
       <PageHead
         eyebrow="Devices & adapters"
         title="本店设备"
-        description="云打印、泡茶机、支付网关、平台订单与会员系统均通过适配层接入，按门店单独配置并启用。"
+        description="云打印与支付网关通过适配层接入；扫码器用蓝牙 HID 直连 iPad，泡茶机由厂商软件单独控制，都不进后台管理。"
         actions={<Badge tone={pendingCount ? 'warn' : 'ok'}>{pendingCount ? `${pendingCount} 项待接入` : '全部已接入'}</Badge>}
       />
       <Panel title="设备状态" description="接入新设备只需实现同一套适配接口，业务流程无需改动。">
@@ -2685,7 +3477,7 @@ function DevicesSection({ store }: { store: Store }) {
         <Panel title="接口边界" description="以下能力由适配层统一定义，配置对应驱动后即可启用。">
           <div className="stack">
             <div className="notice"><Icon name="printer" size={15} /><span><strong>云标签打印</strong>：杯贴与订单标签。驱动负责把杯号、商品、温度、冰量映射到厂商模板。</span></div>
-            <div className="notice"><Icon name="cup" size={15} /><span><strong>泡茶机</strong>：设备状态与冲泡命令。设备调度不进入下单主流程，避免下单被设备阻塞。</span></div>
+            <div className="notice"><Icon name="scan" size={15} /><span><strong>扫码器</strong>：蓝牙 HID 键盘模式，iPad 配对即用，等同于键盘输入；营业台开启「扫码枪常驻」后即可直接出餐，无需服务端接入。</span></div>
             <div className="notice"><Icon name="card" size={15} /><span><strong>支付网关</strong>：下单收款与退款。微信、支付宝等通道共用同一支付引用与退款幂等键。</span></div>
             <div className="notice"><Icon name="bag" size={15} /><span><strong>外卖平台 / 会员</strong>：平台拉单回执与会员权益校验。未配置通道时，对应操作在门店侧不可用。</span></div>
           </div>

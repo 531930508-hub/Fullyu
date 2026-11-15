@@ -1,6 +1,6 @@
 <template>
   <!--
-    会员卡：一张卡承载身份、本年已省、三业态权益与续费。
+    会员卡：一张卡承载身份、本卡期已省、全平台权益与续费。
     不做翻面：卡脚是稳稳的一条，左侧看明细、右侧拉开权益，
     所有内容都在文档流里，不会有元素互相压住。
   -->
@@ -8,10 +8,10 @@
     <view class="bmc-main">
       <view class="bmc-row1">
         <text class="bmc-eyebrow">FULL YU MEMBER</text>
-        <text class="bmc-scope">{{ tt('全业态通用', 'All locations') }}</text>
+        <text class="bmc-scope">{{ tt('全平台通用', 'All locations') }}</text>
         <text class="bmc-state" :class="{ 'is-warn': expiring }">{{ stateText }}</text>
       </view>
-      <text class="bmc-name serif">{{ tt('Full愈会员卡', 'Full Yuk member card') }}</text>
+      <text class="bmc-name serif">{{ tt('Full愈大会员', 'Full Yu Membership') }}</text>
       <view class="bmc-meta">
         <text class="bmc-who">{{ whoLine }}</text>
         <text class="bmc-valid">{{ validLine }}</text>
@@ -21,12 +21,12 @@
     <!-- 卡脚：两个互不重叠的点击区 -->
     <view class="bmc-foot" :class="{ 'is-warn': expiring }">
       <view class="bmc-cell bmc-saved" role="button" @click="onSaved">
-        <text class="bmc-lab">{{ active ? tt('本年已省', 'Saved this year') : tt('开卡', 'Join') }}</text>
-        <text class="bmc-amt serif">¥{{ active ? formatYuan(savedCents) : formatYuan(annualPrice) }}</text>
-        <text class="bmc-more">{{ active ? tt('明细 ›', 'Details ›') : tt('起 ›', 'from ›') }}</text>
+        <text class="bmc-lab">{{ active ? tt('本卡期已省', 'Saved this term') : tt('开卡', 'Join') }}</text>
+        <text class="bmc-amt serif">{{ active ? `¥${formatYuan(savedCents)}` : (memberPrice == null ? '—' : `¥${formatYuan(memberPrice)}`) }}</text>
+        <text class="bmc-more">{{ active ? tt('明细 ›', 'Details ›') : (memberEntry && memberEntry.from ? tt('起 ›', 'from ›') : (memberPrice == null ? '' : '›')) }}</text>
       </view>
       <view class="bmc-cell bmc-toggle" role="button" @click="open = !open">
-        <text>{{ active ? (expiring ? tt('去续费', 'Renew') : tt('权益与续费', 'Benefits & renewal')) : tt('查看权益', 'See benefits') }}</text>
+        <text>{{ active ? tt('权益与续费', 'Benefits & renewal') : tt('查看权益', 'See benefits') }}</text>
         <text class="bmc-car" :class="{ 'is-up': open }">⌄</text>
       </view>
     </view>
@@ -34,20 +34,19 @@
     <!-- 展开区：往下长，把下面的内容推下去 -->
     <view class="bmc-drawer">
       <view class="bmc-drawer-in">
-        <text class="bmc-dhead">{{ tt('三业态权益 · 全门店可用', 'Benefits across three stores · all locations') }}</text>
-        <view v-for="item in benefitRows" :key="item.business + item.title" class="bmc-ben">
-          <text class="bmc-brand">{{ brandName(item.business) }}</text>
-          <view class="bmc-ben-body">
-            <text class="bmc-ben-t">{{ item.title }}</text>
-            <text v-if="item.desc" class="bmc-ben-d">{{ item.desc }}</text>
+        <template v-if="benefitRows.length">
+          <text class="bmc-dhead">{{ tt('全平台权益 · 全门店可用', 'Platform-wide benefits · all locations') }}</text>
+          <view v-for="item in benefitRows" :key="item.business + item.title" class="bmc-ben">
+            <text class="bmc-brand">{{ brandName(item.business) }}</text>
+            <view class="bmc-ben-body">
+              <text class="bmc-ben-t">{{ item.title }}</text>
+              <text v-if="item.desc" class="bmc-ben-d">{{ item.desc }}</text>
+            </view>
+            <text v-if="item.business === homeBusiness" class="bmc-here">{{ tt('本店', 'Here') }}</text>
           </view>
-          <text v-if="item.business === homeBusiness" class="bmc-here">{{ tt('本店', 'Here') }}</text>
-        </view>
+        </template>
 
-        <button hover-class="none" class="bmc-renew" @click="$emit('purchase')">
-          {{ active ? tt('续费', 'Renew') : tt('开通 Full愈会员卡', 'Join Full Yuk member card') }}
-        </button>
-        <text class="bmc-note">{{ active ? tt('续费从到期日往后接；', 'Renewal starts when your current term ends. ') : '' }}{{ tt('7 天内可自助退款，已领年卡礼按价值扣除。', 'Self-service refund within 7 days; received annual gifts are deducted at value.') }}</text>
+        <text class="bmc-note">{{ active ? tt('续费从到期日往后接；', 'Renewal starts when your current term ends. ') : '' }}{{ tt('7 天内可自助退款，已领会员礼按价值扣除。', 'Self-service refund within 7 days; received member gifts are deducted at value.') }}</text>
         <view class="bmc-link" @click="$emit('rules')">
           <text>{{ tt('会员权益与退款规则', 'Member benefits & refund rules') }}</text>
           <text class="bmc-link-tail">{{ tt('查看 ›', 'View ›') }}</text>
@@ -56,6 +55,10 @@
           <text>{{ tt('有会员码？点此兑换', 'Have a member code? Redeem here') }}</text>
           <text class="bmc-link-tail">›</text>
         </view>
+        <!-- 续费/开通统一收进抽屉：点开是选时长的确认弹窗，卡外不再重复放按钮 -->
+        <button hover-class="none" class="bmc-renew" @click.stop="$emit('renew')">
+          {{ active ? tt('续费 Full愈大会员', 'Renew Full Yu Membership') : tt('开通 Full愈大会员', 'Join Full Yu Membership') }}
+        </button>
       </view>
     </view>
   </view>
@@ -63,14 +66,14 @@
 
 <script setup>
 import { computed, ref } from 'vue';
-import { CARD_PRODUCTS, cardStateLabel, formatDate, formatYuan } from '@/lib/brandMember';
+import { cardStateLabel, entryPrice, formatDate, formatYuan } from '@/lib/brandMember';
 import { useLocale } from '@/lib/useLocale';
 
 const props = defineProps({
   data: { type: Object, required: true },
   active: { type: Boolean, default: false }
 });
-const emit = defineEmits(['purchase', 'detail', 'rules', 'gift']);
+const emit = defineEmits(['detail', 'rules', 'gift', 'renew']);
 
 const { locale, tt } = useLocale();
 const open = ref(false);
@@ -110,24 +113,15 @@ const validLine = computed(() => {
   return tt(`至 ${until} 到期${tail} · 全门店可用`, `Valid until ${until}${tail} · all locations`);
 });
 
-const annualPrice = computed(() => {
-  const rows = (props.data && props.data.products) || [];
-  const hit = rows.find((item) => item.code === 'FY_ANNUAL');
-  return (hit || CARD_PRODUCTS[1] || { priceCents: 29900 }).priceCents;
-});
+// 会员价格只认 CRM 产品目录（多个时长取最低价）；读不到就显示「—」，不用本地价格补位。
+const memberEntry = computed(() => entryPrice(props.data && props.data.products));
+const memberPrice = computed(() => (memberEntry.value ? memberEntry.value.amountCents : null));
 
-const benefitRows = computed(() => {
-  const rows = (props.data && props.data.benefits) || [];
-  if (rows.length) return rows;
-  return [
-    { business: 'teahour', title: '会员茶饮权益', desc: '具体内容以门店公示为准' },
-    { business: 'retreat', title: '项目会员价', desc: '提前一天预约享会员价，当日另计' },
-    { business: 'presence', title: '优先排位与课程阶梯价', desc: '热门课程优先排位' }
-  ];
-});
+// 权益标题与说明只展示 CRM 返回内容；为空时不编造权益条目。
+const benefitRows = computed(() => (props.data && props.data.benefits) || []);
 
 function brandName(business) {
-  return BRAND_LABEL[business] || '全业态';
+  return BRAND_LABEL[business] || '全平台';
 }
 
 function onSaved() {

@@ -1,7 +1,8 @@
 /**
- * 顾客个人资料维护：姓名、性别、生日与头像。
+ * 顾客个人资料维护：昵称、性别、生日与头像。
+ * 昵称同时回写 CRM 统一账号，其他端看到同一个名字。
  * 字段口径与在场一致（gender 1=男 2=女 null=未填写，birthday 精确到日）。
- * 跨系统同步由 ProfileSyncProvider 承接，当前为占位实现，只校验业务代码的用法。
+ * 跨系统同步由 ProfileSyncProvider / CRM 客户端承接，本文件只校验业务代码的用法。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -50,32 +51,42 @@ describe('顾客个人资料', () => {
     fs.rmSync(path.join(UPLOAD_ROOT, saved!.avatarKey as string), { force: true });
   });
 
-  it('可以一次更新姓名、性别与生日，并落库', async () => {
-    const me = await h.customer('待改名');
+  it('可以更新性别与生日，并落库', async () => {
+    const me = await h.customer('待补资料');
     const res = await h.api('put', '/customer/profile', me.token, {
-      name: '沈听雨',
       gender: 2,
       birthday: '1995-03-08'
     });
     expect(res.status).toBe(200);
-    expect(res.body.customer.name).toBe('沈听雨');
     expect(res.body.customer.gender).toBe(2);
     expect(res.body.customer.birthday).toBe('1995-03-08');
 
     const saved = await h.prisma.customer.findUnique({ where: { id: me.id } });
-    expect(saved?.name).toBe('沈听雨');
     expect(saved?.gender).toBe(2);
     expect(saved?.birthday?.toISOString().slice(0, 10)).toBe('1995-03-08');
+  });
+
+  it('顾客可以修改昵称，并落库', async () => {
+    const me = await h.customer('旧昵称');
+    const res = await h.api('put', '/customer/profile', me.token, { name: '  沈听雨  ' });
+    expect(res.status).toBe(200);
+    expect(res.body.customer.name).toBe('沈听雨');
+
+    const saved = await h.prisma.customer.findUnique({ where: { id: me.id } });
+    expect(saved?.name).toBe('沈听雨');
+
+    // 空白昵称与超长昵称拒绝，避免把名字清空。
+    expect((await h.api('put', '/customer/profile', me.token, { name: '   ' })).status).toBe(400);
+    expect((await h.api('put', '/customer/profile', me.token, { name: '名'.repeat(21) })).status).toBe(400);
   });
 
   it('只传一个字段时不会清空其他字段', async () => {
     const me = await h.customer('局部更新');
     await h.api('put', '/customer/profile', me.token, { gender: 1, birthday: '2000-01-01' });
-    const res = await h.api('put', '/customer/profile', me.token, { name: '陆青' });
+    const res = await h.api('put', '/customer/profile', me.token, { birthday: '2000-02-02' });
     expect(res.status).toBe(200);
-    expect(res.body.customer.name).toBe('陆青');
+    expect(res.body.customer.birthday).toBe('2000-02-02');
     expect(res.body.customer.gender).toBe(1);
-    expect(res.body.customer.birthday).toBe('2000-01-01');
   });
 
   it('显式传 null 可以清空性别与生日', async () => {
@@ -85,24 +96,6 @@ describe('顾客个人资料', () => {
     expect(res.status).toBe(200);
     expect(res.body.customer.gender).toBeNull();
     expect(res.body.customer.birthday).toBeNull();
-  });
-
-  it('姓名为空、超长或仅空白被拒绝', async () => {
-    const me = await h.customer('校验姓名');
-    const blank = await h.api('put', '/customer/profile', me.token, { name: '   ' });
-    expect(blank.status).toBe(400);
-    const tooLong = await h.api('put', '/customer/profile', me.token, { name: '茶'.repeat(13) });
-    expect(tooLong.status).toBe(400);
-
-    const saved = await h.prisma.customer.findUnique({ where: { id: me.id } });
-    expect(saved?.name).toBe('校验姓名');
-  });
-
-  it('姓名里的换行被折成空格，不会写入多行', async () => {
-    const me = await h.customer('换行姓名');
-    const res = await h.api('put', '/customer/profile', me.token, { name: ' 林\n舟 ' });
-    expect(res.status).toBe(200);
-    expect(res.body.customer.name).toBe('林 舟');
   });
 
   it('性别只接受 1 / 2 / null', async () => {
@@ -134,7 +127,7 @@ describe('顾客个人资料', () => {
   });
 
   it('未登录不能改资料', async () => {
-    const res = await h.api('put', '/customer/profile', null, { name: '匿名' });
+    const res = await h.api('put', '/customer/profile', null, { gender: 1 });
     expect(res.status).toBe(401);
   });
 
@@ -178,11 +171,11 @@ describe('顾客个人资料', () => {
   it('资料变更会推给跨系统同步 provider', async () => {
     const sync = h.app.get(HardwareService).profileSync as NoopProfileSync;
     const me = await h.customer('同步茶客');
-    await h.api('put', '/customer/profile', me.token, { name: '叶知秋', gender: 2, birthday: '1992-09-09' });
+    await h.api('put', '/customer/profile', me.token, { gender: 2, birthday: '1992-09-09' });
 
     const pushed = sync.lastPushed();
     expect(pushed?.customerId).toBe(me.id);
-    expect(pushed?.name).toBe('叶知秋');
+    expect(pushed?.name).toBe('同步茶客');
     expect(pushed?.gender).toBe(2);
     expect(pushed?.birthday).toBe('1992-09-09');
     // 占位实现不对外取数，第三方用户中心接入后替换

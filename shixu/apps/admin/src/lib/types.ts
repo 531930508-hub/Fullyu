@@ -97,6 +97,11 @@ export type OrderItem = {
   unitPriceCents: number;
   totalCents: number;
   costCents: number;
+  /** 本行参与自带杯减免的杯数（按加入顺序分配）。 */
+  byoCupQty?: number;
+  byoCupDiscountCents?: number;
+  /** 本行年卡会员每杯立减金额。 */
+  memberDiscountCents?: number;
   temp: string | null;
   ice: string | null;
 };
@@ -132,6 +137,14 @@ export type Order = {
   createdBy: string | null;
   paymentRef: string | null;
   paymentMethod: string | null;
+  /** 自带杯：杯数与按杯减免金额，退款时按实付口径分摊。 */
+  byoCupCups?: number;
+  byoCupDiscountCents?: number;
+  /** 年卡会员：每杯立减标准、享受杯数与减免总额。 */
+  memberDiscountPerCupCents?: number;
+  memberDiscountCups?: number;
+  memberDiscountCents?: number;
+  couponDiscountCents?: number;
   preparedAt: number | null;
   createdAt: number;
   paidAt: number | null;
@@ -228,7 +241,7 @@ export type ProfitReport = {
 
 export type Approval = {
   id: string;
-  kind: 'REFUND' | 'LOSS';
+  kind: 'REFUND' | 'LOSS' | 'ATTENDANCE';
   status: 'pending' | 'approved' | 'rejected';
   amountCents: number;
   storeId: string | null;
@@ -325,7 +338,6 @@ export type DevicePayload = {
   machines: Array<DeviceStatus & { id: string; kind: string }>;
   payment: DeviceStatus;
   platform: { mode: string };
-  member: { mode: string };
 };
 
 export type Mapping = {
@@ -406,16 +418,23 @@ export type Overview = {
   topProducts: Array<{ name: string; series: Series; qty: number; amount: number }>;
 };
 
-/** 优惠券模板：总部按通用 / 指定品类创建，限定有效期，按手机号发放给会员。 */
+/** 优惠券模板：总部按通用 / 指定品类 / 指定单品创建，限定有效期，按手机号或规则发放给会员。 */
 export type Coupon = {
   id: string;
   title: string;
-  scope: 'all' | 'category';
+  scope: 'all' | 'category' | 'product';
   categoryId: string | null;
+  productId: string | null;
   amountCents: number;
   minSpendCents: number;
   validFrom: number;
   validTo: number;
+  /** 发放后 N 天有效；0 表示只用固定区间。 */
+  validDays: number;
+  /** 是否在顾客端「可领券」列表中开放自助领取。 */
+  claimable: boolean;
+  /** 每位会员自助领取的上限张数。 */
+  claimLimit: number;
   active: boolean;
   note: string;
   createdBy: string;
@@ -423,6 +442,58 @@ export type Coupon = {
   issued?: number;
   used?: number;
   available?: number;
+  revoked?: number;
+  claimed?: number;
+};
+
+export type CouponRuleKind = 'birthday' | 'welcome' | 'winback';
+
+/** 自动发券规则：命中人群后按天幂等发放，执行记录落在发券批次上。 */
+export type CouponRule = {
+  id: string;
+  couponId: string;
+  couponTitle: string;
+  couponActive: boolean;
+  couponValidTo: number;
+  amountCents: number;
+  kind: CouponRuleKind;
+  kindLabel: string;
+  enabled: boolean;
+  tier: 'all' | 'standard' | 'annual';
+  config: {
+    daysBefore?: number;
+    inactiveDays?: number;
+    minOrders?: number;
+    withinDays?: number;
+  };
+  note: string;
+  lastRunAt: number | null;
+  lastRunIssued: number;
+  lastRunSkipped: number;
+  totalIssued: number;
+  createdAt: number;
+};
+
+export type CouponRulePreview = {
+  count: number;
+  willIssue: number;
+  held: number;
+  alreadyThisPeriod: number;
+  period: string;
+  kindLabel?: string;
+};
+
+export type CouponRuleRunResult = {
+  ruleId: string;
+  kind: CouponRuleKind;
+  couponTitle: string;
+  targetCount: number;
+  issued: number;
+  skipped: number;
+  period: string;
+  replayed: boolean;
+  batchId: string;
+  error?: string;
 };
 
 export type CouponIssueResult = {
@@ -458,4 +529,271 @@ export type HomeContent = {
   banners: Banner[];
   series: HomeSeriesSlot[];
   products: Array<Pick<Product, 'id' | 'name' | 'nameEn' | 'series' | 'kind' | 'status'>>;
+};
+
+/* ------------------------------ 考勤（在店时段） ------------------------------ */
+
+export type WorkSessionStatus = 'open' | 'pending_close' | 'closed' | 'lapsed' | 'voided';
+
+/** 一段在店时间。minutes 只有 closed 才有值——进行中和待补签都不计入工时。 */
+export type WorkSession = {
+  id: string;
+  storeId: string;
+  userId: string;
+  businessDate: string;
+  clockInAt: number;
+  clockOutAt: number | null;
+  minutes: number;
+  liveMinutes: number;
+  status: WorkSessionStatus;
+  inDistanceM: number | null;
+  inAccuracyM: number | null;
+  outDistanceM: number | null;
+  pendingApprovalId: string | null;
+  adjustable: boolean;
+  note: string;
+};
+
+export type AttendanceStoreOption = {
+  id: string;
+  name: string;
+  short: string;
+  address: string;
+  lat: number;
+  lng: number;
+};
+
+export type AttendanceMine = {
+  today: string;
+  now: number;
+  open: WorkSession | null;
+  sessions: WorkSession[];
+  pendingCount: number;
+  unresolvedCount: number;
+  /** 全部未闭合时段（含往天的），页面上要能逐条补离店/撤回 */
+  unresolved: WorkSession[];
+  month: { label: string; minutes: number; days: number };
+  stores: AttendanceStoreOption[];
+  policy: {
+    radiusM: number;
+    accuracyCeilingM: number;
+    accuracyAllowanceM: number;
+    maxSegmentMinutes: number;
+  };
+  /** 带上定位读数请求时的围栏预判；服务端与 clock-in 共用同一份判定 */
+  preview: {
+    ok: boolean;
+    reason: 'ok' | 'no_location' | 'untrusted_accuracy' | 'out_of_range';
+    distanceM: number | null;
+    limitM: number;
+  } | null;
+  /** 今日计划班次；没排班为 null。只作提示，不参与到店判定 */
+  shift: {
+    storeId: string;
+    startMin: number;
+    endMin: number;
+    note: string;
+  } | null;
+};
+
+export type AttendanceBoardPerson = {
+  userId: string;
+  name: string;
+  /** 跨店看板时这段属于哪家店；单店时只有一项 */
+  storeNames: string[];
+  sessions: WorkSession[];
+  minutes: number;
+  liveMinutes: number;
+  unresolved: number;
+  /** 当天计划工时（班表），用于「计划 vs 实际」对照；不参与工时合计 */
+  plannedMinutes: number;
+};
+
+export type AttendanceBoard = {
+  /** 单店口径时为该店；「全部门店」时为 null */
+  storeId: string | null;
+  storeName: string;
+  stores: Array<{ id: string; name: string }>;
+  date: string;
+  now: number;
+  policy: { radiusM: number };
+  rows: AttendanceBoardPerson[];
+  onDuty: Array<{ userId: string; name: string; storeName: string; clockInAt: number; liveMinutes: number }>;
+  unresolved: Array<{
+    sessionId: string;
+    userId: string;
+    name: string;
+    storeName: string;
+    status: WorkSessionStatus;
+    businessDate: string;
+    clockInAt: number;
+    liveMinutes: number;
+  }>;
+  summary: {
+    peopleCount: number;
+    totalMinutes: number;
+    liveMinutes: number;
+    plannedMinutes: number;
+    /** 往天排了班却没有任何计时的人数 */
+    notClockedCount: number;
+    unresolvedCount: number;
+    pendingApprovals: number;
+  };
+  /** 往天排了班但没打卡的人：只提示，不阻断（人可能临时请假） */
+  notClocked: Array<{
+    userId: string;
+    name: string;
+    storeNames: string[];
+    plannedMinutes: number;
+  }>;
+};
+
+/* ------------------------------ 排班（班表） ------------------------------ */
+
+export type ShiftState = 'none' | 'planned' | 'done' | 'short' | 'absent';
+
+export type ShiftCell = {
+  businessDate: string;
+  shift: { id: string; startMin: number; endMin: number; note: string } | null;
+  plannedMinutes: number;
+  /** 当天已计入的实际工时（已闭合时段） */
+  actualMinutes: number;
+  /** 服务端算好的对照结论：今天一律不算缺勤 */
+  state: ShiftState;
+};
+
+export type ShiftRow = {
+  userId: string;
+  name: string;
+  cells: ShiftCell[];
+  plannedMinutes: number;
+  actualMinutes: number;
+};
+
+export type ShiftMatrix = {
+  storeId: string;
+  storeName: string;
+  stores: Array<{ id: string; name: string }>;
+  from: string;
+  to: string;
+  today: string;
+  days: string[];
+  rows: ShiftRow[];
+  summary: { people: number; plannedMinutes: number; actualMinutes: number; absentDays: number };
+  limits: { maxRangeDays: number; pastEditDays: number; futureEditDays: number };
+};
+
+/* ------------------------------ 考勤月报 ------------------------------ */
+
+export type AttendanceReportDay = {
+  businessDate: string;
+  shift: { id: string; startMin: number; endMin: number; note: string } | null;
+  plannedMinutes: number;
+  actualMinutes: number;
+  /** 当天未闭合的时段数：>0 说明这天的工时还没算完 */
+  unresolvedCount: number;
+  state: ShiftState;
+};
+
+export type AttendanceReportRow = {
+  userId: string;
+  name: string;
+  presentDays: number;
+  plannedMinutes: number;
+  actualMinutes: number;
+  absentDays: number;
+  shortDays: number;
+  unresolvedCount: number;
+  days: AttendanceReportDay[];
+};
+
+export type AttendanceReport = {
+  storeId: string;
+  storeName: string;
+  stores: Array<{ id: string; name: string }>;
+  month: string;
+  from: string;
+  to: string;
+  today: string;
+  rows: AttendanceReportRow[];
+  summary: {
+    people: number;
+    presentPeople: number;
+    attendanceDays: number;
+    plannedMinutes: number;
+    actualMinutes: number;
+    absentDays: number;
+    shortDays: number;
+    unresolvedCount: number;
+  };
+};
+
+/* ------------------------------ 劳务结算 ------------------------------ */
+
+/** 门店劳务单价：库里存「分/分钟」，小时价只是 *60 的展示口径。 */
+export type LaborRateRow = {
+  storeId: string;
+  name: string;
+  city: string;
+  laborRatePerMinCents: number;
+  hourlyCents: number;
+};
+
+export type LaborRateList = { maxRatePerMinCents: number; rows: LaborRateRow[] };
+
+export type SettlementLine = {
+  sessionId: string;
+  businessDate: string;
+  from: string;
+  to: string;
+  minutes: number;
+};
+
+export type SettlementStatus = 'draft' | 'posted' | 'voided';
+
+export type WorkSettlement = {
+  id: string;
+  storeId: string;
+  storeName: string;
+  userId: string;
+  userName: string;
+  month: string;
+  periodStart: string;
+  periodEnd: string;
+  /** 实际记工分钟（含不足 1 小时的零头） */
+  minutes: number;
+  /** 计价分钟：按小时向下取整后的整点分钟 */
+  billableMinutes: number;
+  hours: number;
+  ratePerMinCents: number;
+  hourlyCents: number;
+  baseAmountCents: number;
+  adjustmentCents: number;
+  adjustmentNote: string;
+  amountCents: number;
+  status: SettlementStatus;
+  /** 未闭合段数（含待补签）：大于 0 时不能确认入账 */
+  unclosedCount: number;
+  pendingApprovals: number;
+  lines: SettlementLine[];
+  postedExpenseId: string | null;
+  confirmedBy: string | null;
+  confirmedAt: number | null;
+  confirmedNote: string;
+};
+
+export type SettlementList = {
+  month: string;
+  periodStart: string;
+  periodEnd: string;
+  rows: WorkSettlement[];
+  summary: {
+    count: number;
+    draftCount: number;
+    postedCount: number;
+    minutes: number;
+    baseAmountCents: number;
+    amountCents: number;
+    unclosedCount: number;
+  };
 };

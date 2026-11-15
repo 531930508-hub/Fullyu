@@ -111,20 +111,42 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 13px 12px 7px;
-  font-size: 10px;
-  letter-spacing: 1px;
-  color: var(--muted);
+  padding: 12px 12px 6px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--ink);
   text-align: left;
   border-radius: 8px;
 }
-.nav-group-toggle:hover { color: var(--ink); }
+.nav-group-toggle:hover { color: var(--wood); }
 .nav-group-toggle.has-active { color: var(--ink); }
 .nav-group-name { flex: 1 1 auto; }
-.nav-group-count { font-size: 9px; letter-spacing: 0; color: var(--muted); opacity: .7; }
-.nav-group-chevron { flex-shrink: 0; opacity: .65; transform: rotate(-90deg); transition: transform 160ms ease; }
+.nav-group-count { font-size: 10px; font-weight: 500; letter-spacing: 0; color: var(--muted); opacity: .55; }
+.nav-group-chevron { flex-shrink: 0; opacity: .5; transform: rotate(-90deg); transition: transform 160ms ease; }
 .nav-group-chevron.expanded { transform: rotate(0deg); }
-.nav-group-items { display: flex; flex-direction: column; gap: 4px; }
+.nav-group-items { display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; }
+/* 二级条目：弱化字重、收起图标，用缩进 + 选中圆点区分层级（参照轻疗后台子菜单）。 */
+.nav-group-items .side-link {
+  min-height: 38px;
+  padding: 9px 12px 9px 38px;
+  font-size: 12.5px;
+  font-weight: 400;
+  gap: 10px;
+}
+.nav-group-items .side-link > svg { display: none; }
+.nav-group-items .side-link.active { position: relative; font-weight: 550; }
+.nav-group-items .side-link.active::before {
+  content: "";
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: var(--card);
+}
 .nav-group-items.collapsed { display: none; }
 /* 左上角 logo 可点击回默认首页；品牌区外观保持不变。 */
 .sidebar-brand-link { display: block; color: inherit; text-decoration: none; border-radius: 10px; }
@@ -312,31 +334,61 @@ table.tbl.tbl-compact td:nth-child(4) { width: 88px; }
   .sidebar { width: 158px; padding: 24px 10px; }
 }
 @media (max-width: 900px) {
+  /* 窄屏侧栏：固定左侧 72px 图标栏，正文补上同等内边距；
+     展开时侧栏切成 268px 抽屉盖在遮罩之上，因此正文不会横向跳动。 */
   .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
     transform: none;
     box-shadow: none;
     width: 72px;
     padding: 22px 8px;
+    padding-bottom: max(22px, env(safe-area-inset-bottom));
+    transition: width var(--ease);
   }
-  .sidebar-brand, .side-link span { display: none; }
-  /* 图标栏放不下分组标题：取消折叠，全部菜单按原顺序平铺，导航区单独滚动。 */
-  .nav-group-toggle { display: none; }
-  .nav-group-items.collapsed { display: flex; }
-  .nav-group + .nav-group {
+  .sidebar.open {
+    display: flex;
+    z-index: 60;
+    width: min(86vw, 268px);
+    padding: 24px 12px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+    box-shadow: var(--shadow-lg);
+  }
+  /* 展开态回到桌面侧栏的排版，抵消 v7 里只服务图标栏的隐藏/居中规则。 */
+  .sidebar.open .sidebar-brand { display: block; }
+  .sidebar.open .side-link { justify-content: flex-start; }
+  .sidebar.open .side-link span { display: inline; }
+  .sidebar.open .side-link .badge { display: inline-flex; }
+  .sidebar.open .sidebar-user { display: flex; }
+  .ops-main { padding-left: calc(72px + 20px); }
+  /* 窄屏顶栏只留汉堡按钮，把宽度让给页面操作项。 */
+  .shell-topbar .shell-topbar-note { display: none; }
+  /* 图标栏态：只留图标，分组标题与账号信息收起，全部菜单按原顺序平铺。 */
+  .sidebar:not(.open) .sidebar-brand,
+  .sidebar:not(.open) .side-link span,
+  .sidebar:not(.open) .nav-group-toggle,
+  .sidebar:not(.open) .sidebar-user div,
+  .sidebar:not(.open) .sidebar-user .icon-btn { display: none; }
+  .sidebar:not(.open) .nav-group-items.collapsed { display: flex; }
+  .sidebar:not(.open) .nav-group + .nav-group {
     margin-top: 6px;
     padding-top: 6px;
     border-top: 1px solid var(--line);
   }
-  .side-link { justify-content: center; padding: 13px 8px; }
-  .sidebar-user div { display: none; }
-  .sidebar-user .icon-btn { display: none; }
-  .sidebar-scrim { display: none !important; }
+  .sidebar:not(.open) .side-link { justify-content: center; padding: 13px 8px; }
+  /* 图标栏靠图标识别入口：恢复二级条目的图标并退回居中样式。 */
+  .sidebar:not(.open) .nav-group-items .side-link { min-height: 44px; padding: 13px 8px; }
+  .sidebar:not(.open) .nav-group-items .side-link > svg { display: block; }
+  .sidebar:not(.open) .nav-group-items .side-link.active::before { display: none; }
 }
 @media (max-width: 680px) {
   .page-head h1 { font-size: 23px; }
   .stat-grid { gap: 10px; }
   .stat { padding: 14px 15px; }
   .stat-value { font-size: 27px; }
+  /* 手机上图标栏让位给抽屉，正文回到满宽（覆盖上面的 900px 留白）。 */
+  .ops-main { padding-left: 12px; }
 }
 
 /* shell toolbar bar (store switch + quick links, no title) */
@@ -348,6 +400,17 @@ table.tbl.tbl-compact td:nth-child(4) { width: 88px; }
   margin-bottom: 18px;
   min-height: 40px;
 }
+.shell-topbar .shell-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+/* 汉堡按钮全宽度常驻：窄屏拉抽屉，宽屏把侧栏收成图标栏。 */
+.shell-topbar .menu-toggle { display: inline-flex; }
+/* 顶栏现在必须常驻：没有右侧操作项时，至少还要留出收起侧栏的入口。 */
+.shell-topbar.shell-topbar-empty { display: flex; }
+.shell-topbar.shell-topbar-empty .shell-topbar-note { display: none; }
 .shell-topbar .shell-topbar-note {
   font-size: 11px;
   letter-spacing: 0.6px;
@@ -356,6 +419,36 @@ table.tbl.tbl-compact td:nth-child(4) { width: 88px; }
 .shell-topbar .ops-toolbar {
   margin-bottom: 0;
   flex-wrap: nowrap;
+}
+
+/* 宽屏收起态：侧栏收到 72px 图标栏，排版与窄屏图标栏保持一致（正文自会跟着变宽）。 */
+@media (min-width: 901px) {
+  .ops-shell.sidebar-collapsed .sidebar {
+    width: 72px;
+    padding: 22px 8px;
+  }
+  .ops-shell.sidebar-collapsed .sidebar-brand,
+  .ops-shell.sidebar-collapsed .sidebar-label,
+  .ops-shell.sidebar-collapsed .side-link span,
+  .ops-shell.sidebar-collapsed .side-link .badge,
+  .ops-shell.sidebar-collapsed .nav-group-toggle,
+  .ops-shell.sidebar-collapsed .nav-pinned-divider,
+  .ops-shell.sidebar-collapsed .sidebar-user div,
+  .ops-shell.sidebar-collapsed .sidebar-user .icon-btn,
+  .ops-shell.sidebar-collapsed .sidebar-bottom { display: none; }
+  .ops-shell.sidebar-collapsed .side-link {
+    justify-content: center;
+    padding: 13px 8px;
+  }
+  /* 收起后分组标题没了，二级条目一律平铺并恢复图标，靠图标识别入口。 */
+  .ops-shell.sidebar-collapsed .nav-group-items.collapsed { display: flex; }
+  .ops-shell.sidebar-collapsed .nav-group-items .side-link > svg { display: block; }
+  .ops-shell.sidebar-collapsed .side-link.active::before { display: none; }
+  .ops-shell.sidebar-collapsed .nav-group + .nav-group {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+  }
 }
 
 /* stat tone variants (v7 .stat re-asserts card background later in cascade) */

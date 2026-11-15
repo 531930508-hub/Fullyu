@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { badRequest, notFound } from '../common/errors';
 import { mapProduct, mapPublicProduct, mapStore, productImageUrl } from '../common/mappers';
+import { loadByoCupPolicy } from '../orders/byo-cup.policy';
 
 /** 品牌固定顺序：醒 → 松 → 庆 → 眠。数据库按 series 字符串排序会变成 mian 在前。 */
 const SERIES_RANK: Record<string, number> = { xing: 0, song: 1, qing: 2, mian: 3 };
@@ -53,6 +54,8 @@ export class CatalogService {
     return {
       store,
       categories,
+      // 自带杯政策：顾客端只用来展示「到柜台每杯立减」，营业台用来本地预估金额。
+      byoCup: await loadByoCupPolicy(this.prisma),
       products: products.map((row) => {
         const product = mapPublicProduct(row);
         const stock = row.stock[0];
@@ -81,6 +84,7 @@ export class CatalogService {
     return {
       store,
       categories,
+      byoCup: await loadByoCupPolicy(this.prisma),
       products: products.map((row) => {
         const { costCents: _costCents, ...product } = mapProduct(row);
         const stock = row.stock[0];

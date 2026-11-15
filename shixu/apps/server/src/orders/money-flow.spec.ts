@@ -110,7 +110,9 @@ describe('资金正逆向链路：金额、防重与重试', () => {
         id: `CC-MF-${process.pid}-${couponSeq}`,
         couponId: coupon.id,
         customerId,
-        status: 'available'
+        status: 'available',
+        validFrom: coupon.validFrom,
+        validTo: coupon.validTo
       }
     });
     return held.id;

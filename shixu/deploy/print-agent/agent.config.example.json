@@ -1,0 +1,9 @@
+{
+  "apiBase": "https://teahour.fullyu.cn/api",
+  "storeId": "sh",
+  "token": "把服务端 PRINT_AGENT_TOKENS 里本店那串令牌贴进来",
+  "printerName": "XP-420B",
+  "pollMs": 1500,
+  "labelGapMs": 500,
+  "encoding": "gb18030"
+}

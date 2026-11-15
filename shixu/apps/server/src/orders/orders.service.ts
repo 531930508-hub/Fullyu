@@ -11,8 +11,9 @@ import { HardwareService } from '../hardware/hardware.module';
 import { FinanceService, saleMethod } from '../finance/finance.service';
 import { PrintingService } from '../printing/printing.service';
 import { CouponsService, type ResolvedCoupon } from '../coupons/coupons.service';
+import { loadByoCupPolicy } from './byo-cup.policy';
 import { ICE_OPTIONS } from '@teahour/shared';
-import type { PaymentState } from '@teahour/integrations';
+import type { PaymentGateway, PaymentState } from '@teahour/integrations';
 
 export type OrderLineInput = {
   productId: string;
@@ -47,6 +48,11 @@ export type CreateOrderInput = {
   idempotencyKey?: string;
   /** 内部使用：失败重试复用同一订单时，允许该单已锁定的券继续核验。 */
   retryOrderId?: string;
+  /**
+   * 自带杯杯数：只能由营业台代点声明（channel=assisted），按杯减免，封顶该杯单价。
+   * 缺省/0 表示不使用；小程序与外部平台单传非 0 一律拒绝。
+   */
+  byoCups?: number;
 };
 
 export type RefundLineInput = { itemId: string; qty: number };
@@ -84,6 +90,12 @@ type PreparedLine = {
   costCents: number;
   temp: string | null;
   ice: string | null;
+  /** 该行享受自带杯减免的杯数（0 表示本行没有自带杯）。 */
+  byoCupQty: number;
+  /** 该行自带杯减免金额，已从 totalCents 扣掉。 */
+  byoCupDiscountCents: number;
+  /** 该行年卡会员每杯立减金额，已从 totalCents 扣掉。 */
+  memberDiscountCents: number;
 };
 
 const ORDER_INCLUDE = {
@@ -230,6 +242,7 @@ export class OrdersService {
     const lines: PreparedLine[] = [];
     let grossCents = 0;
     let discountCents = 0;
+    let discountCups = 0;
     let costCents = 0;
     for (const mergedLine of merged.values()) {
       const product = mergedLine.product;
@@ -246,8 +259,10 @@ export class OrdersService {
           ? Math.min(Math.max(0, Math.round(input.memberDiscountPerCupCents)), product.priceCents)
           : 0;
       const unitPriceCents = product.priceCents - discount;
+      const memberDiscountCents = discount * mergedLine.qty;
       grossCents += product.priceCents * mergedLine.qty;
-      discountCents += discount * mergedLine.qty;
+      discountCents += memberDiscountCents;
+      if (discount > 0) discountCups += mergedLine.qty;
       costCents += product.costCents * mergedLine.qty;
       lines.push({
         product,
@@ -256,11 +271,19 @@ export class OrdersService {
         totalCents: unitPriceCents * mergedLine.qty,
         costCents: product.costCents * mergedLine.qty,
         temp: mergedLine.temp,
-        ice: mergedLine.ice
+        ice: mergedLine.ice,
+        byoCupQty: 0,
+        byoCupDiscountCents: 0,
+        memberDiscountCents
       });
     }
 
-    // 优惠券：按券的品类范围计算可用小计（会员每杯减免之后），门槛与面额都由服务端核验。
+    // 自带杯：只有营业台代点能声明（顾客在柜台出示自带杯）。按杯逐行分摊，单杯封顶该行单价，
+    // 与会员立减叠加（会员 -2 之后再减自带杯 -5）。分摊进订单行后，退款按行金额比例计算天然正确。
+    const byoCup = await this.applyByoCup(input, lines);
+    const byoCupDiscountCents = byoCup.discountCents;
+
+    // 优惠券：按券的品类范围计算可用小计（会员每杯减免与自带杯减免之后），门槛与面额都由服务端核验。
     let coupon: ResolvedCoupon | null = null;
     let couponDiscountCents = 0;
     if (input.couponId) {
@@ -271,11 +294,12 @@ export class OrdersService {
         retryOrderId: input.retryOrderId,
         lines: lines.map((line) => ({
           categoryId: line.product.categoryId,
+          productId: line.product.id,
           totalCents: line.totalCents
         }))
       });
       coupon = resolved;
-      couponDiscountCents = Math.min(resolved.discountCents, grossCents - discountCents);
+      couponDiscountCents = Math.min(resolved.discountCents, grossCents - discountCents - byoCupDiscountCents);
     }
 
     return {
@@ -283,10 +307,56 @@ export class OrdersService {
       coupon,
       grossCents,
       discountCents,
+      memberDiscountPerCupCents: discountCents
+        ? Math.max(0, Math.round(Number(input.memberDiscountPerCupCents) || 0))
+        : 0,
+      memberDiscountCups: discountCups,
+      memberDiscountCents: discountCents,
+      byoCupCups: byoCup.cups,
+      byoCupDiscountCents,
       couponDiscountCents,
-      totalCents: Math.max(0, grossCents - discountCents - couponDiscountCents),
+      totalCents: Math.max(0, grossCents - discountCents - byoCupDiscountCents - couponDiscountCents),
       costCents
     };
+  }
+
+  /**
+   * 计算并写入自带杯减免（就地修改行金额）。
+   * 规则：仅 assisted + fresh；杯数不得超过本单杯数；逐杯从前往后分摊，单杯减免封顶该行实付单价。
+   */
+  private async applyByoCup(
+    input: CreateOrderInput,
+    lines: PreparedLine[]
+  ): Promise<{ cups: number; discountCents: number }> {
+    for (const line of lines) {
+      line.byoCupQty = 0;
+      line.byoCupDiscountCents = 0;
+    }
+    const requested = Math.round(Number(input.byoCups) || 0);
+    if (requested <= 0) return { cups: 0, discountCents: 0 };
+    if (requested > 10) throw badRequest('自带杯杯数超出单笔上限');
+    if (input.channel !== 'assisted') throw badRequest('自带杯减免需在门店柜台由伙伴确认');
+    if (input.business !== 'fresh') throw badRequest('自带杯减免仅适用于现制茶饮');
+    const policy = await loadByoCupPolicy(this.prisma);
+    if (!policy.enabled || policy.perCupCents <= 0) throw badRequest('本店暂未开放自带杯优惠');
+    const cups = lines.reduce((sum, line) => sum + line.qty, 0);
+    if (requested > cups) throw badRequest(`自带杯杯数不能超过本单杯数（${cups} 杯）`);
+
+    let remaining = requested;
+    let discountCents = 0;
+    for (const line of lines) {
+      if (remaining <= 0) break;
+      const take = Math.min(remaining, line.qty);
+      const perCup = Math.min(policy.perCupCents, line.unitPriceCents);
+      const cut = perCup * take;
+      if (cut <= 0) continue;
+      line.byoCupQty = take;
+      line.byoCupDiscountCents = cut;
+      line.totalCents -= cut;
+      discountCents += cut;
+      remaining -= take;
+    }
+    return { cups: requested, discountCents };
   }
 
   private async createUnpaidOrder(
@@ -338,6 +408,11 @@ export class OrdersService {
           couponId: prepared.coupon?.id || null,
           couponTitle: prepared.coupon?.title || null,
           couponDiscountCents: prepared.couponDiscountCents,
+          byoCupCups: prepared.byoCupCups,
+          byoCupDiscountCents: prepared.byoCupDiscountCents,
+          memberDiscountPerCupCents: prepared.memberDiscountPerCupCents,
+          memberDiscountCups: prepared.memberDiscountCups,
+          memberDiscountCents: prepared.memberDiscountCents,
           customerId: input.customerId || null,
           ownerKind: input.ownerKind || 'customer',
           createdBy: input.actor?.id || null,
@@ -376,6 +451,9 @@ export class OrdersService {
             unitPriceCents: line.unitPriceCents,
             totalCents: line.totalCents,
             costCents: line.costCents,
+            byoCupQty: line.byoCupQty,
+            byoCupDiscountCents: line.byoCupDiscountCents,
+            memberDiscountCents: line.memberDiscountCents,
             temp: line.temp,
             ice: line.ice
           }
@@ -445,8 +523,11 @@ export class OrdersService {
         paymentMethod: order.paymentMethod ? this.methodLabel(order.paymentMethod) : null
       });
       const pickupCode = order.business === 'retail' ? await this.assignPickupCode(tx) : null;
-      await tx.order.update({
-        where: { id: orderId },
+      // 并发落账（汇付回调 + 顾客查单 + 0 元单兜底可能同时到达）只允许一个写入者：
+      // 用条件更新把「未支付且未取消」的订单原子抢到手，后到者 count=0 直接收口，
+      // 否则两边都会插同一批杯标，撞 order_units.label 唯一键让回调 500、钱已到而单未落。
+      const claimed = await tx.order.updateMany({
+        where: { id: orderId, paymentStatus: { not: 'paid' }, status: { not: 'cancelled' } },
         data: {
           status: order.business === 'retail' ? 'awaiting' : 'pending',
           paymentStatus: 'paid',
@@ -456,6 +537,24 @@ export class OrdersService {
           printStatus: order.business === 'retail' ? 'none' : 'queued'
         }
       });
+      if (claimed.count === 0) {
+        const fresh = await tx.order.findUnique({ where: { id: orderId }, select: { paymentStatus: true } });
+        if (fresh?.paymentStatus === 'paid') {
+          outcome = 'duplicate';
+          return;
+        }
+        outcome = 'blocked-cancelled';
+        await logAction(tx, {
+          actorName: '支付网关',
+          action: '迟到支付成功拦截',
+          detail: `${order.number} · 已取消订单收到支付成功通知 ¥${(order.totalCents / 100).toFixed(2)}，资金待人工退款/对账，未复活订单`,
+          type: 'payment',
+          storeId: order.storeId,
+          orderId,
+          at: now.getTime()
+        });
+        return;
+      }
       // 支付成功：锁定中的券转为已使用，之后不能再被任何订单占用。
       if (order.couponId) {
         await tx.customerCoupon.updateMany({
@@ -519,6 +618,7 @@ export class OrdersService {
    * - 只有未支付订单才允许取消并回补库存。
    */
   private async markPaymentFailed(orderId: string, reason: string, actorName = '支付网关'): Promise<void> {
+    let cancelled = false;
     await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw notFound('订单不存在');
@@ -547,6 +647,7 @@ export class OrdersService {
         }
       }
       await tx.order.update({ where: { id: orderId }, data: { status: 'cancelled', paymentStatus: 'failed' } });
+      cancelled = true;
       // 支付失败：释放本单锁定的券，顾客可在重试或其他订单继续使用。
       await tx.customerCoupon.updateMany({
         where: { orderId, status: 'reserved' },
@@ -560,6 +661,75 @@ export class OrdersService {
         storeId: order.storeId,
         orderId
       });
+    });
+    // 本地已取消只在库里生效；渠道侧的预下单还挂着，顾客仍可能把它付掉。
+    // 这里主动关单，顺带把悬挂的支付意图收口（关单结果未知时留待查单收敛）。
+    if (cancelled) {
+      try {
+        await this.closeChannelOrder(orderId);
+      } catch {
+        // 关单失败不影响已经完成的取消；意图保持悬挂，交给查单/对账收敛。
+      }
+    }
+  }
+
+  /**
+   * 未支付单取消后到渠道侧关单并收敛支付意图。
+   * - 关单成功/渠道处理中：意图不再悬挂处理中；
+   * - 渠道报告原单已支付：不改订单，意图保持 unknown 交给对账（迟到支付由 markPaid 拦截并留痕）；
+   * - 关单请求未知（超时/断连）：意图保持 unknown，下次查单收敛。
+   */
+  private async closeChannelOrder(orderId: string): Promise<void> {
+    const gateway = this.hardware.payment;
+    if (!gateway.close) return;
+    const [intent] = await this.prisma.paymentIntent.findMany({
+      where: { orderId, status: { in: ['processing', 'unknown'] }, method: { not: 'cash' } },
+      orderBy: { createdAt: 'desc' },
+      take: 1
+    });
+    if (!intent) return;
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return;
+    const method = intent.method === 'alipay' ? 'alipay' : 'wechat';
+    let result: Awaited<ReturnType<NonNullable<PaymentGateway['close']>>>;
+    try {
+      result = await gateway.close({
+        orderId,
+        storeId: intent.storeId,
+        method,
+        requestedAt: intent.createdAt.getTime()
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await this.prisma.paymentIntent.update({
+        where: { id: intent.id },
+        data: { status: 'unknown', failReason: `关单结果未知：${message}`, updatedAt: new Date() }
+      });
+      return;
+    }
+    const reason =
+      result.status === 'paid'
+        ? '订单取消时渠道报告原单已支付，待对账/退款'
+        : result.status === 'closed'
+          ? '订单取消，渠道关单成功'
+          : result.status === 'processing'
+            ? '订单取消，渠道关单处理中'
+            : `订单取消，渠道关单失败：${result.error || '未知原因'}`;
+    await this.prisma.paymentIntent.update({
+      where: { id: intent.id },
+      data: {
+        status: result.status === 'closed' || result.status === 'failed' ? 'failed' : 'unknown',
+        failReason: reason,
+        updatedAt: new Date()
+      }
+    });
+    await logAction(this.prisma, {
+      actorName: '支付网关',
+      action: '取消关单',
+      detail: `${order.number} · ${reason}`,
+      type: 'payment',
+      storeId: order.storeId,
+      orderId
     });
   }
 
@@ -580,6 +750,15 @@ export class OrdersService {
   }> {
     const order = await this.customerOrder(input.customerId, input.orderId);
     const gateway = this.hardware.payment;
+    // 0 元单（券全额抵扣 / 赠饮）没有可支付金额：补记落账后直接返回，绝不向渠道下发 0 元支付。
+    // 历史未支付单与并发建单都可能从这里兜底。
+    if (order.totalCents <= 0) {
+      if (order.paymentStatus !== 'paid') {
+        const outcome = await this.markPaid(order.id, `ZERO-${order.id}`);
+        if (outcome === 'blocked-cancelled') throw conflict('订单已取消，请重新下单');
+      }
+      return { paid: true, mode: gateway.mode, prepayMode: 'none' };
+    }
     // 异步渠道下已支付无需再预下单；同步渠道（mock）保持原行为，仍返回模拟支付参数供联调。
     if (order.paymentStatus === 'paid' && gateway.asyncPayments) {
       return { paid: true, mode: gateway.mode, prepayMode: 'live' };
@@ -1159,6 +1338,11 @@ export class OrdersService {
       });
     }
 
+    // 0 元单（券全额抵扣 / 赠送）：没有可扣金额，任何渠道都会拒绝，直接按已支付落账。
+    if (prepared.totalCents <= 0) {
+      return this.settleZeroOrder(orderId, intent, input.business);
+    }
+
     // 异步渠道（汇付等）：订单保持未支付，由预下单/收款码/付款码发起，回调落账。
     // 绝不在渠道未确认时调用同步 charge，也不把「已发起」当成「已支付」。
     if (this.hardware.payment.asyncPayments) {
@@ -1168,6 +1352,23 @@ export class OrdersService {
     const charge = await this.runCharge(intent, orderId, input, storeId, prepared.totalCents);
     if (!charge.ok) throw conflict(charge.error);
     return this.finishOrder(orderId, input.business);
+  }
+
+  /**
+   * 0 元单落账：不经过支付渠道，直接按已支付完成，并把支付意图收敛为成功。
+   * 券在 markPaid 里由 reserved 转 used，库存与取餐号按正常已支付单处理。
+   */
+  private async settleZeroOrder(
+    orderId: string,
+    intent: PaymentIntent,
+    business: 'fresh' | 'retail'
+  ): Promise<CreateOrderResult> {
+    const providerRef = `ZERO-${orderId}`;
+    const outcome = await this.markPaid(orderId, providerRef);
+    if (outcome === 'blocked-cancelled') throw conflict('订单已取消，请重新下单');
+    await this.settleIntent(intent, orderId, providerRef, { kind: 'none', status: 'paid' });
+    const finished = await this.finishOrder(orderId, business);
+    return { ...finished, payment: { kind: 'none', status: 'paid' } };
   }
 
   /** 异步渠道下按门店收款方式发起支付；返回给前端继续完成支付所需的信息。 */

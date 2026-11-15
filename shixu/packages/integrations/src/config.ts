@@ -16,7 +16,7 @@ const DEFAULT_HUIFU_DIR = '/etc/teahour/huifu';
 
 const DEFAULT_HUIFU_NOTIFY = 'https://teahour.fullyu.cn/api/hooks/payment/huifu-payment';
 
-const CHANNEL_KEYS: ExternalChannelKey[] = ['printer', 'teaMachine', 'payment', 'platform', 'member', 'wechat'];
+const CHANNEL_KEYS: ExternalChannelKey[] = ['printer', 'teaMachine', 'payment', 'platform', 'wechat'];
 
 const trim = (value: string | undefined): string | undefined => {
   const text = value?.trim();
@@ -55,12 +55,27 @@ const parseMode = (value: string | undefined): IntegrationsMode => {
 };
 
 /**
+ * 杯贴打印机驱动选择。
+ * 芯烨 XP-420B 有两种接法：
+ * - xpyun：走条码云（云端直推，门店不用开电脑，推荐）；
+ * - agent：USB 直连门店电脑，由打印代理领取 TSPL。
+ * 飞鹅是整机云通道（feie）。写错值直接报错，不静默挑一个。
+ */
+const parsePrinterDriver = (value: string | undefined): 'feie' | 'xpyun' | 'agent' => {
+  const text = (value || '').trim().toLowerCase();
+  if (!text || text === 'feie' || text === 'feieyun') return 'feie';
+  if (text === 'xpyun' || text === 'xpyuncloud' || text === 'barcode') return 'xpyun';
+  if (text === 'agent' || text === 'xprinter' || text === 'local') return 'agent';
+  throw new Error(`PRINTER_DRIVER 只接受 feie / xpyun / agent，当前为「${value}」`);
+};
+
+/**
  * 从环境变量装配对接配置。
  *
  * - INTEGRATIONS_MODE：mock（开发默认）| live | disabled（生产默认）
  * - INTEGRATIONS_<CHANNEL>_MODE：按渠道覆盖，如 INTEGRATIONS_PAYMENT_MODE=live
  * - 生产环境未显式配置时默认 disabled，且禁止 mock——mock 只属于本地开发，
- *   不允许在生产里冒充支付/打印/会员等真实能力。
+ *   不允许在生产里冒充支付/打印/平台等真实能力。
  * - WECHAT_APPID / WECHAT_APPSECRET / WECHAT_MCHID：小程序与微信支付凭证
  * - INTEGRATIONS_ENV：部署环境标识（如 staging / prod-sh），仅用于展示
  */
@@ -92,6 +107,7 @@ export function loadIntegrationsConfig(input: ConfigInput): IntegrationsConfig {
     mode: resolved,
     channels,
     env: trim(env.INTEGRATIONS_ENV) || trim(env.NODE_ENV) || 'local',
+    printerDriver: parsePrinterDriver(env.PRINTER_DRIVER),
     wechat: {
       appId: trim(env.WECHAT_APPID) || DEFAULT_APPID,
       appSecret: trim(env.WECHAT_APPSECRET),
@@ -130,6 +146,17 @@ export function loadIntegrationsConfig(input: ConfigInput): IntegrationsConfig {
         }
         return gap;
       })()
+    },
+    xpyun: {
+      user: trim(env.XPYUN_USER),
+      ukey: trim(env.XPYUN_UKEY),
+      sn: trim(env.XPYUN_SN),
+      storeSn: parseStringMap(env.XPYUN_STORE_SN, 'XPYUN_STORE_SN'),
+      apiBase: (trim(env.XPYUN_API_BASE) || 'https://open-barcode.xpyun.net/api/openapi').replace(/\/+$/, ''),
+      timeoutMs: clampNumber(env.XPYUN_TIMEOUT_MS, 3_000, 30_000, 10_000),
+      labelWidthMm: clampNumber(env.XPYUN_LABEL_WIDTH_MM, 20, 104, 40),
+      labelHeightMm: clampNumber(env.XPYUN_LABEL_HEIGHT_MM, 10, 200, 60),
+      gapMm: clampNumber(env.XPYUN_LABEL_GAP_MM, 0, 10, 2)
     }
   };
 }

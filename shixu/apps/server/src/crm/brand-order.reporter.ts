@@ -17,7 +17,7 @@ export type BrandOrderReportResult = { reported: number; refunded: number; skipp
  * - CRM 按 orderRef 幂等（同额重放成功、改额 409），退款按累计金额上报，
  *   所以进程重启后重复上报不会多发骰子；内存指纹只用来省掉无变化的请求；
  * - 任一失败都不记指纹，下一轮继续；服务不可用时整批停下，不把失败当成功。
- * - 时叙目前没有会员价，savedCents 固定 0；接入会员权益后再按实际优惠上报。
+ * - savedCents 取订单落库的年卡会员每杯立减总额；CRM 退款接口按累计退款比例冲回节省。
  */
 @Injectable()
 export class BrandOrderReporter implements OnModuleInit, OnModuleDestroy {
@@ -80,7 +80,14 @@ export class BrandOrderReporter implements OnModuleInit, OnModuleDestroy {
         paidAt: { gte: new Date(now.getTime() - WINDOW_MS) }
       },
       orderBy: { paidAt: 'asc' },
-      select: { id: true, customerId: true, totalCents: true, refundedCents: true, paidAt: true },
+      select: {
+        id: true,
+        customerId: true,
+        totalCents: true,
+        refundedCents: true,
+        memberDiscountCents: true,
+        paidAt: true
+      },
       take: 500
     });
 
@@ -89,7 +96,8 @@ export class BrandOrderReporter implements OnModuleInit, OnModuleDestroy {
       if (attempts >= BATCH) break;
       const customerId = order.customerId as string;
       const refunded = Math.min(Math.max(0, order.refundedCents || 0), order.totalCents);
-      const fingerprint = `${order.totalCents}:${refunded}`;
+      const savedCents = Math.max(0, order.memberDiscountCents || 0);
+      const fingerprint = `${order.totalCents}:${refunded}:${savedCents}`;
       if (this.sent.get(order.id) === fingerprint) {
         result.skipped += 1;
         continue;
@@ -104,7 +112,7 @@ export class BrandOrderReporter implements OnModuleInit, OnModuleDestroy {
         await this.brand.reportOrder(customerId, {
           orderRef: order.id,
           paidCents: order.totalCents,
-          savedCents: 0,
+          savedCents,
           occurredAt: (order.paidAt as Date).toISOString()
         });
         result.reported += 1;

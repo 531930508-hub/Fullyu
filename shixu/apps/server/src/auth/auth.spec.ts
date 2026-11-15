@@ -139,9 +139,12 @@ describe('认证与会话', () => {
     expect(attackerOrders.status).toBe(200);
     expect(attackerOrders.body.orders).toHaveLength(0);
 
-    const attackerProfile = await h.api('put', '/customer/profile', hijack.body.token, { name: '冒名' });
+    const attackerProfile = await h.api('put', '/customer/profile', hijack.body.token, { gender: 1 });
     expect(attackerProfile.status).toBe(200);
     expect(attackerProfile.body.customer.id).not.toBe(victim.id);
+    // 改资料只能改到自己：受害顾客的档案保持原样。
+    const victimRow = await h.prisma.customer.findUnique({ where: { id: victim.id } });
+    expect(victimRow?.gender).toBeNull();
   });
 
   it('同一手机号重复登录恢复同一账号', async () => {

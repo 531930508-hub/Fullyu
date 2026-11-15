@@ -104,6 +104,7 @@ export const api = {
       products: import('./types').Product[];
       retail: import('./types').RetailAvailability[];
       hardware: Record<string, string>;
+      byoCup: { enabled: boolean; perCupCents: number };
       // 员工目录视图（/store/catalog）：保留投茶量供代点/报损展示，仍不含成本字段。
     }>('/store/catalog', { query: { storeId } }),
   customerMemberVerify: (code: string) =>
@@ -278,10 +279,11 @@ export const api = {
   adminVoidExpense: (id: string) =>
     request<{ expense: import('./types').Expense }>(`/admin/expenses/${id}/void`, { method: 'POST' }),
 
-  adminApprovals: (query: { status?: string; kind?: string }) =>
+  adminApprovals: (query: { view?: 'todo' | 'done' | 'all'; kind?: string; status?: string }) =>
     request<{
+      view: 'todo' | 'done' | 'all';
       approvals: import('./types').Approval[];
-      counts: { pending: number; approved: number; rejected: number };
+      counts: { pending: number; done: number; total: number; approved: number; rejected: number };
     }>('/admin/approvals', { query }),
   adminDecide: (id: string, decision: 'approve' | 'reject', comment?: string) =>
     request<{ approval: import('./types').Approval }>(`/admin/approvals/${id}/decide`, {
@@ -356,21 +358,45 @@ export const api = {
   adminCoupons: () => request<{ coupons: import('./types').Coupon[] }>('/admin/coupons'),
   adminCreateCoupon: (body: {
     title: string;
-    scope: 'all' | 'category';
+    scope: 'all' | 'category' | 'product';
     categoryId?: string | null;
+    productId?: string | null;
     amountCents: number;
     minSpendCents: number;
     validFrom: string;
     validTo: string;
+    validDays?: number;
+    claimable?: boolean;
+    claimLimit?: number;
     note?: string;
   }) => request<{ coupon: import('./types').Coupon }>('/admin/coupons', { method: 'POST', body }),
-  adminUpdateCoupon: (id: string, body: { active?: boolean; note?: string }) =>
-    request<{ coupon: import('./types').Coupon }>(`/admin/coupons/${id}`, { method: 'PATCH', body }),
+  adminUpdateCoupon: (
+    id: string,
+    body: { active?: boolean; note?: string; claimable?: boolean; claimLimit?: number }
+  ) => request<{ coupon: import('./types').Coupon }>(`/admin/coupons/${id}`, { method: 'PATCH', body }),
   adminIssueCoupon: (id: string, phones: string[]) =>
     request<import('./types').CouponIssueResult>(`/admin/coupons/${id}/issue`, {
       method: 'POST',
       body: { phones }
     }),
+  adminCouponRules: () => request<{ rules: import('./types').CouponRule[] }>('/admin/coupons/rules'),
+  adminCreateCouponRule: (body: {
+    couponId: string;
+    kind: import('./types').CouponRuleKind;
+    tier?: 'all' | 'standard' | 'annual';
+    config: import('./types').CouponRule['config'];
+    note?: string;
+  }) => request<{ rule: { id: string } }>('/admin/coupons/rules', { method: 'POST', body }),
+  adminUpdateCouponRule: (
+    id: string,
+    body: { enabled?: boolean; tier?: 'all' | 'standard' | 'annual'; config?: import('./types').CouponRule['config']; note?: string }
+  ) => request<{ rule: import('./types').CouponRule }>(`/admin/coupons/rules/${id}`, { method: 'PATCH', body }),
+  adminDeleteCouponRule: (id: string) =>
+    request<{ ok: boolean }>(`/admin/coupons/rules/${id}`, { method: 'DELETE' }),
+  adminPreviewCouponRule: (id: string) =>
+    request<import('./types').CouponRulePreview>(`/admin/coupons/rules/${id}/preview`, { method: 'POST' }),
+  adminRunCouponRule: (id: string) =>
+    request<{ result: import('./types').CouponRuleRunResult }>(`/admin/coupons/rules/${id}/run`, { method: 'POST' }),
 
   adminMe: () => request<{ permissions: string[]; hasProfit: boolean }>('/admin/me'),
 
@@ -404,7 +430,94 @@ export const api = {
   adminResetSeriesImage: (key: string) =>
     request<{ series: import('./types').HomeSeriesSlot[] }>(`/admin/content/series/${key}`, {
       method: 'DELETE'
-    })
+    }),
+
+  /* ------------------------- 考勤：到店确认与补签 ------------------------- */
+
+  /** 带上定位读数时，服务端会把围栏预判（preview）一起返回，前端不自己算距离。 */
+  attendanceMine: (storeId?: string, fix?: { lat: number; lng: number; accuracyM: number | null } | null) =>
+    request<import('./types').AttendanceMine>('/attendance/mine', {
+      query: { storeId, lat: fix?.lat, lng: fix?.lng, accuracyM: fix?.accuracyM }
+    }),
+  /** 只上报原始定位读数；是否放行由服务端重算距离后决定。 */
+  attendanceClockIn: (body: { storeId: string; lat: number; lng: number; accuracyM: number | null }) =>
+    request<{
+      session: import('./types').WorkSession;
+      gate: { ok: boolean; reason: string; distanceM: number | null; limitM: number };
+      replay: boolean;
+    }>('/attendance/clock-in', { method: 'POST', body }),
+  attendanceClockOut: (body: { lat?: number | null; lng?: number | null; accuracyM?: number | null }) =>
+    request<{ session: import('./types').WorkSession; minutes: number; voided: boolean }>(
+      '/attendance/clock-out',
+      { method: 'POST', body }
+    ),
+  attendanceRequestClose: (body: { sessionId: string; clockOutAt: number; reason?: string }) =>
+    request<{ approvalId: string; session: import('./types').WorkSession }>('/attendance/requests/close', {
+      method: 'POST',
+      body
+    }),
+  attendanceRequestBackfill: (body: {
+    storeId: string;
+    clockInAt: number;
+    clockOutAt: number;
+    reason?: string;
+  }) =>
+    request<{ approvalId: string; minutes: number }>('/attendance/requests/backfill', {
+      method: 'POST',
+      body
+    }),
+  attendanceCancelRequest: (id: string) =>
+    request<{ ok: boolean }>(`/attendance/requests/${id}/cancel`, { method: 'POST' }),
+  /** storeId 省略 = 本人可见的全部门店 */
+  attendanceBoard: (storeId?: string, date?: string) =>
+    request<import('./types').AttendanceBoard>('/attendance/board', { query: { storeId, date } }),
+
+  /* ------------------------- 考勤：排班（班表） ------------------------- */
+
+  /** 人 × 天的矩阵；不传 from/to 默认本周（周一起算）。 */
+  attendanceShifts: (query: { storeId?: string; from?: string; to?: string }) =>
+    request<import('./types').ShiftMatrix>('/attendance/shifts', { query }),
+  /** 同一人同一天同店只有一条班：重复提交即覆盖。 */
+  attendanceSaveShift: (body: {
+    storeId: string;
+    userId: string;
+    businessDate: string;
+    startMin: number;
+    endMin: number;
+    note?: string;
+  }) => request<{ shift: { id: string; startMin: number; endMin: number; note: string }; plannedMinutes: number }>(
+    '/attendance/shifts',
+    { method: 'PUT', body }
+  ),
+  /** 按 (门店, 员工, 日期) 清空，前端不必先拿 id。 */
+  attendanceClearShift: (query: { storeId: string; userId: string; businessDate: string }) =>
+    request<{ ok: boolean }>('/attendance/shifts', { method: 'DELETE', query }),
+  /** 月度核对：一人一行 + 人×天明细，不含金额（金额在劳务结算）。 */
+  attendanceReport: (query: { storeId?: string; month?: string }) =>
+    request<import('./types').AttendanceReport>('/attendance/report', { query }),
+
+  /* ------------------------- 考勤：劳务结算 ------------------------- */
+
+  attendanceLaborRates: () => request<import('./types').LaborRateList>('/attendance/labor-rates'),
+  /** 单价只有「保存」一种语义：挂在门店上，不需要新增/删除。 */
+  attendanceSaveLaborRate: (storeId: string, body: { laborRatePerMinCents: number; note?: string }) =>
+    request<import('./types').LaborRateRow>(`/attendance/labor-rates/${storeId}`, { method: 'PUT', body }),
+  attendanceSettlements: (query: { month?: string; storeId?: string }) =>
+    request<import('./types').SettlementList>('/attendance/settlements', { query }),
+  /** 出单/重算：草稿刷新，已入账跳过，返回本次新建/重算/跳过张数。 */
+  attendanceGenerateSettlements: (body: { month?: string; storeId?: string }) =>
+    request<import('./types').SettlementList & { created: number; updated: number; skipped: number }>(
+      '/attendance/settlements/generate',
+      { method: 'POST', body }
+    ),
+  attendanceConfirmSettlement: (
+    id: string,
+    body: { adjustmentCents?: number; adjustmentNote?: string; note?: string }
+  ) =>
+    request<{ settlement: import('./types').WorkSettlement | null; expenseId: string | null }>(
+      `/attendance/settlements/${id}/confirm`,
+      { method: 'POST', body }
+    )
 };
 
 export type RangeQuery = { range?: string; from?: string; to?: string };

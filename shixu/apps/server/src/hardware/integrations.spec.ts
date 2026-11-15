@@ -12,7 +12,7 @@ const baseInput = {
 };
 
 describe('integrations 装配', () => {
-  it('默认 mock 模式：八项能力都由内置实现接管', () => {
+  it('默认 mock 模式：七项能力都由内置实现接管', () => {
     const config = loadIntegrationsConfig({ ...baseInput, env: {} });
     expect(config.mode).toBe('mock');
 
@@ -22,7 +22,6 @@ describe('integrations 装配', () => {
     expect(described.printer.mode).toBe('mock');
     expect(described.teaMachine.mode).toBe('mock');
     expect(described.platform.mode).toBe('mock');
-    expect(described.member.mode).toBe('mock');
     expect(described.wechat.mode).toBe('mock');
     expect(described.avatar).toEqual({ name: 'local-disk', mode: 'local' });
     expect(described.profileSync).toEqual({ name: 'pending-user-center', mode: 'noop' });

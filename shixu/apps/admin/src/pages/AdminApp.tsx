@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError, type RangeQuery } from '../lib/api';
-import { useApi, useStoredJsonState, useStoredState } from '../lib/hooks';
+import { useApi, useNow, useStoredJsonState, useStoredState } from '../lib/hooks';
 import { useStaffAuth } from '../lib/auth';
 import { StaffShell } from '../components/StaffShell';
 import { visibleNav } from '../lib/nav';
@@ -38,6 +38,20 @@ import {
   percent,
   todayText
 } from '../lib/format';
+import {
+  SESSION_LABEL,
+  SHIFT_STATE_LABEL,
+  addDaysText,
+  clockToMinutes,
+  elapsedText,
+  minutesText as durationText,
+  sessionTone,
+  shiftClock,
+  shiftStateTone,
+  shiftText,
+  weekdayText,
+  weekStartText
+} from '../lib/attendance';
 import { HOME_IMAGE_HEIGHT, HOME_IMAGE_WIDTH, MAX_UPLOAD_BYTES, prepareHomeImage, prepareProductImage } from '../lib/image';
 import type {
   Approval,
@@ -46,10 +60,14 @@ import type {
   Category,
   Coupon,
   CouponIssueResult,
+  CouponRule,
+  CouponRuleKind,
+  CouponRulePreview,
   Expense,
   FinanceEntry,
   HomeContent,
   HomeSeriesSlot,
+  LaborRateRow,
   LogEntry,
   Loss,
   LossPolicy,
@@ -62,8 +80,10 @@ import type {
   ProfitReport,
   Role,
   Series,
+  ShiftCell,
   StaffRow,
-  Store
+  Store,
+  WorkSettlement
 } from '../lib/types';
 
 /* ------------------------------- shared ------------------------------- */
@@ -74,6 +94,10 @@ type Section =
   | 'profit'
   | 'expenses'
   | 'approvals'
+  | 'schedule'
+  | 'attendance'
+  | 'report'
+  | 'settlements'
   | 'losses'
   | 'coupons'
   | 'content'
@@ -90,6 +114,10 @@ const SECTION_TITLE: Record<Section, string> = {
   profit: '门店利润',
   expenses: '运营费用',
   approvals: '审批中心',
+  schedule: '排班表',
+  attendance: '在店看板',
+  report: '考勤月报',
+  settlements: '劳务结算',
   losses: '报损与损耗',
   coupons: '优惠券',
   content: '首页内容',
@@ -108,6 +136,10 @@ const SECTION_PERM: Record<Section, string> = {
   profit: 'dashboard:profit',
   expenses: 'finance:view',
   approvals: 'approval:view',
+  schedule: 'attendance:view',
+  attendance: 'attendance:view',
+  report: 'attendance:view',
+  settlements: 'attendance:settle',
   losses: 'loss:view',
   coupons: 'coupon:view',
   content: 'product:view',
@@ -125,6 +157,10 @@ const SECTION_ORDER: Section[] = [
   'profit',
   'expenses',
   'approvals',
+  'schedule',
+  'attendance',
+  'report',
+  'settlements',
   'losses',
   'coupons',
   'content',
@@ -135,6 +171,30 @@ const SECTION_ORDER: Section[] = [
   'roles',
   'logs'
 ];
+
+/* 三类审批的展示与判定权限：金额为 0 的补签按「时长」呈现，避免出现 ¥0.00 的卡面。 */
+const APPROVAL_PERM: Record<Approval['kind'], string> = {
+  REFUND: 'order:refund:approve',
+  LOSS: 'loss:approve',
+  ATTENDANCE: 'attendance:approve'
+};
+const APPROVAL_LABEL: Record<Approval['kind'], string> = {
+  REFUND: '退款审批',
+  LOSS: '报损审批',
+  ATTENDANCE: '补签审批'
+};
+const APPROVAL_TONE: Record<Approval['kind'], 'accent' | 'warn' | 'dark'> = {
+  REFUND: 'accent',
+  LOSS: 'warn',
+  ATTENDANCE: 'dark'
+};
+
+function attendanceMinutes(payload: Record<string, unknown>): number {
+  const from = Number(payload.clockInAt);
+  const to = Number(payload.clockOutAt);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return 0;
+  return Math.round((to - from) / 60000);
+}
 
 type RangeKind = 'today' | '7' | '30' | 'custom';
 type RangeState = { kind: RangeKind; from: string; to: string };
@@ -282,6 +342,10 @@ export function AdminApp() {
       {allowed && section === 'profit' ? <ProfitPage /> : null}
       {allowed && section === 'expenses' ? <ExpensesPage /> : null}
       {allowed && section === 'approvals' ? <ApprovalsPage onChanged={refreshApprovalCount} /> : null}
+      {allowed && section === 'schedule' ? <SchedulePage /> : null}
+      {allowed && section === 'attendance' ? <AttendancePage /> : null}
+      {allowed && section === 'report' ? <AttendanceReportPage /> : null}
+      {allowed && section === 'settlements' ? <SettlementsPage /> : null}
       {allowed && section === 'losses' ? <LossesPage /> : null}
       {allowed && section === 'coupons' ? <CouponsPage /> : null}
       {allowed && section === 'content' ? <ContentPage /> : null}
@@ -1364,13 +1428,17 @@ function ProfitPage() {
 function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
   const { can } = useStaffAuth();
   const notify = useToast();
-  const [status, setStatus] = useStoredState<'pending' | 'all' | 'approved' | 'rejected'>(
-    'teahour.admin.approvals.status',
-    'pending',
-    ['pending', 'all', 'approved', 'rejected']
+  const [view, setView] = useStoredState<'todo' | 'done' | 'all'>(
+    'teahour.admin.approvals.view',
+    'todo',
+    ['todo', 'done', 'all']
   );
-  const [kind, setKind] = useStoredState<'all' | 'REFUND' | 'LOSS'>('teahour.admin.approvals.kind', 'all', ['all', 'REFUND', 'LOSS']);
-  const query = useApi(() => api.adminApprovals({ status, kind }), [status, kind]);
+  const [kind, setKind] = useStoredState<'all' | 'REFUND' | 'LOSS' | 'ATTENDANCE'>(
+    'teahour.admin.approvals.kind',
+    'all',
+    ['all', 'REFUND', 'LOSS', 'ATTENDANCE']
+  );
+  const query = useApi(() => api.adminApprovals({ view, kind }), [view, kind]);
   const [decision, setDecision] = useState<{ approval: Approval; action: 'approve' | 'reject' } | null>(null);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1410,8 +1478,7 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
       <PageHead
         eyebrow="品牌总部 · 风控"
         title="审批中心"
-        description="退款与超限报损在同一处处理。审批通过后按业务规则执行退款或扣减库存成本。"
-        meta={<span>待处理 {data.counts.pending} · 已通过 {data.counts.approved} · 已驳回 {data.counts.rejected}</span>}
+        description="退款、超限报损与补签都在这里处理：先看等待你审批的，再回看自己处理过的和全部留档。"
         actions={
           <Segmented
             value={kind}
@@ -1419,7 +1486,9 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
             options={[
               { value: 'all', label: '全部' },
               { value: 'REFUND', label: '退款' },
-              { value: 'LOSS', label: '报损' }
+              { value: 'LOSS', label: '报损' },
+              // 补签只给有 attendance:approve 的岗位看，避免出现点了就被拒的筛选
+              ...(can('attendance:approve') ? [{ value: 'ATTENDANCE' as const, label: '补签' }] : [])
             ]}
             onChange={setKind}
           />
@@ -1427,28 +1496,25 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
       />
 
       <Tabs
-        value={status}
-        onChange={setStatus}
+        value={view}
+        onChange={setView}
         options={[
-          { value: 'pending', label: '待处理', count: data.counts.pending },
-          { value: 'approved', label: '已通过', count: data.counts.approved },
-          { value: 'rejected', label: '已驳回', count: data.counts.rejected },
-          { value: 'all', label: '全部' }
+          { value: 'todo', label: '待我审批', count: data.counts.pending },
+          { value: 'done', label: '我已处理', count: data.counts.done },
+          { value: 'all', label: '全部记录', count: data.counts.total }
         ]}
       />
 
       <div style={{ marginTop: 14 }}>
         {data.approvals.map((approval) => {
-          const permission = approval.kind === 'REFUND' ? 'order:refund:approve' : 'loss:approve';
-          const canDecide = approval.status === 'pending' && can(permission);
+          const permission = APPROVAL_PERM[approval.kind];
+          const canDecide = view === 'todo' && approval.status === 'pending' && can(permission);
           return (
             <article className="approval-card" key={approval.id}>
               <div className="approval-head">
                 <div>
                   <h3>
-                    <Badge tone={approval.kind === 'REFUND' ? 'accent' : 'warn'}>
-                      {approval.kind === 'REFUND' ? '退款审批' : '报损审批'}
-                    </Badge>{' '}
+                    <Badge tone={APPROVAL_TONE[approval.kind]}>{APPROVAL_LABEL[approval.kind]}</Badge>{' '}
                     {approval.summary}
                   </h3>
                   <div className="approval-meta">
@@ -1467,8 +1533,10 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
                   {approval.comment ? <p className="faint tiny" style={{ marginTop: 4 }}>审批意见：{approval.comment}</p> : null}
                 </div>
                 <div className="approval-actions">
-                  <span className="approval-amount">{money(approval.amountCents)}</span>
-                  {approval.status === 'pending' ? (
+                  <span className="approval-amount">
+                    {approval.kind === 'ATTENDANCE' ? durationText(attendanceMinutes(approval.payload)) : money(approval.amountCents)}
+                  </span>
+                  {view === 'todo' && approval.status === 'pending' ? (
                     canDecide ? (
                       <>
                         <button type="button" className="btn btn-sm btn-success-soft" onClick={() => openDecision(approval, 'approve')}>
@@ -1490,7 +1558,23 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
           );
         })}
         {!data.approvals.length ? (
-          <EmptyState icon="check" title="没有待处理的申请" description="新的退款或超限报损会自动出现在这里。" />
+          <EmptyState
+            icon="check"
+            title={
+              view === 'todo'
+                ? '没有待你审批的申请'
+                : view === 'done'
+                  ? '还没有处理记录'
+                  : '还没有审批记录'
+            }
+            description={
+              view === 'todo'
+                ? '新的退款或超限报损会自动出现在这里，审批后进入「我已处理」。'
+                : view === 'done'
+                  ? '通过或驳回过的退款、报损会保留在这里，金额与执行结果可回查。'
+                  : '门店发起的退款、超限报损都会留档在这里，可按类型筛选回查。'
+            }
+          />
         ) : null}
       </div>
 
@@ -1633,7 +1717,1571 @@ function RefundRulePanel() {
   );
 }
 
+/* ------------------------------- 排班表 ------------------------------- */
+
+/** 30 分钟一档的选择项；已有班次不在整点半上时补进去，避免打开就丢值。 */
+function timeOptions(from: number, to: number, extra: number[] = []) {
+  const values = new Set<number>();
+  for (let minute = from; minute <= to; minute += 30) values.add(minute);
+  for (const minute of extra) if (minute >= from && minute <= to) values.add(minute);
+  return [...values].sort((a, b) => a - b);
+}
+
+/**
+ * 排班表：人 × 天的一格一段，点格子改。
+ *
+ * 故意不做「模板/批量复制」：门店一周只有几十格，逐格改反而不会错；
+ * 班表也不参与打卡校验，它只在看板上提示计划 vs 实际，工资仍按实际工时结算。
+ */
+function SchedulePage() {
+  const { can } = useStaffAuth();
+  const notify = useToast();
+  const confirm = useConfirm();
+  const canManage = can('attendance:manage');
+
+  const [storeId, setStoreId] = useState('');
+  const [anchor, setAnchor] = useState(() => weekStartText(todayText()));
+  const [editing, setEditing] = useState<{ userId: string; name: string; cell: ShiftCell } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const from = anchor;
+  const to = addDaysText(anchor, 6);
+  const query = useApi(() => api.attendanceShifts({ storeId: storeId || undefined, from, to }), [storeId, from, to]);
+
+  if (query.loading && !query.data) return <Spinner label="正在读取班表" />;
+  if (query.error && !query.data) return <InlineError message={query.error} />;
+  const data = query.data;
+  if (!data) return null;
+
+  const currentWeek = weekStartText(data.today);
+  const earliest = addDaysText(data.today, -data.limits.pastEditDays);
+  const latest = addDaysText(data.today, data.limits.futureEditDays);
+  const canEditDay = (day: string) => canManage && day >= earliest && day <= latest;
+  const weekTag =
+    from === currentWeek ? '本周' : from === addDaysText(currentWeek, 7) ? '下周' : from === addDaysText(currentWeek, -7) ? '上周' : '';
+  // 短时只在「往天」成立，直接数格子，不额外让服务端算一个只用于文案的数字。
+  const shortDays = data.rows.reduce(
+    (sum, row) => sum + row.cells.filter((cell) => cell.state === 'short').length,
+    0
+  );
+
+  const openEditor = (userId: string, name: string, cell: ShiftCell) => {
+    setSaveError(null);
+    setEditing({ userId, name, cell });
+  };
+
+  const saveShift = async (start: string, end: string, note: string) => {
+    if (!editing) return;
+    const startMin = clockToMinutes(start);
+    const endMin = clockToMinutes(end);
+    if (startMin == null || endMin == null) {
+      setSaveError('请选择开始和结束时间');
+      return;
+    }
+    if (endMin <= startMin) {
+      setSaveError('结束时间要晚于开始时间（跨零点请拆成两天）');
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await api.attendanceSaveShift({
+        storeId: data.storeId,
+        userId: editing.userId,
+        businessDate: editing.cell.businessDate,
+        startMin,
+        endMin,
+        note
+      });
+      setEditing(null);
+      notify(`${editing.name} ${editing.cell.businessDate} 的班次已保存`);
+      await query.reload({ silent: true });
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : '保存失败，请稍后重试');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearShift = async () => {
+    if (!editing) return;
+    const ok = await confirm({
+      title: '清空这一天的班',
+      message: `${editing.name} · ${editing.cell.businessDate} 的计划会删除；已经记录的实际工时不受影响。`,
+      confirmText: '清空',
+      tone: 'danger'
+    });
+    if (!ok) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await api.attendanceClearShift({
+        storeId: data.storeId,
+        userId: editing.userId,
+        businessDate: editing.cell.businessDate
+      });
+      setEditing(null);
+      notify('已清空这一天的班');
+      await query.reload({ silent: true });
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : '清空失败，请稍后重试');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cellView = (name: string, userId: string, cell: ShiftCell) => {
+    const editable = canEditDay(cell.businessDate);
+    const reason = !canManage
+      ? '当前账号只能查看班表'
+      : editable
+        ? ''
+        : `只能修改 ${earliest} 之后、${latest} 之前的班`;
+    const stateText =
+      cell.shift && (cell.state === 'done' || cell.state === 'short' || cell.state === 'absent')
+        ? SHIFT_STATE_LABEL[cell.state]
+        : '';
+    const body = (
+      <>
+        {cell.shift ? (
+          <span className="mono">{shiftText(cell.shift.startMin, cell.shift.endMin)}</span>
+        ) : (
+          <span className="shift-empty">{canManage ? '＋' : '—'}</span>
+        )}
+        {stateText ? <small className={`shift-state tone-${shiftStateTone(cell.state)}`}>{stateText}</small> : null}
+      </>
+    );
+    if (!editable) {
+      return (
+        <div className="shift-cell is-static" title={reason}>
+          {body}
+        </div>
+      );
+    }
+    return (
+      <button
+        type="button"
+        className="shift-cell"
+        title={cell.shift ? '点击修改这一天的班' : '点击排班'}
+        aria-label={
+          cell.shift
+            ? `${name} ${cell.businessDate} ${shiftText(cell.shift.startMin, cell.shift.endMin)}，点击修改`
+            : `${name} ${cell.businessDate} 未排班，点击排班`
+        }
+        onClick={() => openEditor(userId, name, cell)}
+      >
+        {body}
+      </button>
+    );
+  };
+
+  return (
+    <>
+      <PageHead
+        eyebrow="品牌总部 · 门店"
+        title="排班表"
+        description="按门店排「几点该来」。周一起算，一次改一格；班表只作计划 vs 实际的对照，不拦打卡、不参与工资计算。"
+        actions={
+          <div className="row-gap">
+            <select
+              value={storeId || data.storeId}
+              onChange={(event) => setStoreId(event.target.value)}
+              aria-label="门店"
+            >
+              {data.stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAnchor(addDaysText(from, -7))}>
+              上一周
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAnchor(currentWeek)}>
+              本周
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAnchor(addDaysText(from, 7))}>
+              下一周
+            </button>
+          </div>
+        }
+        meta={
+          <>
+            <span>
+              {data.storeName} · {from} — {to}
+            </span>
+            {weekTag ? <Badge tone="accent">{weekTag}</Badge> : null}
+            <span>
+              {canManage ? `可修改 ${earliest} 起、${latest} 前的班` : '只读：修改班表需要「维护计划班次」权限'}
+            </span>
+          </>
+        }
+      />
+
+      <div className="stat-grid">
+        <Stat
+          label="计划工时"
+          value={durationText(data.summary.plannedMinutes)}
+          hint={`${data.summary.people} 人排了班`}
+          icon="calendar"
+        />
+        <Stat
+          label="已记实际工时"
+          value={durationText(data.summary.actualMinutes)}
+          hint="只算已闭合的计时时段"
+          icon="clock"
+        />
+        <Stat
+          label="缺勤天数"
+          value={data.summary.absentDays}
+          hint={
+            data.summary.absentDays
+              ? `往天排了班却没计时，先确认是否请假${shortDays ? ` · ${shortDays} 天短时` : ''}`
+              : shortDays
+                ? `往天都来了 · ${shortDays} 天短时`
+                : '往天没有排了班却没来的情况'
+          }
+          tone={data.summary.absentDays ? 'soft' : 'plain'}
+          icon="alert"
+        />
+        <Stat
+          label="计划人天"
+          value={data.summary.plannedMinutes ? `${Math.round((data.summary.plannedMinutes / 480) * 10) / 10}` : '—'}
+          hint="按 8 小时一天折算，只用于估人力"
+          icon="users"
+        />
+      </div>
+
+      <Panel
+        title="一周班表"
+        description={canManage ? '点任意格子填时间，再点一次就是改。同一个人同一天只排一段。' : '当前账号可查看班表。'}
+        flush
+      >
+        {query.error ? <InlineError message={`${query.error}（展示的是最近一次成功读取的班表）`} /> : null}
+        {!data.rows.length ? (
+          <EmptyState
+            icon="users"
+            title="这家店还没有可排班的员工"
+            description="先到「账号管理」把员工挂到这家店，再回来排班。"
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl shift-grid">
+              <thead>
+                <tr>
+                  <th className="shift-name">员工</th>
+                  {data.days.map((day) => (
+                    <th key={day} className={`shift-day ${day === data.today ? 'is-today' : ''}`}>
+                      <span>{weekdayText(day)}</span>
+                      <small>
+                        {day.slice(5)}
+                        {day === data.today ? ' · 今天' : ''}
+                      </small>
+                    </th>
+                  ))}
+                  <th className="num">计划合计</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((row) => (
+                  <tr key={row.userId}>
+                    <td className="shift-name">
+                      <strong>{row.name}</strong>
+                      <small className="sub-cell">
+                        {row.plannedMinutes ? `计划 ${durationText(row.plannedMinutes)}` : '未排班'}
+                      </small>
+                    </td>
+                    {row.cells.map((cell) => (
+                      <td key={cell.businessDate} className={cell.businessDate === data.today ? 'is-today' : ''}>
+                        {cellView(row.name, row.userId, cell)}
+                      </td>
+                    ))}
+                    <td className="num">{row.plannedMinutes ? durationText(row.plannedMinutes) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <div className="notice">
+        <Icon name="info" size={15} />
+        <span>
+          班表是「计划」，只用来对照：迟到、早走、临时来帮忙都不会被拦，缺勤/短时也只在看板上提示。
+          工资按实际计时结算，月底出工时结算单时不会用到这一页。
+        </span>
+      </div>
+
+      <ShiftEditor
+        open={Boolean(editing)}
+        storeName={data.storeName}
+        editing={editing}
+        saving={saving}
+        error={saveError}
+        onClose={() => setEditing(null)}
+        onSave={saveShift}
+        onClear={clearShift}
+      />
+    </>
+  );
+}
+
+/** 单格编辑器：只改这一人这一天的开始/结束与备注。 */
+function ShiftEditor({
+  open,
+  storeName,
+  editing,
+  saving,
+  error,
+  onClose,
+  onSave,
+  onClear
+}: {
+  open: boolean;
+  storeName: string;
+  editing: { userId: string; name: string; cell: ShiftCell } | null;
+  saving: boolean;
+  error: string | null;
+  onClose: () => void;
+  onSave: (start: string, end: string, note: string) => void;
+  onClear: () => void;
+}) {
+  const [start, setStart] = useState('09:00');
+  const [end, setEnd] = useState('18:00');
+  const [note, setNote] = useState('');
+
+  const shift = editing?.cell.shift || null;
+  const startExtra = shift ? shift.startMin : null;
+  const endExtra = shift ? shift.endMin : null;
+
+  useEffect(() => {
+    if (!open || !editing) return;
+    setStart(editing.cell.shift ? shiftClock(editing.cell.shift.startMin) : '09:00');
+    setEnd(editing.cell.shift ? shiftClock(editing.cell.shift.endMin) : '18:00');
+    setNote(editing.cell.shift?.note || '');
+  }, [open, editing]);
+
+  if (!editing) return null;
+  const cell = editing.cell;
+  const startMin = clockToMinutes(start);
+  const endMin = clockToMinutes(end);
+  const planMinutes = startMin != null && endMin != null && endMin > startMin ? endMin - startMin : 0;
+  const presets: Array<{ label: string; start: string; end: string }> = [
+    { label: '早班 09:00–18:00', start: '09:00', end: '18:00' },
+    { label: '晚班 12:00–21:00', start: '12:00', end: '21:00' },
+    { label: '半天 10:00–14:00', start: '10:00', end: '14:00' }
+  ];
+
+  return (
+    <Modal
+      open={open}
+      title={`排班 · ${editing.name}`}
+      description={`${cell.businessDate} ${weekdayText(cell.businessDate)} · ${storeName}｜同一个人同一天只排一段`}
+      onClose={onClose}
+      footer={
+        <>
+          {cell.shift ? (
+            <button type="button" className="btn btn-ghost" onClick={onClear} disabled={saving}>
+              清空这一天
+            </button>
+          ) : null}
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
+            取消
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => onSave(start, end, note)}
+            disabled={saving || !planMinutes}
+          >
+            {saving ? '保存中…' : '保存班次'}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid">
+        <Field label="开始时间">
+          <select value={start} onChange={(event) => setStart(event.target.value)} aria-label="开始时间">
+            {timeOptions(0, 1439, startExtra == null ? [] : [startExtra]).map((minute) => (
+              <option key={minute} value={shiftClock(minute)}>
+                {shiftClock(minute)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="结束时间" hint="跨零点请拆成两天，各排一段。">
+          <select value={end} onChange={(event) => setEnd(event.target.value)} aria-label="结束时间">
+            {timeOptions(30, 1440, endExtra == null ? [] : [endExtra]).map((minute) => (
+              <option key={minute} value={shiftClock(minute)}>
+                {shiftClock(minute)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="备注（可选）" className="span-2" hint="如「早班」「临时顶班」，只给排班的人看。">
+          <input
+            value={note}
+            maxLength={80}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="例如：早班 / 顶班"
+          />
+        </Field>
+      </div>
+
+      <div className="row-gap shift-presets">
+        {presets.map((preset) => (
+          <button
+            key={preset.label}
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              setStart(preset.start);
+              setEnd(preset.end);
+            }}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="shift-plan-preview">
+        这段计划 {planMinutes ? durationText(planMinutes) : '—'}
+        {cell.actualMinutes ? ` · 当天已记 ${durationText(cell.actualMinutes)}` : ''}
+      </div>
+
+      {error ? <InlineError message={error} /> : null}
+    </Modal>
+  );
+}
+
 /* ------------------------------- losses ------------------------------- */
+
+/* ------------------------------ 在店看板 ------------------------------ */
+
+/**
+ * 在店看板：今天谁在店里、各人记了多少、哪些时段没闭合。
+ *
+ * 落在「运营管理」而不是「经营分析」，因为它回答的是「现在要不要打电话叫人」，
+ * 不是月底算账——所以默认是今天，且只在店与未闭合两类会变色。
+ */
+function AttendancePage() {
+  const [storeId, setStoreId] = useState('');
+  const [date, setDate] = useState(todayText());
+  const query = useApi(() => api.attendanceBoard(storeId || undefined, date), [storeId, date]);
+  const now = useNow(1000);
+
+  if (query.loading && !query.data) return <Spinner label="正在读取在店情况" />;
+  if (query.error && !query.data) return <InlineError message={query.error} />;
+  const data = query.data;
+  if (!data) return null;
+  // 回看往天时「正在店里」这个词不成立：那天的段要么已闭合，要么还挂在那里等人处理
+  const isToday = data.date === todayText();
+
+  return (
+    <>
+      <PageHead
+        eyebrow="品牌总部 · 门店"
+        title="在店看板"
+        description="按天看在店情况：谁正在店里计时、谁已经下班、哪些时段忘了点离店。补签的审批在「审批中心 · 补签」。"
+        actions={
+          <div className="row-gap">
+            <select value={storeId} onChange={(event) => setStoreId(event.target.value)} aria-label="门店">
+              <option value="">全部门店</option>
+              {data.stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={date}
+              max={todayText()}
+              onChange={(event) => setDate(event.target.value)}
+              aria-label="日期"
+            />
+          </div>
+        }
+      />
+
+      <div className="stat-grid">
+        <Stat
+          label={isToday ? '在店人数' : '仍在校时'}
+          value={data.onDuty.length}
+          hint={`统计范围：${data.storeName}`}
+          icon="users"
+        />
+        <Stat
+          label="已计入工时"
+          value={durationText(data.summary.totalMinutes)}
+          hint={
+            data.summary.plannedMinutes
+              ? `计划 ${durationText(data.summary.plannedMinutes)} · ${data.summary.peopleCount} 人`
+              : `${data.summary.peopleCount} 人有记录`
+          }
+          icon="clock"
+        />
+        <Stat
+          label="进行中"
+          value={durationText(data.summary.liveMinutes)}
+          hint="离店确认后才会转为已计入"
+          tone={data.summary.liveMinutes ? 'soft' : 'plain'}
+        />
+        <Stat
+          label="未闭合时段"
+          value={data.summary.unresolvedCount}
+          hint={data.summary.pendingApprovals ? `${data.summary.pendingApprovals} 段在等审批` : '没有待审批的补签'}
+          tone={data.summary.unresolvedCount ? 'soft' : 'plain'}
+          icon="alert"
+        />
+      </div>
+
+      <Panel
+        title={isToday ? '正在店里' : '当天仍在计时'}
+        description="从到店确认开始实时计时。超过 16 小时未离店会自动转为待补签。"
+        flush
+      >
+        {!data.onDuty.length ? (
+          <EmptyState
+            icon="clock"
+            title={isToday ? '此刻没有人在店里计时' : '这一天没有仍在计时的时段'}
+            description={`${data.date} 的到店记录会出现在下面；如果人明明在店里却没有记录，多半是忘了点到店确认。`}
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>员工</th>
+                  <th>门店</th>
+                  <th>到店</th>
+                  <th className="num">已计时</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.onDuty.map((row) => (
+                  <tr key={row.userId}>
+                    <td>{row.name}</td>
+                    <td className="tiny muted">{row.storeName}</td>
+                    <td className="tiny">{dateTimeText(row.clockInAt)}</td>
+                    <td className="num mono">{elapsedText(row.clockInAt, now)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <Panel
+        title="未闭合的时段"
+        description="待补签的时段不计工时；员工提交补签后进入审批中心，通过的才会补记。"
+        flush
+      >
+        {!data.unresolved.length ? (
+          <EmptyState icon="check" title="全部时段都闭合了" description="今天没有忘记离店的情况。" />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>员工</th>
+                  <th>门店</th>
+                  <th>到店</th>
+                  <th>状态</th>
+                  <th className="num">已过时长</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.unresolved.map((row) => (
+                  <tr key={row.sessionId}>
+                    <td>{row.name}</td>
+                    <td className="tiny muted">{row.storeName}</td>
+                    <td className="tiny">{dateTimeText(row.clockInAt)}</td>
+                    <td>
+                      <Badge tone={sessionTone(row.status)}>{SESSION_LABEL[row.status] || row.status}</Badge>
+                    </td>
+                    <td className="num">
+                      {row.status === 'open' ? (
+                        <span className="mono">{elapsedText(row.clockInAt, now)}</span>
+                      ) : (
+                        <span className="muted">{durationText(row.liveMinutes || 0)}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      {data.notClocked.length ? (
+        <Panel
+          title="排了班没打卡"
+          description="这一天在班表里有计划，却一条计时记录都没有。先确认是不是请假或临时调店，别直接当缺勤。"
+          flush
+        >
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>员工</th>
+                  <th>门店</th>
+                  <th className="num">计划工时</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.notClocked.map((row) => (
+                  <tr key={row.userId}>
+                    <td>{row.name}</td>
+                    <td className="tiny muted">{row.storeNames.join('、') || '—'}</td>
+                    <td className="num">{durationText(row.plannedMinutes)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      ) : null}
+
+      <Panel
+        title={`按人汇总 · ${data.date}`}
+        description="同一人当天多段会累加；「计划」来自班表，只作对照，工资按实际工时结算。"
+        flush
+      >
+        {!data.rows.length ? (
+          <EmptyState icon="users" title="这一天没有在店记录" description="换一天或换门店看看。" />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>员工</th>
+                  <th>门店</th>
+                  <th className="num">段数</th>
+                  <th className="num">计划</th>
+                  <th className="num">已计入</th>
+                  <th className="num">进行中</th>
+                  <th className="num">未闭合</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((row) => (
+                  <tr key={row.userId}>
+                    <td>{row.name}</td>
+                    <td className="tiny muted">{row.storeNames.join('、') || '—'}</td>
+                    <td className="num">{row.sessions.length}</td>
+                    <td className="num muted">{row.plannedMinutes ? durationText(row.plannedMinutes) : '—'}</td>
+                    <td className="num">{durationText(row.minutes)}</td>
+                    <td className="num muted">{row.liveMinutes ? durationText(row.liveMinutes) : '—'}</td>
+                    <td className="num">
+                      {row.unresolved ? (
+                        <Badge tone="warn">{row.unresolved}</Badge>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <div className="notice">
+        <Icon name="info" size={15} />
+        <span>
+          工时按「已结束」的时段累加，跨零点会拆到两天。看板只反映计时情况，
+          工资结算以月底的工时结算单为准。
+        </span>
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------ 考勤月报 ------------------------------ */
+
+const REPORT_TARGET: Record<string, { label: string; tone: 'ok' | 'warn' | 'danger' | 'neutral' }> = {
+  planned: { label: '未开始', tone: 'neutral' },
+  done: { label: '已对上', tone: 'ok' },
+  short: { label: '短时', tone: 'warn' },
+  absent: { label: '缺勤', tone: 'danger' },
+  none: { label: '计划外', tone: 'neutral' }
+};
+
+/** 差异带符号：+ 是多记的，− 是少记的；0 不写「0m」而写破折号，扫表更快。 */
+function signedMinutesText(minutes: number) {
+  if (!minutes) return '—';
+  return `${minutes > 0 ? '+' : '−'}${durationText(Math.abs(minutes))}`;
+}
+
+/**
+ * 考勤月报：一个月、一家店、一人一行，月底核对用。
+ *
+ * 数据和班表同一套口径（服务端算好），页面只负责「按月看汇总 + 按人下钻到天」。
+ * 这里不出现金额：工资在「劳务结算」按门店单价出单，混在一起容易把计划工时当成应付工时。
+ */
+function AttendanceReportPage() {
+  const [storeId, setStoreId] = useState('');
+  const [month, setMonth] = useState(() => currentMonthText());
+  const [personId, setPersonId] = useState('');
+  const query = useApi(() => api.attendanceReport({ storeId: storeId || undefined, month }), [storeId, month]);
+
+  if (query.loading && !query.data) return <Spinner label="正在汇总月度考勤" />;
+  if (query.error && !query.data) return <InlineError message={query.error} />;
+  const data = query.data;
+  if (!data) return null;
+
+  // 全员 × 整月会有很多「没班也没工时」的空行，汇总只留有内容的员工
+  const active = data.rows.filter(
+    (row) => row.plannedMinutes > 0 || row.actualMinutes > 0 || row.unresolvedCount > 0
+  );
+  const picked = active.find((row) => row.userId === personId) ?? null;
+  const detail = (picked ? [picked] : active)
+    .flatMap((row) =>
+      row.days
+        .filter((day) => day.shift || day.actualMinutes > 0 || day.unresolvedCount > 0)
+        .map((day) => ({ row, day }))
+    )
+    .sort((a, b) => (a.day.businessDate === b.day.businessDate ? 0 : a.day.businessDate < b.day.businessDate ? 1 : -1));
+
+  const diffMinutes = data.summary.actualMinutes - data.summary.plannedMinutes;
+  const fileStem = `考勤月报-${data.storeName}-${data.month}`;
+
+  const exportSummary = () =>
+    exportCsv(
+      `${fileStem}-汇总.csv`,
+      ['门店', '月份', '员工', '出勤天数', '计划工时(分钟)', '实际工时(分钟)', '差异(分钟)', '缺勤天数', '短时天数', '未闭合段数'],
+      active.map((row) => [
+        data.storeName,
+        data.month,
+        row.name,
+        row.presentDays,
+        row.plannedMinutes,
+        row.actualMinutes,
+        row.actualMinutes - row.plannedMinutes,
+        row.absentDays,
+        row.shortDays,
+        row.unresolvedCount
+      ])
+    );
+
+  const exportDetail = () =>
+    exportCsv(
+      `${fileStem}-明细.csv`,
+      ['门店', '月份', '日期', '员工', '班次', '计划(分钟)', '实际(分钟)', '结论', '未闭合段数'],
+      detail.map(({ row, day }) => [
+        data.storeName,
+        data.month,
+        day.businessDate,
+        row.name,
+        day.shift ? shiftText(day.shift.startMin, day.shift.endMin) : '',
+        day.plannedMinutes,
+        day.actualMinutes,
+        REPORT_TARGET[day.state]?.label ?? day.state,
+        day.unresolvedCount
+      ])
+    );
+
+  return (
+    <>
+      <PageHead
+        eyebrow="品牌总部 · 门店"
+        title="考勤月报"
+        description="按月核对工时：谁出勤了几天、计划与实际差多少、哪天缺勤或短时、还有哪些时段没闭合。工资请到「劳务结算」出单。"
+        actions={
+          <div className="row-gap">
+            <select value={storeId} onChange={(event) => setStoreId(event.target.value)} aria-label="门店">
+              {data.stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="month"
+              value={month}
+              max={currentMonthText()}
+              onChange={(event) => {
+                if (event.target.value) setMonth(event.target.value);
+              }}
+              aria-label="月份"
+            />
+          </div>
+        }
+      />
+
+      <div className="stat-grid">
+        <Stat
+          label="出勤人天"
+          value={data.summary.attendanceDays}
+          hint={`${data.summary.presentPeople} 人有工时 · ${data.summary.people} 人有排班或工时`}
+          icon="users"
+        />
+        <Stat
+          label="实际工时"
+          value={durationText(data.summary.actualMinutes)}
+          hint={data.summary.plannedMinutes ? `计划 ${durationText(data.summary.plannedMinutes)}` : '本月还没有排班'}
+          icon="clock"
+        />
+        <Stat
+          label="实际 − 计划"
+          value={signedMinutesText(diffMinutes)}
+          hint="计划只作对照，工资按实际工时结算"
+          tone={diffMinutes ? 'soft' : 'plain'}
+        />
+        <Stat
+          label="缺勤 / 短时"
+          value={`${data.summary.absentDays} / ${data.summary.shortDays}`}
+          hint={
+            data.summary.unresolvedCount
+              ? `${data.summary.unresolvedCount} 段未闭合，工时未计入`
+              : '没有未闭合的时段'
+          }
+          tone={data.summary.unresolvedCount ? 'soft' : 'plain'}
+          icon="alert"
+        />
+      </div>
+
+      <Panel
+        title="按人汇总"
+        description="只列本月有排班、有工时或有未闭合时段的员工；点一行可下钻到这个人的人×天明细。"
+        actions={
+          <button type="button" className="btn btn-sm btn-ghost" disabled={!active.length} onClick={exportSummary}>
+            <Icon name="download" size={14} /> 导出汇总
+          </button>
+        }
+        flush
+      >
+        {!active.length ? (
+          <EmptyState
+            icon="chart"
+            title="这个月还没有工时记录"
+            description={`${data.month} 的到店记录会在这里按月汇总；排班只是计划，员工到店确认后才产生实际工时。`}
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>员工</th>
+                  <th className="num">出勤</th>
+                  <th className="num">计划</th>
+                  <th className="num">实际</th>
+                  <th className="num">差异</th>
+                  <th className="num">缺勤</th>
+                  <th className="num">短时</th>
+                  <th className="num">未闭合</th>
+                </tr>
+              </thead>
+              <tbody>
+                {active.map((row) => {
+                  const rowDiff = row.actualMinutes - row.plannedMinutes;
+                  return (
+                    <tr key={row.userId}>
+                      <td>
+                        {row.name}
+                        {!row.plannedMinutes ? <span className="tiny muted"> · 未排班</span> : null}
+                      </td>
+                      <td className="num">{row.presentDays} 天</td>
+                      <td className="num muted">{row.plannedMinutes ? durationText(row.plannedMinutes) : '—'}</td>
+                      <td className="num">{row.actualMinutes ? durationText(row.actualMinutes) : '—'}</td>
+                      <td className={`num${rowDiff ? '' : ' muted'}`}>
+                        {row.plannedMinutes ? signedMinutesText(rowDiff) : '—'}
+                      </td>
+                      <td className="num">
+                        {row.absentDays ? <Badge tone="danger">{row.absentDays}</Badge> : <span className="muted">—</span>}
+                      </td>
+                      <td className="num">
+                        {row.shortDays ? <Badge tone="warn">{row.shortDays}</Badge> : <span className="muted">—</span>}
+                      </td>
+                      <td className="num">
+                        {row.unresolvedCount ? (
+                          <Badge tone="warn">{row.unresolvedCount}</Badge>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => setPersonId(picked?.userId === row.userId ? '' : row.userId)}
+                        >
+                          {picked?.userId === row.userId ? '收起明细' : '看明细'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <Panel
+        title="人 × 天明细"
+        description="只列有班、有工时或有未闭合时段的日期；今天不判缺勤，短时/缺勤只看往天。"
+        actions={
+          <div className="row-gap">
+            <select value={personId} onChange={(event) => setPersonId(event.target.value)} aria-label="员工">
+              <option value="">全部员工</option>
+              {active.map((row) => (
+                <option key={row.userId} value={row.userId}>
+                  {row.name}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn btn-sm btn-ghost" disabled={!detail.length} onClick={exportDetail}>
+              <Icon name="download" size={14} /> 导出明细
+            </button>
+          </div>
+        }
+        flush
+      >
+        {!detail.length ? (
+          <EmptyState
+            icon="calendar"
+            title="没有可展开的明细"
+            description="这个人本月既没有排班也没有工时；换个人或换个月份再看看。"
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>员工</th>
+                  <th>班次</th>
+                  <th className="num">计划</th>
+                  <th className="num">实际</th>
+                  <th>结论</th>
+                  <th className="num">未闭合</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.map(({ row, day }) => {
+                  const target = REPORT_TARGET[day.state] ?? { label: day.state, tone: 'neutral' as const };
+                  return (
+                    <tr key={`${row.userId}|${day.businessDate}`}>
+                      <td>
+                        {day.businessDate}
+                        <span className="tiny muted"> {weekdayText(day.businessDate)}</span>
+                      </td>
+                      <td>{row.name}</td>
+                      <td className="muted">{day.shift ? shiftText(day.shift.startMin, day.shift.endMin) : '—'}</td>
+                      <td className="num muted">{day.plannedMinutes ? durationText(day.plannedMinutes) : '—'}</td>
+                      <td className="num">{day.actualMinutes ? durationText(day.actualMinutes) : '—'}</td>
+                      <td>
+                        <Badge tone={target.tone}>{target.label}</Badge>
+                      </td>
+                      <td className="num">
+                        {day.unresolvedCount ? <Badge tone="warn">{day.unresolvedCount}</Badge> : <span className="muted">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <div className="notice">
+        <Icon name="info" size={15} />
+        <span>
+          实际工时只累加「已结束」的时段，跨零点会拆到两天；未闭合时段（忘了点离店、等审批的补签）先不计入、
+          在这里单独计数。金额与单价不在这页，请看「劳务结算」。
+        </span>
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------ 劳务结算 ------------------------------ */
+
+function currentMonthText() {
+  return todayText().slice(0, 7);
+}
+
+/** 只做「年月」加减；用本地日历而不是 UTC，避免月初/月末换算后差一个月。 */
+function monthShift(month: string, delta: number) {
+  const [year, mon] = month.split('-').map(Number);
+  if (!year || !mon) return month;
+  const date = new Date(year, mon - 1 + delta, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+const SETTLEMENT_STATUS: Record<string, { label: string; tone: 'ok' | 'warn' | 'neutral' }> = {
+  draft: { label: '待确认', tone: 'warn' },
+  posted: { label: '已入账', tone: 'ok' },
+  voided: { label: '已作废', tone: 'neutral' }
+};
+
+/**
+ * 劳务结算：一个月一批，按「门店 × 员工」出单。
+ *
+ * 页面上三件事按顺序做：先定单价（门店维度），再出单/重算（草稿可反复算），
+ * 最后逐张确认入账（写人力费用，金额从此不可变）。阻断项（未闭合时段、审批中的补签）
+ * 只拦「确认」，不拦「出单」——先出单看清差多少，再去补签，比一个都出不来有用。
+ */
+function SettlementsPage() {
+  const notify = useToast();
+  const [month, setMonth] = useState(() => monthShift(currentMonthText(), -1));
+  const [storeId, setStoreId] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [confirming, setConfirming] = useState<WorkSettlement | null>(null);
+  const [detail, setDetail] = useState<WorkSettlement | null>(null);
+  const query = useApi(() => api.attendanceSettlements({ month, storeId: storeId || undefined }), [month, storeId]);
+  const rates = useApi(() => api.attendanceLaborRates(), []);
+
+  const data = query.data;
+  const monthClosed = !!data && data.periodEnd < todayText();
+
+  if (query.loading && !data) return <Spinner label="正在读取结算单" />;
+  if (query.error && !data) return <InlineError message={query.error} />;
+  if (!data) return null;
+
+  // 门店下拉以单价列表为准（含还没出过单的门店），再并上当期有单的店，避免切月份后选项跳动。
+  const storeOptions = new Map<string, string>((rates.data?.rows ?? []).map((row) => [row.storeId, row.name]));
+  data.rows.forEach((row) => storeOptions.set(row.storeId, row.storeName));
+
+  const generate = async () => {
+    setGenerating(true);
+    try {
+      const result = await api.attendanceGenerateSettlements({ month, storeId: storeId || undefined });
+      query.setData(result);
+      notify(
+        `出单完成：新建 ${result.created} 张，重算 ${result.updated} 张，跳过已入账 ${result.skipped} 张`,
+        'ok'
+      );
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '出单失败', 'danger');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const exportCurrent = () => {
+    exportCsv(
+      `劳务结算-${data.month}.csv`,
+      ['门店', '员工', '月份', '计价小时', '计时分钟', '单价（元/小时）', '基础（元）', '调整（元）', '合计（元）', '状态', '未闭合段', '待审批', '调整备注', '入账备注'],
+      data.rows.map((row) => [
+        row.storeName,
+        row.userName,
+        row.month,
+        row.hours,
+        row.minutes,
+        (row.hourlyCents / 100).toFixed(2),
+        (row.baseAmountCents / 100).toFixed(2),
+        (row.adjustmentCents / 100).toFixed(2),
+        (row.amountCents / 100).toFixed(2),
+        SETTLEMENT_STATUS[row.status]?.label || row.status,
+        row.unclosedCount,
+        row.pendingApprovals,
+        row.adjustmentNote,
+        row.confirmedNote
+      ])
+    );
+    notify(`已导出 ${data.month} 的 ${data.rows.length} 张结算单`, 'ok');
+  };
+
+  return (
+    <>
+      <PageHead
+        eyebrow="品牌总部 · 运营"
+        title="劳务结算"
+        description="按「门店 × 员工 × 月」出单：先把门店劳务单价定好，再出单看金额；确认入账会写入一笔人力费用，金额从此不可改。未闭合的时段与审批中的补签只拦确认，不拦出单。"
+        meta={
+          <span>
+            {data.month} · {data.rows.length} 张 · 已入账 {data.summary.postedCount} 张
+          </span>
+        }
+        actions={
+          <div className="row-gap">
+            <select value={storeId} onChange={(event) => setStoreId(event.target.value)} aria-label="门店">
+              <option value="">全部门店</option>
+              {[...storeOptions.entries()].map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="month"
+              value={month}
+              max={currentMonthText()}
+              onChange={(event) => setMonth(event.target.value || currentMonthText())}
+              aria-label="结算月份"
+            />
+            <button type="button" className="btn btn-primary" disabled={generating} onClick={generate}>
+              {generating ? '出单中…' : '出单 / 重算'}
+            </button>
+          </div>
+        }
+      />
+
+      <div className="stat-grid">
+        <Stat
+          label="应结总额"
+          value={money(data.summary.amountCents)}
+          hint={`基础 ${money(data.summary.baseAmountCents)}${data.summary.postedCount ? `，含已入账 ${data.summary.postedCount} 张` : ''}`}
+          icon="coin"
+        />
+        <Stat
+          label="待确认"
+          value={data.summary.draftCount}
+          hint="草稿可重算，入账后不可改"
+          tone={data.summary.draftCount ? 'soft' : 'plain'}
+        />
+        <Stat label="已入账" value={data.summary.postedCount} hint="已写入人力费用" icon="check" />
+        <Stat
+          label="未闭合时段"
+          value={data.summary.unclosedCount}
+          hint={data.summary.unclosedCount ? '补完离店或补签后才能确认' : '没有待补的时段'}
+          tone={data.summary.unclosedCount ? 'soft' : 'plain'}
+          icon="alert"
+        />
+      </div>
+
+      <Panel
+        title="结算单"
+        description={
+          monthClosed
+            ? '确认入账后金额锁定；要改只能作废重出。'
+            : '本月还没结束，可以先出单预览；月末结束后才能确认入账。'
+        }
+        actions={
+          <button type="button" className="btn btn-sm btn-ghost" disabled={!data.rows.length} onClick={exportCurrent}>
+            导出 CSV
+          </button>
+        }
+      >
+        {data.rows.length ? (
+          <div className="table-wrap">
+            <table className="tbl tbl-compact">
+              <thead>
+                <tr>
+                  <th>门店 / 员工</th>
+                  <th className="num">计价工时</th>
+                  <th className="num">单价</th>
+                  <th className="num">基础</th>
+                  <th className="num">调整</th>
+                  <th className="num">合计</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((row) => {
+                  const blocked = row.unclosedCount > 0 || row.pendingApprovals > 0;
+                  const status = SETTLEMENT_STATUS[row.status] ?? { label: row.status, tone: 'neutral' as const };
+                  return (
+                    <tr key={row.id}>
+                      <td>
+                        <div className="cell-title">{row.userName}</div>
+                        <div className="faint tiny">
+                          {row.storeName} · {row.periodStart.slice(5)}—{row.periodEnd.slice(5)}
+                        </div>
+                      </td>
+                      <td className="num">
+                        {row.hours} 小时
+                        {row.minutes !== row.billableMinutes ? (
+                          <div className="faint tiny">计 {durationText(row.minutes)}，满点计</div>
+                        ) : null}
+                      </td>
+                      <td className="num">
+                        {money(row.hourlyCents)}
+                        <div className="faint tiny">{row.ratePerMinCents} 分/分钟</div>
+                      </td>
+                      <td className="num">{money(row.baseAmountCents)}</td>
+                      <td className="num">
+                        {row.adjustmentCents ? money(row.adjustmentCents, { sign: true }) : <span className="muted">—</span>}
+                        {row.adjustmentNote ? <div className="faint tiny">{row.adjustmentNote}</div> : null}
+                      </td>
+                      <td className="num">
+                        <strong>{money(row.amountCents)}</strong>
+                      </td>
+                      <td>
+                        <Badge tone={status.tone}>{status.label}</Badge>
+                        {row.status === 'draft' && blocked ? (
+                          <div className="faint tiny" style={{ marginTop: 4 }}>
+                            {row.unclosedCount ? `${row.unclosedCount} 段未闭合` : ''}
+                            {row.unclosedCount && row.pendingApprovals ? ' · ' : ''}
+                            {row.pendingApprovals ? `${row.pendingApprovals} 条补签待审批` : ''}
+                          </div>
+                        ) : null}
+                        {row.status === 'posted' ? (
+                          <div className="faint tiny" style={{ marginTop: 4 }}>
+                            {row.confirmedAt ? `${dateTimeText(row.confirmedAt)} 入账` : '已入账'}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td>
+                        <div className="row-gap">
+                          {row.status === 'draft' ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-primary"
+                              disabled={!monthClosed || blocked}
+                              title={
+                                !monthClosed
+                                  ? '本月还没结束，结束后才能入账'
+                                  : blocked
+                                    ? '还有未闭合时段或待审批补签，先处理完再入账'
+                                    : undefined
+                              }
+                              onClick={() => setConfirming(row)}
+                            >
+                              确认入账
+                            </button>
+                          ) : null}
+                          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setDetail(row)}>
+                            明细
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            icon="coin"
+            title={`${data.month} 还没有结算单`}
+            description="先在上面点「出单 / 重算」，系统会按当期已结束的时段，为每家店的每位员工生成一张草稿。"
+          />
+        )}
+      </Panel>
+
+      <LaborRatePanel
+        maxRatePerMinCents={rates.data?.maxRatePerMinCents ?? 0}
+        rows={rates.data?.rows ?? null}
+        loading={rates.loading && !rates.data}
+        error={rates.error}
+        onSaved={() => {
+          rates.reload({ silent: true }).catch(() => undefined);
+          // 单价变了，草稿金额也会变：顺手重算一遍再刷新，省得用户手动点两次。
+          query.reload({ silent: true }).catch(() => undefined);
+        }}
+      />
+
+      <div className="notice">
+        <Icon name="info" size={15} />
+        <span>
+          计价按小时向下取整：不足 1 小时的零头不计，整点分钟 × 门店单价。未设置单价的门店按 0 元计，
+          出单后金额为 0 的草稿不会产生费用行；调整额需要写明原因，入账后可以按来源「劳务结算」在财务流水里找到。
+        </span>
+      </div>
+
+      <ConfirmSettlementModal
+        row={confirming}
+        onClose={() => setConfirming(null)}
+        onDone={() => {
+          setConfirming(null);
+          notify('结算单已入账，人力费用已记入财务流水', 'ok');
+          query.reload({ silent: true });
+        }}
+      />
+
+      <Modal
+        open={!!detail}
+        title={detail ? `${detail.storeName} · ${detail.userName} · ${detail.month}` : '结算明细'}
+        description={detail ? `计价 ${detail.hours} 小时 × ${money(detail.hourlyCents)}/小时，合计 ${money(detail.amountCents)}` : undefined}
+        onClose={() => setDetail(null)}
+        size="md"
+        footer={
+          <button type="button" className="btn btn-ghost" onClick={() => setDetail(null)}>
+            关闭
+          </button>
+        }
+      >
+        {detail ? (
+          <div className="table-wrap">
+            <table className="tbl tbl-compact">
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>时段</th>
+                  <th className="num">分钟</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.lines.map((line) => (
+                  <tr key={line.sessionId}>
+                    <td>{line.businessDate}</td>
+                    <td>
+                      {line.from} — {line.to}
+                    </td>
+                    <td className="num">{line.minutes}</td>
+                  </tr>
+                ))}
+                {!detail.lines.length ? (
+                  <tr>
+                    <td colSpan={3} className="muted">
+                      这张单只有未闭合的时段，没有可计价的行。
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+            {detail.confirmedNote ? (
+              <p className="faint tiny" style={{ marginTop: 8 }}>
+                入账备注：{detail.confirmedNote}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+    </>
+  );
+}
+
+/** 门店劳务单价：单位是「元/小时」，落库换算成整数「分/分钟」，换算误差在保存后立刻回显。 */
+function LaborRatePanel({
+  rows,
+  maxRatePerMinCents,
+  loading,
+  error,
+  onSaved
+}: {
+  rows: LaborRateRow[] | null;
+  maxRatePerMinCents: number;
+  loading: boolean;
+  error: string | null;
+  onSaved: () => void;
+}) {
+  const notify = useToast();
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!rows) return;
+    // 只补齐还没进入草稿的门店：保存某一行会触发整表刷新，不能把别行还没保存的输入冲掉。
+    setDraft((current) => {
+      const next = { ...current };
+      rows.forEach((row) => {
+        if (next[row.storeId] === undefined) next[row.storeId] = (row.hourlyCents / 100).toFixed(2);
+      });
+      return next;
+    });
+  }, [rows]);
+
+  const save = async (row: LaborRateRow) => {
+    const yuan = Number(draft[row.storeId] ?? '');
+    if (!Number.isFinite(yuan) || yuan < 0) return notify('单价请填不小于 0 的数字', 'danger');
+    const cents = Math.round((yuan * 100) / 60);
+    if (maxRatePerMinCents && cents > maxRatePerMinCents) {
+      return notify(`单价不能超过 ${money(maxRatePerMinCents * 60)}/小时，请确认填的是时薪`, 'danger');
+    }
+    setBusyId(row.storeId);
+    try {
+      const saved = await api.attendanceSaveLaborRate(row.storeId, { laborRatePerMinCents: cents });
+      setDraft((current) => ({ ...current, [row.storeId]: (saved.hourlyCents / 100).toFixed(2) }));
+      notify(`${row.name} 单价已更新为 ${money(saved.hourlyCents)}/小时`, 'ok');
+      onSaved();
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '保存单价失败', 'danger');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <Panel
+      title="门店劳务单价"
+      description="结算金额 = 计价小时 × 单价。这里改的是门店级默认单价，已入账的结算单不受影响；重新出单才会用新价。"
+    >
+      {loading ? (
+        <Spinner label="正在读取单价" />
+      ) : error && !rows ? (
+        <InlineError message={error} />
+      ) : rows && rows.length ? (
+        <div className="table-wrap">
+          <table className="tbl tbl-compact">
+            <thead>
+              <tr>
+                <th>门店</th>
+                <th className="num">当前（元/小时）</th>
+                <th className="num">等价单价</th>
+                <th>新单价（元/小时）</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const value = draft[row.storeId] ?? '';
+                const dirty = value !== (row.hourlyCents / 100).toFixed(2);
+                return (
+                  <tr key={row.storeId}>
+                    <td>
+                      <div className="cell-title">{row.name}</div>
+                      <div className="faint tiny">{row.city || '—'}</div>
+                    </td>
+                    <td className="num">{money(row.hourlyCents)}</td>
+                    <td className="num faint tiny">{row.laborRatePerMinCents} 分/分钟</td>
+                    <td>
+                      <input
+                        inputMode="decimal"
+                        value={value}
+                        aria-label={`${row.name} 劳务单价`}
+                        style={{ maxWidth: 130 }}
+                        onChange={(event) => setDraft({ ...draft, [row.storeId]: event.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${dirty ? 'btn-primary' : 'btn-ghost'}`}
+                        disabled={busyId === row.storeId || !dirty}
+                        onClick={() => save(row)}
+                      >
+                        {busyId === row.storeId ? '保存中…' : '保存'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState icon="store" title="还没有可维护的门店" description="先在「门店配置」里创建门店。" />
+      )}
+    </Panel>
+  );
+}
+
+function ConfirmSettlementModal({
+  row,
+  onClose,
+  onDone
+}: {
+  row: WorkSettlement | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [adjust, setAdjust] = useState('');
+  const [adjustNote, setAdjustNote] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!row) return;
+    setAdjust('');
+    setAdjustNote('');
+    setNote('');
+    setError(null);
+    setBusy(false);
+  }, [row]);
+
+  const parsed = Number(adjust.trim() === '' ? '0' : adjust);
+  const adjustmentCents = Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
+  const preview = (row?.baseAmountCents ?? 0) + adjustmentCents;
+
+  const submit = async () => {
+    if (!row) return;
+    if (!Number.isFinite(parsed)) {
+      setError('调整额请填数字，正数为补发、负数为扣减');
+      return;
+    }
+    if (adjustmentCents !== 0 && !adjustNote.trim()) {
+      setError('填写了调整金额必须写调整原因');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.attendanceConfirmSettlement(row.id, {
+        adjustmentCents,
+        adjustmentNote: adjustNote.trim() || undefined,
+        note: note.trim() || undefined
+      });
+      onDone();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '确认入账失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={!!row}
+      title="确认劳务结算"
+      description={row ? `${row.storeName} · ${row.userName} · ${row.month}，入账后金额不可修改。` : undefined}
+      onClose={busy ? () => undefined : onClose}
+      size="sm"
+      footer={
+        <>
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
+            取消
+          </button>
+          <button type="button" className="btn btn-primary" disabled={busy || preview < 0} onClick={submit}>
+            {busy ? '入账中…' : '确认入账'}
+          </button>
+        </>
+      }
+    >
+      {row ? (
+        <>
+          <div className="table-wrap" style={{ marginBottom: 12 }}>
+            <table className="tbl tbl-compact">
+              <tbody>
+                <tr>
+                  <td>计价工时</td>
+                  <td className="num">{row.hours} 小时</td>
+                </tr>
+                <tr>
+                  <td>基础劳务</td>
+                  <td className="num">{money(row.baseAmountCents)}</td>
+                </tr>
+                <tr>
+                  <td>调整后合计</td>
+                  <td className="num">
+                    <strong>{money(preview)}</strong>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="form-grid">
+            <Field label="调整额（元）" hint="正数补发、负数扣减；0 表示不调整。">
+              <input
+                inputMode="decimal"
+                value={adjust}
+                placeholder="0.00"
+                onChange={(event) => setAdjust(event.target.value)}
+              />
+            </Field>
+            <Field label="调整原因" hint="调整不为 0 时必填，会写进财务流水与操作记录。">
+              <input
+                value={adjustNote}
+                maxLength={200}
+                onChange={(event) => setAdjustNote(event.target.value)}
+              />
+            </Field>
+            <div className="span-2">
+              <Field label="入账备注" hint="选填，记录这张单的特殊说明。">
+                <input value={note} maxLength={200} onChange={(event) => setNote(event.target.value)} />
+              </Field>
+            </div>
+          </div>
+          {error ? <InlineError message={error} /> : null}
+        </>
+      ) : null}
+    </Modal>
+  );
+}
 
 function LossesPage() {
   const { can } = useStaffAuth();
@@ -2750,15 +4398,28 @@ function CouponsPage() {
   if (!data) return null;
 
   const categories = catalog.data?.categories || [];
+  const products = catalog.data?.products || [];
   const categoryName = (id: string | null) =>
     categories.find((item) => item.id === id)?.name || '指定品类';
+  const productName = (id: string | null) => products.find((item) => item.id === id)?.name || '指定单品';
+  const scopeText = (coupon: Coupon) =>
+    coupon.scope === 'product'
+      ? `单品券 · ${productName(coupon.productId)}`
+      : coupon.scope === 'category'
+        ? `品类券 · ${categoryName(coupon.categoryId)}`
+        : '全场通用';
+  const validityText = (coupon: Coupon) =>
+    coupon.validDays > 0
+      ? `领取后 ${coupon.validDays} 天有效 · 活动截止 ${dateText(coupon.validTo)}`
+      : `固定有效期 ${dateText(coupon.validFrom)} 至 ${dateText(coupon.validTo)}`;
   const totals = data.coupons.reduce(
     (acc, row) => ({
       issued: acc.issued + (row.issued || 0),
       used: acc.used + (row.used || 0),
-      available: acc.available + (row.available || 0)
+      available: acc.available + (row.available || 0),
+      claimed: acc.claimed + (row.claimed || 0)
     }),
-    { issued: 0, used: 0, available: 0 }
+    { issued: 0, used: 0, available: 0, claimed: 0 }
   );
 
   const toggle = async (coupon: Coupon) => {
@@ -2779,7 +4440,7 @@ function CouponsPage() {
       <PageHead
         eyebrow="品牌总部 · 会员权益"
         title="优惠券"
-        description="按通用或指定品类创建券，限定有效期与使用门槛；发放时按手机号定位会员，顾客在小程序下单时抵扣。"
+        description="按全场、品类或单品创建券，可选固定有效期或领取后 N 天有效；发放时按手机号定位会员，也可开放会员自助领取，或交给自动化规则按人群发放。"
         meta={<span>{data.coupons.length} 个券模板</span>}
         actions={
           managed ? (
@@ -2791,7 +4452,7 @@ function CouponsPage() {
       />
       <div className="stat-grid">
         <Stat label="券模板" value={data.coupons.length} hint="含已停用" tone="dark" icon="megaphone" />
-        <Stat label="已发放" value={totals.issued} hint="按手机号发到会员" />
+        <Stat label="已发放" value={totals.issued} hint={`其中自助领取 ${totals.claimed}`} />
         <Stat label="已使用" value={totals.used} hint="支付成功后才核销" />
         <Stat label="可再用" value={totals.available} hint="未使用的券张数" />
       </div>
@@ -2805,16 +4466,24 @@ function CouponsPage() {
             <div className="mapping-row" key={coupon.id}>
               <span className="mapping-ext">{money(coupon.amountCents)}</span>
               <span className="grow">
-                <strong>{coupon.title}</strong>
+                <strong>
+                  {coupon.title}
+                  {coupon.claimable ? (
+                    <span className="faint tiny" style={{ marginLeft: 8 }}>
+                      可自助领取 · 每人限 {coupon.claimLimit} 张
+                    </span>
+                  ) : null}
+                </strong>
                 <span className="faint tiny" style={{ display: 'block', marginTop: 2 }}>
-                  {coupon.scope === 'category' ? categoryName(coupon.categoryId) : '通用券'}
+                  {scopeText(coupon)}
                   {coupon.minSpendCents > 0 ? ` · 满 ${money(coupon.minSpendCents)} 可用` : ' · 无门槛'}
-                  {` · ${dateText(coupon.validFrom)} 至 ${dateText(coupon.validTo)}`}
+                  {` · ${validityText(coupon)}`}
                 </span>
               </span>
               <Badge tone={coupon.active ? 'ok' : 'danger'}>{coupon.active ? '生效中' : '已停用'}</Badge>
               <span className="faint tiny">
                 发 {coupon.issued || 0} · 用 {coupon.used || 0}
+                {coupon.revoked ? ` · 作废 ${coupon.revoked}` : ''}
               </span>
               {managed ? (
                 <div className="row-gap">
@@ -2847,12 +4516,14 @@ function CouponsPage() {
           ) : null}
         </div>
       </Panel>
+      <CouponRulesPanel coupons={data.coupons} />
       <p className="page-foot-note">
-        券的面额、门槛、品类与有效期由服务端在下单时再次核验；停用后未使用的券立即失效，已使用的记录保留。
+        券的面额、门槛、范围与有效期由服务端在下单时再次核验；领取后 N 天的券在发放那一刻固化到期时间，后续改动模板不会延长已发出去的券。停用后未使用的券立即失效，已使用的记录保留。
       </p>
       <CouponCreateModal
         open={creating}
         categories={categories}
+        products={products}
         onClose={() => setCreating(false)}
         onSaved={() => {
           setCreating(false);
@@ -2869,24 +4540,358 @@ function CouponsPage() {
   );
 }
 
+const RULE_TIER_LABEL: Record<CouponRule['tier'], string> = {
+  all: '全部会员',
+  standard: '普通会员',
+  annual: 'Full愈大会员'
+};
+
+function ruleConfigText(rule: CouponRule): string {
+  if (rule.kind === 'birthday') {
+    const days = rule.config.daysBefore ?? 0;
+    return days > 0 ? `生日前 ${days} 天发放，一年一张` : '生日当天发放，一年一张';
+  }
+  if (rule.kind === 'welcome') {
+    return `注册后 ${rule.config.withinDays ?? 7} 天内、尚无支付订单的会员，一次一张`;
+  }
+  return `${rule.config.inactiveDays ?? 60} 天没来消费、且至少有 ${rule.config.minOrders ?? 1} 笔已支付订单，${rule.config.inactiveDays ?? 60} 天一次`;
+}
+
+function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
+  const { can } = useStaffAuth();
+  const notify = useToast();
+  const confirm = useConfirm();
+  const query = useApi(() => api.adminCouponRules(), []);
+  const [creating, setCreating] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<Record<string, CouponRulePreview>>({});
+  const managed = can('coupon:manage');
+
+  if (query.loading && !query.data) return <Spinner label="正在读取自动发券规则" />;
+  const rules = query.data?.rules || [];
+
+  const preview = async (rule: CouponRule) => {
+    setBusy(`preview:${rule.id}`);
+    try {
+      const result = await api.adminPreviewCouponRule(rule.id);
+      setPreviews((current) => ({ ...current, [rule.id]: result }));
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '预览失败', 'danger');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const run = async (rule: CouponRule) => {
+    setBusy(`run:${rule.id}`);
+    try {
+      const { result } = await api.adminRunCouponRule(rule.id);
+      notify(
+        result.replayed
+          ? `「${rule.couponTitle}」今天已经跑过，不会重复发券`
+          : `命中 ${result.targetCount} 人，实际发券 ${result.issued} 张` +
+              (result.skipped ? `，跳过 ${result.skipped} 人` : ''),
+        result.replayed ? 'info' : 'ok'
+      );
+      setPreviews((current) => {
+        const next = { ...current };
+        delete next[rule.id];
+        return next;
+      });
+      query.reload({ silent: true });
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '执行失败', 'danger');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const toggleEnabled = async (rule: CouponRule, enabled: boolean) => {
+    setBusy(`toggle:${rule.id}`);
+    try {
+      await api.adminUpdateCouponRule(rule.id, { enabled });
+      notify(enabled ? '规则已启用' : '规则已暂停', 'ok');
+      query.reload({ silent: true });
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '操作失败', 'danger');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async (rule: CouponRule) => {
+    const ok = await confirm({
+      title: '删除这条发券规则？',
+      message: `「${rule.kindLabel} · ${rule.couponTitle}」删除后不再自动发券，已发出去的券不受影响。`,
+      confirmText: '删除规则',
+      tone: 'danger'
+    });
+    if (!ok) return;
+    setBusy(`delete:${rule.id}`);
+    try {
+      await api.adminDeleteCouponRule(rule.id);
+      notify('规则已删除', 'ok');
+      query.reload({ silent: true });
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '删除失败', 'danger');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <>
+      <Panel
+        eyebrow="自动化"
+        title="自动发券规则"
+        description="每天凌晨自动扫描命中人群：生日关怀、新客欢迎、沉睡唤回。同一会员同一个规则周期内只会发一张，手动执行也只补发缺的那部分。"
+        flush
+        actions={
+          managed ? (
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setCreating(true)}>
+              <Icon name="plus" size={14} /> 新建规则
+            </button>
+          ) : null
+        }
+      >
+        <div className="mapping-list" style={{ padding: '4px 20px 12px' }}>
+          {rules.map((rule) => {
+            const result = previews[rule.id];
+            return (
+              <div className="mapping-row" key={rule.id}>
+                <span className="mapping-ext">{rule.kindLabel}</span>
+                <span className="grow">
+                  <strong>{rule.couponTitle}</strong>
+                  <span className="faint tiny" style={{ display: 'block', marginTop: 2 }}>
+                    {ruleConfigText(rule)}
+                    {` · ${RULE_TIER_LABEL[rule.tier]}`}
+                    {` · 已发 ${rule.totalIssued} 张`}
+                    {rule.lastRunAt ? ` · 上次 ${dateText(rule.lastRunAt)} 发 ${rule.lastRunIssued}` : ' · 还没跑过'}
+                  </span>
+                  {result ? (
+                    <span className="faint tiny" style={{ display: 'block', marginTop: 2 }}>
+                      本期命中 {result.count} 人：将发 {result.willIssue} 张；本周期已发{' '}
+                      {result.alreadyThisPeriod} 人；手持同款券 {result.held} 人。
+                    </span>
+                  ) : null}
+                </span>
+                <Badge tone={rule.enabled ? 'ok' : 'neutral'}>{rule.enabled ? '每日执行' : '已暂停'}</Badge>
+                {managed ? (
+                  <div className="row-gap">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      disabled={busy === `preview:${rule.id}`}
+                      onClick={() => preview(rule)}
+                    >
+                      预览
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      disabled={busy === `run:${rule.id}` || !rule.enabled}
+                      onClick={() => run(rule)}
+                    >
+                      立即执行
+                    </button>
+                    <Switch
+                      checked={rule.enabled}
+                      label={`${rule.kindLabel}规则启用状态`}
+                      onChange={(next) => toggleEnabled(rule, next)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      disabled={busy === `delete:${rule.id}`}
+                      onClick={() => remove(rule)}
+                    >
+                      删除
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+          {!rules.length ? (
+            <EmptyState
+              icon="megaphone"
+              title="还没有自动规则"
+              description="生日、新客、沉睡唤回都可以交给规则每天自动发放，不用再手动按手机号发券。"
+            />
+          ) : null}
+        </div>
+      </Panel>
+      <CouponRuleModal
+        open={creating}
+        coupons={coupons.filter((coupon) => coupon.active)}
+        onClose={() => setCreating(false)}
+        onSaved={() => {
+          setCreating(false);
+          notify('自动发券规则已创建', 'ok');
+          query.reload({ silent: true });
+        }}
+      />
+    </>
+  );
+}
+
+function CouponRuleModal({
+  open,
+  coupons,
+  onClose,
+  onSaved
+}: {
+  open: boolean;
+  coupons: Coupon[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [couponId, setCouponId] = useState('');
+  const [kind, setKind] = useState<CouponRuleKind>('birthday');
+  const [tier, setTier] = useState<CouponRule['tier']>('all');
+  const [daysBefore, setDaysBefore] = useState('0');
+  const [withinDays, setWithinDays] = useState('7');
+  const [inactiveDays, setInactiveDays] = useState('60');
+  const [minOrders, setMinOrders] = useState('1');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setCouponId(coupons[0]?.id || '');
+    setKind('birthday');
+    setTier('all');
+    setDaysBefore('0');
+    setWithinDays('7');
+    setInactiveDays('60');
+    setMinOrders('1');
+    setNote('');
+    setError(null);
+  }, [open, coupons]);
+
+  const save = async () => {
+    if (!couponId) return setError('请选择要发放的券');
+    const config =
+      kind === 'birthday'
+        ? { daysBefore: Math.round(Number(daysBefore || 0)) }
+        : kind === 'welcome'
+          ? { withinDays: Math.round(Number(withinDays || 0)) }
+          : { inactiveDays: Math.round(Number(inactiveDays || 0)), minOrders: Math.round(Number(minOrders || 1)) };
+    if (kind === 'welcome' && !(config as { withinDays: number }).withinDays) setError('新客窗口需大于 0 天');
+    if (kind === 'winback' && !(config as { inactiveDays: number }).inactiveDays) setError('沉睡天数需大于 0');
+    setBusy(true);
+    setError(null);
+    try {
+      await api.adminCreateCouponRule({ couponId, kind, tier, config, note: note.trim() || undefined });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '创建失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      title="新建自动发券规则"
+      description="规则创建后立即生效，每天自动扫描；也可以随时手动执行一次。"
+      onClose={busy ? () => undefined : onClose}
+      footer={
+        <>
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
+            取消
+          </button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={save}>
+            {busy ? '保存中…' : '创建规则'}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid">
+        <Field label="规则类型" className="span-2">
+          <Segmented
+            value={kind}
+            ariaLabel="规则类型"
+            options={[
+              { value: 'birthday', label: '生日关怀' },
+              { value: 'welcome', label: '新客欢迎' },
+              { value: 'winback', label: '沉睡唤回' }
+            ]}
+            onChange={(next) => setKind(next)}
+          />
+        </Field>
+        <Field label="发放的券" className="span-2" hint="只列出生效中的券模板。">
+          <select value={couponId} onChange={(event) => setCouponId(event.target.value)}>
+            {coupons.map((coupon) => (
+              <option key={coupon.id} value={coupon.id}>
+                {money(coupon.amountCents)} · {coupon.title}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {kind === 'birthday' ? (
+          <Field label="提前天数" hint="0 表示生日当天发放。">
+            <input inputMode="numeric" value={daysBefore} onChange={(event) => setDaysBefore(event.target.value)} />
+          </Field>
+        ) : null}
+        {kind === 'welcome' ? (
+          <Field label="注册后多少天内">
+            <input inputMode="numeric" value={withinDays} onChange={(event) => setWithinDays(event.target.value)} />
+          </Field>
+        ) : null}
+        {kind === 'winback' ? (
+          <>
+            <Field label="多少天没消费">
+              <input inputMode="numeric" value={inactiveDays} onChange={(event) => setInactiveDays(event.target.value)} />
+            </Field>
+            <Field label="最少历史订单数">
+              <input inputMode="numeric" value={minOrders} onChange={(event) => setMinOrders(event.target.value)} />
+            </Field>
+          </>
+        ) : null}
+        <Field label="会员层级">
+          <select value={tier} onChange={(event) => setTier(event.target.value as CouponRule['tier'])}>
+            <option value="all">全部会员</option>
+            <option value="standard">普通会员</option>
+            <option value="annual">Full愈大会员</option>
+          </select>
+        </Field>
+        <Field label="内部备注" hint="仅总部可见。">
+          <input value={note} maxLength={200} onChange={(event) => setNote(event.target.value)} />
+        </Field>
+      </div>
+      <InlineError message={error} />
+    </Modal>
+  );
+}
+
 function CouponCreateModal({
   open,
   categories,
+  products,
   onClose,
   onSaved
 }: {
   open: boolean;
   categories: Category[];
+  products: Product[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [title, setTitle] = useState('');
-  const [scope, setScope] = useState<'all' | 'category'>('all');
+  const [scope, setScope] = useState<'all' | 'category' | 'product'>('all');
   const [categoryId, setCategoryId] = useState('');
+  const [productId, setProductId] = useState('');
   const [amount, setAmount] = useState('10');
   const [minSpend, setMinSpend] = useState('0');
+  const [validityMode, setValidityMode] = useState<'fixed' | 'days'>('fixed');
   const [validFrom, setValidFrom] = useState(todayText());
   const [validTo, setValidTo] = useState(dateText(Date.now() + 29 * 86400000));
+  const [validDays, setValidDays] = useState('7');
+  const [claimable, setClaimable] = useState(false);
+  const [claimLimit, setClaimLimit] = useState('1');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2896,22 +4901,37 @@ function CouponCreateModal({
     setTitle('');
     setScope('all');
     setCategoryId(categories[0]?.id || '');
+    setProductId(products[0]?.id || '');
     setAmount('10');
     setMinSpend('0');
+    setValidityMode('fixed');
     setValidFrom(todayText());
     setValidTo(dateText(Date.now() + 29 * 86400000));
+    setValidDays('7');
+    setClaimable(false);
+    setClaimLimit('1');
     setNote('');
     setError(null);
-  }, [open, categories]);
+  }, [open, categories, products]);
 
   const save = async () => {
     const amountCents = Math.round(Number(amount) * 100);
     const minSpendCents = Math.round(Number(minSpend || 0) * 100);
+    const days = Math.round(Number(validDays || 0));
     if (!title.trim()) return setError('请填写券名称');
     if (!Number.isFinite(amountCents) || amountCents <= 0) return setError('券面额必须大于 0');
     if (!Number.isFinite(minSpendCents) || minSpendCents < 0) return setError('使用门槛不能为负数');
     if (scope === 'category' && !categoryId) return setError('指定品类券需要选择分类');
-    if (!validFrom || !validTo || validFrom > validTo) return setError('有效期结束需晚于开始');
+    if (scope === 'product' && !productId) return setError('指定单品券需要选择商品');
+    if (validityMode === 'fixed' && (!validFrom || !validTo || validFrom > validTo)) {
+      return setError('有效期结束需晚于开始');
+    }
+    if (validityMode === 'days' && (!Number.isFinite(days) || days < 1 || days > 365)) {
+      return setError('领取后有效天数需在 1~365 之间');
+    }
+    if (claimable && !(Number(claimLimit) >= 1 && Number(claimLimit) <= 99)) {
+      return setError('每人领取上限需在 1~99 之间');
+    }
     setBusy(true);
     setError(null);
     try {
@@ -2919,10 +4939,14 @@ function CouponCreateModal({
         title: title.trim(),
         scope,
         categoryId: scope === 'category' ? categoryId : null,
+        productId: scope === 'product' ? productId : null,
         amountCents,
         minSpendCents,
-        validFrom,
+        validFrom: validityMode === 'fixed' ? validFrom : todayText(),
         validTo,
+        validDays: validityMode === 'days' ? days : 0,
+        claimable,
+        claimLimit: claimable ? Math.round(Number(claimLimit)) : 1,
         note: note.trim() || undefined
       });
       onSaved();
@@ -2960,7 +4984,8 @@ function CouponCreateModal({
             ariaLabel="适用范围"
             options={[
               { value: 'all', label: '全场通用' },
-              { value: 'category', label: '指定品类' }
+              { value: 'category', label: '指定品类' },
+              { value: 'product', label: '指定单品' }
             ]}
             onChange={(next) => setScope(next)}
           />
@@ -2976,18 +5001,61 @@ function CouponCreateModal({
             </select>
           </Field>
         ) : null}
+        {scope === 'product' ? (
+          <Field label="适用单品" className="span-2" hint="只有这张券指定的商品才能抵扣；茶单和零售商品都可以选。">
+            <select value={productId} onChange={(event) => setProductId(event.target.value)}>
+              {products.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {money(item.priceCents)} · {item.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : null}
         <Field label="券面额（元）">
           <input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} />
         </Field>
         <Field label="使用门槛（元）" hint="填 0 表示无门槛。">
           <input inputMode="decimal" value={minSpend} onChange={(event) => setMinSpend(event.target.value)} />
         </Field>
-        <Field label="生效日">
-          <input type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} />
+        <Field label="有效期方式" className="span-2">
+          <Segmented
+            value={validityMode}
+            ariaLabel="有效期方式"
+            options={[
+              { value: 'fixed', label: '固定日期区间' },
+              { value: 'days', label: '领取后 N 天' }
+            ]}
+            onChange={(next) => setValidityMode(next)}
+          />
         </Field>
-        <Field label="失效日">
-          <input type="date" value={validTo} onChange={(event) => setValidTo(event.target.value)} />
+        {validityMode === 'fixed' ? (
+          <>
+            <Field label="生效日">
+              <input type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} />
+            </Field>
+            <Field label="失效日">
+              <input type="date" value={validTo} onChange={(event) => setValidTo(event.target.value)} />
+            </Field>
+          </>
+        ) : (
+          <>
+            <Field label="领取后有效天数" hint="从发放那一刻算起，写入每张券，不随模板改动。">
+              <input inputMode="numeric" value={validDays} onChange={(event) => setValidDays(event.target.value)} />
+            </Field>
+            <Field label="活动截止日" hint="领取后 N 天与这个日期取较早者。">
+              <input type="date" value={validTo} onChange={(event) => setValidTo(event.target.value)} />
+            </Field>
+          </>
+        )}
+        <Field label="开放自助领取" className="span-2" hint="打开后，会员在小程序「我的券」里可以直接领取，每人限领下方张数。">
+          <Switch checked={claimable} label="开放自助领取" onChange={setClaimable} />
         </Field>
+        {claimable ? (
+          <Field label="每人限领（张）">
+            <input inputMode="numeric" value={claimLimit} onChange={(event) => setClaimLimit(event.target.value)} />
+          </Field>
+        ) : null}
         <Field label="内部备注" className="span-2" hint="仅总部可见，不会展示给顾客。">
           <input value={note} maxLength={200} onChange={(event) => setNote(event.target.value)} />
         </Field>
@@ -3100,26 +5168,25 @@ function CouponIssueModal({
  * 二维码内容是 https 链接，微信识别后打开 pages/index/index，并把原链接放进 q 参数。
  * 这里只保存链接前缀；能否真正拉起取决于公网域名备案、规则发布与小程序正式版。
  */
-function SeatQrPanel({ onChange }: { onChange: (baseUrl: string) => void }) {
+function SeatQrPanel() {
   const { can } = useStaffAuth();
   const notify = useToast();
   const query = useApi(() => api.adminSeatQr(), []);
   const editable = can('store:config:edit');
   const [baseUrl, setBaseUrl] = useState('');
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (!query.data) return;
     setBaseUrl(query.data.baseUrl);
-    onChange(query.data.baseUrl);
-  }, [query.data, onChange]);
+  }, [query.data]);
 
   const save = async (next: string) => {
     setBusy(true);
     try {
       const result = await api.adminSaveSeatQr(next.trim());
       setBaseUrl(result.baseUrl);
-      onChange(result.baseUrl);
       notify(
         result.baseUrl
           ? '已保存链接前缀，重新下载桌签即可使用；微信规则发布后扫码才直接打开小程序。'
@@ -3140,9 +5207,27 @@ function SeatQrPanel({ onChange }: { onChange: (baseUrl: string) => void }) {
     <Panel
       eyebrow="门店 · 桌签"
       title="微信原生扫一扫"
-      description="普通二维码不能直接拉起小程序。填写一个已通过 ICP 备案、并在微信公众平台登记了「扫普通链接二维码打开小程序」规则的链接前缀后，桌签二维码会改为链接码：规则发布后，顾客用微信「扫一扫」直接打开小程序，并自动选中本店本桌、默认店内享用；规则发布前，同一链接会打开顾客端 H5 预览（可浏览茶单，不能下单），不会进入本后台。"
-      actions={<Badge tone={active ? 'ok' : 'neutral'}>{active ? '链接码已启用' : '小程序内扫码'}</Badge>}
+      description={
+        active
+          ? `当前桌签为 https 链接码，前缀 ${baseUrl}；微信「扫一扫」直接打开小程序并选中本店本桌。`
+          : '当前桌签为「门店ID|位置」纯文本码，只有在小程序内点「扫桌签」才能识别。'
+      }
+      actions={
+        <div className="row-gap">
+          <Badge tone={active ? 'ok' : 'neutral'}>{active ? '链接码已启用' : '小程序内扫码'}</Badge>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setOpen((value) => !value)}>
+            {open ? '收起设置' : '展开设置'}
+          </button>
+        </div>
+      }
     >
+      {!open ? (
+        <p className="faint tiny" style={{ margin: 0, lineHeight: 1.7 }}>
+          普通二维码不能直接拉起小程序：先在微信公众平台登记「扫普通链接二维码打开小程序」规则，再在这里填写链接前缀即可。
+          这是全局设置，展开后可填写前缀或恢复纯文本码。
+        </p>
+      ) : (
+        <>
       {query.loading && !query.data ? (
         <Spinner label="正在读取桌签扫码配置" />
       ) : query.error && !query.data ? (
@@ -3203,40 +5288,66 @@ function SeatQrPanel({ onChange }: { onChange: (baseUrl: string) => void }) {
           ? '当前桌签内容为 https 链接，小程序内直接扫同一张码也能识别。微信规则发布前，微信「扫一扫」会打开 H5 预览页；位置改名或删除后旧桌签会失效，需要重新下载打印。'
           : '未配置时桌签内容为「门店ID|位置」，只有在小程序内点「扫桌签」才能识别；微信原生「扫一扫」只会显示码内文本。'}
       </p>
+        </>
+      )}
     </Panel>
   );
+}
+
+/** 桌签链接前缀只用于详情页的文案与桌签内容提示；切换列表/详情时重新取一次。 */
+function useSeatQrBase(reloadKey: string) {
+  const query = useApi(() => api.adminSeatQr(), [reloadKey]);
+  const [base, setBase] = useState('');
+  useEffect(() => {
+    if (query.data) setBase(query.data.baseUrl);
+  }, [query.data]);
+  return base;
 }
 
 function StoresPage() {
   const { can } = useStaffAuth();
   const notify = useToast();
   const query = useApi(() => api.adminStores(), []);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
-  const [seatQrBase, setSeatQrBase] = useState('');
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<'all' | 'open' | 'closed'>('all');
   const editable = can('store:config:edit');
+
+  // /admin/stores/:id 复用同一节菜单，避免新增一级菜单；详情本身就是「维护」子页。
+  const detailId = (location.pathname.replace(/^\/admin\/stores\/?/, '').split('/')[0] || '').trim();
+  const seatQrBase = useSeatQrBase(detailId);
 
   if (query.loading && !query.data) return <Spinner label="正在读取门店" />;
   if (query.error && !query.data) return <InlineError message={query.error} />;
   const data = query.data;
   if (!data) return null;
 
-  return (
-    <>
-      <PageHead
-        eyebrow="品牌总部 · 门店"
-        title="门店配置"
-        description="维护门店身份、地址、营业状态、下单渠道、取餐位置与标签机。门店账号只可调整本店库存与售罄，不修改总部配置。"
-        meta={<span>{data.stores.length} 家门店</span>}
-        actions={
-          editable ? (
-            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
-              新增门店
-            </button>
-          ) : null
-        }
-      />
-      <SeatQrPanel onChange={setSeatQrBase} />
-      {data.stores.map((store) => (
+  const backToList = () => navigate('/admin/stores');
+
+  if (detailId) {
+    const store = data.stores.find((item) => item.id === detailId);
+    if (!store) {
+      return (
+        <>
+          <PageHead
+            eyebrow="品牌总部 · 门店"
+            title="门店不存在"
+            description="门店可能已被删除，或这条链接已经过期。"
+          />
+          <EmptyState icon="store" title="找不到这家门店" description={`门店 ID：${detailId}`} action={<button type="button" className="btn btn-primary" onClick={backToList}>返回门店列表</button>} />
+        </>
+      );
+    }
+    return (
+      <>
+        <div className="detail-bar">
+          <button type="button" className="btn btn-sm btn-ghost" onClick={backToList}>
+            ← 返回门店列表
+          </button>
+          <span className="faint tiny">共 {data.stores.length} 家门店</span>
+        </div>
         <StoreCard
           key={store.id}
           store={store}
@@ -3247,7 +5358,102 @@ function StoresPage() {
             query.reload({ silent: true });
           }}
         />
-      ))}
+      </>
+    );
+  }
+
+  const keyword = search.trim().toLowerCase();
+  const filtered = data.stores.filter((store) => {
+    if (status === 'open' && !store.open) return false;
+    if (status === 'closed' && store.open) return false;
+    if (!keyword) return true;
+    return [store.name, store.nameEn, store.short, store.city, store.cityEn, store.address, store.id]
+      .filter(Boolean)
+      .some((text) => String(text).toLowerCase().includes(keyword));
+  });
+  const openCount = data.stores.filter((store) => store.open).length;
+
+  return (
+    <>
+      <PageHead
+        eyebrow="品牌总部 · 门店"
+        title="门店配置"
+        description="列表只显示关键状态，默认收起；门店资料、营业设置、取餐位置与桌签都进详情页维护。门店账号只可调整本店库存与售罄，不修改总部配置。"
+        meta={
+          <span>
+            {data.stores.length} 家门店 · {openCount} 家营业中
+          </span>
+        }
+        actions={
+          editable ? (
+            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+              新增门店
+            </button>
+          ) : null
+        }
+      />
+      <Panel
+        title="门店列表"
+        description="点门店名称或右侧按钮进入详情页维护。"
+        actions={
+          <div className="toolbar">
+            <div className="search">
+              <Icon name="search" size={15} />
+              <input
+                value={search}
+                placeholder="搜索门店 / 城市 / 地址"
+                aria-label="搜索门店"
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+            <Segmented
+              ariaLabel="筛选营业状态"
+              value={status}
+              options={[
+                { value: 'all' as const, label: '全部' },
+                { value: 'open' as const, label: '营业中' },
+                { value: 'closed' as const, label: '未营业' }
+              ]}
+              onChange={setStatus}
+            />
+          </div>
+        }
+        flush
+      >
+        {filtered.length ? (
+          <ul className="store-admin-list">
+            {filtered.map((store) => (
+              <li className="store-admin-row" key={store.id}>
+                <button type="button" className="store-admin-row-main" onClick={() => navigate(`/admin/stores/${store.id}`)}>
+                  <span className="store-admin-row-title">
+                    {store.name}
+                    <span className="faint tiny">{store.nameEn}</span>
+                  </span>
+                  <span className="faint tiny">
+                    {store.city} · {store.address} · {store.hours}
+                  </span>
+                </button>
+                <div className="store-admin-row-meta">
+                  <Badge tone={store.open ? 'ok' : 'warn'}>{store.open ? '营业中' : '未营业'}</Badge>
+                  {store.retailPickup ? <Badge tone="accent">零售提货</Badge> : null}
+                  <span className="faint tiny">{store.positions.length} 个取餐位置</span>
+                  <Badge tone={store.printerStatus === 'online' ? 'ok' : 'warn'}>
+                    标签机{store.printerStatus === 'online' ? '在线' : '离线'}
+                  </Badge>
+                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => navigate(`/admin/stores/${store.id}`)}>
+                    {editable ? '维护资料' : '查看资料'}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="store-admin-empty">
+            <EmptyState icon="store" title="没有匹配的门店" description="换个关键词，或把筛选切回「全部」。" />
+          </div>
+        )}
+      </Panel>
+      <SeatQrPanel />
       <StoreCreateDrawer
         open={creating}
         onClose={() => setCreating(false)}
@@ -3258,6 +5464,73 @@ function StoresPage() {
         }}
       />
     </>
+  );
+}
+
+/**
+ * 门店劳务单价（元/小时）：走独立接口，和门店配置的「保存」互不影响。
+ *
+ * 只有 attendance:settle 才看得到：单价是金额敏感信息，不该随门店配置页外泄。
+ * 落库单位是「分/分钟」，所以输入按小时换算、保存后回显实际生效的小时价。
+ */
+function StoreLaborRateField({ storeId, storeName }: { storeId: string; storeName: string }) {
+  const { can } = useStaffAuth();
+  const notify = useToast();
+  const allowed = can('attendance:settle');
+  const query = useApi(() => (allowed ? api.attendanceLaborRates() : Promise.resolve(null)), [allowed]);
+  const row = query.data?.rows.find((item) => item.storeId === storeId) ?? null;
+  const saved = row ? (row.hourlyCents / 100).toFixed(2) : '';
+  const [value, setValue] = useState(saved);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setValue(saved);
+    // 只在读到的单价变化时覆写输入框，避免每次渲染打断正在输入的数字。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved, storeId]);
+
+  if (!allowed) return null;
+
+  const save = async () => {
+    const yuan = Number(value);
+    if (!Number.isFinite(yuan) || yuan < 0) {
+      notify('劳务单价请填不小于 0 的数字', 'danger');
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.attendanceSaveLaborRate(storeId, { laborRatePerMinCents: Math.round((yuan * 100) / 60) });
+      await query.reload({ silent: true });
+      notify(`${storeName} 劳务单价已更新`, 'ok');
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '保存劳务单价失败', 'danger');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Field
+      label="劳务单价（元/小时）"
+      hint={
+        row
+          ? `结算按这个价乘计价工时；当前 ${money(row.hourlyCents)}/小时（${row.laborRatePerMinCents} 分/分钟）。`
+          : '还没读到单价，保存后可回显实际生效的小时价。'
+      }
+    >
+      <div className="flex">
+        <input
+          inputMode="decimal"
+          value={value}
+          placeholder="30.00"
+          onChange={(event) => setValue(event.target.value)}
+          aria-label="劳务单价（元/小时）"
+        />
+        <button type="button" className="btn btn-sm btn-ghost" disabled={busy || value === saved} onClick={save}>
+          {busy ? '保存中…' : '保存单价'}
+        </button>
+      </div>
+    </Field>
   );
 }
 
@@ -3495,6 +5768,7 @@ function StoreCard({
             onChange={(event) => setDraft({ ...draft, waitMinutes: event.target.value })}
           />
         </Field>
+        <StoreLaborRateField storeId={store.id} storeName={store.name} />
         <div className="span-2">
           <div className="cust-sheet-label">下单渠道</div>
           <div className="row-gap">
@@ -3920,10 +6194,30 @@ function StaffPage() {
         }}
       />
       <p className="page-foot-note">
-        新建账号使用 6–20 位数字手机号作为登录名，初始密码至少 8 位，建议首次登录后由本人修改。账号停用后无法登录，但历史操作记录保留。
+        新建账号使用 6–20 位数字手机号作为登录名，初始密码必填、不限制长度，建议首次登录后由本人修改。账号停用后无法登录，但历史操作记录保留。
       </p>
     </>
   );
+}
+
+const STAFF_FIELD_LABELS: Record<string, string> = {
+  name: '姓名',
+  username: '登录账号',
+  password: '密码',
+  roleIds: '角色',
+  storeIds: '门店范围',
+  allStores: '门店范围',
+  active: '账号状态'
+};
+
+/** 把服务端的校验明细（details）拼成“字段：原因”，不再只显示泛化提示。 */
+function staffErrorMessage(err: ApiError) {
+  const details = Array.isArray(err.details) ? (err.details as Array<{ path?: string; message?: string }>) : [];
+  const lines = details
+    .filter((item) => item && typeof item.message === 'string' && /[\u4e00-\u9fa5]/.test(item.message))
+    .map((item) => `${STAFF_FIELD_LABELS[item.path || ''] || '参数'}：${item.message}`);
+  if (!lines.length) return err.message;
+  return Array.from(new Set(lines)).join('；');
 }
 
 function StaffDrawer({
@@ -3950,11 +6244,15 @@ function StaffDrawer({
   const [active, setActive] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showErrors, setShowErrors] = useState(false);
+  const hydrated = useRef(false);
 
   useEffect(() => {
     if (!editing) return;
     setError(null);
     setBusy(false);
+    setShowErrors(false);
+    hydrated.current = false;
     if (editing === 'new') {
       setName('');
       setUsername('');
@@ -3974,22 +6272,53 @@ function StaffDrawer({
     setActive(editing.active);
   }, [editing]);
 
+  // 角色 / 门店是异步加载的：抽屉先打开、数据后到时默认值为空，保存会被服务端拦成
+  // “请至少选择一个角色 / 请选择授权门店”。数据到位后补一次默认值，且只在用户尚未选择时补。
+  useEffect(() => {
+    if (!isNew || hydrated.current) return;
+    if (!roles.length || !stores.length) return;
+    hydrated.current = true;
+    setRoleIds((list) =>
+      list.length ? list : ([roles.find((role) => role.id === 'r-staff')?.id || roles[0]?.id].filter(Boolean) as string[])
+    );
+    setStoreIds((list) => (list.length ? list : stores.slice(0, 1).map((store) => store.id)));
+  }, [isNew, roles, stores]);
+
   const toggle = (list: string[], value: string) =>
     list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 
+  // 先在前端拦一遍：服务端只能给出笼统的“参数格式不正确”，用户不知道改哪一项。
+  const issues: Array<{ field: 'name' | 'username' | 'password' | 'roles' | 'stores'; message: string }> = [];
+  if (!name.trim()) issues.push({ field: 'name', message: '请填写姓名' });
+  if (name.trim().length > 30) issues.push({ field: 'name', message: '姓名最多 30 个字' });
+  if (isNew && !/^\d{6,20}$/.test(username.trim())) {
+    issues.push({ field: 'username', message: '登录账号需为 6–20 位数字手机号' });
+  }
+  if (isNew && !password) issues.push({ field: 'password', message: '请填写初始密码' });
+  if (password.length > 72) issues.push({ field: 'password', message: '密码最多 72 位' });
+  if (!roleIds.length) issues.push({ field: 'roles', message: '请至少选择一个角色' });
+  if (!allStores && !storeIds.length) issues.push({ field: 'stores', message: '请至少选择一个门店，或开启全部门店' });
+  const fieldError = (field: 'name' | 'username' | 'password' | 'roles' | 'stores') =>
+    showErrors ? issues.find((issue) => issue.field === field)?.message || null : null;
+
   const save = async () => {
+    setShowErrors(true);
+    if (issues.length) {
+      setError(null);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const body: Record<string, unknown> = {
-        name,
+        name: name.trim(),
         roleIds,
         allStores,
         storeIds: allStores ? [] : storeIds,
         active
       };
       if (isNew) {
-        body.username = username;
+        body.username = username.trim();
         body.password = password;
         await api.adminCreateStaff(body);
       } else if (member) {
@@ -3998,7 +6327,7 @@ function StaffDrawer({
       }
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : '保存失败');
+      setError(err instanceof ApiError ? staffErrorMessage(err) : '保存失败');
     } finally {
       setBusy(false);
     }
@@ -4016,17 +6345,17 @@ function StaffDrawer({
           <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
             取消
           </button>
-          <button type="button" className="btn btn-primary" disabled={busy || !name.trim()} onClick={save}>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={save}>
             {busy ? '保存中…' : '保存账号'}
           </button>
         </>
       }
     >
       <div className="form-grid">
-        <Field label="姓名">
+        <Field label="姓名" error={fieldError('name')}>
           <input value={name} maxLength={30} onChange={(event) => setName(event.target.value)} />
         </Field>
-        <Field label="登录账号" hint={isNew ? '6–20 位数字手机号' : '登录名创建后不可修改'}>
+        <Field label="登录账号" hint={isNew ? '6–20 位数字手机号' : '登录名创建后不可修改'} error={fieldError('username')}>
           <input
             value={username}
             maxLength={20}
@@ -4034,7 +6363,11 @@ function StaffDrawer({
             onChange={(event) => setUsername(event.target.value.replace(/\D/g, ''))}
           />
         </Field>
-        <Field label={isNew ? '初始密码' : '重置密码'} hint="至少 8 位；编辑时留空表示不修改。">
+        <Field
+          label={isNew ? '初始密码' : '重置密码'}
+          hint={isNew ? '不限长度；建议首次登录后由本人修改。' : '编辑时留空表示不修改。'}
+          error={fieldError('password')}
+        >
           <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" />
         </Field>
         <Field label="账号状态">
@@ -4058,6 +6391,8 @@ function StaffDrawer({
               </label>
             ))}
           </div>
+          {!roles.length ? <span className="field-hint">角色列表未加载完成，请稍后重试或刷新页面。</span> : null}
+          {fieldError('roles') ? <span className="field-error">{fieldError('roles')}</span> : null}
         </div>
         <div className="span-2">
           <Field label="门店范围">
@@ -4080,6 +6415,10 @@ function StaffDrawer({
               ))}
             </div>
           ) : null}
+          {!allStores && !stores.length ? (
+            <span className="field-hint">门店列表未加载完成，请稍后重试或刷新页面。</span>
+          ) : null}
+          {fieldError('stores') ? <span className="field-error">{fieldError('stores')}</span> : null}
         </div>
       </div>
       <InlineError message={error} />

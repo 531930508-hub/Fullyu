@@ -21,7 +21,9 @@ function service(fetchImpl: typeof fetch) {
     fetchImpl,
     quotaRetryDelayMs: 0
   });
-  return new AuthService({} as never, {} as never, {} as never, { wechat } as never, {} as never);
+  return new AuthService({} as never, {} as never, {} as never, { wechat } as never, {} as never, {
+    perCupCents: async () => 200
+  } as never, { refresh: async (customer: unknown) => customer } as never);
 }
 
 async function failure(promise: Promise<unknown>): Promise<ApiError> {

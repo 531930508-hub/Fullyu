@@ -21,6 +21,18 @@ export type CupLabelPayload = {
   cupIndex: number;
   cupTotal: number;
   printedAt: string;
+  /** 取餐号（A001）。缺省时从杯贴码 A001-1 反推，保证旧任务也能打。 */
+  pickupCode?: string;
+  /** 系列代码 xing / song / qing / mian，用来出英文系列名。 */
+  series?: string;
+  /** 系列中文名；缺省时用品名「·」前的一段。 */
+  seriesName?: string;
+  /** 顾客称呼，只放昵称/姓氏，不放全名与手机号。 */
+  customerName?: string;
+  /** 门店电话或品牌客服号。 */
+  storePhone?: string;
+  /** 下单时间（ISO）；缺省回落到 printedAt。 */
+  orderedAt?: string;
 };
 
 export type PrintJobPayload = {
@@ -40,6 +52,11 @@ export type PrintResult = {
 export interface LabelPrinter {
   readonly name: string;
   readonly mode: string;
+  /**
+   * cloud：服务端可直接把内容推给厂商（飞鹅等整机云通道）；
+   * agent：打印机 USB 直连门店电脑（芯烨 XP-420B），只能由门店打印代理领取任务。
+   */
+  readonly transport?: 'cloud' | 'agent';
   print(job: PrintJobPayload): Promise<PrintResult>;
   status(): Promise<DeviceStatus>;
 }
@@ -157,6 +174,11 @@ export interface PaymentGateway {
   micropay?(request: MicropayRequest): Promise<MicropayResult>;
   /** 主动查询支付结果，用于回调延迟或断网恢复。 */
   query?(request: PaymentQueryRequest): Promise<PaymentQueryResult>;
+  /**
+   * 关闭渠道侧未支付的预下单（订单取消后必须关，否则顾客仍可能把已取消的单付掉）。
+   * 未实现的渠道跳过；结果按 closed/processing/paid/failed 如实返回。
+   */
+  close?(request: PaymentCloseRequest): Promise<PaymentCloseResult>;
   /** 服务商模式下按门店解析子商户号；无此能力或未配置时返回空。 */
   merchantFor?(storeId: string): string;
 }
@@ -175,19 +197,6 @@ export interface PlatformConnector {
   readonly mode: string;
   pullOrders(since: number): Promise<PlatformOrder[]>;
   acknowledge(externalId: string): Promise<boolean>;
-}
-
-export type MemberBenefit = {
-  code: string;
-  tier: 'annual' | 'guest';
-  discountPerCupCents: number;
-  name?: string;
-};
-
-export interface MemberProvider {
-  readonly name: string;
-  readonly mode: string;
-  verify(code: string): Promise<MemberBenefit | null>;
 }
 
 /** 小程序登录态：真实实现为 wx.login code → auth.code2Session。 */
@@ -280,6 +289,27 @@ export type PaymentQueryResult = {
   status: PaymentState;
   providerRef?: string;
   paidAt?: number;
+};
+
+export type PaymentCloseRequest = {
+  orderId: string;
+  storeId: string;
+  method: PaymentChannel;
+  /** 原下单时间：关单必须带原交易请求日期，否则渠道拒绝。 */
+  requestedAt?: number;
+};
+
+export type PaymentCloseResult = {
+  ok: boolean;
+  /**
+   * closed：渠道确认已关单，原单不可再付；
+   * processing：渠道已受理关单、尚未落到终态；
+   * paid：原单其实已支付（不能关），需按迟到支付/退款处理；
+   * failed：渠道明确拒绝关单。
+   */
+  status: 'closed' | 'processing' | 'paid' | 'failed';
+  providerRef?: string;
+  error?: string;
 };
 
 /**
@@ -377,7 +407,6 @@ export type IntegrationKey =
   | 'teaMachine'
   | 'payment'
   | 'platform'
-  | 'member'
   | 'wechat'
   | 'avatar'
   | 'profileSync';
@@ -387,7 +416,6 @@ export type Integrations = {
   teaMachine: TeaMachineAdapter;
   payment: PaymentGateway;
   platform: PlatformConnector;
-  member: MemberProvider;
   wechat: MiniProgramAuthProvider;
   avatar: AvatarStorageProvider;
   profileSync: ProfileSyncProvider;
@@ -402,7 +430,7 @@ export type Integrations = {
 export type IntegrationsMode = 'mock' | 'live' | 'disabled';
 
 /** 可按渠道独立配置模式的外部通道；avatar/profileSync 是本地能力，跟随整体配置。 */
-export type ExternalChannelKey = 'printer' | 'teaMachine' | 'payment' | 'platform' | 'member' | 'wechat';
+export type ExternalChannelKey = 'printer' | 'teaMachine' | 'payment' | 'platform' | 'wechat';
 
 export type IntegrationsConfig = {
   /** 全局模式，也是未单独配置的渠道的默认模式。 */
@@ -447,6 +475,13 @@ export type IntegrationsConfig = {
     assetUrl: (key: string) => string;
   };
   /**
+   * 杯贴打印机驱动：
+   * - feie：飞鹅云标签机（云端直推，需账号 SN）；
+   * - xpyun：芯烨条码云（XP-420B 接云端，服务端直推，不用门店电脑）；
+   * - agent：芯烨 XP-420B 这类 USB 桌面机，由门店打印代理领取 TSPL 任务。
+   */
+  printerDriver: 'feie' | 'xpyun' | 'agent';
+  /**
    * 飞鹅云标签机（杯贴打印，含杯号二维码）。
    * user / UKEY 只从服务器环境变量读取；门店 SN 可单独映射，避免所有店打到同一台机器。
    */
@@ -463,5 +498,20 @@ export type IntegrationsConfig = {
     labelHeightMm: number;
     /** 两张标签纸之间的间距与偏移，形如 2,0（单位 mm）。 */
     labelGap: string;
+  };
+  /**
+   * 芯烨条码云（XP-420B 联网版，走 open-barcode.xpyun.net 的 sprinter 接口）。
+   * 与飞鹅是两套账号体系：这里的 user / UKEY 来自条码云开发者平台，不是打印机机身 KEY。
+   */
+  xpyun: {
+    user?: string;
+    ukey?: string;
+    sn?: string;
+    storeSn: Record<string, string>;
+    apiBase: string;
+    timeoutMs: number;
+    labelWidthMm: number;
+    labelHeightMm: number;
+    gapMm: number;
   };
 };

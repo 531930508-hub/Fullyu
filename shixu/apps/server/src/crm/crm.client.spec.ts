@@ -87,6 +87,34 @@ describe('CrmClient', () => {
     await expect(client.getByLocalUser('C999')).resolves.toBeNull();
   });
 
+  it('资料回写带签名，返回新版本号供本地快照对齐', async () => {
+    const client = new CrmClient();
+    await client.resolve({ localUserId: 'C250', name: '原昵称' });
+
+    const updated = await client.updateProfile('C250', {
+      name: '新昵称',
+      gender: 1,
+      birthday: '1996-03-08',
+      avatarUrl: 'https://cdn.example.com/a.jpg'
+    });
+    expect(updated).toMatchObject({
+      name: '新昵称',
+      gender: 1,
+      birthday: '1996-03-08',
+      avatarUrl: 'https://cdn.example.com/a.jpg',
+      profileVersion: 1
+    });
+
+    const last = fake.requests[fake.requests.length - 1];
+    expect(last).toMatchObject({ method: 'POST', path: '/api/external/members/profile', signatureOk: true });
+    expect(JSON.parse(last.body)).toMatchObject({
+      localUserId: 'C250',
+      name: '新昵称',
+      gender: 1,
+      birthday: '1996-03-08'
+    });
+  });
+
   it('身份冲突透传为 409，由顾客联系客服人工合并', async () => {
     const client = new CrmClient();
     fake.failNext = {

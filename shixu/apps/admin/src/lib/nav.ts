@@ -31,6 +31,8 @@ export type OpsNavGroup<T extends OpsNavItem = OpsNavItem> = {
 export const OPS_NAV: OpsNavItem[] = [
   // 营业台是门店每天最常用的入口：固定在一级，一次点击直达，不折进分组。
   { key: 'store/workbench', label: '营业台', icon: 'grid', perm: 'pos:use', group: '门店营业', pinned: true },
+  // 到店确认排在门店组第一位：开门第一件事就是它，比帮客人点单更早。
+  { key: 'store/attendance', label: '到店确认', icon: 'clock', perm: 'attendance:clock', group: '门店营业' },
   { key: 'store/assisted', label: '帮客人点单', icon: 'plus', perm: 'pos:use', group: '门店营业' },
   { key: 'store/retail', label: '零售提取', icon: 'bag', perm: 'retail:handover', group: '门店营业' },
   { key: 'store/orders', label: '订单记录', icon: 'receipt', perm: 'order:view', group: '门店营业' },
@@ -41,6 +43,13 @@ export const OPS_NAV: OpsNavItem[] = [
   { key: 'admin/finance', label: '财务流水', icon: 'coin', perm: 'finance:view', group: '经营分析' },
   { key: 'admin/profit', label: '门店利润', icon: 'sliders', perm: 'dashboard:profit', group: '经营分析' },
   { key: 'admin/expenses', label: '运营费用', icon: 'receipt', perm: 'finance:view', group: '经营分析' },
+  // 排班在在店看板之前：先排「几点该来」，再看「今天谁在」。
+  { key: 'admin/schedule', label: '排班表', icon: 'calendar', perm: 'attendance:view', group: '运营管理' },
+  { key: 'admin/attendance', label: '在店看板', icon: 'users', perm: 'attendance:view', group: '运营管理' },
+  // 月报紧跟在店看板之后：看板看「今天谁在」，月报看「这个月谁出勤了多少小时」。
+  { key: 'admin/report', label: '考勤月报', icon: 'chart', perm: 'attendance:view', group: '运营管理' },
+  // 结算紧跟在店看板之后：看板看「今天谁在」，结算看「这个月该结多少」。
+  { key: 'admin/settlements', label: '劳务结算', icon: 'coin', perm: 'attendance:settle', group: '运营管理' },
   { key: 'admin/approvals', label: '审批中心', icon: 'check', perm: 'approval:view', group: '运营管理' },
   { key: 'admin/losses', label: '报损与损耗', icon: 'alert', perm: 'loss:view', group: '运营管理' },
   { key: 'admin/coupons', label: '优惠券', icon: 'megaphone', perm: 'coupon:view', group: '运营管理' },

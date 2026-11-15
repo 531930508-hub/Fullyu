@@ -19,7 +19,9 @@ export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
 export const EXPENSE_SOURCES: Record<string, string> = {
   manual: '手动录入',
   import: '批量导入',
-  seed: '开账'
+  seed: '开账',
+  /** 劳务月结确认时自动投影的费用行，不允许手工删改 */
+  settlement: '劳务结算'
 };
 
 export type ParsedSheet = {

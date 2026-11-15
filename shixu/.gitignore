@@ -9,5 +9,7 @@ unpackage/
 apps/server/prisma/*.db
 apps/server/prisma/*.db-journal
 apps/server/uploads/
+# 清库/迁移前的本地库备份（含真实会员手机号，只留在本机）
+backups/
 .env
 .env.local

@@ -7,11 +7,12 @@ export const PERMISSION_MODULES = [
   { key: 'loss', name: '报损与损耗' },
   { key: 'approval', name: '审批' },
   { key: 'coupon', name: '会员与券' },
+  { key: 'attendance', name: '在店与工时' },
   { key: 'rbac', name: '账号与权限' },
   { key: 'log', name: '操作记录' }
 ] as const;
 
-/** 33 个权限点；level: MENU=页面可见 / ACTION=操作 / FIELD=敏感字段。 */
+/** 38 个权限点；level: MENU=页面可见 / ACTION=操作 / FIELD=敏感字段。 */
 export const PERMISSIONS = [
   { code: 'dashboard:view', name: '经营概览', module: 'dashboard', level: 'MENU' },
   { code: 'dashboard:profit', name: '利润与成本（敏感）', module: 'dashboard', level: 'FIELD' },
@@ -42,6 +43,12 @@ export const PERMISSIONS = [
   { code: 'approval:config', name: '审批流配置', module: 'approval', level: 'ACTION' },
   { code: 'coupon:view', name: '优惠券与发券记录', module: 'coupon', level: 'MENU' },
   { code: 'coupon:manage', name: '创建与发放优惠券', module: 'coupon', level: 'ACTION' },
+  // 在店时段：口径是「灵活用工的服务时段记录」，不是考勤。金额只在结算点产生。
+  { code: 'attendance:clock', name: '到店 / 离店确认与补签', module: 'attendance', level: 'ACTION' },
+  { code: 'attendance:view', name: '在店看板与服务时段', module: 'attendance', level: 'MENU' },
+  { code: 'attendance:manage', name: '维护计划班次', module: 'attendance', level: 'ACTION' },
+  { code: 'attendance:approve', name: '审批补签与直接补正（敏感）', module: 'attendance', level: 'ACTION' },
+  { code: 'attendance:settle', name: '劳务结算出账与入账（敏感）', module: 'attendance', level: 'ACTION' },
   { code: 'rbac:view', name: '权限管理', module: 'rbac', level: 'MENU' },
   { code: 'rbac:edit', name: '维护账号与角色', module: 'rbac', level: 'ACTION' },
   { code: 'rbac:scope', name: '配置数据范围（敏感）', module: 'rbac', level: 'FIELD' },
@@ -77,7 +84,8 @@ export const ROLE_TEMPLATES: RoleTemplate[] = [
     perms: [
       'dashboard:view', 'dashboard:profit', 'finance:view', 'finance:export',
       'finance:expense', 'order:view', 'order:refund:approve', 'loss:view',
-      'loss:approve', 'approval:view', 'approval:config', 'coupon:view', 'log:view'
+      'loss:approve', 'approval:view', 'approval:config', 'coupon:view', 'log:view',
+      'attendance:view', 'attendance:approve', 'attendance:settle'
     ]
   },
   {
@@ -90,7 +98,8 @@ export const ROLE_TEMPLATES: RoleTemplate[] = [
       'dashboard:view', 'product:view', 'product:edit', 'product:price',
       'product:publish', 'mapping:view', 'mapping:edit', 'store:config',
       'store:config:edit', 'order:view', 'loss:view', 'loss:approve',
-      'loss:config', 'approval:view', 'coupon:view', 'coupon:manage', 'log:view'
+      'loss:config', 'approval:view', 'coupon:view', 'coupon:manage', 'log:view',
+      'attendance:view', 'attendance:approve'
     ]
   },
   {
@@ -102,7 +111,7 @@ export const ROLE_TEMPLATES: RoleTemplate[] = [
     perms: [
       'dashboard:view', 'pos:use', 'retail:handover', 'order:view',
       'order:refund', 'order:refund:request', 'store:stock', 'store:device',
-      'loss:report', 'log:view'
+      'loss:report', 'log:view', 'attendance:clock', 'attendance:view', 'attendance:manage'
     ]
   },
   {
@@ -114,7 +123,7 @@ export const ROLE_TEMPLATES: RoleTemplate[] = [
     perms: [
       'dashboard:view', 'pos:use', 'retail:handover', 'order:view',
       'order:refund', 'order:refund:request', 'store:stock', 'store:device',
-      'loss:report', 'log:view'
+      'loss:report', 'log:view', 'attendance:clock', 'attendance:view', 'attendance:manage'
     ]
   },
   {
@@ -123,7 +132,7 @@ export const ROLE_TEMPLATES: RoleTemplate[] = [
     description: '营业台、代点、零售交付与订单查看，退款需申请',
     builtin: true,
     scope: 'STORES',
-    perms: ['pos:use', 'retail:handover', 'order:view', 'order:refund:request']
+    perms: ['pos:use', 'retail:handover', 'order:view', 'order:refund:request', 'attendance:clock']
   },
   {
     id: 'r-audit',
@@ -134,7 +143,7 @@ export const ROLE_TEMPLATES: RoleTemplate[] = [
     perms: [
       'dashboard:view', 'dashboard:profit', 'finance:view', 'product:view',
       'mapping:view', 'store:config', 'order:view', 'loss:view',
-      'approval:view', 'coupon:view', 'rbac:view', 'log:view'
+      'approval:view', 'coupon:view', 'rbac:view', 'log:view', 'attendance:view'
     ]
   }
 ];
