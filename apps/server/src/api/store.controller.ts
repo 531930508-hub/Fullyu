@@ -162,16 +162,20 @@ export class StoreController {
     assertStoreAccess(staff, input.storeId);
     const business = input.business ?? 'fresh';
     let memberDiscountPerCupCents = 0;
+    let memberCustomerId: string | null = null;
     if (input.memberCode && business === 'fresh') {
       const benefit = await this.auth.memberBenefitByCode(input.memberCode);
       if (!benefit) throw badRequest('会员码无效，请重新扫码或改为标准价收款');
       memberDiscountPerCupCents = benefit.discountPerCupCents;
+      // 关联顾客身份，订单上报 CRM 时才能按 localUserId 记录会员节省。
+      memberCustomerId = benefit.customerId;
     }
     const result = await this.orders.createOrder({
       ...input,
       business,
       channel: 'assisted',
       ownerKind: 'guest',
+      customerId: memberCustomerId,
       memberDiscountPerCupCents,
       actor: staff,
       clientIp: req.ip
@@ -203,7 +207,16 @@ export class StoreController {
     const input = parseInput(z.object({ code: z.string().trim().min(1).max(40) }), body);
     const benefit = await this.auth.memberBenefitByCode(input.code);
     if (!benefit) throw badRequest('会员码无效，请重新扫码或改为标准价收款');
-    return { benefit, mode: 'db' };
+    return {
+      benefit: {
+        code: benefit.code,
+        tier: benefit.tier,
+        discountPerCupCents: benefit.discountPerCupCents,
+        name: benefit.name,
+        memberUntil: benefit.memberUntil
+      },
+      mode: 'db'
+    };
   }
 
   @Get('orders/:id')

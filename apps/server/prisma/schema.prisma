@@ -235,6 +235,8 @@ model Customer {
   memberUntil    DateTime? @map("member_until")
   crmCardState   String?  @map("crm_card_state")
   memberSyncedAt DateTime? @map("member_synced_at")
+  // 最近一次与 CRM 对齐的资料版本号；CRM profileVersion 更新时按新值回写本地快照。
+  crmProfileVersion Int  @default(0) @map("crm_profile_version")
   createdAt  DateTime @default(now()) @map("created_at")
 
   orders  Order[]
@@ -387,6 +389,10 @@ model Order {
   // 自带杯优惠：只由营业台代点声明（顾客自带杯），按杯数逐杯减免，金额已分摊进订单行。
   byoCupCups          Int     @default(0) @map("byo_cup_cups")
   byoCupDiscountCents Int     @default(0) @map("byo_cup_discount_cents")
+  // 年卡会员每杯立减：服务端按库内会籍与 CRM 权益计算，金额已分摊进订单行，并作为 CRM savedCents 上报。
+  memberDiscountPerCupCents Int @default(0) @map("member_discount_per_cup_cents")
+  memberDiscountCups        Int @default(0) @map("member_discount_cups")
+  memberDiscountCents       Int @default(0) @map("member_discount_cents")
   pickupCode    String?   @map("pickup_code")
   pickupStoreId String?   @map("pickup_store_id")
   printStatus   String    @default("pending") @map("print_status")
@@ -434,6 +440,8 @@ model OrderItem {
   // 该行里享受自带杯减免的杯数与该行减免金额，便于对账与退款口径复核。
   byoCupQty           Int @default(0) @map("byo_cup_qty")
   byoCupDiscountCents Int @default(0) @map("byo_cup_discount_cents")
+  // 该行年卡会员立减金额，已从 totalCents 扣掉；退款按实付比例分摊时天然包含。
+  memberDiscountCents Int @default(0) @map("member_discount_cents")
   temp           String?
   ice            String?
 

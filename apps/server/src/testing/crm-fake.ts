@@ -12,6 +12,10 @@ export type FakeCrmMember = {
   memberNo: string;
   name: string;
   balance: number;
+  gender?: number | null;
+  birthday?: string | null;
+  avatarUrl?: string | null;
+  profileVersion: number;
 };
 
 export type FakeCrmRequest = {
@@ -116,13 +120,41 @@ export async function startFakeCrm(options: {
           memberId: `mem-${seq}`,
           memberNo: `FY-TEST-${String(seq).padStart(6, '0')}`,
           name: String(input.name || '会员'),
-          balance: 0
+          balance: 0,
+          gender: null,
+          birthday: null,
+          avatarUrl: null,
+          profileVersion: 0
         };
         members.set(localUserId, member);
         reply(res, 200, { ...member, created: true, bound: false });
         return;
       }
       reply(res, 200, { ...member, created: false, bound: false });
+      return;
+    }
+
+    if (req.method === 'POST' && path === '/api/external/members/profile') {
+      const input = JSON.parse(rawBody) as Record<string, unknown>;
+      const member = members.get(String(input.localUserId || ''));
+      if (!member) {
+        reply(res, 404, { error: 'NOT_FOUND', message: '该本地用户尚未同步到 CRM，请先完成身份解析' });
+        return;
+      }
+      if (typeof input.name === 'string') member.name = input.name;
+      if (input.gender !== undefined) member.gender = input.gender as number | null;
+      if (input.birthday !== undefined) member.birthday = input.birthday as string | null;
+      if (input.avatarUrl !== undefined) member.avatarUrl = input.avatarUrl as string | null;
+      member.profileVersion += 1;
+      reply(res, 200, {
+        memberId: member.memberId,
+        memberNo: member.memberNo,
+        name: member.name,
+        gender: member.gender,
+        birthday: member.birthday,
+        avatarUrl: member.avatarUrl,
+        profileVersion: member.profileVersion
+      });
       return;
     }
 

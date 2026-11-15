@@ -38,13 +38,14 @@ const orderSchema = z.object({
 
 const profileSchema = z
   .object({
-    // 姓名以 CRM 统一账号为准，这里不再接收：旧版本小程序传上来的 name 被忽略。
+    // 昵称由顾客自填，同时回写 CRM 统一账号；1–20 字，去首尾空白后校验。
+    name: z.string().trim().min(1, '请填写昵称').max(20, '昵称不能超过 20 个字').optional(),
     // 1=男 2=女 null=未填写，与在场一致
     gender: z.union([z.literal(1), z.literal(2), z.null()]).optional(),
     birthday: z.union([z.string().max(10), z.null()]).optional()
   })
   .refine(
-    (value) => value.gender !== undefined || value.birthday !== undefined,
+    (value) => value.name !== undefined || value.gender !== undefined || value.birthday !== undefined,
     { message: '没有需要更新的资料' }
   );
 
@@ -204,7 +205,7 @@ export class CustomerController {
     return this.auth.bindWechatPhone(customer.id, input);
   }
 
-  /** 个人资料维护：性别、生日（姓名以 CRM 统一账号为准，小程序不可改）。字段口径与在场一致。 */
+  /** 个人资料维护：昵称、性别、生日；昵称同时同步会员中心统一账号。字段口径与在场一致。 */
   @Put('profile')
   @UseGuards(CustomerGuard)
   async updateProfile(@Body() body: unknown, @Customer() customer: CustomerContext) {

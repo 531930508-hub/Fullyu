@@ -30,6 +30,18 @@ export type CrmMember = {
   status?: string;
   created?: boolean;
   bound?: boolean;
+  gender?: number | null;
+  birthday?: string | null;
+  avatarUrl?: string | null;
+  profileVersion?: number;
+};
+
+/** 资料回写只带顾客自己可编辑的字段；未传的字段 CRM 保持原值。 */
+export type CrmProfilePatch = {
+  name?: string;
+  gender?: number | null;
+  birthday?: string | null;
+  avatarUrl?: string | null;
 };
 
 export class CrmResponseError extends Error {
@@ -97,7 +109,30 @@ export class CrmClient {
     }
   }
 
-  private normalize(member: CrmMember): CrmMember {
+  /**
+   * 资料回写：小程序编辑后覆盖 CRM 对应字段。
+   * 返回最新 profileVersion，调用方存本地快照，避免下次回源被旧资料覆盖。
+   */
+  async updateProfile(
+    localUserId: string,
+    patch: CrmProfilePatch
+  ): Promise<CrmMember & { profileVersion: number }> {
+    try {
+      const member = await this.request<CrmMember & { profileVersion: number }>(
+        'POST',
+        '/api/external/members/profile',
+        { localUserId, ...patch }
+      );
+      if (!member || typeof member.memberId !== 'string' || !Number.isFinite(member.profileVersion)) {
+        throw new ApiError(503, '会员服务返回数据异常，请稍后重试', { code: 'CRM_UNAVAILABLE' });
+      }
+      return member;
+    } catch (error) {
+      throw this.mapError(error);
+    }
+  }
+
+  private normalize<T extends CrmMember>(member: T): T {
     if (!member || typeof member.memberId !== 'string' || !Number.isFinite(member.balance)) {
       throw new ApiError(503, '会员服务返回数据异常，请稍后重试', { code: 'CRM_UNAVAILABLE' });
     }

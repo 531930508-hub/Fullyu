@@ -991,10 +991,16 @@
         </text>
       </view>
 
-      <!-- 姓名以 CRM 统一账号为准：这里只展示，顾客不需要也不可能在小程序里另设一个名字。 -->
+      <!-- 昵称由顾客自填，保存后同步会员中心统一账号，门店与其他端看到同一个名字。 -->
       <view class="form-row">
-        <text class="form-label">{{ tt('姓名', 'Name') }}</text>
-        <text class="form-static">{{ state.customer.name }}</text>
+        <text class="form-label">{{ tt('昵称', 'Nickname') }}</text>
+        <input
+          class="form-input"
+          :value="profileForm.name"
+          maxlength="20"
+          :placeholder="tt('怎么称呼你', 'What should we call you?')"
+          @input="onName"
+        />
       </view>
 
       <text class="option-title">{{ tt('性别', 'Gender') }}</text>
@@ -1026,7 +1032,7 @@
           {{ profileSaving ? tt('正在保存…', 'Saving…') : tt('保存', 'Save') }}
         </button>
       </view>
-      <text class="note section-space">{{ tt('姓名取自会员中心统一账号，不支持在小程序内修改；生日与性别选填，仅用于会员关怀。', 'Your name comes from your member account and cannot be changed here. Birthday and gender are optional and used for member care.') }}</text>
+      <text class="note section-space">{{ tt('昵称会同步到会员中心统一账号；生日与性别选填，仅用于会员关怀。', 'Your nickname syncs to your member account. Birthday and gender are optional and used for member care.') }}</text>
     </BottomSheet>
 
     <!-- ------------------------------ 会员码 ------------------------------ -->
@@ -1543,7 +1549,7 @@ const couponAuto = ref(true);
 const memberOpen = ref(false);
 const profileOpen = ref(false);
 // 姓名不在小程序里设置：展示 CRM 统一账号的姓名，可编辑的只有性别与生日。
-const profileForm = reactive({ gender: null, birthday: '' });
+const profileForm = reactive({ name: '', gender: null, birthday: '' });
 const profileSaving = ref(false);
 const avatarSaving = ref(false);
 const profileError = ref('');
@@ -3419,6 +3425,7 @@ function openProfileEdit() {
     openLogin(() => openProfileEdit());
     return;
   }
+  profileForm.name = state.customer.name || '';
   profileForm.gender = state.customer.gender ?? null;
   profileForm.birthday = state.customer.birthday || '';
   profileError.value = '';
@@ -3434,6 +3441,10 @@ function pickGender(value) {
   profileForm.gender = profileForm.gender === value ? null : value;
 }
 
+function onName(event) {
+  profileForm.name = (event.detail && event.detail.value) || '';
+}
+
 function onBirthday(event) {
   profileForm.birthday = (event.detail && event.detail.value) || '';
 }
@@ -3443,7 +3454,13 @@ async function saveProfile() {
   profileSaving.value = true;
   profileError.value = '';
   try {
+    const name = profileForm.name.trim();
+    if (!name) {
+      profileError.value = tt('请填写昵称', 'Please enter a nickname');
+      return;
+    }
     const result = await api.updateProfile({
+      name,
       gender: profileForm.gender ?? null,
       birthday: profileForm.birthday || null
     });

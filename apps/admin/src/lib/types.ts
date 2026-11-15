@@ -100,6 +100,8 @@ export type OrderItem = {
   /** 本行参与自带杯减免的杯数（按加入顺序分配）。 */
   byoCupQty?: number;
   byoCupDiscountCents?: number;
+  /** 本行年卡会员每杯立减金额。 */
+  memberDiscountCents?: number;
   temp: string | null;
   ice: string | null;
 };
@@ -138,6 +140,10 @@ export type Order = {
   /** 自带杯：杯数与按杯减免金额，退款时按实付口径分摊。 */
   byoCupCups?: number;
   byoCupDiscountCents?: number;
+  /** 年卡会员：每杯立减标准、享受杯数与减免总额。 */
+  memberDiscountPerCupCents?: number;
+  memberDiscountCups?: number;
+  memberDiscountCents?: number;
   couponDiscountCents?: number;
   preparedAt: number | null;
   createdAt: number;

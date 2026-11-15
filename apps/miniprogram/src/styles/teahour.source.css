@@ -1715,6 +1715,19 @@ uni-page-body .profile-edit-link .app-icon { display: inline-block; vertical-ali
   align-items: center;
   justify-content: space-between;
 }
+/* 顾客可编辑的文本字段：外形与日期选择一致。 */
+.form-row .form-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  background: var(--card);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 42px;
+  color: var(--art-ink);
+}
 /* 只读资料（例如 CRM 统一用户名）：外形与输入框一致，但底色区分「不可编辑」。 */
 .form-row .form-static {
   display: block;

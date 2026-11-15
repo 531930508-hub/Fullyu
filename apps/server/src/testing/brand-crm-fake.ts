@@ -30,7 +30,7 @@ export type FakeBrandCrm = {
   delayMs: number;
   giftClaims: Set<string>;
   feedback: Array<{ localUserId: string; content: string; allowQuote: boolean }>;
-  orders: Map<string, { localUserId: string; paidCents: number; refundCents: number }>;
+  orders: Map<string, { localUserId: string; paidCents: number; savedCents: number; refundCents: number }>;
   missingMembers: Set<string>;
   close: () => Promise<void>;
 };
@@ -362,6 +362,7 @@ export async function startFakeBrandCrm(options: {
         localUserId?: string;
         orderRef?: string;
         paidCents?: number;
+        savedCents?: number;
       };
       if (!input.localUserId || state.missingMembers.has(input.localUserId)) {
         reply(res, 404, { error: 'MEMBER_NOT_FOUND', message: '该用户尚未同步到 CRM' });
@@ -376,6 +377,7 @@ export async function startFakeBrandCrm(options: {
         state.orders.set(input.orderRef || '', {
           localUserId: input.localUserId,
           paidCents: input.paidCents || 0,
+          savedCents: input.savedCents || 0,
           refundCents: 0
         });
       }

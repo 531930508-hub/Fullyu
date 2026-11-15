@@ -101,6 +101,24 @@ describe('顾客下单主流程', () => {
     expect(discounted.status).toBe(201);
     expect(discounted.body.order.totalCents).toBe(1800);
     expect(discounted.body.order.items[0].unitPriceCents).toBe(1800);
+    expect(discounted.body.order).toMatchObject({
+      customerId: annual.id,
+      memberDiscountPerCupCents: 200,
+      memberDiscountCups: 1,
+      memberDiscountCents: 200
+    });
+    expect(discounted.body.order.items[0].memberDiscountCents).toBe(200);
+
+    const stored = await h.prisma.order.findUnique({
+      where: { id: discounted.body.order.id },
+      include: { items: true }
+    });
+    expect(stored).toMatchObject({
+      memberDiscountPerCupCents: 200,
+      memberDiscountCups: 1,
+      memberDiscountCents: 200
+    });
+    expect(stored?.items[0].memberDiscountCents).toBe(200);
   });
 
   it('年卡到期后不再享受每杯立减', async () => {
@@ -301,6 +319,12 @@ describe('顾客下单主流程', () => {
     expect(discounted.body.order.channel).toBe('assisted');
     expect(discounted.body.order.items[0].unitPriceCents).toBe(1800);
     expect(discounted.body.order.totalCents).toBe(3600);
+    expect(discounted.body.order).toMatchObject({
+      customerId: annual.id,
+      memberDiscountPerCupCents: 200,
+      memberDiscountCups: 2,
+      memberDiscountCents: 400
+    });
 
     const plain = await h.api('post', '/store/orders', manager, {
       storeId: 'sh',

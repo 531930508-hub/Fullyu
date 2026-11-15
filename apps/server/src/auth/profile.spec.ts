@@ -1,8 +1,8 @@
 /**
- * 顾客个人资料维护：性别、生日与头像。
- * 姓名以 CRM 统一账号为准，小程序不再提供单独设置（旧客户端传的 name 被忽略）。
+ * 顾客个人资料维护：昵称、性别、生日与头像。
+ * 昵称同时回写 CRM 统一账号，其他端看到同一个名字。
  * 字段口径与在场一致（gender 1=男 2=女 null=未填写，birthday 精确到日）。
- * 跨系统同步由 ProfileSyncProvider 承接，当前为占位实现，只校验业务代码的用法。
+ * 跨系统同步由 ProfileSyncProvider / CRM 客户端承接，本文件只校验业务代码的用法。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -66,19 +66,18 @@ describe('顾客个人资料', () => {
     expect(saved?.birthday?.toISOString().slice(0, 10)).toBe('1995-03-08');
   });
 
-  it('姓名不能通过小程序资料接口修改', async () => {
-    const me = await h.customer('统一姓名');
-    // 只想改名：没有任何可更新字段，直接拒绝。
-    expect((await h.api('put', '/customer/profile', me.token, { name: '沈听雨' })).status).toBe(400);
-
-    // 夹带姓名时只保存性别，姓名以 CRM 统一账号为准。
-    const res = await h.api('put', '/customer/profile', me.token, { name: '沈听雨', gender: 1 });
+  it('顾客可以修改昵称，并落库', async () => {
+    const me = await h.customer('旧昵称');
+    const res = await h.api('put', '/customer/profile', me.token, { name: '  沈听雨  ' });
     expect(res.status).toBe(200);
-    expect(res.body.customer.name).toBe('统一姓名');
-    expect(res.body.customer.gender).toBe(1);
+    expect(res.body.customer.name).toBe('沈听雨');
 
     const saved = await h.prisma.customer.findUnique({ where: { id: me.id } });
-    expect(saved?.name).toBe('统一姓名');
+    expect(saved?.name).toBe('沈听雨');
+
+    // 空白昵称与超长昵称拒绝，避免把名字清空。
+    expect((await h.api('put', '/customer/profile', me.token, { name: '   ' })).status).toBe(400);
+    expect((await h.api('put', '/customer/profile', me.token, { name: '名'.repeat(21) })).status).toBe(400);
   });
 
   it('只传一个字段时不会清空其他字段', async () => {

@@ -94,6 +94,8 @@ type PreparedLine = {
   byoCupQty: number;
   /** 该行自带杯减免金额，已从 totalCents 扣掉。 */
   byoCupDiscountCents: number;
+  /** 该行年卡会员每杯立减金额，已从 totalCents 扣掉。 */
+  memberDiscountCents: number;
 };
 
 const ORDER_INCLUDE = {
@@ -240,6 +242,7 @@ export class OrdersService {
     const lines: PreparedLine[] = [];
     let grossCents = 0;
     let discountCents = 0;
+    let discountCups = 0;
     let costCents = 0;
     for (const mergedLine of merged.values()) {
       const product = mergedLine.product;
@@ -256,8 +259,10 @@ export class OrdersService {
           ? Math.min(Math.max(0, Math.round(input.memberDiscountPerCupCents)), product.priceCents)
           : 0;
       const unitPriceCents = product.priceCents - discount;
+      const memberDiscountCents = discount * mergedLine.qty;
       grossCents += product.priceCents * mergedLine.qty;
-      discountCents += discount * mergedLine.qty;
+      discountCents += memberDiscountCents;
+      if (discount > 0) discountCups += mergedLine.qty;
       costCents += product.costCents * mergedLine.qty;
       lines.push({
         product,
@@ -268,7 +273,8 @@ export class OrdersService {
         temp: mergedLine.temp,
         ice: mergedLine.ice,
         byoCupQty: 0,
-        byoCupDiscountCents: 0
+        byoCupDiscountCents: 0,
+        memberDiscountCents
       });
     }
 
@@ -301,6 +307,11 @@ export class OrdersService {
       coupon,
       grossCents,
       discountCents,
+      memberDiscountPerCupCents: discountCents
+        ? Math.max(0, Math.round(Number(input.memberDiscountPerCupCents) || 0))
+        : 0,
+      memberDiscountCups: discountCups,
+      memberDiscountCents: discountCents,
       byoCupCups: byoCup.cups,
       byoCupDiscountCents,
       couponDiscountCents,
@@ -399,6 +410,9 @@ export class OrdersService {
           couponDiscountCents: prepared.couponDiscountCents,
           byoCupCups: prepared.byoCupCups,
           byoCupDiscountCents: prepared.byoCupDiscountCents,
+          memberDiscountPerCupCents: prepared.memberDiscountPerCupCents,
+          memberDiscountCups: prepared.memberDiscountCups,
+          memberDiscountCents: prepared.memberDiscountCents,
           customerId: input.customerId || null,
           ownerKind: input.ownerKind || 'customer',
           createdBy: input.actor?.id || null,
@@ -439,6 +453,7 @@ export class OrdersService {
             costCents: line.costCents,
             byoCupQty: line.byoCupQty,
             byoCupDiscountCents: line.byoCupDiscountCents,
+            memberDiscountCents: line.memberDiscountCents,
             temp: line.temp,
             ice: line.ice
           }

@@ -9,9 +9,10 @@ import { ApiError, badRequest, tooManyRequests, unauthorized } from '../common/e
 import { newId, dayStamp } from '../common/ids';
 import { logAction } from '../common/logs';
 import { mapCustomer, mapStaffSummary } from '../common/mappers';
+import { assetUrl } from '../common/assets';
 import { LoginAttemptLimiter } from './login-attempts';
 import { loginRateLimit } from '../config/config';
-import { CrmClient, type CrmIdentity } from '../crm/crm.client';
+import { CrmClient, type CrmIdentity, type CrmMember } from '../crm/crm.client';
 import { BrandPerksService, DEFAULT_PER_CUP_CENTS } from '../crm/brand-perks.service';
 import { MembershipService } from '../crm/membership.service';
 
@@ -35,6 +36,7 @@ const WECHAT_RATE_LIMIT_CODES = new Set([45011]);
 @Injectable()
 export class AuthService {
   private readonly wechatLogger = new Logger('WechatAuth');
+  private readonly logger = new Logger('AuthService');
   /** 后台登录失败计数：按「来源 IP + 账号」隔离，成功登录清零。 */
   private readonly loginAttempts = new LoginAttemptLimiter(loginRateLimit());
 
@@ -293,6 +295,7 @@ export class AuthService {
     const row = await this.membership.refresh(found);
     const discountPerCupCents = await this.annualDiscountFor(row);
     return {
+      customerId: row.id,
       code: row.memberCode,
       tier: discountPerCupCents ? 'annual' : 'standard',
       discountPerCupCents,
@@ -303,18 +306,20 @@ export class AuthService {
 
   /**
    * 顾客资料维护：性别、生日。
-   * 姓名以会员中心统一账号为准，小程序不再提供单独设置（旧客户端传上来的 name 会被忽略）。
-   * 字段口径与在场一致（gender 1=男 2=女 null=未填写，birthday 精确到日），
-   * 落库后交 ProfileSyncProvider 外推，待第三方用户中心接入时替换实现。
+   * 顾客可改：昵称、性别、生日。
+   * 姓名同时回写会员中心统一账号，其他业务端与店员端立即看到同一个名字；
+   * 字段口径与在场一致（gender 1=男 2=女 null=未填写，birthday 精确到日）。
+   * 落库后交 syncProfile 外推到 CRM，CRM 不可用时只记日志，本地编辑不丢。
    */
   async updateCustomerProfile(
     customerId: string,
-    input: { gender?: number | null; birthday?: string | null }
+    input: { name?: string; gender?: number | null; birthday?: string | null }
   ) {
     const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
     if (!customer) throw unauthorized('顾客会话不存在');
 
-    const data: { gender?: number | null; birthday?: Date | null } = {};
+    const data: { name?: string; gender?: number | null; birthday?: Date | null } = {};
+    if (input.name !== undefined) data.name = normalizeCustomerName(input.name);
     if (input.gender !== undefined) data.gender = normalizeGender(input.gender);
     if (input.birthday !== undefined) data.birthday = normalizeBirthday(input.birthday);
     if (!Object.keys(data).length) throw badRequest('没有需要更新的资料');
@@ -369,7 +374,41 @@ export class AuthService {
     const perCupCents = await this.perkRates.perCupCents();
     if (!this.crm.enabled) return customerPayload(fresh, undefined, perCupCents);
     const member = await this.crm.resolve(this.crmIdentity(fresh));
-    return customerPayload(await this.adoptCrmName(fresh, member.name), member.balance, perCupCents);
+    const synced = await this.adoptCrmProfile(
+      await this.adoptCrmName(fresh, member.name),
+      member
+    );
+    return customerPayload(synced, member.balance, perCupCents);
+  }
+
+  /**
+   * CRM 资料版本比本地快照新时，把 CRM 上的性别/生日写回本地。
+   * 头像以本地上传为准（CRM 只存对外 URL），避免远程地址反查不回存储 key。
+   * 同版本时只写版本号，不覆盖本地刚提交、尚未回推的编辑。
+   */
+  private async adoptCrmProfile<T extends CrmCustomer>(customer: T, member: CrmMember): Promise<T> {
+    const version = Number(member.profileVersion) || 0;
+    const seen = Number(customer.crmProfileVersion) || 0;
+    if (version <= seen) return customer;
+    const gender = member.gender === 1 || member.gender === 2 ? member.gender : null;
+    const birthday = member.birthday ? new Date(`${member.birthday}T00:00:00.000Z`) : null;
+    const changes: { gender?: number | null; birthday?: Date | null } = {};
+    if (gender !== (customer.gender ?? null)) changes.gender = gender;
+    if ((birthday?.getTime() ?? null) !== (customer.birthday?.getTime() ?? null)) {
+      changes.birthday = birthday;
+    }
+    try {
+      await this.prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          ...changes,
+          crmProfileVersion: version
+        }
+      });
+    } catch {
+      // 快照写回失败不影响本次读取：先按 CRM 资料展示，下次回源再补写。
+    }
+    return { ...customer, ...changes, crmProfileVersion: version };
   }
 
   /**
@@ -411,10 +450,15 @@ export class AuthService {
       unionId: customer.unionId ?? null,
       openId: customer.openId ?? null,
       gender: customer.gender ?? null,
-      birthday: customer.birthday ? customer.birthday.toISOString().slice(0, 10) : null
+      birthday: customer.birthday ? customer.birthday.toISOString().slice(0, 10) : null,
+      avatarUrl: crmAvatarUrl(customer.avatarKey)
     };
   }
 
+  /**
+   * 本地资料落库后外推会员中心；这是「时叙 → CRM」的唯一出口。
+   * CRM 未开启时保持旧的 provider 行为（当前为 noop），失败只记日志不阻断顾客操作。
+   */
   private async syncProfile(customer: {
     id: string;
     phone: string | null;
@@ -423,6 +467,29 @@ export class AuthService {
     birthday: Date | null;
     avatarKey: string | null;
   }) {
+    if (this.crm.enabled) {
+      try {
+        const avatarUrl = crmAvatarUrl(customer.avatarKey);
+        const member = await this.crm.updateProfile(customer.id, {
+          name: customer.name,
+          gender: customer.gender,
+          birthday: customer.birthday ? customer.birthday.toISOString().slice(0, 10) : null,
+          // 未配置公网 ASSET_BASE_URL 时不推本地地址，避免 CRM 存下无法访问的 localhost 头像。
+          ...(avatarUrl ? { avatarUrl } : {})
+        });
+        if (member.profileVersion) {
+          await this.prisma.customer.update({
+            where: { id: customer.id },
+            data: { crmProfileVersion: member.profileVersion }
+          });
+        }
+      } catch (error) {
+        this.logger.warn(
+          `资料回写会员中心失败：${error instanceof Error ? error.message : '未知错误'}`
+        );
+      }
+      return;
+    }
     await this.hardware.profileSync.pushProfile({
       customerId: customer.id,
       phone: customer.phone,
@@ -444,6 +511,29 @@ function normalizePhone(value: string | undefined | null, countryCode?: string):
   if (/^\+861\d{10}$/.test(phone)) phone = phone.slice(3);
   if (/^1\d{10}$/.test(phone) || /^\+\d{7,15}$/.test(phone)) return phone;
   throw badRequest('请填写正确的手机号');
+}
+
+/** 推给 CRM 的头像地址必须是外网可达的；本地开发默认 localhost 时宁可不传。 */
+function crmAvatarUrl(avatarKey: string | null | undefined): string | null {
+  if (!avatarKey) return null;
+  const url = assetUrl(avatarKey);
+  try {
+    const host = new URL(url).hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+/** 昵称：1–20 字，去掉换行与首尾空白；空串视为不合法，避免把名字清空。 */
+function normalizeCustomerName(value: string): string {
+  const name = String(value ?? '')
+    .replace(/[\r\n\t]/g, ' ')
+    .trim();
+  if (!name) throw badRequest('请填写昵称');
+  if (name.length > 20) throw badRequest('昵称不能超过 20 个字');
+  return name;
 }
 
 function normalizeGender(value: number | null): number | null {
@@ -496,6 +586,8 @@ export function customerPayload(
     birthday?: Date | null;
     memberTier?: string | null;
     memberUntil?: Date | null;
+    /** 本地已对齐的 CRM 资料版本，用于判断是否需要回写快照。 */
+    crmProfileVersion?: number;
   },
   /** 会员中心余额；传入时以它为准，用于替换业务端本地只读积分。 */
   pointsOverride?: number,

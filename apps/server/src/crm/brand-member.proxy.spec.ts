@@ -243,7 +243,7 @@ describe('顾客品牌会员代理', () => {
     };
     await h.prisma.order.createMany({
       data: [
-        { ...base, id: 'ORD-RPT-1', number: 'RPT-1', totalCents: 18000, customerId: buyer.id },
+        { ...base, id: 'ORD-RPT-1', number: 'RPT-1', totalCents: 18000, memberDiscountCents: 2000, customerId: buyer.id },
         { ...base, id: 'ORD-RPT-2', number: 'RPT-2', totalCents: 4200, refundedCents: 1200, customerId: buyer.id },
         { ...base, id: 'ORD-RPT-3', number: 'RPT-3', totalCents: 0, customerId: buyer.id, parentOrderId: 'ORD-RPT-1' },
         { ...base, id: 'ORD-RPT-4', number: 'RPT-4', totalCents: 3000, paymentStatus: 'unpaid', paidAt: null, customerId: buyer.id },
@@ -257,7 +257,12 @@ describe('顾客品牌会员代理', () => {
     expect(down.failed).toBeGreaterThanOrEqual(1);
 
     for (let i = 0; i < 6; i += 1) await reporter.runOnce(now);
-    expect(fake.orders.get('ORD-RPT-1')).toMatchObject({ localUserId: buyer.id, paidCents: 18000, refundCents: 0 });
+    expect(fake.orders.get('ORD-RPT-1')).toMatchObject({
+      localUserId: buyer.id,
+      paidCents: 18000,
+      savedCents: 2000,
+      refundCents: 0
+    });
     expect(fake.orders.get('ORD-RPT-2')).toMatchObject({ paidCents: 4200, refundCents: 1200 });
     expect(fake.orders.has('ORD-RPT-3')).toBe(false);
     expect(fake.orders.has('ORD-RPT-4')).toBe(false);

@@ -115,6 +115,43 @@ describe('时叙顾客接入 CRM', () => {
     expect(saved?.name).toBe('统一姓名');
   });
 
+  it('小程序改名与资料回写 CRM，CRM 新版本反向刷新本地快照', async () => {
+    const login = await h.api('post', '/customer/session', null, {
+      phone: '13900002007',
+      name: '改名前'
+    });
+    const id = login.body.customer.id as string;
+
+    const updated = await h.api('put', '/customer/profile', login.body.token, {
+      name: '改名后',
+      gender: 2,
+      birthday: '1993-07-21'
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body.customer.name).toBe('改名后');
+    expect(fake.members.get(id)).toMatchObject({
+      name: '改名后',
+      gender: 2,
+      birthday: '1993-07-21',
+      profileVersion: 1
+    });
+    const local = await h.prisma.customer.findUnique({ where: { id } });
+    expect(local?.crmProfileVersion).toBe(1);
+
+    // 后台在 CRM 改资料：版本号增加后，小程序下次读取按 CRM 为准。
+    const member = fake.members.get(id)!;
+    member.gender = 1;
+    member.birthday = '1990-01-02';
+    member.profileVersion += 1;
+
+    const me = await h.api('get', '/customer/me', login.body.token);
+    expect(me.status).toBe(200);
+    expect(me.body.customer.gender).toBe(1);
+    expect(me.body.customer.birthday).toBe('1990-01-02');
+    const adopted = await h.prisma.customer.findUnique({ where: { id } });
+    expect(adopted?.crmProfileVersion).toBe(2);
+  });
+
   it('CRM 还没有姓名时保留本地名字，不被清空', async () => {
     const login = await h.api('post', '/customer/session', null, {
       phone: '13900002006',
