@@ -25,12 +25,16 @@ const props = withDefaults(
 
 const statusBarHeight = readCapsuleLayout().statusBarHeight
 
+const TAB_PAGES = ['/pages/index/index', '/pages/my-courses/index', '/pages/profile/index']
+
 function goBack() {
   if (getCurrentPages().length > 1) {
     uni.navigateBack()
     return
   }
-  uni.reLaunch({ url: props.fallback })
+  // 门户根页没有上一页（登录后是 reLaunch 进来的），fallback 可指向小程序 tab 页
+  if (TAB_PAGES.includes(props.fallback)) uni.switchTab({ url: props.fallback })
+  else uni.reLaunch({ url: props.fallback })
 }
 </script>
 

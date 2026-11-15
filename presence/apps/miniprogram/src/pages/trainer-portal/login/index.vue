@@ -1,6 +1,12 @@
 <template>
   <view class="page login-page">
     <view :style="{ height: statusBarHeight + 'px' }"></view>
+    <!-- 登录页是 reLaunch 终点，同样要给一条回小程序的路 -->
+    <view class="nav-top">
+      <button class="nav-back" :aria-label="tr('返回小程序', 'Back to the app')" @tap="leavePortal">
+        <PresenceIcon name="back" :size="32" />
+      </button>
+    </view>
     <view class="brand">
       <view class="brand-mark serif"><text>Full愈</text></view>
       <text class="brand-title serif">{{ tr('导师门户', 'Trainer Portal') }}</text>
@@ -59,6 +65,7 @@ import { portalLogin } from '@/api/trainer-portal'
 import { useTrainerPortalStore } from '@/stores/trainer-portal'
 import { getTrainerToken } from '@/utils/trainer-request'
 import { readCapsuleLayout } from '@/utils/capsule'
+import PresenceIcon from '@/components/PresenceIcon.vue'
 
 const statusBarHeight = readCapsuleLayout().statusBarHeight
 const store = useTrainerPortalStore()
@@ -97,6 +104,15 @@ async function submit() {
 function goApply() {
   uni.navigateTo({ url: '/pages/trainer-portal/apply/index' })
 }
+
+/** 不登录也能走：有上一页就退一步，否则回小程序首页 */
+function leavePortal() {
+  if (getCurrentPages().length > 1) {
+    uni.navigateBack()
+    return
+  }
+  uni.switchTab({ url: '/pages/index/index' })
+}
 </script>
 
 <style scoped>
@@ -105,8 +121,26 @@ function goApply() {
   display: flex;
   flex-direction: column;
 }
+.nav-top {
+  padding-top: 16rpx;
+  display: flex;
+  align-items: center;
+}
+.nav-back {
+  margin: 0;
+  flex-shrink: 0;
+  width: 64rpx;
+  height: 64rpx;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--c-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-card);
+}
 .brand {
-  padding: 80rpx 0 48rpx;
+  padding: 40rpx 0 48rpx;
   display: flex;
   flex-direction: column;
   gap: 12rpx;
