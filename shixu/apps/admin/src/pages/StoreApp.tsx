@@ -762,7 +762,7 @@ function Workbench({
 /* ------------------------------ assisted order ------------------------------ */
 
 type CartLine = { productId: string; qty: number; temp: string | null; ice: string | null };
-type MemberBenefit = { code: string; discountPerCupCents: number; name?: string };
+type MemberBenefit = { code: string; discountPerCupCents: number; name?: string; birthday?: string | null };
 
 /**
  * 自带杯减免（与后端同一口径）：按购物袋顺序逐杯分配，单杯减免取「政策每杯金额」与
