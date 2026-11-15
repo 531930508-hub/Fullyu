@@ -253,3 +253,66 @@ information_schema 判存量，天然幂等）。扩到 **37 个**脚本重跑�
 
 **边界**：本次验证的是"在**当前生产结构**上重复执行"这一真实发版场景；空库从零建库的顺序正确性，
 仍以 §二 的影子库演练为准。
+
+## 十三、2026-11-15 Night 1 已执行：33 个脚本上生产（只 DDL，不换 jar、不动前端）
+
+分两夜走的**第一夜**，按「一个窗口只改一个变量」执行：只改库结构，代码/前端零改动。
+
+### 执行前
+
+| 项 | 值 |
+|---|---|
+| 生产快照 | `121.40:/opt/fullyu-mall-backups/db/tou_mall_current-20261115T143237Z.sql.gz`（10,948,024 B，sha256 `424b346f…f521b9b`，123 表，binlog `mysql-bin.002179:3052632`） |
+| 演练库 | `121.40:n1rehearse_20261115`（快照还原后按序跑三遍） |
+| 三遍结果 | pass1=pass2=pass3，0 失败，逐表行数完全相同；123 表 → 157 表 |
+| 结构对账 | `sql-audit.py` → ✅ 表/列一致（157 表 / 1635 列，与生产执行后完全一致） |
+| 高危语句 | 0 个 `DROP`/`TRUNCATE`/`RENAME`/`MODIFY`/`CHANGE`/`DELETE`；73 处 `ADD COLUMN` 全部可空或带默认值 |
+
+**执行前必须先补 `sql/prod`**：`make-prod-sql.py --check` 报落后两个脚本（`2026-12-01-pay-group.sql`、
+`2026-12-03-member-card-rate-realtime.sql`）。已跑 `make-prod-sql.py` 生成，`sql/prod` 现 **40 个**（基线 37 → 40，
+故重做了上面的三遍验证）。
+
+### 执行结果（生产 `tou_mall_current`）
+
+| 项 | 执行前 | 执行后 |
+|---|---|---|
+| 表 | 123 | **157** |
+| 列 | — | **1635** |
+| `s_order` 行 | 46,322 | 46,322（未变） |
+| `c_customer` 行 | 10,083 | 10,083（未变） |
+| `ums_menu` 行 | 44 | 51（新增行，无删除） |
+| `ums_role_menu_relation` 行 | 136 | 166（新增行，无删除） |
+
+执行日志：`121.40:/opt/fullyu-mall-backups/db/night1-20261115-223905/run.log`（逐个脚本 OK，fails=0）。
+`pay-group` 单独跑两遍（幂等），建 `s_pay_group` 23 列。
+
+冒烟：`/health` 200、`cityretreat` 200、`/api/product/list` 200、当日日志 `ERROR` 计数 0。旧 jar 未重启。
+
+### 留到 Night 2 的 7 个脚本（务必与新 jar + 新前端同一窗口）
+
+| 脚本 | 为什么不能提前 |
+|---|---|
+| `2026-11-10-admin-menu-ia.sql` | **删 51 行菜单、只留 22 行新 IA**，`ums_role_menu_relation` 166→101。09-12 的前端把菜单写死、只靠 DB 驱动权限，提前跑会让现网后台权限对不上 |
+| `2026-11-09-remove-member-card-integration-menu.sql`、`2026-11-11-admin-menu-tabs.sql`、`2026-11-11-customer-tag-menu.sql` | 同上，页签/菜单行随新前端一起生效 |
+| `2026-11-12-customer-nickname-anonymize.sql` | 必须在新 jar 之后（否则中间新建客户又落回「用户+手机号」） |
+| `2026-12-01-order-visit-no-backfill.sql` | 整次发版最后一步（新 jar 生效后回填历史编号） |
+| `2026-12-03-member-card-rate-realtime.sql` | 条款文案随新「实时口径」一起上，单独跑会造成文案与行为不一致 |
+
+这 7 个已在 `n1rehearse_20261115`（= 生产 Night 1 之后的状态）**各跑两遍**：0 失败、逐表行数两遍相同、
+`s_order` 里 `counted_without_visit_no=0`。结果 157 表 → 164 表 / 419,582 行。
+
+### Night 1 踩到的两个坑（下一位注意）
+
+1. **脚本顺序不能用 macOS 的 `sort` 生成**。`2026-11-07-member-card-v2.sql` 依赖
+   `2026-11-07-member-card.sql` 建的 `s_member_card_config`；BSD `sort` 按标点优先把 `-v2` 排在前面 →
+   `Table doesn't exist`。GNU `sort`（服务器 `en_US.UTF-8`）顺序正确。**顺序一律在服务器上生成**：
+   `ls sql/prod/2026-*.sql | sort`，别在 Mac 上排好了再传。
+2. **排序规则漂移仍在**：`s_integration_operation` / `s_stat_internal_account` 的 `phone` 是
+   `utf8mb4_0900_ai_ci`，而 `oms_company_address` / `ums_member` 是 `utf8mb3_general_ci`。
+   `sql-audit` 只告警（默认不失败）。新代码里若出现 `ia.phone = ums_member.phone` 这类比较会抛 1267，
+   Night 2 上线前要确认相关 SQL 已显式 `CONVERT(... USING utf8mb4) COLLATE ...`。
+
+### 回滚
+
+库层面：加列/加表/加行对 09-12 的旧 jar 全透明，**不回滚也安全**。真要回到执行前：
+还原上面那份快照（123 表），或只删 `s_pay_group` 与本次新增列（清单见 `run.log`）。
