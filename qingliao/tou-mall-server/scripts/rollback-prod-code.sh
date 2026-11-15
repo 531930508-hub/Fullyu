@@ -43,14 +43,18 @@ set -uo pipefail
 cd $APP_DIR
 BK=backup/pre-rollback-\$(date +%Y%m%d-%H%M%S); mkdir -p \$BK
 cp -p $APP_DIR/$JAR_NAME \$BK/$JAR_NAME
-cp -p $APP_DIR/backup/$JAR_DIR/$JAR_NAME $APP_DIR/$JAR_NAME
+# 必须「拷到临时文件再 mv 原子替换」：直接 cp 覆盖正在运行的 jar 会原地改写同一 inode，
+# JVM 懒加载类时读到坏字节码，抛 NoClassDefFoundError（2026-11-15 回滚踩过）。
+cp -p $APP_DIR/backup/$JAR_DIR/$JAR_NAME $APP_DIR/.jar.new.\$\$
+mv -f $APP_DIR/.jar.new.\$\$ $APP_DIR/$JAR_NAME
 p=\$(pgrep -f 'jar $JAR_NAME' | head -1); [ -n \"\$p\" ] && { kill \$p; for i in \$(seq 1 20); do kill -0 \$p 2>/dev/null || break; sleep 1; done; }
 nohup java -Xms2048m -Xmx4096m -Dspring.profiles.active=prod -jar $JAR_NAME >> logs/mall-admin-\$(date +%F).log 2>&1 &
 for i in \$(seq 1 60); do
   [ \"\$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:9929/health)\" = 200 ] && { echo HEALTH_OK; exit 0; }
   sleep 3
 done
-echo HEALTH_FAIL; cp -p \$BK/$JAR_NAME $APP_DIR/$JAR_NAME; p=\$(pgrep -f 'jar $JAR_NAME'); [ -n \"\$p\" ] && kill \$p; sleep 5
+echo HEALTH_FAIL; p=\$(pgrep -f 'jar $JAR_NAME'); [ -n \"\$p\" ] && kill \$p; sleep 5
+cp -p \$BK/$JAR_NAME $APP_DIR/.jar.new.\$\$; mv -f $APP_DIR/.jar.new.\$\$ $APP_DIR/$JAR_NAME
 nohup java -Xms2048m -Xmx4096m -Dspring.profiles.active=prod -jar $JAR_NAME >> logs/mall-admin-\$(date +%F).log 2>&1 &
 echo REVERTED_TO_CURRENT
 REMOTE"
