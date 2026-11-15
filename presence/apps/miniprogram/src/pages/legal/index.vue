@@ -82,7 +82,7 @@ const TERMS_ZH: LegalDoc = {
     {
       h: '六、会员卡与积分',
       p: [
-        'Full愈年卡与月卡是在有效期内享受时叙、在场、轻疗会员权益的服务权益卡，不属于储值卡，不设余额或提现，不可转让、代付或找零。完整规则见「会员规则」。',
+        'Full愈大会员与 Full愈月会员（价格与时长以购买页展示为准）是在有效期内享受时叙、在场、轻疗会员权益的服务权益卡，不属于储值卡，不设余额或提现，不可转让、代付或找零。完整规则见「会员规则」。',
         '积分由 Full愈品牌会员中心统一记录，通过消费、活动与愈行之旅获得，不可购买、提现或转让，按批次到期；具体以积分说明与结算页为准。',
         '代金券有适用范围与有效期，不兑现、不找零，具体以券面说明为准。'
       ]
@@ -154,7 +154,7 @@ const TERMS_EN: LegalDoc = {
     {
       h: '6. Membership and points',
       p: [
-        'The Full Yu annual and monthly cards are service-benefit cards for member pricing at Teahour, Presence and Retreat during the term. They are not stored-value cards: there is no balance or cash withdrawal, and they cannot be transferred, used to pay for others or exchanged for change. See Member rules for the full terms.',
+        'The Full Yu Membership and Full Yu Monthly Membership (price and term as shown on the purchase page) are service-benefit cards for member pricing at Teahour, Presence and Retreat during the term. They are not stored-value cards: there is no balance or cash withdrawal, and they cannot be transferred, used to pay for others or exchanged for change. See Member rules for the full terms.',
         'Points are recorded centrally by the Full Yu membership centre, earned through spending, activities and the Journey game, and cannot be purchased, withdrawn or transferred. They expire in batches; see the points description and checkout page.',
         'Vouchers have applicable ranges and validity periods, cannot be exchanged for cash, and follow the terms shown on the voucher.'
       ]
@@ -218,7 +218,7 @@ const PRIVACY_ZH: LegalDoc = {
       h: '四、共享与委托处理',
       p: [
         '我们不会出售你的个人信息。仅在实现以下功能所必需的范围内共享：微信（登录、手机号授权、订阅消息与支付）、微信支付（收付款与退款）、云服务商（服务器与数据存储）。我们会要求合作方按约定保护你的信息。',
-        '为提供 Full愈年卡在时叙、在场、轻疗三店通用的会员权益，你的手机号、会员编号、卡期与积分会在 Full愈品牌会员体系内共享，仅用于跨店识别会员身份、核销权益与内部结算，不用于与会员服务无关的用途。'
+        '为提供 Full愈大会员在时叙、在场、轻疗三店通用的会员权益，你的手机号、会员编号、卡期与积分会在 Full愈大会员体系内共享，仅用于跨店识别会员身份、核销权益与内部结算，不用于与会员服务无关的用途。'
       ]
     },
     {
@@ -286,7 +286,7 @@ const PRIVACY_EN: LegalDoc = {
       h: '4. Sharing and processors',
       p: [
         'We do not sell your personal information. We share only what is necessary with WeChat (sign-in, phone authorisation, subscribe messages and payment), WeChat Pay (payments and refunds) and our cloud provider (servers and data storage). Partners are required to protect your information under our agreements.',
-        'To provide Full Yu annual card benefits across Teahour, Presence and Retreat, your phone number, member number, card term and points are shared within the Full Yu membership programme. This is used only to recognise your membership across stores, redeem benefits and settle internally, not for unrelated purposes.'
+        'To provide Full Yu Membership benefits across Teahour, Presence and Retreat, your phone number, member number, card term and points are shared within the Full Yu membership programme. This is used only to recognise your membership across stores, redeem benefits and settle internally, not for unrelated purposes.'
       ]
     },
     {
@@ -324,12 +324,12 @@ const PRIVACY_EN: LegalDoc = {
 }
 
 const MEMBER_ZH: LegalDoc = {
-  lead: '本规则适用于 Full愈年卡与月卡。开通前请确认卡种、价格、有效期与适用门店；开通即表示你已阅读并同意本规则。',
+  lead: '本规则适用于 Full愈大会员与 Full愈月会员。开通前请确认所选时长、价格、有效期与适用门店；开通即表示你已阅读并同意本规则。',
   sections: [
     {
       h: '一、卡的性质',
       p: [
-        'Full愈年卡（¥299 / 365 天）与月卡（¥45 / 30 天）是在有效期内享受时叙、在场、轻疗会员权益的服务权益卡，不是储值卡。卡内不含可消费本金，不产生余额，不可提现、转账、代付或找零。'
+        'Full愈大会员与 Full愈月会员（价格与时长以购买页展示为准）是在有效期内享受时叙、在场、轻疗会员权益的服务权益卡，不是储值卡。卡内不含可消费本金，不产生余额，不可提现、转账、代付或找零。'
       ]
     },
     {
@@ -361,8 +361,8 @@ const MEMBER_ZH: LegalDoc = {
     {
       h: '五、退款',
       p: [
-        '开通后 7 日内可申请无理由退款，退还实付金额；期间已领取的年卡礼（实物礼）按其标注价值扣除。',
-        '超过 7 日的，按实付金额扣除已享会员优惠与已领取年卡礼价值后计算；已享优惠包括会员价差额、积分抵扣、赠品与活动优惠。计算结果为 0 或以下的，不予退款。',
+        '开通后 7 日内可申请无理由退款，退还实付金额；期间已领取的会员礼（实物礼）按其标注价值扣除。',
+        '超过 7 日的，按实付金额扣除已享会员优惠与已领取会员礼价值后计算；已享优惠包括会员价差额、积分抵扣、赠品与活动优惠。计算结果为 0 或以下的，不予退款。',
         '通过会员码兑换或随其他卡附赠的会员资格未单独付款，不涉及退款；附赠资格随原卡失效。',
         '退款原路退回，到账时间以支付渠道为准；已开具发票的，需按税务规定办理发票退回或红冲。特殊情况可联系门店伙伴，由工作人员核实后协商处理。'
       ]
@@ -403,12 +403,12 @@ const MEMBER_ZH: LegalDoc = {
 }
 
 const MEMBER_EN: LegalDoc = {
-  lead: 'These rules apply to the Full Yu annual and monthly card. Please confirm the plan, price, term and participating stores before joining. Joining means you have read and accepted these rules.',
+  lead: 'These rules apply to the Full Yu Membership and Full Yu Monthly Membership. Please confirm the term, price, validity and participating stores before joining. Joining means you have read and accepted these rules.',
   sections: [
     {
       h: '1. What the card is',
       p: [
-        'The Full Yu annual card (¥299 / 365 days) and monthly card (¥45 / 30 days) are service-benefit cards for member pricing at Teahour, Presence and Retreat during the term. They are not stored-value cards: there is no spendable principal or balance, and no cash withdrawal, transfer, payment on behalf of others or change.'
+        'The Full Yu Membership and Full Yu Monthly Membership (price and term as shown on the purchase page) are service-benefit cards for member pricing at Teahour, Presence and Retreat during the term. They are not stored-value cards: there is no spendable principal or balance, and no cash withdrawal, transfer, payment on behalf of others or change.'
       ]
     },
     {
@@ -440,8 +440,8 @@ const MEMBER_EN: LegalDoc = {
     {
       h: '5. Refunds',
       p: [
-        'Within 7 days of joining you may request a refund without giving a reason; the amount paid is refunded less the marked value of any annual gifts (physical gifts) already collected.',
-        'After 7 days, the refund is the amount paid less member savings already enjoyed and the value of annual gifts collected. Savings include member-price savings, point offsets, gifts and promotional discounts. If the result is 0 or less, no refund is due.',
+        'Within 7 days of joining you may request a refund without giving a reason; the amount paid is refunded less the marked value of any member gifts (physical gifts) already collected.',
+        'After 7 days, the refund is the amount paid less member savings already enjoyed and the value of member gifts collected. Savings include member-price savings, point offsets, gifts and promotional discounts. If the result is 0 or less, no refund is due.',
         'Membership redeemed with a member code or included with another card was not paid for separately and is not refundable; included membership ends with the original card.',
         'Refunds are returned to the original payment method; timing depends on the payment channel. If an invoice has been issued, it must be returned or reversed under tax rules. For special circumstances, talk to our store team, who will verify and work it out with you.'
       ]

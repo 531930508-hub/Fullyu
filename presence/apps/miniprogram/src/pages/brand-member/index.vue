@@ -3,7 +3,7 @@
     <view :style="{ height: statusBarHeight + 'px' }"></view>
     <view class="nav-bar" :style="{ paddingTop: headerTop + 'px' }">
       <view class="nav-copy">
-        <text class="nav-title serif">{{ tr('Full愈年卡', 'Full Yu Annual') }}</text>
+        <text class="nav-title serif">{{ tr('Full愈大会员', 'Full Yu Membership') }}</text>
         <text class="nav-sub">{{ tr('品牌通用会员 · 三店权益', 'One card across Full Yu') }}</text>
       </view>
       <text v-if="isMock" class="dev-chip">{{ tr('合成数据', 'Mock data') }}</text>
@@ -13,7 +13,7 @@
       <PageState
         v-if="!isLoggedIn"
         state="guest"
-        :title="tr('开通 Full愈年卡', 'Join Full Yu Annual')"
+        :title="tr('开通 Full愈大会员', 'Join Full Yu Membership')"
         :message="tr('登录后查看会员身份、积分与三店权益', 'Log in to see your membership, points and benefits')"
         :action="tr('去登录', 'Log in')"
         @action="goLogin"
@@ -122,7 +122,7 @@
           </view>
         </view>
 
-        <!-- 04 礼物与邀请：年卡礼、邀请、会员码收在同一组 -->
+        <!-- 04 礼物与邀请：会员礼、邀请、会员码收在同一组 -->
         <view v-if="vouchers.length || active" class="section gift-panel">
           <view class="chapter-head">
             <text class="chapter-index">{{ chap.gifts }}</text>
@@ -341,7 +341,7 @@ const active = computed(() => {
   const state = data.value?.card?.state
   return state === 'ACTIVE' || state === 'EXPIRING' || state === 'PENDING'
 })
-// 骰子进度、续费提醒与年卡礼都由 CRM 计算；页面只展示，不在前端推算金额。
+// 骰子进度、续费提醒与会员礼都由 CRM 计算；页面只展示，不在前端推算金额。
 const progress = computed(() => data.value?.dice?.progress || null)
 // 退款可能把骰子扣成负数；欠账先补回，进度文案由 CRM 一并计算。
 const diceDebt = computed(() => {
@@ -666,7 +666,7 @@ async function openGame() {
   }
 }
 
-const shareTitle = () => tr('Full愈年卡｜一张卡，三店通用', 'Full Yu Annual | One card across three places')
+const shareTitle = () => tr('Full愈大会员｜一张卡，三店通用', 'Full Yu Membership | One card across three places')
 onShareAppMessage((res: any) => {
   // 「发给好友」按钮带邀请码：好友打开落地页，登录后领取在场免费体验课。
   const code = res?.from === 'button' ? res?.target?.dataset?.code : ''

@@ -1,13 +1,13 @@
 <template>
   <!--
-    会员卡：一张卡承载身份、本年已省、全平台权益与续费。
+    会员卡：一张卡承载身份、本卡期已省、全平台权益与续费。
     不做翻面：卡脚是稳稳的一条，左侧报账、右侧拉开权益与卡型，
     所有内容都在文档流里，不会有元素互相压住。
   -->
   <view class="bmc" :class="{ 'is-open': open, 'is-dim': !active }">
     <view class="bmc-main">
       <view class="bmc-row1">
-        <text class="bmc-eyebrow">FULL YU ANNUAL MEMBER</text>
+        <text class="bmc-eyebrow">{{ eyebrow }}</text>
         <text class="bmc-scope">{{ tr('全平台通用', 'All locations') }}</text>
         <text class="bmc-state" :class="{ 'is-warn': expiring }">{{ stateText }}</text>
       </view>
@@ -22,7 +22,7 @@
     <!-- 卡脚：左侧报账，右侧拉开抽屉 -->
     <view class="bmc-foot" :class="{ 'is-warn': expiring }">
       <view class="bmc-cell bmc-saved">
-        <text class="bmc-lab">{{ active ? tr('本年已省', 'Saved this year') : tr('开卡', 'Join') }}</text>
+        <text class="bmc-lab">{{ active ? tr('本卡期已省', 'Saved this term') : tr('开卡', 'Join') }}</text>
         <text class="bmc-amt serif">{{ active ? `¥${formatYuan(savedCents)}` : joinPrice === null ? '—' : `¥${formatYuan(joinPrice)}` }}</text>
         <text v-if="!active" class="bmc-more">{{ joinPrice === null ? tr('价格读取中', 'Loading price') : tr('起 / 年', 'from / year') }}</text>
       </view>
@@ -68,7 +68,7 @@
         <button v-if="selectedProduct" hover-class="none" class="bmc-renew" @tap="$emit('purchase', selectedProduct.code)">
           {{ active ? tr('续费 ', 'Renew ') : tr('开通 ', 'Join ') }}{{ planName(selectedProduct) }} · ¥{{ formatYuan(selectedProduct.priceCents) }}
         </button>
-        <text class="bmc-note">{{ active ? tr('续费从到期日往后接；', 'Renewal starts when your current term ends. ') : '' }}{{ tr('7 天内可自助退款，已领年卡礼按价值扣除。', 'Self-service refund within 7 days; received annual gifts are deducted at value.') }}</text>
+        <text class="bmc-note">{{ active ? tr('续费从到期日往后接；', 'Renewal starts when your current term ends. ') : '' }}{{ tr('7 天内可自助退款，已领会员礼按价值扣除。', 'Self-service refund within 7 days; received member gifts are deducted at value.') }}</text>
         <text v-if="!active && purchaseMode !== 'mock'" class="bmc-note">{{ tr('线上支付接入中，暂不能在线开通。', 'Online payment is not live yet, so joining here is unavailable.') }}</text>
         <view class="bmc-link" @tap="$emit('rules')">
           <text>{{ tr('会员权益与退款规则', 'Member benefits & refund rules') }}</text>
@@ -100,23 +100,27 @@ defineEmits<{ (e: 'select', code: string): void; (e: 'purchase', code: string): 
 const open = ref(false)
 /** 当前门店＝在场；权益行上标出「本店」。 */
 const homeBusiness = 'presence'
+/** 卡面英文眉题与时叙一致：不分卡型，统一 FULL YU MEMBER。 */
+const eyebrow = computed(() => 'FULL YU MEMBER')
 const PLAN_EN: Record<string, string> = {
-  FY_MONTH: 'Monthly card',
-  FY_ANNUAL: 'Annual card'
+  FY_MONTH: 'Full Yu Monthly Membership',
+  FY_ANNUAL: 'Full Yu Membership'
 }
 /** 卡面大字用产品全名，英文界面下按已知全名翻译。 */
 const PLAN_NAME_EN: Record<string, string> = {
-  'Full愈年卡': 'Full Yu Annual',
-  'Full愈月卡': 'Full Yu Monthly'
+  'Full愈大会员': 'Full Yu Membership',
+  'Full愈月会员': 'Full Yu Monthly Membership'
 }
 /** CRM 权益标题与说明是中文，英文界面下按已知文案翻译，未命中时原样展示。 */
 const BENEFIT_EN: Record<string, [string, string]> = {
-  '在场 · 优先排位与阶梯价': ['Presence · priority spots & tier pricing', 'Priority waitlist on popular classes; member tier prices without a Pass'],
+  '在场 · 优先排位与会员价': ['Presence · priority spots & member pricing', 'Priority waitlist on popular classes; member pricing on classes'],
+  '在场 · 优先排位与阶梯价': ['Presence · priority spots & member pricing', 'Priority waitlist on popular classes; member pricing on classes'],
   '时叙 · 会员茶饮权益': ['Teahour · member tea benefits', 'Member-only tea benefits; details per store notice'],
   '轻疗 · 项目会员价': ['Retreat · member treatment prices', 'Book a day ahead for member price; same-day bookings get a member price too'],
   '会员茶饮权益': ['Member tea benefits', 'Details per store notice'],
   '项目会员价': ['Member treatment prices', 'Book a day ahead for member price'],
-  '优先排位与课程阶梯价': ['Priority spots & tier pricing', 'Priority waitlist on popular classes']
+  '优先排位与课程阶梯价': ['Priority spots & member pricing', 'Priority waitlist on popular classes; member pricing on classes'],
+  '优先排位与课程会员价': ['Priority spots & member pricing', 'Priority waitlist on popular classes; member pricing on classes']
 }
 
 const card = computed(() => props.data?.card || ({} as BrandMemberData['card']))
@@ -126,8 +130,8 @@ const stateText = computed(() => (props.active ? cardStateLabel(card.value.state
 
 const nameLine = computed(() => {
   const name = props.active ? card.value.productName : ''
-  const fallback = name || tr('Full愈年卡', 'Full Yu Annual')
-  return isEnglish() ? PLAN_NAME_EN[fallback] || (card.value.productCode ? PLAN_EN[card.value.productCode] : '') || fallback : fallback
+  const fallback = name || tr('Full愈大会员', 'Full Yu Membership')
+  return isEnglish() ? PLAN_NAME_EN[fallback] || PLAN_EN[card.value.productCode || ''] || fallback : fallback
 })
 const whoLine = computed(() => {
   const member = props.data?.member

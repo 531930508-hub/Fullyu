@@ -58,7 +58,7 @@ const zh: Record<string, string> = {
   'profile.contactService': '联系客服',
   'profile.about': '关于 Full愈',
   'profile.editProfile': '编辑资料',
-  'profile.memberActive': '年卡有效',
+  'profile.memberActive': '大会员有效',
 
   // 通用
   'common.back': '返回',

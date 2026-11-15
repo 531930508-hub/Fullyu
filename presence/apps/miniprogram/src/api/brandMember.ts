@@ -1,5 +1,5 @@
 /**
- * 品牌会员（Full愈年卡）客户端适配层。
+ * 品牌会员（Full愈大会员）客户端适配层。
  *
  * 生产构建默认走在场服务端代理（/member/brand/*）：签名密钥只留在服务端，
  * 会员身份固定取当前登录用户，页面不接触 CRM、也不信任前端传入的积分、骰子或金额。
@@ -71,7 +71,7 @@ export interface BrandMemberData {
   savedCents: number
   /** 续费提醒：仅 EXPIRING 且无待生效续卡时由 CRM 给出，金额与文案都以 CRM 为准。 */
   renewal?: { show: boolean; savedCents?: number; remainingDays?: number | null; text?: string }
-  /** 年卡礼提货码：任一门店出示、店员核销一次。 */
+  /** 会员礼提货码：任一门店出示、店员核销一次。 */
   vouchers?: BrandPickupVoucher[]
   /** 会员公告：后台发布后只对有效会员返回，置顶优先，最多 3 条。 */
   notices?: BrandNotice[]
@@ -157,14 +157,14 @@ export interface BrandQuote {
 export const MOCK_CARD_PRODUCTS: BrandCardProduct[] = [
   {
     code: 'FY_MONTH',
-    name: 'Full愈月卡',
+    name: 'Full愈月会员',
     priceCents: 4500,
     validDays: 30,
     period: '30 天'
   },
   {
     code: 'FY_ANNUAL',
-    name: 'Full愈年卡',
+    name: 'Full愈大会员',
     priceCents: 29900,
     validDays: 365,
     period: '365 天'
@@ -175,7 +175,7 @@ const BENEFITS: BrandBenefit[] = [
   {
     business: 'presence',
     title: '在场 · 优先排位与阶梯价',
-    desc: '热门课程候补优先排位；课程享会员阶梯价'
+    desc: '热门课程候补优先排位；课程享会员价'
   },
   {
     business: 'teahour',
@@ -206,7 +206,7 @@ function annualCard(forceExpiring = false): BrandCardState {
     return {
       state: 'EXPIRING',
       productCode: 'FY_ANNUAL',
-      productName: 'Full愈年卡',
+      productName: 'Full愈大会员',
       priceCents: 29900,
       validFrom: '2025-11-27',
       validUntil: '2026-11-26',
@@ -218,7 +218,7 @@ function annualCard(forceExpiring = false): BrandCardState {
   return {
     state: daysFromNow('2027-10-29') <= 30 ? 'EXPIRING' : 'ACTIVE',
     productCode: 'FY_ANNUAL',
-    productName: 'Full愈年卡',
+    productName: 'Full愈大会员',
     priceCents: 29900,
     validFrom: '2026-10-30',
     validUntil: '2027-10-29',
@@ -295,7 +295,7 @@ export function createMockState(cardState = 'ACTIVE'): BrandMemberData {
       ? [
           {
             code: 'PV8K2M',
-            title: '年卡茶礼一份',
+            title: '会员茶礼一份',
             desc: '任一门店出示提货码，店员核销一次',
             valueCents: 6800,
             status: 'ISSUED',

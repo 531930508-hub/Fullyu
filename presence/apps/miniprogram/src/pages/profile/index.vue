@@ -18,16 +18,16 @@
           <view class="edit-link"><text>{{ tr('登录', 'Sign in') }}</text><PresenceIcon name="arrow" :size="26" /></view>
         </button>
       </view>
-      <!-- 品牌会员入口：未登录也保留入口，点击先登录 -->
+      <!-- 大会员入口：一张卡三店通用，未登录也保留入口，点击先登录 -->
       <button class="brand-entry" :class="{ active: brandActive }" @tap="goBrandMember">
         <view class="brand-entry-head">
-          <text class="brand-entry-eyebrow latin">FULL YU ANNUAL</text>
+          <text class="brand-entry-eyebrow latin">FULL YU MEMBERSHIP</text>
           <text class="brand-entry-state">{{ brandActive ? tr(`还有 ${brandRemaining} 天`, `${brandRemaining} days left`) : tr('三店通用', 'All three stores') }}</text>
         </view>
-        <text class="brand-entry-title serif">{{ tr('Full愈年卡', 'Full Yu Annual') }}</text>
+        <text class="brand-entry-title serif">{{ tr('Full愈大会员', 'Full Yu Membership') }}</text>
         <text class="brand-entry-sub">{{ brandSubLine }}</text>
         <view class="brand-entry-foot">
-          <text>{{ brandActive ? tr('进入品牌会员中心', 'Open brand membership') : (isLoggedIn ? tr('开通品牌年卡', 'Join Full Yu Annual') : tr('了解品牌会员', 'See brand membership')) }}</text>
+          <text>{{ brandActive ? tr('进入会员中心', 'Open membership') : (isLoggedIn ? tr('开通大会员', 'Join Full Yu') : tr('了解大会员', 'See membership')) }}</text>
           <PresenceIcon name="arrow" :size="22" :color="brandActive ? '#eec76f' : iconColors.primary" />
         </view>
       </button>
@@ -194,7 +194,7 @@ const accountMenu = computed(() => [
   { page: 'voucher-redeem', icon: 'ticket', label: tr('兑换代金券', 'Redeem voucher'), tab: false },
   { page: 'my-reviews', icon: 'star', label: t('profile.myReviews'), tab: false },
   { page: 'community-mine', icon: 'users', label: tr('我的社群', 'My communities'), tab: false },
-  { page: 'brand-member', icon: 'card', label: tr('Full愈年卡', 'Full Yu Annual'), tab: false },
+  { page: 'brand-member', icon: 'card', label: tr('Full愈大会员', 'Full Yu Membership'), tab: false },
 ])
 
 async function loadBrandData() {

@@ -142,12 +142,12 @@
         <view v-if="!isMember" class="member-benefit">
           <button class="member-link" @tap="memberBenefitOpen = !memberBenefitOpen">
             <PresenceIcon name="card" :size="32" />
-            <text class="member-link-label">{{ tr('会员候补席优先', 'Member waitlist priority') }}</text>
+            <text class="member-link-label">{{ tr('大会员候补席优先', 'Member waitlist priority') }}</text>
             <text class="member-link-action">{{ memberBenefitOpen ? tr('收起', 'Hide') : tr('了解', 'Learn more') }}</text>
           </button>
           <view v-if="memberBenefitOpen" class="member-benefit-body">
-            <text>{{ tr('会员候补席先于普通席递补，并享会员课程价。开通后可回来继续候补。', 'Member seats are offered before standard seats, with member pricing. You can come back and join this waitlist after activating.') }}</text>
-            <button class="member-benefit-cta" @tap="goMember">{{ tr('查看会员权益', 'View membership') }}</button>
+            <text>{{ tr('大会员候补席先于普通席递补，并享会员课程价。开通后可回来继续候补。', 'Member seats are offered before standard seats, with member pricing. You can come back and join this waitlist after activating.') }}</text>
+            <button class="member-benefit-cta" @tap="goMember">{{ tr('查看大会员权益', 'View membership') }}</button>
           </view>
         </view>
         <!-- 候补规则同意：预付前必须勾选，可展开查看候补与退款规则 -->
