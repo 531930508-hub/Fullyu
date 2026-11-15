@@ -46,6 +46,9 @@ pnpm --filter @fullyu/miniprogram dev:h5
 
 ## 部署
 
+> 总则见 `docs/deploy/发布与分支规范.md`（分支模型、三道门、各项目通道矩阵、探针、tag 记账）；协作红线见根目录 `AGENTS.md`。
+> 发布前统一跑 `scripts/release-check.sh --project <presence|shixu|crm|qingliao-mini>`；每次生产发布用 `scripts/release-tag.sh` 打 `prod-<项目>-<时间>` tag，`scripts/release-status.sh` 查各项目线上版本。
+
 - **在场**：根目录 `.github/workflows/ci-deploy.yml`，push 到 `main` 触发构建 + 部署到 ECS。
   - 部署步骤默认关闭，需在仓库 `Settings → Variables` 设置 `ENABLE_DEPLOY=true` 后才执行，避免迁移期误触生产。
   - 需要在 `Settings → Secrets` 配置：`ECS_HOST`、`ECS_USER`、`ECS_SSH_KEY`、`SERVER_PATH`、`ADMIN_DIST_PATH`、`H5_DIST_PATH`、`PM2_APP`。
@@ -55,8 +58,11 @@ pnpm --filter @fullyu/miniprogram dev:h5
 
 ## 分支约定
 
-- `main` 只接受可部署的合并；日常开发走 `feat/*` 或 `fix/*`。
+- **`main` 是唯一可发布分支**，只接受可发布的合并。系统边界靠目录与 CI 的 `paths` 隔断，**不按系统分长期分支**（`split/*`、`merge/*`、`release/*` 这类影子分支已于 2026-11-15 清理，见规范 §7）。
+- 日常开发走短期分支 `<feat|fix|chore|docs|hotfix>/<scope>-<yyyymmdd>`，寿命 ≤ 7 天，**合并即删**（本地和远端）。
+- 需要同时开两个系统：`git worktree add ../wt-shixu main`，不要用分支做隔离。
 - 提交信息：`type(scope): 说明`，如 `fix(presence): 修复券码兑换竞态`。
+- 分支审计：`scripts/branch-audit.sh`；发布门禁：`scripts/release-check.sh --project <项目>`。
 - 大文件（图片素材、合同、报表）不入库，放对象存储或各自的文档库；仓库只存代码与必要的小体积资源。
 
 ## 历史

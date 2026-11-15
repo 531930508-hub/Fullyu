@@ -1,0 +1,115 @@
+# 非 main 分支的构建检查：只检查，不部署。
+#
+# 解决什么：时叙 / CRM 原来只有本地门禁，分支上红了没人知道，合进 main 才发现。
+# 触发：push 到非 main 分支、或 PR，且改动落在 shixu/** 或 crm/**。
+# 不做：不部署、不碰服务器、不跑在场（在场由 ci-deploy.yml 负责）。
+# 注意：这里只构建，不等于验收；上线仍需 release-check → 合 main → 按规范 §2 部署 → 探针。
+name: CI 检查（时叙/CRM，只构建）
+
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'shixu/**'
+      - 'crm/**'
+      - '.github/workflows/ci-check.yml'
+  pull_request:
+    paths:
+      - 'shixu/**'
+      - 'crm/**'
+
+concurrency:
+  group: ci-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: 识别受影响项目
+    runs-on: ubuntu-latest
+    outputs:
+      shixu: ${{ steps.d.outputs.shixu }}
+      crm: ${{ steps.d.outputs.crm }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: d
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          # 新分支推送时 before 全为 0，回退到与 origin/main 的 merge-base
+          if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            base=$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD~1)
+          fi
+          files=$(git diff --name-only "$base" HEAD || true)
+          shixu=$(printf '%s\n' "$files" | awk '/^shixu\//{c++} END{print c+0}')
+          crm=$(printf '%s\n' "$files" | awk '/^crm\//{c++} END{print c+0}')
+          echo "base=$base"
+          echo "变更文件（前 40 条）："
+          printf '%s\n' "$files" | head -40
+          echo "shixu=$shixu crm=$crm"
+          {
+            echo "shixu=$shixu"
+            echo "crm=$crm"
+          } >> "$GITHUB_OUTPUT"
+
+  shixu:
+    name: 时叙构建
+    needs: detect
+    if: needs.detect.outputs.shixu != '0'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shixu
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: shixu/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build server
+        run: pnpm --filter @teahour/server build
+      - name: Build admin
+        run: pnpm --filter @teahour/admin build
+
+  crm:
+    name: CRM 构建与测试
+    needs: detect
+    if: needs.detect.outputs.crm != '0'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: crm/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma Client
+        run: pnpm --filter @fullyu/crm-server db:generate
+      - name: Build server
+        run: pnpm build:server
+      # CRM 的单测是它主要的安全网（合成库、临时 SQLite，不依赖外部服务）
+      - name: Test
+        run: pnpm test
