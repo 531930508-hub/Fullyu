@@ -332,7 +332,8 @@ export function buildCupLabelTspl(label: CupLabelPayload, style: TsplLabelStyle 
   const time: TextOpts = { ...small, tracking: CUP_LABEL_TRACK.time };
 
   // ① 品牌行 + 杯序（右）：品牌收紧字距，中英之间不留空格，别把右上角的杯序挤到第二行视线里
-  cmds.push(...line(l.brand.x, l.brand.y, 'Full愈·时叙', { ...cn, tracking: CUP_LABEL_TRACK.brand }));
+  // 分隔符与条码云通道保持一致用 `|`：`·`(U+00B7) 在部分标签机字库里缺字形，会打成问号
+  cmds.push(...line(l.brand.x, l.brand.y, 'Full愈|时叙', { ...cn, tracking: CUP_LABEL_TRACK.brand }));
   const seq = `${label.cupIndex} / ${label.cupTotal}`;
   cmds.push(...line(l.right - trackedWidth(seq, 12, 12, small.tracking), l.cupSeq.y, seq, small));
 

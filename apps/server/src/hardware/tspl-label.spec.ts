@@ -129,10 +129,12 @@ describe('TSPL 杯贴渲染（XP-420B）', () => {
 
   it('品牌行收紧：不留空格、字距 2 点，给右上角杯序让出视线', () => {
     const brand = row(raw(), CUP_LABEL_LAYOUT.brand.y);
-    expect(brand.map((glyph) => glyph.text).join('')).toBe('Full愈·时叙');
+    // 分隔符是 ASCII 竖线：中点号在部分机型字库里缺字形，会打成问号
+    expect(brand.map((glyph) => glyph.text).join('')).toBe('Full愈|时叙');
     // 「Full」4 个 ASCII × (12+2) = 56，愈 落在 20+56 上
     expect(brand.find((glyph) => glyph.text === '愈')?.x).toBe(76);
-    expect(brand.find((glyph) => glyph.text === '·')?.x).toBe(102);
+    // 竖线与原来的中点号同宽（ASCII 12+2 字距），版式位置不变
+    expect(brand.find((glyph) => glyph.text === '|')?.x).toBe(102);
     expect(brand.find((glyph) => glyph.text === '时')?.x).toBe(116);
     // 整行右缘 166，离杯序（232 起）还有 66 点
     const last = brand[brand.length - 1];

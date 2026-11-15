@@ -121,9 +121,16 @@ const SERIES_EN: Record<string, string> = {
   mian: 'GOOD NIGHT'
 };
 
-/** XML 里 < & > 与引号必须转义，否则茶名里一个 & 就能让整张标签解析失败。 */
+/**
+ * XML 里 < & > 与引号必须转义，否则茶名里一个 & 就能让整张标签解析失败。
+ *
+ * 另外把中点类分隔符换成 ASCII 竖线：条码云 f=7 字库缺这些字形，
+ * 实机会打成「上海?西岸店」（2026-11-15 在 XP-420B 上实测）。
+ * 店名、茶名、顾客名都可能带中点，所以放在这里统一兜住，而不是只改品牌行。
+ */
 export function xpyunText(value: string | null | undefined): string {
   return String(value ?? '')
+    .replace(/[\u00B7\u2022\u2027\u30FB\u2219\uFF65]/g, '|')
     .replace(/[\r\n\t]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .replace(/&/g, '&amp;')
@@ -202,7 +209,9 @@ export function buildXpyunCupLabel(
   const parts: string[] = [];
 
   // ① 品牌 + 杯序（右）
-  parts.push(...textTag(l.marginX, l.brandY, 'Full愈·时叙', { f: FONT_CN }));
+  // 分隔符用 ASCII 竖线：`·`（U+00B7）在条码云 f=7 字库里没有字形，
+  // 实测会打印成「Full愈?时叙」。`|` 任何固件都有，换机型也不会退化成方块。
+  parts.push(...textTag(l.marginX, l.brandY, 'Full愈|时叙', { f: FONT_CN }));
   parts.push(
     ...textTag(l.rightX, l.cupSeqY, `${label.cupIndex} / ${label.cupTotal}`, {
       f: FONT_SMALL,

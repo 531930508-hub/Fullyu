@@ -125,7 +125,8 @@ describe('芯烨条码云标签适配', () => {
     // 二维码 s 是模块点数（dot），不是 mm
     expect(content).toMatch(/<QRC x="[\d.]+" y="[\d.]+" s="5" e="M">A001-1<\/QRC>/);
     expect(content).toContain('生椰拿铁');
-    expect(content).toContain('时叙·上海徐汇店');
+    // 店名里的中点号已换成竖线，实机不会打成问号
+    expect(content).toContain('时叙|上海徐汇店');
   });
 
   it('同一订单多杯时逐张下发，每张二维码是自己的杯号', async () => {
@@ -249,6 +250,27 @@ describe('芯烨条码云标签适配', () => {
 
     expect(content).toContain('&lt;花园&gt;&amp;蜜香');
     expect(content).not.toContain('<花园>');
+  });
+
+  it('品牌行用 ASCII 竖线分隔：中点号在 f=7 字库里缺字形，实机会打成「Full愈?时叙」', () => {
+    const content = buildXpyunCupLabel(job().labels[0]);
+
+    const brand = content.match(/<TEXT x="3" y="3" f="7">([^<]*)<\/TEXT>/)?.[1];
+    expect(brand).toBe('Full愈|时叙');
+    expect(brand).not.toContain('\u00B7');
+  });
+
+  it('店名、茶名里的中点号也换成竖线，实机不会打成一串问号', () => {
+    const content = buildXpyunCupLabel(
+      job([{ storeName: '上海·西岸店', productName: '醒·花园蜜香' }]).labels[0]
+    );
+
+    expect(content).toContain('上海|西岸店');
+    // 系列名被拆成「系列 + 茶名」两段，中点号不会留在纸上
+    expect(content).toContain('醒');
+    expect(content).toContain('花园蜜香');
+    // 整张纸上不该再出现 U+00B7
+    expect(content).not.toContain('\u00B7');
   });
 
   it('坐标一律整数 mm：云端对 x="2.0" 都回 -2，只有 BL 的 w/h 允许小数', () => {

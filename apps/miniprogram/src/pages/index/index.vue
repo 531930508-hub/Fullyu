@@ -238,8 +238,8 @@
                           <view>
                             <text class="price">{{ money(product.priceCents) }}</text>
                             <text class="tiny muted"> / {{ tt(product.unit, product.unitEn || product.unit) }}</text>
-                            <view v-if="product.memberEligible && memberPerCup > 0" class="tiny muted">
-                              {{ tt(`大会员每杯立减 ${money(memberPerCup)}`, `Members save ${money(memberPerCup)} per cup`) }}
+                            <view v-if="product.memberEligible && member" class="tiny muted">
+                              {{ tt('大会员专享价', 'Member price') }}
                             </view>
                           </view>
                           <button hover-class="none"
@@ -1045,7 +1045,7 @@
         <text class="member-code">{{ state.customer.memberCode }}</text>
         <text class="tiny muted">{{ tt('向门店伙伴出示，核验后享受会员权益。', 'Show this to a partner to apply member benefits.') }}</text>
         <text class="pill" :class="{ green: member }">
-          {{ member ? tt(`每杯减 ¥${(state.customer.discountPerCupCents / 100).toFixed(0)}`, `¥${(state.customer.discountPerCupCents / 100).toFixed(0)} off per cup`) : tt('普通会员', 'Member') }}
+          {{ member ? tt('会员权益生效中', 'Member benefits active') : tt('普通会员', 'Member') }}
         </text>
         <button hover-class="none" class="btn primary full section-space" @click="memberOpen = false">{{ tt('收好', 'Done') }}</button>
       </view>
@@ -1594,7 +1594,6 @@ const storeChosen = computed(() => Boolean(state.storeChosen));
 const bottle = computed(() => state.products.find((product) => product.kind === 'bottle' && product.status === 'published'));
 const member = computed(() => Boolean(state.customer && state.customer.discountPerCupCents > 0));
 // 立减金额只来自服务端会员资料；未登录或服务端未返回时按 0 处理，不在前端编造优惠。
-const memberPerCup = computed(() => (state.customer && state.customer.discountPerCupCents) || 0);
 
 /** 个人资料副标题：手机号脱敏 + 会员身份；会员码只在旁边的小图标里展示。 */
 const profileSub = computed(() => {

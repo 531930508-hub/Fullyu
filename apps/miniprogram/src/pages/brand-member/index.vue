@@ -27,10 +27,10 @@
           <MemberCard
             :data="data"
             :active="active"
-            @purchase="openPurchase(selectedCode)"
             @detail="openDetail"
             @rules="openRules"
             @gift="openGift"
+            @renew="openPurchase(selectedCode)"
           />
 
           <!-- 01 社区黑板报：门店公告与会员故事贴在同一块板上，置顶公告排最前 -->
@@ -205,7 +205,7 @@
           </button>
         </view>
         <view class="bm-confirm-row"><text>{{ active ? tt('续费账户', 'Renew for') : tt('开卡账户', 'Open for') }}</text><text>{{ data.member.name }} · {{ data.member.phoneMasked }}</text></view>
-        <view class="bm-confirm-row"><text>{{ tt('包含', 'Includes') }}</text><text>{{ tt('全平台会员价 · 愈行之旅', 'Member prices · Healing Journey') }}</text></view>
+        <view v-if="benefitSummary" class="bm-confirm-row"><text>{{ tt('包含', 'Includes') }}</text><text>{{ benefitSummary }}</text></view>
         <view class="bm-confirm-row"><text>{{ tt('卡类型', 'Card type') }}</text><text>{{ tt('服务权益卡（非储值，不可提现）', 'Service benefit card (not stored value, not withdrawable)') }}</text></view>
         <view class="bm-confirm-row"><text>{{ tt('收款方', 'Payee') }}</text><text>{{ tt('时叙（本小程序）', '时叙 (this mini program)') }}</text></view>
         <view class="bm-mock-note">{{ payError || tt('付款后会员立即生效；若支付成功但页面仍显示未开通，刷新一次即可，款项不会重复扣。服务权益卡非储值，不可提现。', 'Your membership starts right after payment. If it still shows inactive, refresh once — you will not be charged twice. This is a benefit card, not stored value.') }}</view>
@@ -342,6 +342,12 @@ const diceDebt = computed(() => {
   return balance < 0 ? Math.abs(balance) : 0;
 });
 const vouchers = computed(() => (data.value && Array.isArray(data.value.vouchers) ? data.value.vouchers : []));
+// 开通确认里的「包含」只报 CRM 下发的权益标题；CRM 没给权益时退回一句通用描述。
+const benefitSummary = computed(() => {
+  const rows = data.value && Array.isArray(data.value.benefits) ? data.value.benefits : [];
+  const titles = rows.map((item) => item && item.title).filter(Boolean);
+  return titles.length ? titles.join(locale.value === 'en' ? ', ' : ' · ') : tt('全平台会员价 · 愈行之旅', 'Member prices · Healing Journey');
+});
 // 公告、故事都只对有效会员返回；前端不做额外推断。
 const notices = computed(() => (data.value && Array.isArray(data.value.notices) ? data.value.notices : []));
 // 黑板报首屏只贴 3 条，其余由会员手动展开；排序（置顶优先）由 CRM 决定。

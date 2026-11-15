@@ -26,7 +26,7 @@
         <text class="bmc-more">{{ active ? tt('明细 ›', 'Details ›') : (memberEntry && memberEntry.from ? tt('起 ›', 'from ›') : (memberPrice == null ? '' : '›')) }}</text>
       </view>
       <view class="bmc-cell bmc-toggle" role="button" @click="open = !open">
-        <text>{{ active ? (expiring ? tt('去续费', 'Renew') : tt('权益与续费', 'Benefits & renewal')) : tt('查看权益', 'See benefits') }}</text>
+        <text>{{ active ? tt('权益与续费', 'Benefits & renewal') : tt('查看权益', 'See benefits') }}</text>
         <text class="bmc-car" :class="{ 'is-up': open }">⌄</text>
       </view>
     </view>
@@ -46,9 +46,6 @@
           </view>
         </template>
 
-        <button hover-class="none" class="bmc-renew" @click="$emit('purchase')">
-          {{ active ? tt('续费', 'Renew') : tt('开通 Full愈大会员', 'Join Full Yu Membership') }}
-        </button>
         <text class="bmc-note">{{ active ? tt('续费从到期日往后接；', 'Renewal starts when your current term ends. ') : '' }}{{ tt('7 天内可自助退款，已领会员礼按价值扣除。', 'Self-service refund within 7 days; received member gifts are deducted at value.') }}</text>
         <view class="bmc-link" @click="$emit('rules')">
           <text>{{ tt('会员权益与退款规则', 'Member benefits & refund rules') }}</text>
@@ -58,6 +55,10 @@
           <text>{{ tt('有会员码？点此兑换', 'Have a member code? Redeem here') }}</text>
           <text class="bmc-link-tail">›</text>
         </view>
+        <!-- 续费/开通统一收进抽屉：点开是选时长的确认弹窗，卡外不再重复放按钮 -->
+        <button hover-class="none" class="bmc-renew" @click.stop="$emit('renew')">
+          {{ active ? tt('续费 Full愈大会员', 'Renew Full Yu Membership') : tt('开通 Full愈大会员', 'Join Full Yu Membership') }}
+        </button>
       </view>
     </view>
   </view>
@@ -72,7 +73,7 @@ const props = defineProps({
   data: { type: Object, required: true },
   active: { type: Boolean, default: false }
 });
-const emit = defineEmits(['purchase', 'detail', 'rules', 'gift']);
+const emit = defineEmits(['detail', 'rules', 'gift', 'renew']);
 
 const { locale, tt } = useLocale();
 const open = ref(false);
