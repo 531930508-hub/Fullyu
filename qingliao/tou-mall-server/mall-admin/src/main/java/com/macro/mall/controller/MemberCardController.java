@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * Full愈年卡（会员卡）。
+ * Full愈大会员（会员卡）。
  *
  * <p>小程序端：config / info / purchase。
  * 后台管理端：page / detail / issue / refund / expiring / stats / config/update。</p>
@@ -26,7 +26,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/memberCard")
-@Api(tags = "Full愈年卡")
+@Api(tags = "Full愈大会员")
 public class MemberCardController implements ContextMixin {
 
     @Autowired
@@ -35,13 +35,13 @@ public class MemberCardController implements ContextMixin {
     private BrandCardPaymentService brandCardPaymentService;
 
     @GetMapping("/config")
-    @ApiOperation("年卡配置与权益说明（无需登录）")
+    @ApiOperation("会员卡配置与权益说明（无需登录）")
     public CommonResult config() {
         return CommonResult.success(service.configView());
     }
 
     @GetMapping("/info")
-    @ApiOperation("当前客户年卡信息（未登录返回 authorized=false）")
+    @ApiOperation("当前客户会员卡信息（未登录返回 authorized=false）")
     public CommonResult info() {
         return CommonResult.success(service.info(curCustomerId()));
     }
@@ -84,7 +84,7 @@ public class MemberCardController implements ContextMixin {
     }
 
     @GetMapping("/stats")
-    @ApiOperation("后台：年卡指标")
+    @ApiOperation("后台：会员卡指标")
     public CommonResult stats() {
         return CommonResult.success(service.stats());
     }
@@ -96,7 +96,7 @@ public class MemberCardController implements ContextMixin {
     }
 
     @PostMapping("/config/update")
-    @ApiOperation("后台：保存年卡配置")
+    @ApiOperation("后台：保存会员卡配置")
     public CommonResult updateConfig(@RequestBody MemberCardConfig config) {
         service.updateConfig(config);
         return CommonResult.success(service.configView());

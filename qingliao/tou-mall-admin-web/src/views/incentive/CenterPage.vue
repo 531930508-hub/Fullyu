@@ -12,6 +12,7 @@ export default {
     return {
       tabs: [
         { name: 'board', perm: 'incentiveCenter:board', label: '激励看板', component: () => import('@/views/incentive/dashboard/index') },
+        { name: 'settlement', label: '月度结算', component: () => import('@/views/incentive/settlement/index') },
         { name: 'training', perm: 'incentiveCenter:training', label: '培训考核', component: () => import('@/views/incentive/training/index') },
         { name: 'settings', perm: 'incentiveCenter:settings', label: '奖励参数', component: () => import('@/views/incentive/settings/index') }
       ]

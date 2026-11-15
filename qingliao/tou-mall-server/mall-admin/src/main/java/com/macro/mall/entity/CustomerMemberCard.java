@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Getter;
@@ -60,7 +61,8 @@ public class CustomerMemberCard extends BaseEntity {
     @ApiModelProperty("开卡快照-提前预约折扣率")
     private BigDecimal advanceRate;
 
-    @ApiModelProperty("开卡快照-当日预约折扣率")
+    @Deprecated
+    @ApiModelProperty("开卡快照-历史字段当日预约折扣率（已取消，固定 1.0000）")
     private BigDecimal sameDayRate;
 
     @ApiModelProperty("实付开卡金额")

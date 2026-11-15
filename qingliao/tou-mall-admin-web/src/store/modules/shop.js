@@ -1,11 +1,9 @@
 import shopApi from "@/api/shop/shop";
-import roomApi from "@/api/shop/room";
 import massagistApi from "@/api/massagist";
 
 const shop = {
   state: {
     shopList: [],
-    roomList: [],
     shopListAll: [],
     massagistList: [],
   },
@@ -17,9 +15,6 @@ const shop = {
     },
     SET_SHOP_LIST_All: (state, shopListAll) => {
       state.shopListAll = shopListAll || []
-    },
-    SET_ROOM_LIST: (state, roomList) => {
-      state.roomList = roomList || []
     },
     SET_MASSAGIST_LIST: (state, massagistList) => {
       state.massagistList = massagistList || []
@@ -38,17 +33,15 @@ const shop = {
     },
     async setShopAllList({commit, state}, forceUpdate = false) {
       if (state.shopListAll.length == 0 || forceUpdate) {
-        let res = await shopApi.listAll()
+        // 只取服务端授权范围内的门店，防止受限账号拿到全量门店
+        let res = await shopApi.authorized()
         let data = res.data || [];
         commit('SET_SHOP_LIST_All', data)
       }
     },
-    async setRoomList({commit, state}, forceUpdate = false) {
-      if (state.roomList.length == 0 || forceUpdate) {
-        let res = await roomApi.list()
-        let data = res.data || [];
-        commit('SET_ROOM_LIST', data)
-      }
+    // 语义化别名，新代码统一使用
+    async setAuthorizedShopList({dispatch}, forceUpdate = false) {
+      return dispatch('setShopAllList', forceUpdate)
     },
     async setMassagistList({commit, state}, forceUpdate = false) {
       if (state.massagistList.length == 0 || forceUpdate) {

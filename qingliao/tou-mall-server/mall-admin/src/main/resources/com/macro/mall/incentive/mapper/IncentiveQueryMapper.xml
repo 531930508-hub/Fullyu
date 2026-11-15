@@ -20,7 +20,12 @@
         AND TRIM(c.phone) &lt;&gt; ''
         AND NOT EXISTS (
             SELECT 1 FROM s_stat_internal_account ia
-            WHERE ia.enabled = 1 AND ia.phone = TRIM(c.phone)
+            <!-- c_customer 由会员中心侧建表，排序规则可能是 utf8mb4_0900_ai_ci，
+                 s_stat_internal_account 是 utf8mb4_general_ci；两边直接比对会抛
+                 1267 Illegal mix of collations。这里显式收敛到 general_ci，
+                 避免依赖外部表的默认排序规则。 -->
+            WHERE ia.enabled = 1
+              AND ia.phone = CONVERT(TRIM(c.phone) USING utf8mb4) COLLATE utf8mb4_general_ci
         )
     </sql>
 
@@ -54,6 +59,44 @@
           AND od.end_time &gt;= #{start}
           AND od.end_time &lt; #{end}
         <include refid="shopFilter"/>
+        ORDER BY od.massagist_id, od.end_time, od.id
+    </select>
+
+    <select id="selectSalaryDetails" resultType="com.macro.mall.incentive.model.SalaryDetailRow">
+        SELECT od.id AS detail_id,
+               o.id AS order_id,
+               od.massagist_id,
+               od.shop_id,
+               od.duration,
+               COALESCE(p.coefficient, 1.00) AS project_coefficient,
+               <!-- 与服务费明细（StatisticsService）口径对齐：接待单也是有效工时，
+                    需要透出订单类型，由 BaseMinutesCalculator 按门店排班比例封顶。 -->
+               o.type AS detail_type,
+               od.start_time,
+               od.end_time,
+               od.project_id,
+               COALESCE(p.title, o.product_title) AS project_title
+        FROM oms_order_detail od
+        INNER JOIN s_order o ON o.id = od.order_id
+        LEFT JOIN s_project p ON p.id = od.project_id
+        WHERE o.state IN (1, 2)
+          AND o.appointment_state IN (1, 2)
+          AND o.pay_time IS NOT NULL
+          AND od.state = 2
+          AND od.massagist_id IS NOT NULL
+          <!-- 基础薪资工时口径与服务费明细完全一致：内部员工账号的订单同样计入，
+               这里不再套用 validOrderWhere 里的内部员工账号排除规则。 -->
+          AND od.end_time &gt;= #{start}
+          AND od.end_time &lt; #{end}
+          <if test="shopIds != null and shopIds.size() > 0">
+              AND od.shop_id IN
+              <foreach collection="shopIds" item="shopId" open="(" separator="," close=")">
+                  #{shopId}
+              </foreach>
+          </if>
+          <if test="massagistId != null">
+              AND od.massagist_id = #{massagistId}
+          </if>
         ORDER BY od.massagist_id, od.end_time, od.id
     </select>
 

@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * 复购激励计算：老客 60 天留存、新客 30 天档位、新客 10 天斐波那契。
@@ -27,15 +28,26 @@ import java.util.Set;
  * <p>口径以首单月归属：
  * 老客窗口为 M-6 至 M-2，30 天新客窗口为 M-3 至 M-1，
  * 10 天记录取 M 月首单，第二次到店即使发生在次月仍归首单月。
- * 留存率是两类复购奖励的共同前提；新客样本只限制 30 天档位。</p>
+ * 留存率是两类复购奖励的共同前提；新客与老客各自设有样本门槛。</p>
  *
- * <p>老客留存按“服务人次”计算：窗口内该伙伴的每一次老客到店为分母，
- * 同手机号在 1–60 天内再次到店（可由其他伙伴服务）为分子。
- * 新客共同服务时按首日服务伙伴人数分摊权重；第二条到店可由其他伙伴完成。</p>
+ * <p>老客留存按“人次”计算：窗口内在本店由该伙伴服务过的每一次老客到店（非首单）各为一个分母单位，
+ * 该次到店后 60 天内再次到店（可由其他伙伴、其他门店服务）即为这次到店留存；
+ * 同一客户同一天的多条订单只算一次到店，避免拆单重复计数。
+ * 样本不足 minRetentionSample 时不判合格，与 30 天档位的新客样本门槛同理。</p>
+ *
+ * <p>观察期不足的样本不计入分母：留存要求到店日 + 60 天、新客复购要求首单 + 30 天
+ * 已落在数据截止日之前，否则当月看板会出现“月底补涨”。</p>
+ *
+ * <p>新客共同服务时按首日服务伙伴人数分摊权重；第二条到店可由其他伙伴完成。</p>
  */
 public class RepurchaseBatchCalculator {
 
     private static final int WEIGHT_SCALE = 6;
+
+    /**
+     * 老客留存的观察窗口：到店后 60 天内是否有下一次到店。
+     */
+    private static final int RETENTION_DAYS = 60;
 
     public RepurchaseMetrics calculate(Long massagistId,
                                        List<CustomerVisit> visits,
@@ -58,22 +70,49 @@ public class RepurchaseBatchCalculator {
                                        IncentiveRule rule,
                                        String month,
                                        LocalDate dataThrough) {
+        return calculate(massagistId, scopeShopId, visits, firstVisitDates, rule, month,
+                dataThrough, dataThrough);
+    }
+
+    /**
+     * 按门店范围计算。首单归属和留存分母只统计 scopeShopId 门店，
+     * 但客户后续到店允许跨店，以还原真实的 60 天留存与复购行为。
+     * scopeShopId 为 null 时不限制门店，用于疗愈师本人视角。
+     *
+     * <p>tenDayThrough 是 10 天复购的观察截止日：该指标的第二次到店允许落在次月，
+     * 历史月份可补算到“月末 + 10 天”，当月则不超过今天。</p>
+     */
+    public RepurchaseMetrics calculate(Long massagistId,
+                                       Long scopeShopId,
+                                       List<CustomerVisit> visits,
+                                       Map<String, LocalDate> firstVisitDates,
+                                       IncentiveRule rule,
+                                       String month,
+                                       LocalDate dataThrough,
+                                       LocalDate tenDayThrough) {
         if (rule == null) {
             throw new IllegalArgumentException("激励规则不能为空");
         }
         YearMonth selected = IncentiveMath.parseMonth(month);
         LocalDate through = IncentiveMath.dataThrough(dataThrough);
+        LocalDate tenThrough = tenDayThrough == null || tenDayThrough.isBefore(through)
+                ? through : tenDayThrough;
         List<CustomerVisit> clean = normalizeVisits(visits, through);
         Map<String, List<CustomerVisit>> byPhone = groupByPhone(clean);
         Map<String, LocalDate> firstVisits = resolveFirstVisits(clean, firstVisitDates);
+        // 10 天复购需要看次月到店，单独构造一份截至 tenThrough 的到店表；
+        // 留存与 30 天复购仍严格以 through 为准，避免用后续月份回算历史看板。
+        Map<String, List<CustomerVisit>> byPhoneTen = tenThrough.isAfter(through)
+                ? groupByPhone(normalizeVisits(visits, tenThrough)) : byPhone;
 
         RepurchaseMetrics metrics = new RepurchaseMetrics();
         metrics.setRetentionThreshold(rule.getRetentionThreshold());
         metrics.setMinNewSample(rule.getMinNewSample());
+        metrics.setMinRetentionSample(minRetentionSample(rule));
 
-        calculateRetention(metrics, massagistId, scopeShopId, clean, byPhone, firstVisits, rule, selected);
+        calculateRetention(metrics, massagistId, scopeShopId, clean, byPhone, firstVisits, rule, selected, through);
         calculateThirtyDay(metrics, massagistId, scopeShopId, byPhone, firstVisits, rule, selected, through);
-        calculateTenDay(metrics, massagistId, scopeShopId, byPhone, firstVisits, rule, selected, through);
+        calculateTenDay(metrics, massagistId, scopeShopId, byPhoneTen, firstVisits, rule, selected, tenThrough);
 
         metrics.setPotentialAmount(IncentiveMath.sum(
                 metrics.getTierPotentialAmount(), metrics.getTenDayPotentialAmount()));
@@ -92,7 +131,8 @@ public class RepurchaseBatchCalculator {
                                     Map<String, List<CustomerVisit>> byPhone,
                                     Map<String, LocalDate> firstVisits,
                                     IncentiveRule rule,
-                                    YearMonth selected) {
+                                    YearMonth selected,
+                                    LocalDate through) {
         int length = positive(rule.getRetentionMonths(), 6);
         int offset = positive(rule.getRetentionEndOffset(), 2);
         LocalDate start = selected.minusMonths(offset + length - 1L).atDay(1);
@@ -100,8 +140,8 @@ public class RepurchaseBatchCalculator {
         metrics.setRetentionWindowStart(start);
         metrics.setRetentionWindowEnd(end);
 
-        int denominator = 0;
-        int retained = 0;
+        // 老客 -> 窗口内可观察到的到店日；同客户同日拆单只保留一次到店。
+        Map<String, Set<LocalDate>> windowVisits = new LinkedHashMap<>();
         for (CustomerVisit visit : clean) {
             if (massagistId != null && !massagistId.equals(visit.getMassagistId())) {
                 continue;
@@ -112,16 +152,30 @@ public class RepurchaseBatchCalculator {
             if (visit.getServiceDate().isBefore(start) || visit.getServiceDate().isAfter(end)) {
                 continue;
             }
+            // 观察期不足 60 天的到店不计入，否则当月看板会随日期推进“补涨”。
+            if (visit.getServiceDate().plusDays(RETENTION_DAYS).isAfter(through)) {
+                continue;
+            }
             String phone = normalizePhone(visit.getPhone());
             LocalDate first = firstVisits.get(phone);
             if (first == null || !visit.getServiceDate().isAfter(first)) {
                 continue;
             }
-            denominator++;
-            LocalDate next = earliestAfter(byPhone.get(phone), visit.getServiceDate());
-            if (next != null) {
-                long days = ChronoUnit.DAYS.between(visit.getServiceDate(), next);
-                if (days >= 1 && days <= 60) {
+            windowVisits.computeIfAbsent(phone, k -> new TreeSet<>()).add(visit.getServiceDate());
+        }
+
+        int denominator = 0;
+        int retained = 0;
+        for (Map.Entry<String, Set<LocalDate>> entry : windowVisits.entrySet()) {
+            List<CustomerVisit> visits = byPhone.get(entry.getKey());
+            for (LocalDate serviceDate : entry.getValue()) {
+                denominator++;
+                LocalDate next = earliestAfter(visits, serviceDate);
+                if (next == null) {
+                    continue;
+                }
+                long days = ChronoUnit.DAYS.between(serviceDate, next);
+                if (days >= 1 && days <= RETENTION_DAYS) {
                     retained++;
                 }
             }
@@ -129,11 +183,12 @@ public class RepurchaseBatchCalculator {
 
         BigDecimal threshold = rule.getRetentionThreshold() == null
                 ? new BigDecimal("60") : rule.getRetentionThreshold();
+        int minSample = minRetentionSample(rule);
         metrics.setRetentionSample(denominator);
         metrics.setRetainedVisits(retained);
-        metrics.setRetentionRate(IncentiveMath.percent(
+        metrics.setRetentionRate(denominator == 0 ? null : IncentiveMath.percent(
                 BigDecimal.valueOf(retained), BigDecimal.valueOf(denominator)));
-        metrics.setRetentionEligible(denominator > 0
+        metrics.setRetentionEligible(denominator >= minSample
                 && IncentiveMath.ratioAtLeast(
                 BigDecimal.valueOf(retained), BigDecimal.valueOf(denominator), threshold));
     }
@@ -163,6 +218,10 @@ public class RepurchaseBatchCalculator {
             if (first.isBefore(start) || first.isAfter(end)) {
                 continue;
             }
+            // 首单 + N 天还没走完的新客不计入分母，避免当月复购率被“还没来得及回来”拉低。
+            if (first.plusDays(conversionDays).isAfter(through)) {
+                continue;
+            }
             BigDecimal weight = attributionWeight(phone, first, massagistId, scopeShopId, byPhone);
             if (weight == null) {
                 continue;
@@ -180,7 +239,8 @@ public class RepurchaseBatchCalculator {
         metrics.setNewCustomerCount(distinctNew);
         metrics.setNewCustomerWeight(scaleWeight(denominator));
         metrics.setRepurchaseWeight(scaleWeight(numerator));
-        metrics.setConversionRate(IncentiveMath.percent(numerator, denominator));
+        metrics.setConversionRate(denominator.compareTo(BigDecimal.ZERO) == 0
+                ? null : IncentiveMath.percent(numerator, denominator));
         metrics.setConversionSampleSufficient(sampleSufficient);
 
         List<RepurchaseTier> tiers = sortedTiers(rule.getTiers());
@@ -433,6 +493,13 @@ public class RepurchaseBatchCalculator {
 
     private int positive(Integer value, int fallback) {
         return value == null || value < 1 ? fallback : value;
+    }
+
+    /**
+     * 老客留存的最小样本（可观察老客到店人次）。低于该值只展示、不判合格，避免 1 人次 100% 直接解锁档位。
+     */
+    private int minRetentionSample(IncentiveRule rule) {
+        return positive(rule.getMinRetentionSample(), 30);
     }
 
     private String normalizePhone(String phone) {

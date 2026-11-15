@@ -30,6 +30,8 @@ import com.macro.mall.membercard.dto.MemberCardPriceOption;
 import com.macro.mall.pay.PayService;
 import com.macro.mall.service.approval.RefundApplyService;
 import com.macro.mall.service.base.BaseService;
+import com.macro.mall.service.base.ShopScope;
+import com.macro.mall.service.base.ShopScopeHolder;
 import com.macro.mall.service.base.WrapperBuilder;
 import com.macro.mall.service.shop.BedService;
 import com.macro.mall.service.shop.ShopService;
@@ -73,6 +75,10 @@ import java.util.stream.Stream;
 @Slf4j
 public class OrderService extends BaseService<OrderMapper, Order> {
     private static final Logger LOGGER = LoggerFactory.getLogger(Order.class);
+    /**
+     * 预约时间窗口未命中任何订单时的兜底 id：必须让 id 条件存在，否则查询会退化成「最新 N 条」全量订单
+     */
+    private static final String NO_MATCH_ORDER_ID = "-1";
     @Autowired
     @Lazy
     CustomerCouponService customerCouponService;
@@ -197,11 +203,16 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             order.setTotalAmount(totalAmount);
             order.setPayAmount(totalAmount);
             Integration integration = null;
+            //到店次数：下单时按自然日静态写入，历史订单不回填
+            Integer visitNo = null;
+            if (OrderType.PRODUCT.getValue().equals(orderDetailDto.getType())) {
+                visitNo = resolveVisitNo(orderDetailDto.getCustomerId(), orderDetailDto.getStartTime());
+                order.setVisitNo(visitNo);
+            }
             if (OrderType.PRODUCT.getValue().equals(orderDetailDto.getType())) {
                 if (!isManage && AppointmentType.HAND.getValue().equals(appointmentType)) {
 //                    Long count = countByCustomerId(orderDetailDto.getCustomerId());
-                    Long count = countByCustomerIdNew(orderDetailDto.getCustomerId());
-                    OrderDiscount orderDiscount = orderDiscountService.getDiscountByCount(count + 1, orderDetailDto.getShopId(), orderDetailDto.getDurationMinutes(), product.getAmount());
+                    OrderDiscount orderDiscount = orderDiscountService.getDiscountByCount(visitNo.longValue(), orderDetailDto.getShopId(), orderDetailDto.getDurationMinutes(), product.getAmount());
                     //查询此人是否有积分，如果有就不走折扣
                     Long customerIntegration = integrationService.getIntegrationByCustomerId(orderDetailDto.getCustomerId());
 
@@ -360,7 +371,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             List<Massagist> resultList = new ArrayList<>();
             List<Massagist> massagistList = massagistService.listByShopId(shopId);
             Map<Long, Massagist> massagistMap = massagistList.stream().collect(Collectors.toMap(Massagist::getId, Function.identity()));
-            List<OrderDetail> detailList = orderDetailService.getBaseMapper().findSimpleListByStartDateAndShop(date, shopId);
+            List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(
+                    orderDetailService.getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
 
             //luxin删除
            /* if (CollectionUtils.isEmpty(detailList) && personCount == 1) {
@@ -382,7 +394,6 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 massagistDetailMap.put(d.getMassagistId(), massagistDetailList);
             });
             LocalDateTime endTime = DateUtil.addTimeByMinutes(startTime, durationMinutes);
-            LocalDateTime aEndTime = DateUtil.addTimeByMinutes(endTime, shop.getIntervalMinute());
             List<Long> availableMassagistIdList = new ArrayList<>();
             List<Long> disableMassagistIdList = new ArrayList<>();
             allMassagistList.forEach(m -> {
@@ -400,15 +411,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                     if (CollectionUtils.isEmpty(massagistDetailList)) {
                         isAvailable = true;
                     } else {
-                        isAvailable = massagistDetailList.stream().allMatch(d -> {
-                            LocalDateTime detailEndTime = d.getEndTime();
-                            if(d.getProjectId()!=3){
-                                detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, shop.getIntervalMinute());//间隔15分钟；去掉间隔的
-                            }
-                           // detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, shop.getIntervalMinute());
-                            return DateUtil.toHHmm(startTime).compareTo(DateUtil.toHHmm(detailEndTime)) >= 0
-                                    || DateUtil.toHHmm(aEndTime).compareTo(DateUtil.toHHmm(d.getStartTime())) <= 0;
-                        });
+                        isAvailable = massagistDetailList.stream().noneMatch(d ->
+                            BookingAvailability.overlaps(startTime, endTime, d.getStartTime(), d.getEndTime(), 0));
                     }
                     if (isAvailable) {
                         availableMassagistIdList.add(m.getMassagistId());
@@ -500,6 +504,22 @@ public class OrderService extends BaseService<OrderMapper, Order> {
      * @return
      */
     public List<Bed> findAvailableBedList(Long shopId, LocalDateTime startTime, Integer durationMinutes, Long projectId) {
+        return findAvailableBedList(shopId, startTime, durationMinutes, projectId, null);
+    }
+
+    /** 订单所属客户，用于改单/加钟时段计算时的"同一客户连续服务"判断。 */
+    public Long customerIdOfOrder(Long orderId) {
+        if (orderId == null) {
+            return null;
+        }
+        Order order = getById(orderId);
+        return order == null ? null : order.getCustomerId();
+    }
+
+    /**
+     * @param customerId 客户 id：同一客户在同一床位的连续服务（加钟）不占用 15 分钟整理期
+     */
+    public List<Bed> findAvailableBedList(Long shopId, LocalDateTime startTime, Integer durationMinutes, Long projectId, Long customerId) {
         if (shopId == null) {
             shopId = 1L;
         }
@@ -515,7 +535,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             log.error("查询到店时间失败，所有床位状态不可用，date={}", date);
             return Collections.emptyList();
         }
-        List<OrderDetail> detailList = orderDetailService.getBaseMapper().findSimpleListByStartDateAndShop(date, shopId);
+        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(
+                orderDetailService.getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
         if (CollectionUtils.isEmpty(detailList)) {
             return allBedList;
         }
@@ -529,22 +550,14 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             bedDetailMap.put(d.getBedId(), bedDetailList);
         });
         LocalDateTime endTime = DateUtil.addTimeByMinutes(startTime, durationMinutes);
-        LocalDateTime aEndTime = DateUtil.addTimeByMinutes(endTime, shop.getIntervalMinute());
 
         allBedList.forEach(bed -> {
             List<OrderDetail> bedDetailList = bedDetailMap.get(bed.getId());
             boolean isAvailable = true;
-            if (CollectionUtils.isEmpty(bedDetailList)) {
-                isAvailable = true;
-            } else {
-                isAvailable = bedDetailList.stream().allMatch(d -> {
-                    LocalDateTime detailEndTime = DateUtil.addTimeByMinutes(d.getEndTime(), shop.getIntervalMinute());
-                    if (DateUtil.toHHmm(startTime).compareTo(DateUtil.toHHmm(detailEndTime)) >= 0
-                            || DateUtil.toHHmm(aEndTime).compareTo(DateUtil.toHHmm(d.getStartTime())) <= 0) {
-                        return true;
-                    }
-                    return false;
-                });
+            if (!CollectionUtils.isEmpty(bedDetailList)) {
+                // 床位保留整理周转时间；相邻订单不足周转分钟数才算冲突，同一客户接着来的加钟段不算
+                isAvailable = bedDetailList.stream().noneMatch(d -> BookingAvailability.bedOccupied(
+                        startTime, endTime, d, customerId));
             }
             if (isAvailable) {
                 bed.setAvailable(NormalState.EFFECTIVE.getValue());
@@ -654,7 +667,70 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         buildCouponAmount(page.getList());
         buildDetail(page.getList());
         buildGift(page.getList());
+        //按客户查单（消费记录弹窗）时带上该单是第几次到店
+        buildCustomerVisitNo(page.getList(), params);
         return page;
+    }
+
+    /**
+     * 消费记录弹窗：给每行订单补上「第几次到店」。
+     * 优先用订单上静态写入的编号，历史订单按自然日排名回退；已取消的订单不给编号。
+     */
+    private void buildCustomerVisitNo(List<Order> list, Map<String, Object> params) {
+        if (CollectionUtils.isEmpty(list) || params == null) {
+            return;
+        }
+        Object customerIdObj = params.get("customerId");
+        if (customerIdObj == null || Strings.isBlank(customerIdObj.toString())) {
+            return;
+        }
+        //支持单个 id 或逗号拼接的多个 id（按手机号/姓名检索时会合并成列表）
+        Map<Long, Integer> visitNoMap = new HashMap<>();
+        for (String raw : customerIdObj.toString().split(",")) {
+            String idText = raw.trim();
+            if (Strings.isBlank(idText)) {
+                continue;
+            }
+            try {
+                visitNoMap.putAll(visitNoMapByCustomer(Long.valueOf(idText)));
+            } catch (NumberFormatException ignored) {
+                //非客户 id 的参数直接跳过
+            }
+        }
+        if (visitNoMap.isEmpty()) {
+            return;
+        }
+        list.forEach(o -> o.setVisitNo(visitNoMap.get(o.getId())));
+    }
+
+    /**
+     * 客户全部产品订单的到店编号：订单 id -> 第几次到店（取消/退款/超时的订单为 null）
+     */
+    public Map<Long, Integer> visitNoMapByCustomer(Long customerId) {
+        Map<Long, Integer> result = new HashMap<>();
+        if (customerId == null) {
+            return result;
+        }
+        List<Order> orders = list(new LambdaQueryWrapper<Order>()
+                .select(Order::getId, Order::getVisitNo, Order::getState, Order::getAppointmentState)
+                .eq(Order::getCustomerId, customerId)
+                .eq(Order::getType, OrderType.PRODUCT.getValue()));
+        if (CollectionUtils.isEmpty(orders)) {
+            return result;
+        }
+        Map<Long, LocalDate> dateMap = serviceDateMapByOrderIds(
+                orders.stream().map(Order::getId).collect(Collectors.toList()));
+        //历史单没写编号：按自然日排名回退（与 resolveVisitNo 的口径一致）
+        Map<Long, Integer> fallbackPlan = planVisitNo(
+                orders.stream().filter(this::isVisitCounted).collect(Collectors.toList()), dateMap, null);
+        orders.forEach(o -> {
+            if (!isVisitCounted(o)) {
+                result.put(o.getId(), null);
+                return;
+            }
+            result.put(o.getId(), o.getVisitNo() != null ? o.getVisitNo() : fallbackPlan.get(o.getId()));
+        });
+        return result;
     }
 
 
@@ -675,10 +751,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         Object endAppointmentTime = params.get("endAppointmentTime");
         if (startAppointmentTime != null && Strings.isNotBlank(startAppointmentTime.toString())
                 && endAppointmentTime != null && Strings.isNotBlank(endAppointmentTime.toString())) {
-            List<Long> orderIdListByStartTime = orderDetailService.orderIdListByStartTime(startAppointmentTime, endAppointmentTime);
-            if (!CollectionUtils.isEmpty(orderIdListByStartTime)) {
-                params.put("id", CustomUtil.longList2String(orderIdListByStartTime));
-            }
+            List<Long> orderIds = orderDetailService.orderIdListByStartTime(startAppointmentTime, endAppointmentTime);
+            params.put("id", orderIds.isEmpty() ? NO_MATCH_ORDER_ID : CustomUtil.longList2String(orderIds));
         }
     }
 
@@ -787,7 +861,13 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             return;
         }
         Customer customer = customerService.getById(customerId);
+        if (customer == null) {
+            // 客户档案已删除（订单仍在），不能再走 findCustomerNickname，它会直接取 customer.getId()
+            return;
+        }
         order.setCustomerNickname(customerService.findCustomerNickname(customer));
+        order.setCustomerTitle(customerService.findCustomerComment(customer));
+        order.setCustomerBirthday(customer.getBirthday());
     }
 
     /*public void buildSetOrderDetail(List<Order> list) {
@@ -817,7 +897,9 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 Customer customer = collect.get(e.getCustomerId());
                 if (customer != null) {
                     e.setCustomerNickname(customerService.findCustomerNickname(customer));
+                    e.setCustomerTitle(customerService.findCustomerComment(customer));
                     e.setCustomerPhone(customer.getPhone());
+                    e.setCustomerBirthday(customer.getBirthday());
                 }
             }
         });
@@ -944,9 +1026,21 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             }
             List<OrderDetail> orderDetails = orderDetailService.listByOrderId(orderId);
             oldOrderDetailMap.put(orderId, orderDetails);
-            dto.setOldOrderDetails(orderDetails);
-            orderDetailService.removeByOrderId(orderId);
-            order.setShopId(dto.getShopId());
+            //已到店/已服务的明细必须原样保留：只删行重建未服务的部分，否则技师和到店状态会被覆盖
+            List<OrderDetail> servedDetails = orderDetails.stream()
+                    .filter(OrderDetailService::isServedDetail).collect(Collectors.toList());
+            List<OrderDetail> editableDetails = orderDetails.stream()
+                    .filter(d -> !OrderDetailService.isServedDetail(d)).collect(Collectors.toList());
+            dto.setOldOrderDetails(editableDetails);
+            dto.setServedOrderDetails(servedDetails);
+            if (!CollectionUtils.isEmpty(editableDetails)) {
+                orderDetailService.removeByIds(editableDetails.stream()
+                        .map(OrderDetail::getId).collect(Collectors.toList()));
+            }
+            // 门店归属不允许被前端省略覆盖成 null，否则订单会从门店列表中消失
+            if (dto.getShopId() != null) {
+                order.setShopId(dto.getShopId());
+            }
             if (OrderState.NOT_PAY.getValue().equals(order.getState()) && AppointmentType.AGENT.getValue().equals(order.getAppointmentType())) {
                 order.setProductId(dto.getProductId());
                 Product product = productService.getById(dto.getProductId());
@@ -966,6 +1060,18 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             dto.setCustomerId(order.getCustomerId());
             dto.setAppointmentType(order.getAppointmentType());
             orderDetailService.createDetail(dto, false, false);
+            //改单可能换了日期：原日期腾空或新日期占用编号，从较早那天起重排
+            if (OrderType.PRODUCT.getValue().equals(order.getType())) {
+                LocalDate oldDate = orderDetails.stream()
+                        .map(OrderDetail::getStartTime)
+                        .filter(Objects::nonNull)
+                        .map(LocalDateTime::toLocalDate)
+                        .min(LocalDate::compareTo)
+                        .orElse(null);
+                LocalDate newDate = dto.getStartTime() == null ? null : dto.getStartTime().toLocalDate();
+                refreshVisitNoFrom(order.getCustomerId(),
+                        earlierDate(oldDate, newDate == null ? serviceDateOfOrder(orderId) : newDate));
+            }
         }
         return oldOrderDetailMap;
     }
@@ -984,48 +1090,50 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 throw new BusinessException("订单已取消，不允许修改");
             }
             List<OrderDetail> orderDetails = orderDetailService.listByOrderId(orderId);
-            
-            if(orderDetails.size()>0) {//只修改支付方式时走这个条件；
-                if(!order.getProductTitle().trim().equals("接待")&&dto.getBedIdList().size()==0){
+            boolean reception = OrderType.RECEPTION.getValue().equals(order.getType());
+            List<Long> bedIdList = dto.getBedIdList() == null ? Collections.emptyList() : dto.getBedIdList();
+            List<Long> massagistIdList = dto.getMassagistIdList();
+
+            //改单弹窗只换到店日期/时间、疗愈师、床位/座位、支付方式，没有人数/项目/时长字段，金额不变
+            order.setPayType(dto.getPayType());
+            if (dto.getShopId() != null) {
+                order.setShopId(dto.getShopId());
+            }
+            updateById(order);
+            oldOrderDetailMap.put(orderId, orderDetails);
+
+            if (!reception) {
+                if (bedIdList.isEmpty() && orderDetails.stream()
+                        .anyMatch(d -> !OrderDetailService.isServedDetail(d) && d.getBedId() == null)) {
                     throw new BusinessException("请选择床位");
                 }
-                if (!order.getProductTitle().trim().equals("接待") && orderDetails.get(0).getDuration() == dto.getDurationMinutes()&& orderDetails.get(0).getBedId().equals(dto.getBedIdList().get(0)) && orderDetails.get(0).getStartTime().equals(dto.getStartTime()) && (dto.getMassagistIdList().size()!= 0 && dto.getMassagistIdList().get(0) == orderDetails.get(0).getMassagistId())) {
-                    int i = 0;
-                    order.setPayType(dto.getPayType());
-                    updateById(order);
-                    return oldOrderDetailMap;
+                //原地更新：不删行重建，保留已到店状态、明细 id 与排序
+                orderDetailService.applyOrderEdit(orderDetails, dto.getStartTime(), bedIdList, massagistIdList, dto.getShopId());
+                //改到别的日期：原日期可能被腾空、新日期要占一个编号，从较早那天起重排
+                if (OrderType.PRODUCT.getValue().equals(order.getType())) {
+                    LocalDate oldDate = orderDetails.stream()
+                            .map(OrderDetail::getStartTime)
+                            .filter(Objects::nonNull)
+                            .map(LocalDateTime::toLocalDate)
+                            .min(LocalDate::compareTo)
+                            .orElse(null);
+                    LocalDate newDate = dto.getStartTime() == null ? null : dto.getStartTime().toLocalDate();
+                    refreshVisitNoFrom(order.getCustomerId(),
+                            earlierDate(oldDate, newDate == null ? serviceDateOfOrder(orderId) : newDate));
                 }
-                if(dto.getMassagistIdList().size()==0){
-                   //增加修改信息
-                    order.setPayType(dto.getPayType());
-                    updateById(order);
-                    OrderDetail od=orderDetails.get(0);
-                    od.setBedId(dto.getBedIdList().get(0));
-                    od.setStartTime(dto.getStartTime());
-                    od.setEndTime(dto.getStartTime().plusMinutes(orderDetails.get(0).getDuration()));
-                    orderDetailService.updateById(od);
-                    orderDetailService.extendShifts(Collections.singletonList(od));
-                    return oldOrderDetailMap;
-                }
-
-            }
-            oldOrderDetailMap.put(orderId, orderDetails);
-            dto.setOldOrderDetails(orderDetails);
-            orderDetailService.removeByOrderId(orderId);
-            order.setPayType(dto.getPayType());
-            order.setShopId(dto.getShopId());
-            updateById(order);
-            dto.setOrderId(orderId);
-            dto.setAppointmentType(order.getAppointmentType());
-            if (OrderType.RECEPTION.getValue().equals(order.getType())) {
-                orderDetailService.createReceptionDetail(dto);
                 return oldOrderDetailMap;
             }
+            //接待单按原逻辑重建，已到店/已服务的行同样保留
+            dto.setOrderId(orderId);
+            dto.setAppointmentType(order.getAppointmentType());
             dto.setCustomerId(order.getCustomerId());
-            //验证床位是否被占用
-            //orderDetailService.createDetail(dto, true, false);
-            //不验证床位是否被占
-            orderDetailService.createDetail0410(dto, true, false);
+            List<OrderDetail> rebuildable = orderDetails.stream()
+                    .filter(d -> !OrderDetailService.isServedDetail(d)).collect(Collectors.toList());
+            if (!CollectionUtils.isEmpty(rebuildable)) {
+                orderDetailService.removeByIds(rebuildable.stream()
+                        .map(OrderDetail::getId).collect(Collectors.toList()));
+            }
+            orderDetailService.createReceptionDetail(dto);
         }
         return oldOrderDetailMap;
     }
@@ -1059,6 +1167,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                     order.setCancelOrderType(0);
                 }
                 updateById(order);
+                //这一天如果被取消空了，该客户从这天起的到店编号要重排
+                refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(id));
                 return;
             }
             order.setState(OrderState.CANCELED.getValue());
@@ -1073,6 +1183,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             if (OrderType.RECEPTION.getValue().equals(order.getType())) {
                 return;
             }
+            //取消后该自然日可能已无有效订单，从这天起重排到店编号
+            refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(id));
             if (!OrderState.NOT_PAY.getValue().equals(state)) {
                 handleBookingCancelNotice(id);
             }
@@ -1102,6 +1214,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             order.setCancelOrderType(2);//标识后台取消
             updateById(order);
             orderDetailService.refundOrder(id, true);
+            //退款单取消后这一天可能已无有效订单，重排到店编号
+            refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(id));
             handleBookingCancelNotice(id);
         }
     }
@@ -1268,9 +1382,44 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     }
 
     public List<JSONObject> findArriveTimeList(String date, Integer personCount, Long projectId, Integer durationMinutes, Long shopId, Long massagistId, Long customerId) {
+        return findArriveTimeList(date, personCount, projectId, durationMinutes, shopId, massagistId, customerId, false);
+    }
+
+    /**
+     * 后台建单用：和小程序共用同一套校验（疗愈师技能 + 床位 + 真实可服务人数），
+     * 区别只是可用性不足时把时段置灰返回，而不是直接抛错挡住整个建单页面。
+     */
+    public List<JSONObject> findArriveTimeListForPc(String date, Integer personCount, Long projectId, Integer durationMinutes, Long shopId, Long massagistId) {
+        return findArriveTimeList(date, personCount, projectId, durationMinutes, shopId, massagistId, null, true);
+    }
+
+    /**
+     * 后台建单（含加钟）：来源订单 orderId 优先（加钟时就是被加的那张单），
+     * 否则按手机号识别客户。同一客户紧接着的下一段不占用 15 分钟整理期，
+     * 否则加钟时段会被自己上一单挡住而显示为不可选。
+     */
+    public List<JSONObject> findArriveTimeListForPc(String date, Integer personCount, Long projectId, Integer durationMinutes, Long shopId, Long massagistId,
+                                                    Long orderId, String phone) {
+        Long customerId = orderId != null ? customerIdOfOrder(orderId) : customerIdOfPhone(phone);
+        return findArriveTimeList(date, personCount, projectId, durationMinutes, shopId, massagistId, customerId, true);
+    }
+
+    /** 手机号→客户 id，用于"同一客户连续服务"判断；查不到返回 null（按不同客户处理）。 */
+    public Long customerIdOfPhone(String phone) {
+        if (phone == null || phone.trim().isEmpty()) {
+            return null;
+        }
+        Customer customer = customerService.getByPhone(phone.trim());
+        return customer == null ? null : customer.getId();
+    }
+
+    private List<JSONObject> findArriveTimeList(String date, Integer personCount, Long projectId, Integer durationMinutes, Long shopId, Long massagistId, Long customerId, boolean soft) {
         List<Shop> availableShopList = shopService.findAvailableShopList();
-        if (CollectionUtils.isEmpty(availableShopList)) {
-            log.error("查询到店时间失败，所有门店状态不可用，date={}", date);
+        Shop shop = CollectionUtils.isEmpty(availableShopList) ? null
+                : availableShopList.stream().filter(s -> Objects.equals(shopId, s.getId())).findFirst().orElse(null);
+        if (shop == null) {
+            log.warn("查询到店时间失败，门店不可用，date={}, shopId={}", date, shopId);
+            if (soft) return new ArrayList<>();
             throw new BusinessException("暂无可用门店");
         }
         Integer bedType = projectService.findTypeById(projectId);
@@ -1279,8 +1428,9 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         }
         List<Bed> allBedList = bedService.listByStatusAndTypeAndShopId(NormalState.EFFECTIVE.getValue(), bedType, shopId);
         if (CollectionUtils.isEmpty(allBedList)) {
-            log.error("查询到店时间失败，所有床位状态不可用，date={}", date);
-            if(projectId!=3) {//去除掉接待订单的验证
+            log.warn("查询到店时间失败，门店没有可用床位，date={}, shopId={}", date, shopId);
+            allBedList = new ArrayList<>();
+            if (!soft && projectId != 3) {//去除掉接待订单的验证
                 throw new BusinessException("暂无可用床位");
             }
         }
@@ -1310,15 +1460,20 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             }
         }
         if (CollectionUtils.isEmpty(allMassagistList)) {
-            log.error("查询到店时间失败，没有疗愈师排班数据，date={}", date);
-            throw new BusinessException(massagistId != null
-                    ? orderDetailService.specifiedTherapistMessage(massagistId, date, shopId,
-                            "所选疗愈师暂不提供该项目，请选择其他疗愈师或项目")
-                    : "当天暂无可预约的疗愈师，请选择其他日期");
+            log.warn("查询到店时间失败，没有疗愈师排班数据，date={}, shopId={}, projectId={}", date, shopId, projectId);
+            if (soft) {
+                allMassagistList = new ArrayList<>();
+            } else {
+                throw new BusinessException(massagistId != null
+                        ? orderDetailService.specifiedTherapistMessage(massagistId, date, shopId,
+                                "所选疗愈师暂不提供该项目，请选择其他疗愈师或项目")
+                        : "当天暂无可预约的疗愈师，请选择其他日期");
+            }
         }
-        List<OrderDetail> orderDetailList = orderDetailService.getBaseMapper().findSimpleListByStartDateAndShopId(date, shopId);
+        // 已服务/已取消的未来明细不再占用时段，与建单校验口径一致
+        List<OrderDetail> orderDetailList = BookingAvailability.withoutFinishedFuture(
+                orderDetailService.getBaseMapper().findSimpleListByStartDateAndShopId(date, shopId));
         LocalDateTime nowTime = DateUtil.stringToLocalDate(date).atTime(LocalTime.of(9, 50, 0));
-        Shop shop = availableShopList.stream().filter(s -> shopId.equals(s.getId())).findFirst().get();
         if (DateUtil.getCurrentDateCode().equals(date)) {
             nowTime = LocalDateTime.now();
         } else {
@@ -1337,8 +1492,9 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         List<CompletableFuture<List<JSONObject>>> futures = new ArrayList<>();
 
         List<MassagistSchedules> massagistScheduleList = allMassagistList;
+        List<Bed> bedListForCalc = allBedList;
         CompletableFuture<List<JSONObject>> future = CompletableFuture.supplyAsync(() -> {
-                return getJsonObjects(now, orderDetailList, personCount, durationMinutes, shop, allBedList, massagistScheduleList,projectId,shopId,date);
+                return getJsonObjects(now, orderDetailList, personCount, durationMinutes, shop, bedListForCalc, massagistScheduleList,projectId,shopId,date,customerId);
         }, executor);
         futures.add(future);
 
@@ -1372,7 +1528,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         return resultList;
     }
 
-    private List<JSONObject> getJsonObjects(LocalDateTime time, List<OrderDetail> detailList, Integer personCount, Integer durationMinutes, Shop shop, List<Bed> bedList, List<MassagistSchedules> massagistList,long projectId,long shopId,String date) {
+    private List<JSONObject> getJsonObjects(LocalDateTime time, List<OrderDetail> detailList, Integer personCount, Integer durationMinutes, Shop shop, List<Bed> bedList, List<MassagistSchedules> massagistList,long projectId,long shopId,String date,Long customerId) {
         if (projectId != 3) {
             List<OrderDetail> bookings = detailList == null ? Collections.emptyList() : detailList;
             List<MassagistSchedules> allPeople = massagistSchedulesService.getBaseMapper()
@@ -1389,9 +1545,10 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 JSONObject object = new JSONObject();
                 object.put("time", DateUtil.toHHmm(startTime));
                 object.put("state", 0);
+                // 床位维度：时段展示与建单校验使用同一整理间隔口径
                 List<Bed> availableBeds = bedList.stream().filter(bed -> bookings.stream()
                         .filter(d -> Objects.equals(bed.getId(), d.getBedId()))
-                        .noneMatch(d -> BookingAvailability.overlaps(startTime, endTime, d.getStartTime(), d.getEndTime(), shop.getIntervalMinute())))
+                        .noneMatch(d -> BookingAvailability.bedOccupied(startTime, endTime, d, customerId)))
                         .collect(Collectors.toList());
                 Set<Long> scheduled = BookingAvailability.scheduledIds(startTime, massagistList);
                 List<Long> availablePeople = scheduled.stream().filter(id -> bookings.stream()
@@ -1450,7 +1607,6 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 String result = dateTime.format(targetFormat);
                 LocalDateTime startTime =DateUtil.string2DateTime(result);
                 LocalDateTime endTime = DateUtil.addTimeByMinutes(startTime, durationMinutes);
-                LocalDateTime aEndTime = DateUtil.addTimeByMinutes(endTime, shop.getIntervalMinute());
 
                 List<MassagistSchedules> availableMassagistList = new ArrayList<>();
                 massagistList.forEach(m -> {
@@ -1463,15 +1619,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                     if (CollectionUtils.isEmpty(massagistDetailList)) {
                         isAvailable = true;
                     } else {
-                        isAvailable = massagistDetailList.stream().allMatch(d -> {
-                            LocalDateTime detailEndTime = d.getEndTime();
-                            if(d.getProjectId()!=3){
-                                detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, shop.getIntervalMinute());//间隔15分钟；去掉间隔的
-                            }
-                            //detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, shop.getIntervalMinute());
-                            return DateUtil.toHHmm(startTime).compareTo(DateUtil.toHHmm(detailEndTime)) >= 0
-                                    || DateUtil.toHHmm(aEndTime).compareTo(DateUtil.toHHmm(d.getStartTime())) <= 0;
-                        });
+                        isAvailable = massagistDetailList.stream().noneMatch(d ->
+                            BookingAvailability.overlaps(startTime, endTime, d.getStartTime(), d.getEndTime(), 0));
                     }
                     if (isAvailable) {
                         availableMassagistList.add(m);
@@ -1610,7 +1759,9 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             BigDecimal payAmount = order.getPayAmount();
             BigDecimal respAmount = BigDecimal.valueOf(Integer.parseInt((String) dataMap.getOrDefault("amount", "")));
 
-            if (respAmount.compareTo(payAmount.multiply(BigDecimal.valueOf(100))) != 0) {
+            // 合并支付（预约 + 会员卡续费）只校验总额，单笔金额由 PayGroupService 按分单台账拆好后传进来
+            boolean amountChecked = Boolean.TRUE.equals(dataMap.get("amountChecked"));
+            if (!amountChecked && respAmount.compareTo(payAmount.multiply(BigDecimal.valueOf(100))) != 0) {
                 log.warn("订单金额与支付金额不匹配, orderSn={}, payAmount={}, respAmount={}", orderSn, payAmount, respAmount);
                 throw new BusinessException("订单金额与支付金额不匹配");
             }
@@ -1914,6 +2065,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 order.setAppointmentState(AppointmentState.CANCELED.getValue());
                 order.setCancelOrderType(1);//超时取消
                 updateById(order);
+                //超时未付的预约不再占用自然日
+                refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(orderId));
                 BigDecimal integrationAmount = order.getIntegrationAmount();
                 boolean needRearrangementBed = OrderType.PRODUCT.getValue().equals(order.getType());
                 orderDetailService.refundOrder(orderId, needRearrangementBed);
@@ -2108,6 +2261,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         }
         if (RefundType.CANCEL.getValue().equals(type)) {
             orderDetailService.refundOrder(order.getId(), true);
+            //取消型退款：这一天可能被退空，重排到店编号
+            refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(orderId));
             handleBookingCancelNotice(orderId);
         }
 
@@ -2189,6 +2344,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                     }
                 }
                 updateById(order);
+                //退款到账后订单不再算到店，重排该客户当天的编号
+                refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(order.getId()));
 
             } else if ("P".equals(transStat)) {
                 log.warn("进行中");
@@ -2252,6 +2409,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
         fillPriceData(checkoutData, order, priceContext);
+        // 顺手续年卡：结算页展示续费价，勾选后走 /payGroup/create?renewYear=true 一笔付清
+        fillRenewalView(checkoutData, customerId);
         return checkoutData;
     }
 
@@ -2290,6 +2449,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             data.setCostCouponCount(costCouponCount);
             data.setCanUseCouponCount(canUseCount);
             fillPriceData(data, order, context);
+            fillRenewalView(data, customerId);
             return data;
         }
         MemberCardPriceOption option = findPriceOption(context.result, priceSource);
@@ -2307,7 +2467,20 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         data.setCostCouponCount(costCouponCount);
         data.setCanUseCouponCount(canUseCount);
         fillPriceData(data, order, context);
+        fillRenewalView(data, customerId);
         return data;
+    }
+
+    /**
+     * 结算页会员卡续费信息：切换优惠方案（券 / 积分 / 微信）时也要带回，
+     * 否则小程序切一次支付方式「顺手续年卡」面板就消失（勾选状态和叠加金额都会丢）。
+     */
+    private void fillRenewalView(CheckoutData data, Long customerId) {
+        try {
+            data.setMemberCard(memberCardService.renewalView(customerId));
+        } catch (Exception e) {
+            log.warn("结算页会员卡续费信息加载失败, customerId={}, error={}", customerId, e.getMessage());
+        }
     }
 
     /**
@@ -2318,8 +2491,10 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         PriceContext context = new PriceContext();
         BigDecimal base = order.getTotalAmount();
         Product product = productService.getProductLimit(order.getProductId());
-        Long count = countByCustomerIdNew(order.getCustomerId());
-        OrderDiscount orderDiscount = orderDiscountService.getDiscountByCount(count + 1, order.getShopId(),
+        //到店次数用与建单一致的静态自然日编号，保证「预览价」和「实际下单折扣」口径相同
+        Long visitNo = order.getVisitNo() != null ? order.getVisitNo().longValue()
+                : resolveVisitNo(order.getCustomerId(), orderDetails.get(0).getStartTime()).longValue();
+        OrderDiscount orderDiscount = orderDiscountService.getDiscountByCount(visitNo, order.getShopId(),
                 orderDetails.get(0).getDuration(), product.getAmount());
         Long customerIntegration = integrationService.getIntegrationByCustomerId(order.getCustomerId());
 
@@ -2333,9 +2508,10 @@ public class OrderService extends BaseService<OrderMapper, Order> {
 
         CustomerMemberCard card = memberCardService.getActiveCard(order.getCustomerId());
         input.setHasActiveCard(card != null);
-        if (card != null) {
-            input.setAdvanceRate(card.getAdvanceRate());
-            input.setSameDayRate(card.getSameDayRate());
+        //实时折扣：CRM/配置改价后立即对已发卡会员生效，卡上的 advance_rate 只做兜底快照
+        BigDecimal cardRate = card == null ? null : memberCardService.currentAdvanceRate(card);
+        if (cardRate != null) {
+            input.setAdvanceRate(cardRate);
         }
 
         if (orderDiscount != null) {
@@ -2364,6 +2540,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         input.setCouponCostCount(costCouponCount);
 
         context.card = card;
+        context.cardRate = cardRate;
         context.discount = orderDiscount;
         context.result = MemberCardPriceEngine.compute(input);
         return context;
@@ -2405,12 +2582,10 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             return;
         }
         order.setBenefitAmount(option.getBenefitAmount());
-        if (source == MemberCardPriceEngine.SOURCE_CARD_ADVANCE
-                || source == MemberCardPriceEngine.SOURCE_CARD_SAME_DAY) {
+        if (source == MemberCardPriceEngine.SOURCE_CARD_ADVANCE) {
             order.setMemberCardId(context.card == null ? null : context.card.getId());
-            order.setMemberRate(context.card == null ? null
-                    : (source == MemberCardPriceEngine.SOURCE_CARD_ADVANCE
-                    ? context.card.getAdvanceRate() : context.card.getSameDayRate()));
+            //落单时记录本单实际使用的费率，退款试算据此还原已享优惠
+            order.setMemberRate(context.cardRate);
             order.setPayAmount(option.getPayAmount());
             order.setUseIntegrationState(0);
         } else if (source == MemberCardPriceEngine.SOURCE_DISCOUNT) {
@@ -2463,6 +2638,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     private static class PriceContext {
         private MemberCardPriceEngine.Result result;
         private CustomerMemberCard card;
+        /** 本单使用的年卡费率（实时口径），落到 s_order.member_rate */
+        private BigDecimal cardRate;
         private OrderDiscount discount;
     }
 
@@ -2522,10 +2699,36 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     }
 
     public List<OperatingRevenueDto> operatingRevenue(OperatingRevenueDto operatingRevenueDto) {
+        applyRevenueShopScope(operatingRevenueDto);
         return baseMapper.operatingRevenue(operatingRevenueDto);
     }
 
+    /**
+     * 经营流水的门店作用域收敛：受限账号强制只看授权门店（含导出）。
+     */
+    private void applyRevenueShopScope(OperatingRevenueDto dto) {
+        if (dto == null) {
+            return;
+        }
+        ShopScope scope = ShopScopeHolder.current();
+        if (scope == null || scope.isGlobal()) {
+            return;
+        }
+        if (scope.isEmpty()) {
+            throw new BusinessException("当前账号尚未配置可查看门店");
+        }
+        List<Long> shopIds = scope.effectiveShopIds();
+        if (shopIds == null || shopIds.isEmpty()) {
+            throw new BusinessException("当前账号尚未配置可查看门店");
+        }
+        if (dto.getShopId() != null && !scope.contains(dto.getShopId())) {
+            throw new BusinessException("无权查看该门店");
+        }
+        dto.setShopIds(shopIds);
+    }
+
     public JSONObject operatingRevenueTop(OperatingRevenueDto operatingRevenueDto) {
+        applyRevenueShopScope(operatingRevenueDto);
         List<JSONObject> jsonObjectList = baseMapper.operatingRevenueTop(operatingRevenueDto);
 
         JSONObject refObject = new JSONObject();
@@ -2564,7 +2767,10 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         orderDetailDto.setPayType(OrderPayType.WECHAT.getValue());
         orderDetailDto.setAppointmentType(AppointmentType.HAND.getValue());
         //小程序端硬校验：客户已设为暂别的疗愈师不可被指定
-        if (customerMassagistBlockService.isAnyBlocked(orderDetailDto.getCustomerId(), orderDetailDto.getMassagistIdList())) {
+        //加钟是继续当前这次服务，疗愈师正在客户身边，不能被暂别规则拦住
+        boolean isAddServiceOrder = orderDetailDto.getAddType() != null && orderDetailDto.getAddType() == 1;
+        if (!isAddServiceOrder
+                && customerMassagistBlockService.isAnyBlocked(orderDetailDto.getCustomerId(), orderDetailDto.getMassagistIdList())) {
             throw new BusinessException("该疗愈师暂不可预约，请选择其他疗愈师");
         }
         int overTimeSeconds;
@@ -2596,9 +2802,11 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             customer.setComment(appointmentParam.getComment());
             customer.setNote(appointmentParam.getNote());
             customer.setGender(appointmentParam.getGender());
+            customer.setBirthday(appointmentParam.getBirthday());
             customer.setUpdateTime(LocalDateTime.now());
             customerService.save(customer);
         } else {
+            boolean changed = false;
             if (StrUtil.isNotBlank(appointmentParam.getComment()) || StrUtil.isNotBlank(appointmentParam.getNote()) || !ObjUtil.isEmpty(appointmentParam.getGender())) {
                 boolean same = StrUtil.isNotBlank(customer.getComment())
                         && !ObjUtil.isEmpty(customer.getGender())
@@ -2609,10 +2817,16 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 customer.setComment(appointmentParam.getComment());
                 customer.setGender(appointmentParam.getGender());
                 customer.setNote(appointmentParam.getNote());
-                if (!same) {
-                    customer.setUpdateTime(LocalDateTime.now());
-                    customerService.updateById(customer);
-                }
+                changed = !same;
+            }
+            //生日只在本次提交带了生日且与档案不一致时覆盖，避免未填写的预约把已有生日清空
+            if (appointmentParam.getBirthday() != null && !appointmentParam.getBirthday().equals(customer.getBirthday())) {
+                customer.setBirthday(appointmentParam.getBirthday());
+                changed = true;
+            }
+            if (changed) {
+                customer.setUpdateTime(LocalDateTime.now());
+                customerService.updateById(customer);
             }
         }
         Integer personCount = appointmentParam.getPersonCount();
@@ -2636,6 +2850,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 orderDetailDto.setPersonCount(1);
                 orderDetailDto.setIsUpdateSort(appointmentParam.getIsUpdateSort());
                 orderDetailDto.setAddType(appointmentParam.getAddType());
+                orderDetailDto.setFromOrderId(appointmentParam.getOrderId());
                 if (massagistIdIterator.hasNext()) {
                     orderDetailDto.setMassagistIdList(Arrays.asList(massagistIdIterator.next()));
                 }
@@ -2661,6 +2876,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             orderDetailDto.setPayType(payType);
             orderDetailDto.setIsUpdateSort(appointmentParam.getIsUpdateSort());
             orderDetailDto.setAddType(appointmentParam.getAddType());
+            orderDetailDto.setFromOrderId(appointmentParam.getOrderId());
             Long orderId = buildOrder(orderDetailDto, null, true);
             orderIdList.add(orderId);
         }
@@ -2840,6 +3056,173 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             return Collections.emptyMap();
         }
         return list.stream().collect(Collectors.groupingBy(Order::getProductId, Collectors.collectingAndThen(Collectors.toList(), s -> s.stream().mapToInt(Order::getQuantity).sum())));
+    }
+
+    /**
+     * 到店次数（静态自然日编号）：同一客户同一自然日只算一次到店，编号在建单时写入订单，之后不再随
+     * 日期或统计口径重算；同一自然日的第二单沿用当天已有编号，不重复递增。
+     * 取消/退款/超时的订单不占编号；若某一天的单被全部取消，从该天起重新排号（见 refreshVisitNoFrom）。
+     * 历史订单不回填，仍按原统计口径展示（buildOrderCount 里已做回退）。
+     */
+    public Integer resolveVisitNo(Long customerId, LocalDateTime serviceTime) {
+        if (customerId == null || serviceTime == null) {
+            return 1;
+        }
+        LocalDate targetDate = serviceTime.toLocalDate();
+        List<Order> history = list(new LambdaQueryWrapper<Order>()
+                .select(Order::getId, Order::getVisitNo, Order::getState, Order::getAppointmentState)
+                .eq(Order::getCustomerId, customerId)
+                .eq(Order::getType, OrderType.PRODUCT.getValue())
+                .in(Order::getAppointmentState, AppointmentState.FINISHED.getValue(),
+                        AppointmentState.WAITING.getValue(), AppointmentState.DOING.getValue())
+                .notIn(Order::getState, Arrays.asList(OrderState.TIMEOUT.getValue(),
+                        OrderState.CANCELED.getValue(), OrderState.REFUNDED.getValue())));
+        if (CollectionUtils.isEmpty(history)) {
+            return 1;
+        }
+        history = history.stream().filter(this::isVisitCounted).collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(history)) {
+            return 1;
+        }
+        Map<Long, LocalDate> orderServiceDateMap = serviceDateMapByOrderIds(
+                history.stream().map(Order::getId).collect(Collectors.toList()));
+        //同一天已经有单：沿用当天的到店编号
+        Integer sameDayVisitNo = history.stream()
+                .filter(o -> targetDate.equals(orderServiceDateMap.get(o.getId())))
+                .map(Order::getVisitNo)
+                .filter(Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(null);
+        if (sameDayVisitNo != null) {
+            return sameDayVisitNo;
+        }
+        //之前（不含当天）有服务的自然日数量 + 1
+        long daysBefore = orderServiceDateMap.values().stream()
+                .filter(d -> d.isBefore(targetDate))
+                .distinct()
+                .count();
+        return (int) daysBefore + 1;
+    }
+
+    /**
+     * 该订单是否计入到店编号：取消/退款/超时/退款中的订单都不再占用自然日。
+     * state 为空视为历史数据，按计入处理。
+     */
+    public boolean isVisitCounted(Order order) {
+        if (order == null) {
+            return false;
+        }
+        if (AppointmentState.CANCELED.getValue().equals(order.getAppointmentState())) {
+            return false;
+        }
+        Integer state = order.getState();
+        if (state == null) {
+            return true;
+        }
+        return OrderState.NOT_PAY.getValue().equals(state)
+                || OrderState.PAID_NOT_COMMENT.getValue().equals(state)
+                || OrderState.PAID_COMMENTED.getValue().equals(state);
+    }
+
+    /**
+     * 订单对应的自然日（取明细最早的开始时间）
+     */
+    public LocalDate serviceDateOfOrder(Long orderId) {
+        if (orderId == null) {
+            return null;
+        }
+        return serviceDateMapByOrderIds(Collections.singletonList(orderId)).get(orderId);
+    }
+
+    private Map<Long, LocalDate> serviceDateMapByOrderIds(List<Long> orderIds) {
+        Map<Long, LocalDate> orderServiceDateMap = new HashMap<>();
+        if (CollectionUtils.isEmpty(orderIds)) {
+            return orderServiceDateMap;
+        }
+        List<OrderDetail> details = orderDetailService.getBaseMapper().selectList(
+                new LambdaQueryWrapper<OrderDetail>()
+                        .select(OrderDetail::getOrderId, OrderDetail::getStartTime)
+                        .in(OrderDetail::getOrderId, orderIds));
+        if (CollectionUtils.isEmpty(details)) {
+            return orderServiceDateMap;
+        }
+        details.forEach(d -> {
+            if (d.getOrderId() == null || d.getStartTime() == null) {
+                return;
+            }
+            LocalDate date = d.getStartTime().toLocalDate();
+            orderServiceDateMap.merge(d.getOrderId(), date, (a, b) -> a.isBefore(b) ? a : b);
+        });
+        return orderServiceDateMap;
+    }
+
+    /**
+     * 重排客户 fromDate（含）之后的到店编号：整段按自然日升序重新计数，已取消的订单清空编号。
+     * 取消/退款让某一天变空、或改单把订单挪到别的日期时调用，保证「静态编号」不会出现断号或重号。
+     */
+    public void refreshVisitNoFrom(Long customerId, LocalDate fromDate) {
+        if (customerId == null) {
+            return;
+        }
+        List<Order> orders = list(new LambdaQueryWrapper<Order>()
+                .select(Order::getId, Order::getVisitNo, Order::getState, Order::getAppointmentState)
+                .eq(Order::getCustomerId, customerId)
+                .eq(Order::getType, OrderType.PRODUCT.getValue())
+                .in(Order::getState, Arrays.asList(OrderState.NOT_PAY.getValue(),
+                        OrderState.PAID_NOT_COMMENT.getValue(), OrderState.PAID_COMMENTED.getValue()))
+                .in(Order::getAppointmentState, AppointmentState.WAITING.getValue(),
+                        AppointmentState.DOING.getValue(), AppointmentState.FINISHED.getValue()));
+        if (CollectionUtils.isEmpty(orders)) {
+            return;
+        }
+        Map<Long, LocalDate> dateMap = serviceDateMapByOrderIds(
+                orders.stream().map(Order::getId).collect(Collectors.toList()));
+        Map<Long, Integer> plan = planVisitNo(orders, dateMap, fromDate);
+        orders.forEach(o -> {
+            Integer target = plan.get(o.getId());
+            if (target == null || Objects.equals(target, o.getVisitNo())) {
+                return;
+            }
+            update(new LambdaUpdateWrapper<Order>().set(Order::getVisitNo, target).eq(Order::getId, o.getId()));
+        });
+    }
+
+    /**
+     * 按自然日升序重新编号：fromDate（含）之后的订单给出新编号，之前的或没有服务日期的订单不参与。
+     */
+    Map<Long, Integer> planVisitNo(List<Order> orders, Map<Long, LocalDate> dateMap, LocalDate fromDate) {
+        Map<Long, Integer> plan = new HashMap<>();
+        if (CollectionUtils.isEmpty(orders) || dateMap == null) {
+            return plan;
+        }
+        List<LocalDate> days = orders.stream()
+                .map(o -> dateMap.get(o.getId()))
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+        Map<LocalDate, Integer> rankMap = new HashMap<>();
+        for (int i = 0; i < days.size(); i++) {
+            rankMap.put(days.get(i), i + 1);
+        }
+        orders.forEach(o -> {
+            LocalDate date = dateMap.get(o.getId());
+            if (date == null || (fromDate != null && date.isBefore(fromDate))) {
+                return;
+            }
+            plan.put(o.getId(), rankMap.get(date));
+        });
+        return plan;
+    }
+
+    private LocalDate earlierDate(LocalDate one, LocalDate other) {
+        if (one == null) {
+            return other;
+        }
+        if (other == null) {
+            return one;
+        }
+        return one.isBefore(other) ? one : other;
     }
 
     public Long countByCustomerId(Long customerId) {
@@ -3096,8 +3479,10 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             customer = customerService.initCustomer(phone);
             customer.setComment(appointmentParam.getComment());
             customer.setGender(appointmentParam.getGender());
+            customer.setBirthday(appointmentParam.getBirthday());
             customerService.save(customer);
         } else {
+            boolean changed = false;
             if (StrUtil.isNotBlank(appointmentParam.getComment()) || !ObjUtil.isEmpty(appointmentParam.getGender())) {
                 boolean same = StrUtil.isNotBlank(customer.getComment())
                         && !ObjUtil.isEmpty(customer.getGender())
@@ -3105,10 +3490,16 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                         && customer.getGender().equals(appointmentParam.getGender());
                 customer.setComment(appointmentParam.getComment());
                 customer.setGender(appointmentParam.getGender());
-                if (!same) {
-                    customer.setUpdateTime(LocalDateTime.now());
-                    customerService.updateById(customer);
-                }
+                changed = !same;
+            }
+            //生日只在本次提交带了生日且与档案不一致时覆盖，避免未填写的预约把已有生日清空
+            if (appointmentParam.getBirthday() != null && !appointmentParam.getBirthday().equals(customer.getBirthday())) {
+                customer.setBirthday(appointmentParam.getBirthday());
+                changed = true;
+            }
+            if (changed) {
+                customer.setUpdateTime(LocalDateTime.now());
+                customerService.updateById(customer);
             }
         }
 
@@ -3567,7 +3958,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             //luxin修改了，获取所欲技师列表，因为有调店技师
             List<Massagist> massagistList = massagistService.listNotWhere();
             Map<Long, Massagist> massagistMap = massagistList.stream().collect(Collectors.toMap(Massagist::getId, Function.identity()));
-            List<OrderDetail> detailList = orderDetailService.getBaseMapper().findSimpleListByStartDateAndShop(date, shopId);
+            List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(
+                    orderDetailService.getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
             Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
             detailList.forEach(d -> {
                 List<OrderDetail> massagistDetailList = massagistDetailMap.get(d.getMassagistId());
@@ -3578,8 +3970,6 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 massagistDetailMap.put(d.getMassagistId(), massagistDetailList);
             });
             LocalDateTime endTime = DateUtil.addTimeByMinutes(startTime, durationMinutes);
-            // LocalDateTime aEndTime = DateUtil.addTimeByMinutes(endTime, shop.getIntervalMinute());//间隔15分钟；去掉间隔的
-            LocalDateTime aEndTime = DateUtil.addTimeByMinutes(endTime,0);
             List<Long> availableMassagistIdList = new ArrayList<>();
             List<Long> disableMassagistIdList = new ArrayList<>();
             allMassagistList.forEach(m -> {
@@ -3597,15 +3987,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                     if (CollectionUtils.isEmpty(massagistDetailList)) {
                         isAvailable = true;
                     } else {
-                        isAvailable = massagistDetailList.stream().allMatch(d -> {
-                            LocalDateTime detailEndTime = d.getEndTime();
-                            if(d.getProjectId()!=3){
-                                detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, shop.getIntervalMinute());//间隔15分钟；去掉间隔的
-                            }
-                           // detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, 15);//间隔15分钟；去掉间隔的
-                            return DateUtil.toHHmm(startTime).compareTo(DateUtil.toHHmm(detailEndTime)) >= 0
-                                    || DateUtil.toHHmm(aEndTime).compareTo(DateUtil.toHHmm(d.getStartTime())) <= 0;
-                        });
+                        isAvailable = massagistDetailList.stream().noneMatch(d ->
+                            BookingAvailability.overlaps(startTime, endTime, d.getStartTime(), d.getEndTime(), 0));
                     }
                     if (isAvailable) {
                         availableMassagistIdList.add(m.getMassagistId());
@@ -3690,8 +4073,21 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     }
     //luxin新增,编辑订单时使用
     public List<JSONObject> findArriveTimeListEdit(String date, Integer personCount, Long projectId, Integer durationMinutes, Long shopId,long orderId, Long massagistId) {
+        return findArriveTimeListEdit(date, personCount, projectId, durationMinutes, shopId, orderId, massagistId, false);
+    }
+
+    /** 后台改期用：校验口径与新建一致，不足时置灰而非报错。 */
+    public List<JSONObject> findArriveTimeListEditForPc(String date, Integer personCount, Long projectId, Integer durationMinutes, Long shopId,long orderId, Long massagistId) {
+        return findArriveTimeListEdit(date, personCount, projectId, durationMinutes, shopId, orderId, massagistId, true);
+    }
+
+    private List<JSONObject> findArriveTimeListEdit(String date, Integer personCount, Long projectId, Integer durationMinutes, Long shopId,long orderId, Long massagistId, boolean soft) {
         List<Shop> availableShopList = shopService.findAvailableShopList();
-        if (CollectionUtils.isEmpty(availableShopList)) {
+        Shop shop = CollectionUtils.isEmpty(availableShopList) ? null
+                : availableShopList.stream().filter(s -> Objects.equals(shopId, s.getId())).findFirst().orElse(null);
+        if (shop == null) {
+            log.warn("查询可改期时段失败，门店不可用，date={}, shopId={}", date, shopId);
+            if (soft) return new ArrayList<>();
             throw new BusinessException("暂无可用门店");
         }
         Integer bedType = projectService.findTypeById(projectId);
@@ -3700,7 +4096,9 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         }
         List<Bed> allBedList = bedService.listByStatusAndTypeAndShopId(NormalState.EFFECTIVE.getValue(), bedType, shopId);
         if (CollectionUtils.isEmpty(allBedList)) {
-            throw new BusinessException("暂无可用床位");
+            log.warn("查询可改期时段失败，门店没有可用床位，date={}, shopId={}", date, shopId);
+            allBedList = new ArrayList<>();
+            if (!soft) throw new BusinessException("暂无可用床位");
         }
         //弃用，增加了疗愈师技能判断
         // List<MassagistSchedules> allMassagistList = massagistSchedulesService.simpleListByDateAndShopId(date, shopId);
@@ -3711,11 +4109,20 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             allMassagistList = allMassagistList.stream().filter(s -> massagistId.equals(s.getMassagistId())).collect(Collectors.toList());
         }
         if (CollectionUtils.isEmpty(allMassagistList)) {
-            throw new BusinessException("没有疗愈师排班数据");
+            log.warn("查询可改期时段失败，没有疗愈师排班数据，date={}, shopId={}", date, shopId);
+            if (soft) {
+                allMassagistList = new ArrayList<>();
+            } else {
+                throw new BusinessException("没有疗愈师排班数据");
+            }
         }
         //Map<Long, List<OrderDetail>> orderDetailMap = new HashMap<>();
-        List<OrderDetail> orderDetailList = orderDetailService.getBaseMapper().findSimpleListByStartDateAndShopId(date, shopId);
+        List<OrderDetail> orderDetailList = BookingAvailability.withoutFinishedFuture(
+                orderDetailService.getBaseMapper().findSimpleListByStartDateAndShopId(date, shopId));
         List<OrderDetail> orderDetailListNew=orderDetailList.stream().filter(s -> !s.getOrderId().equals(orderId)).collect(Collectors.toList());
+        //同一客户其它单（例如加钟）在该床位的连续服务不占用整理期
+        Order editOrder = getById(orderId);
+        Long editCustomerId = editOrder == null ? null : editOrder.getCustomerId();
         /*if (!CollectionUtils.isEmpty(orderDetailList)) {
             orderDetailMap = orderDetailList.stream().collect(Collectors.groupingBy(OrderDetail::getShopId));
         }*/
@@ -3724,7 +4131,6 @@ public class OrderService extends BaseService<OrderMapper, Order> {
 
 
         LocalDateTime nowTime = DateUtil.stringToLocalDate(date).atTime(LocalTime.of(9, 50, 0));
-        Shop shop = availableShopList.stream().filter(s -> shopId.equals(s.getId())).findFirst().get();
         if (DateUtil.getCurrentDateCode().equals(date)) {
             nowTime = LocalDateTime.now();
         } else {
@@ -3743,8 +4149,9 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         List<CompletableFuture<List<JSONObject>>> futures = new ArrayList<>();
 
         List<MassagistSchedules> massagistScheduleList = allMassagistList;
+        List<Bed> bedListForCalc = allBedList;
         CompletableFuture<List<JSONObject>> future = CompletableFuture.supplyAsync(() -> {
-            return getJsonObjects(now, orderDetailListNew, personCount, durationMinutes, shop, allBedList, massagistScheduleList,projectId,shopId,date);
+            return getJsonObjects(now, orderDetailListNew, personCount, durationMinutes, shop, bedListForCalc, massagistScheduleList,projectId,shopId,date,editCustomerId);
         }, executor);
         futures.add(future);
 
@@ -3970,13 +4377,14 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         LocalDateTime now = LocalDateTime.now();
         // 2. 计算3天前的时间
         LocalDateTime threeDaysAgo = now.minusDays(3);
+        // 未付单排在最前：首页要能连续支付同一时间窗内的多笔未付订单（超时会被自动取消），
+        // 付完一笔后重新拉取就能拿到下一笔；其余订单仍按创建时间倒序给「上次预约」用。
         List<Order> list= this.lambdaQuery()
                 .eq(Order::getCustomerId, customerId)
                 .ge(Order::getCreateTime,threeDaysAgo)
                 .in(Order::getState,0,1,2)
                 .eq(Order::getType,0)
-                .orderByDesc(Order::getCreateTime)
-                .last("limit 1")
+                .last("order by case when state = 0 then 0 else 1 end asc, create_time desc limit 20")
                 .list();
         buildDetail(list);
         return list;
@@ -4320,12 +4728,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
 
             for (OrderDetail orderDetail : detailList) {
                 LocalDateTime orderStartTime = orderDetail.getStartTime();
-                //orderDetail.getEndTime()结束时间增加15分钟
+                //0 分钟周转：服务结束即可接下一单
                 LocalDateTime orderEndTime = orderDetail.getEndTime();
-
-                if(orderDetail.getProjectId()!=3){
-                    orderEndTime = orderDetail.getEndTime().plusMinutes(15);
-                }
                 if (!orderStartTime.isAfter(time) && orderEndTime.isAfter(time)) {
                     orderCount++;
                 }
@@ -4356,9 +4760,6 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 for (OrderDetail orderDetail : detailList) {
                     LocalDateTime orderStartTime = orderDetail.getStartTime();
                     LocalDateTime orderEndTime = orderDetail.getEndTime();
-                    if(orderDetail.getProjectId()!=3){
-                        orderEndTime = orderDetail.getEndTime().plusMinutes(15);
-                    }
                     if (!orderStartTime.isAfter(time) && orderEndTime.isAfter(time)) {
                         orderCount++;
                     }

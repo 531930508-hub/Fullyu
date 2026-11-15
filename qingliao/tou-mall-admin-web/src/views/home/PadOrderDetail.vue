@@ -1,7 +1,7 @@
 <template>
   <div>
     <el-drawer :show-close="true" :visible.sync="showDrawer" custom-class="PadOrderDetail" size="400px"
-               title="订单详情"
+               :title="readOnly ? '订单详情（只读）' : '订单详情'"
                :before-close="close">
       <div style="padding: 0 24px;height: calc(100vh - 85px);" class="flex flex-column">
         <el-descriptions :column="1" labelClassName="c-c1c0c4" :colon="false" contentClassName="c-49454f"
@@ -16,7 +16,7 @@
           <el-descriptions-item label="支付状态"> {{ orderDetail.order.state | orderStateFilter }}</el-descriptions-item>
           <el-descriptions-item label="支付方式">
           <span
-            :style="(orderDetail.order.state == 0 && orderDetail.order.payType==0) || (orderDetail.order.payType==3 && orderDetail.order.state != 0)?'cursor: pointer;color: #409EFF':''"
+            :style="!readOnly && ((orderDetail.order.state == 0 && orderDetail.order.payType==0) || (orderDetail.order.payType==3 && orderDetail.order.state != 0))?'cursor: pointer;color: #409EFF':''"
             @click="openQrCodePay">
             {{ orderDetail.order.payType | orderPayTypeFilter }}
           </span>
@@ -36,7 +36,7 @@
             <span v-if="orderDetail.order.state==3 || orderDetail.order.state==4">0 元</span>
             <div v-else>
               <div
-                v-if="(orderDetail.order.payType==3 || orderDetail.order.payType==4) || ((orderDetail.order.payType == 0 || orderDetail.order.payType == 1) && orderDetail.order.state==0) "
+                v-if="!readOnly && ((orderDetail.order.payType==3 || orderDetail.order.payType==4) || ((orderDetail.order.payType == 0 || orderDetail.order.payType == 1) && orderDetail.order.state==0))"
                 @click="changePayAmount(orderDetail.order)">
                 {{ orderDetail.order.couponPayAmount }}元
                 <i class="el-icon-edit" style="margin-left: 4px;cursor: pointer"></i>
@@ -49,19 +49,33 @@
               <el-avatar :src="orderDetail.massagist.avatarUrl"
                          style="width: 24px;height: 24px;margin-right: 8px"></el-avatar>
               {{ orderDetail.massagist.name }}
-              <img v-if="orderDetail.specifyType ==1" src="@/assets/images/specify-type-icon.png" height="10"
+              <img v-if="orderDetail.specifyType" :title="orderDetail.specifyType==1?'小程序指定疗愈师（点钟）':'后台指定疗愈师（点钟）'"
+                   src="@/assets/images/specify-type-icon.png" height="10"
                    style="margin-left: 2px" width="10"/>
-              <img v-else-if="!orderDetail.isUpdateSort" src="@/assets/images/not-update-sort.png" height="10"
+              <img v-else-if="!orderDetail.isUpdateSort" title="本单未计入轮次（不占用该疗愈师的轮牌顺序）"
+                   src="@/assets/images/not-update-sort.png" height="10"
                    style="margin-left: 2px" width="10"/>
             </div>
+            <div v-else-if="readOnly || orderDetail.state==2 || orderDetail.state==3" style="color: #C1C0C4">未安排</div>
             <div v-else><a @click="exceArganizeMassagist(orderDetail)"> 一键安排疗愈师</a></div>
           </el-descriptions-item>
           <el-descriptions-item label="服务备注">
             {{ orderDetail.comment }}
-            <i class="el-icon-edit" style="cursor: pointer;padding: 0 4px" @click="updateComment(orderDetail)"></i>
+            <i class="el-icon-edit" style="cursor: pointer;padding: 0 4px"
+               @click="updateComment(orderDetail)"></i>
           </el-descriptions-item>
           <el-descriptions-item label="">
-            <div class="flex align-center justify-end hover-click font-extra-small"
+            <div v-if="readOnly" class="font-extra-small hover-click" style="text-align: right"
+                 @click="showAddOrderLabel(orderDetail.order)">
+              <span v-if="orderDetail.order.oil || partsText(orderDetail.order.parts)">
+                精油 {{ orderDetail.order.oil || '无' }}
+                <span v-if="partsText(orderDetail.order.parts)"
+                      style="margin-left: 10px">部位 {{ partsText(orderDetail.order.parts) }}</span>
+              </span>
+              <span v-else style="color: #C1C0C4">未记录精油和部位</span>
+              <i class="el-icon-edit" style="margin-left: 4px;cursor: pointer"></i>
+            </div>
+            <div v-else class="flex align-center justify-end hover-click font-extra-small"
                  @click="showAddOrderLabel(orderDetail.order)">精油和部位
             </div>
           </el-descriptions-item>
@@ -72,35 +86,47 @@
                  @click="showOrderHistoryDialog(orderDetail.customer)">消费记录
             </div>
           </el-descriptions-item>
+          <!-- 订单相关审批（改单/退款/送券等）：超级管理员可回溯完整流程 -->
+          <el-descriptions-item label="" v-if="orderApprovals.length">
+            <div class="flex align-center justify-end font-extra-small order-approvals">
+              <span class="c-info m-r5">审批记录</span>
+              <el-tag v-for="item in orderApprovals" :key="item.id" size="mini"
+                      :type="approvalTagType(item.state)" class="order-approval-tag"
+                      @click.native="openApprovalFlow(item.id)">
+                {{ item.categoryTitle }} · {{ approvalStateText(item.state) }}
+              </el-tag>
+            </div>
+          </el-descriptions-item>
           <el-descriptions-item label="顾客昵称">
             <div class="flex align-center justify-end">
               <el-avatar :src="orderDetail.customer.avatar"
                          style="width: 24px;height: 24px;margin-right: 8px"></el-avatar>
-              {{ orderDetail.customer.nickname }}
+              {{ (orderDetail.customer.nickname | maskNicknameFilter) || '-' }}
             </div>
           </el-descriptions-item>
-          <el-descriptions-item label="手机号码 Phone"><a :href="'tel:'+orderDetail.customer.phone">
-            <i class="el-icon-phone-outline" style="margin-left: 4px;cursor: pointer"></i>
-            {{ orderDetail.customer.phone }}
-           </a>
+          <el-descriptions-item label="手机号码 Phone">
+            <!-- 页面只展示脱敏号码，不提供一键拨号，避免号码被随手带走 -->
+            <span>{{ orderDetail.customer.phone | maskPhoneFilter }}</span>
           </el-descriptions-item>
           <!--          <el-descriptions-item label="会员等级"> {{ orderDetail.customer.vipLevel || '无' }}</el-descriptions-item>
                     <el-descriptions-item label="已服务数"> {{ orderDetail.customer.orderCount }}次</el-descriptions-item>-->
           <el-descriptions-item label="称呼 Name">
-            <div class="hover-click" @click="handleEditCustomer(orderDetail.customer)">
-              {{ orderDetail.customer.comment }}<i class="el-icon-edit" style="margin-left: 4px;cursor: pointer"></i>
+            <div :class="{'hover-click': !readOnly}" @click="handleEditCustomer(orderDetail.customer)">
+              {{ orderDetail.customer.comment }}<i v-if="!readOnly" class="el-icon-edit"
+                                                  style="margin-left: 4px;cursor: pointer"></i>
             </div>
           </el-descriptions-item>
           <el-descriptions-item label="性别 Gender">
-            <div class="hover-click" @click="handleEditCustomer(orderDetail.customer)">
+            <div :class="{'hover-click': !readOnly}" @click="handleEditCustomer(orderDetail.customer)">
               {{ orderDetail.customer.gender == 1 ? '男' : orderDetail.customer.gender == 2 ? '女' : '' }}<i
-              class="el-icon-edit" style="margin-left: 4px;cursor: pointer"></i>
+              v-if="!readOnly" class="el-icon-edit" style="margin-left: 4px;cursor: pointer"></i>
             </div>
           </el-descriptions-item>
           <el-descriptions-item label="备注 Note">
-            <div class="hover-click flex align-center justify-end" @click="handleEditCustomer(orderDetail.customer)">
+            <div :class="{'hover-click': !readOnly, 'flex': !readOnly, 'align-center': !readOnly, 'justify-end': !readOnly}"
+                 @click="handleEditCustomer(orderDetail.customer)">
               <span>{{ orderDetail.customer.note }}</span>
-              <i class="el-icon-edit" style="margin-left: 4px;cursor: pointer"></i>
+              <i v-if="!readOnly" class="el-icon-edit" style="margin-left: 4px;cursor: pointer"></i>
             </div>
           </el-descriptions-item>
           <el-descriptions-item label="疗愈师偏好">
@@ -116,7 +142,7 @@
             </div>
           </el-descriptions-item>
         </el-descriptions>
-        <div class="flex1 flex flex-column justify-end">
+        <div v-if="!readOnly" class="flex1 flex flex-column justify-end">
           <el-button
             v-if="orderDetail.order.state==0 && (orderDetail.order.payType == 3 || orderDetail.order.payType == 4)"
             @click="handlePay(orderDetail.order)"
@@ -152,6 +178,10 @@
                      @click="printOrder(orderDetail.order)">打印小票
           </el-button>
         </div>
+        <div v-if="readOnly" class="flex1 flex font-extra-small"
+             style="align-items: flex-end;justify-content: center;padding-bottom: 8px;color: #C1C0C4">
+          疗愈师账号仅可查看订单，可填写服务备注与精油部位
+        </div>
       </div>
     </el-drawer>
     <upd-order-form ref="refOrderForm" @submit-success="submitSuccess"></upd-order-form>
@@ -161,8 +191,9 @@
     <confirm-pay-dialog ref="refConfirmPayDialog" @submit-success="submitSuccess"></confirm-pay-dialog>
     <appointment-drawer ref="refAppointmentDrawer" @submit-success="submitSuccess"></appointment-drawer>
     <order-history-dialog ref="refOrderHistoryDialog"></order-history-dialog>
-    <order-label-dialog ref="refOrderLabelDialog" @submit-success="submitSuccess"></order-label-dialog>
+    <order-label-dialog ref="refOrderLabelDialog" @submit-success="onLabelSaved"></order-label-dialog>
     <CancelOrderDialog ref="refCancelOrderDialog" @submit-success="submitSuccess">></CancelOrderDialog>
+    <approval-progress ref="refApprovalProgress"></approval-progress>
   </div>
 </template>
 
@@ -184,23 +215,33 @@ import OrderLabelDialog from "./OrderLabelDialog";
 import CancelOrderDialog from "./CancelOrderDialog";
 import customerMassagistRelationApi from "@/api/customer/customerMassagistRelation";
 import customerMassagistBlockApi from "@/api/customer/customerMassagistBlock";
+import ApprovalProgress from "@/views/order/approval/ApprovalProgress";
+import approvalDetailApi from "@/api/approvalDetail";
 
 
 export default {
   name: 'PadOrderDetail',
   components: {
+    ApprovalProgress,
     CancelOrderDialog,
     OrderLabelDialog,
     OrderHistoryDialog,
     AppointmentDrawer, ConfirmPayDialog, CustomerFormDialog, QrCodePayDialog, RefundForm, UpdOrderForm
   },
-  props: {},
+  props: {
+    //只读模式：疗愈师看板上只允许查看订单，不展示任何编辑/收款/取消入口
+    readOnly: {
+      type: Boolean,
+      default: false
+    }
+  },
   data() {
     return {
       showDrawer: false,
       smsShow: false,
       orderDetail: {customer: {}, massagist: {avatarUrl: ''}, order: {}},
-      customerPreference: {favoriteCount: 0, blockList: []}
+      customerPreference: {favoriteCount: 0, blockList: []},
+      orderApprovals: []
     }
   },
   computed: {
@@ -218,6 +259,8 @@ export default {
       let res = await orderDetailApi.info(id);
       this.orderDetail = res.data || {customer: {}, massagist: {avatarUrl: ''}, order: {}}
       this.loadCustomerPreference(this.orderDetail.customerId || (this.orderDetail.customer && this.orderDetail.customer.id))
+      //审批记录异步加载，失败不阻塞订单详情主流程
+      this.loadOrderApprovals(this.orderDetail.order && this.orderDetail.order.id)
 
       let yuyueTime=this.orderDetail.startTime;
       let tenTime=dateUtil.addSeconds(this.orderDetail.startTime,600);
@@ -232,6 +275,39 @@ export default {
       if(dateUtil.isBefore(yuyueTime,nowTime)){//&&!dateUtil.isBefore(tenTime,nowTime)
         this.smsShow =true;
       }
+    },
+    //订单关联审批（改单/退款/送券等）：失败静默，不影响订单主信息展示
+    async loadOrderApprovals(orderId) {
+      this.orderApprovals = []
+      if (!orderId) return
+      try {
+        const res = await approvalDetailApi.byOrder(orderId)
+        this.orderApprovals = res.data || []
+      } catch (e) {
+        this.orderApprovals = []
+      }
+    },
+    approvalStateText(state) {
+      const map = this.constant.approvalStateMap
+      const textMap = {
+        [map.rejected]: '已拒绝',
+        [map.notSubmit]: '未提交',
+        [map.approving]: '审批中',
+        [map.passed]: '已通过',
+        [map.withdraw]: '已撤回',
+        [map.skipped]: '已跳过',
+      }
+      return textMap[state] || ''
+    },
+    approvalTagType(state) {
+      const map = this.constant.approvalStateMap
+      if (state === map.passed) return 'success'
+      if (state === map.rejected) return 'danger'
+      if (state === map.approving) return 'warning'
+      return 'info'
+    },
+    openApprovalFlow(approvalId) {
+      if (approvalId) this.$refs.refApprovalProgress.openByApprovalId(approvalId)
     },
     async loadCustomerPreference(customerId) {
       this.customerPreference = {favoriteCount: 0, blockList: []}
@@ -278,6 +354,8 @@ export default {
       let form = {
         date,
         time,
+        //来源订单：加钟时段/床位按同一客户判定，不占用 15 分钟整理期
+        orderId: this.orderDetail.orderId,
         projectId: this.orderDetail.projectId,
         massagistIdList,
         bedIdList,
@@ -338,34 +416,53 @@ export default {
       this.close()//luxin新增关闭弹出框
     },
     async exceArganizeMassagist(row) {
-      console.log(row.id)
-      await this.notifyConfirm('确认要给客户安排疗愈师吗？')
+      try {
+        await this.notifyConfirm('确认要给客户安排疗愈师吗？')
+      } catch (e) {
+        // 用户取消
+        return
+      }
       this.showFullLoading()
-      await orderDetailApi.exceArganizeMassagist(row.id)
-      this.updateData()
-      this.hideFullLoading()
-      this.notifySuccess('分配成功！')
+      try {
+        const res = await orderDetailApi.exceArganizeMassagist(row.id)
+        const assigned = (res && res.data) || {}
+        // 必须等详情刷新完成，再判断到底有没有安排上，避免"提示成功但疗愈师仍显示未安排"
+        await this.initOrderDetail(row.id)
+        this.$emit("submit-success")
+        const massagist = this.orderDetail && this.orderDetail.massagist
+        if (massagist && massagist.id) {
+          this.notifySuccess(`已安排疗愈师：${massagist.name}`)
+        } else if (assigned.massagistId) {
+          this.notifyWarning(`已分配疗愈师（id=${assigned.massagistId}），但详情刷新失败，请手动刷新页面确认`)
+        } else {
+          this.notifyWarning('未安排到疗愈师，请检查该时段疗愈师排班后重试')
+        }
+      } finally {
+        this.hideFullLoading()
+      }
     },
     async updateComment(row) {
+      // 只读看板也允许修改服务备注，其余字段仍只读
       this.$prompt('请输入备注内容', '更改备注', {
         confirmButtonText: '保存',
         cancelButtonText: '取消',
-        inputPattern: /^.+$/,
-        inputValue: row.comment,
-        inputErrorMessage: '备注内容不能为空'
+        inputType: 'textarea',
+        inputValue: row.comment || '',
+        inputPlaceholder: '可以不填，清空后保存即删除备注'
       }).then(async ({value}) => {
-        await orderDetailApi.updateComment(row.id, value)
+        const comment = (value || '').trim()
+        await orderDetailApi.updateComment(row.id, comment)
         this.notifySuccess()
-        row.comment = value
-        if (this.oldDetail && this.oldDetail.order) {
-          this.oldDetail.order.comment = value
-        }
+        row.comment = comment
         this.$emit("submit-success")
       }).catch(() => {
 
       });
     },
     openQrCodePay() {
+      if (this.readOnly) {
+        return
+      }
       if (this.orderDetail.order.state == 0 && this.orderDetail.order.payType == 0) {
         if (this.orderDetail.order.payAmount <= 0) {
           Message({
@@ -423,6 +520,9 @@ export default {
       this.$emit("submit-success")
     },
     handleEditCustomer(customer) {
+      if (this.readOnly) {
+        return
+      }
       this.$refs.refCustomerFormDialog.open(customer)
     },
     onUpdateCustomer(customer) {
@@ -444,16 +544,38 @@ export default {
       if (comment && gender) {
         return comment + (gender == 1 ? '先生' : gender == 2 ? '女士' : '')
       }
-      if (nickname && nickname == '用户' + phone) {
-        return phone
+      //昵称可能被登记成「用户+手机号」，这种情况显示脱敏号码
+      if (!nickname || /^用户\d{11}$/.test(nickname) || /^1\d{10}$/.test(nickname)) {
+        return this.$options.filters['maskPhoneFilter'](phone)
       }
       return nickname
     },
+    //只读模式（疗愈师）也允许记录精油和部位：服务结束后由本人补录
     showAddOrderLabel(order) {
-      if (!order.id) {
+      if (!order || !order.id) {
         return
       }
       this.$refs.refOrderLabelDialog.open({orderId: order.id, oil: order.oil, parts: order.parts})
+    },
+    //保存精油和部位：疗愈师留在详情页继续查看，运营侧保持原有「保存后关闭并刷新看板」的行为
+    onLabelSaved(form) {
+      const saved = form || {}
+      if (this.orderDetail && this.orderDetail.order) {
+        this.orderDetail.order.oil = saved.oil
+        this.orderDetail.order.parts = saved.parts
+      }
+      if (this.readOnly) {
+        this.$emit("submit-success")
+        return
+      }
+      this.submitSuccess()
+    },
+    //只读模式下把精油的部位数组拼成一行展示
+    partsText(parts) {
+      if (!parts) {
+        return ''
+      }
+      return Array.isArray(parts) ? parts.join('、') : parts
     }
   },
   filters: {
@@ -471,6 +593,16 @@ export default {
 .PadOrderDetail {
   .el-drawer__header {
     margin-bottom: 0;
+  }
+
+  .order-approvals {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .order-approval-tag {
+    cursor: pointer;
+    margin: 2px 0 2px 4px;
   }
 
 

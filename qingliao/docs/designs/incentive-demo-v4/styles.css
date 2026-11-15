@@ -1,0 +1,63 @@
+/* V4 extends the verified V3 brand tokens; charts are ordinal tier tracks. */
+:root{--v4-gap:14px;--v4-pad:18px;--v4-metric:28px;--v4-track-height:3px;--v4-dot:11px;--v4-chart-text:11px}
+.mobile-v4 .mobile-head{margin-bottom:16px}
+.mobile-v4 .month-label{font-size:11px;color:var(--muted);white-space:nowrap}
+.mobile-v4 .achievement{padding:var(--v4-pad);margin-bottom:18px}
+.achievement-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.achievement-head h2{font-size:15px}
+.achievement-head small{font-size:10px;color:var(--muted)}
+.mobile-v4 .ach-grid{margin:13px 0}
+.mobile-v4 .ach-grid strong{font-size:23px}
+.mobile-v4 .ach-grid small{font-size:11px}
+.mobile-v4 .fan-row{padding-top:10px}
+.mobile-v4 .fan-row>.icon{width:23px;height:23px}
+.mobile-v4 .fan-row>div{min-width:0}
+.mobile-v4 .reward-overview{border:0;margin-bottom:var(--v4-gap)}
+.mobile-v4 .reward-hero{padding:14px 20px 18px}
+.mobile-v4 .reward-hero .hero-value{margin:0 0 5px;font-size:38px}
+.business-card{padding:var(--v4-pad);background:var(--paper);border:1px solid var(--line-light);border-radius:var(--radius);margin-bottom:var(--v4-gap);min-width:0}
+.business-title{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--line-light)}
+.business-title h2{font-size:14px;font-weight:600}
+.business-title .money{font-size:21px;font-weight:600;white-space:nowrap}
+.metric-head{display:flex;justify-content:space-between;align-items:end;gap:12px;margin:16px 0 10px}
+.metric-head small{display:block;font-size:11px;color:var(--muted)}
+.metric-head .metric-value{font-size:var(--v4-metric);font-weight:550;line-height:1.5;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.metric-head .metric-value em{font-size:12px;font-weight:400;font-style:normal;margin-left:4px;letter-spacing:0}
+.metric-head .current-state{text-align:right;font-size:11px;line-height:1.8}
+.current-state b{display:block;font-weight:600;font-size:12px}
+.milestone-list{list-style:none;display:grid;grid-template-columns:repeat(var(--count),minmax(0,1fr));gap:0;padding:0;margin:17px 0 11px}
+.milestone{position:relative;min-width:0;text-align:center;font-size:var(--v4-chart-text);color:var(--muted);padding-top:4px}
+.milestone:before{content:'';position:absolute;top:9px;left:-50%;right:50%;height:var(--v4-track-height);background:var(--line-light)}
+.milestone:first-child:before{display:none}
+.milestone.reached:before{background:var(--wood-700)}
+.milestone .dot{position:relative;z-index:1;display:block;margin:0 auto 9px;width:var(--v4-dot);height:var(--v4-dot);border-radius:50%;background:var(--paper);border:2px solid var(--line)}
+.milestone.reached .dot{border-color:var(--wood-700);background:var(--wood-700)}
+.milestone.current .dot{outline:2px solid var(--wood-700);outline-offset:3px}
+.milestone .threshold{display:block;font-weight:600;white-space:nowrap;color:var(--ink)}
+.milestone .tier-value{display:block;white-space:nowrap;font-size:10px;letter-spacing:-.02em;line-height:1.9}
+.milestone .position-label{display:block;font-size:10px;min-height:20px}
+.milestone.current .position-label{font-weight:600;color:var(--ink)}
+.milestone-list.pending .milestone.reached:before{background:var(--line)}
+.milestone-list.pending .milestone.reached .dot{background:var(--paper);border-color:var(--wood-700)}
+.milestone-note{padding:9px 11px;background:var(--disabled);border-radius:7px;font-size:11px;line-height:1.8}
+.business-note{font-size:10px;color:var(--muted);line-height:1.8;margin-top:8px}
+.retention-summary{background:var(--soft);border:1px solid var(--line-light);border-radius:9px;padding:12px;margin-top:14px}
+.retention-summary .metric-head{margin:0;align-items:center}
+.retention-summary .metric-value{font-size:25px}
+.retention-summary .gate-note{font-size:10px;color:var(--muted);border-top:1px solid var(--line);padding-top:7px;margin-top:7px}
+.rate-section{padding-bottom:14px;border-bottom:1px solid var(--line-light)}
+.applied-reward{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:12px;margin:12px 0 8px}
+.applied-reward strong{font-size:17px;font-weight:550}
+.ten-day-section{padding-top:15px}
+.ten-day-section .applied-reward{margin:0 0 5px}
+.ten-day-section .applied-reward>span{font-weight:600}
+.mobile-v4 .next-reward{padding:12px;margin-top:12px;border:0;background:var(--disabled);border-radius:8px}
+.mobile-v4 .next-reward p{font-size:12px}
+.mobile-v4 .next-reward strong{font-size:23px}
+.mobile-v4 .next-footnote{margin:7px 0 0}
+.other-rewards{padding-top:3px;padding-bottom:3px}
+.other-rewards .reward-row{min-height:51px}
+.mobile-v4 .detail-group{margin-top:var(--v4-gap)}
+.mobile-v4 .service-group{margin-top:12px}
+.mobile-v4 .mobile-footer{padding-top:20px}
+@media(max-width:360px){:root{--v4-pad:14px;--v4-chart-text:10px}.mobile-v4 .ach-grid strong{font-size:21px}.business-title .money{font-size:19px}.milestone .tier-value{font-size:9px}.mobile-v4 .month-label{font-size:10px}.mobile-v4 .fan-row>span:last-child{font-size:11px}}

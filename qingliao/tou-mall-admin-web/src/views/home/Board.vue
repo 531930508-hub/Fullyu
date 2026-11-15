@@ -4,10 +4,11 @@
          style="margin-bottom: 24px;background-color: #FFFFFF;padding: 12px 24px;">
       <div class="flex align-center">
         <hamburger class="m-r-10" :toggleClick="toggleSideBar" :isActive="sidebar.opened"></hamburger>
-        <el-radio-group class="group" v-model="searchForm.type" @change="updateData(true)" size="large">
+        <el-radio-group v-if="!isMassagist" class="group" v-model="searchForm.type" @change="updateData(true)" size="large">
           <el-radio-button :label="1">床位</el-radio-button>
           <el-radio-button :label="2">疗愈师</el-radio-button>
         </el-radio-group>
+        <span v-if="isMassagist" class="readonly-tag">只读看板</span>
       </div>
       <div class="flex align-center flex-wrap">
         <shop-selector v-if="shopList && !isMassagist" v-model="searchForm.shopId" :clearable="false"
@@ -55,7 +56,7 @@
       </div>
     </div>
     <div class="content" v-loading="listLoading">
-      <reception-div v-show="showPrevAndNextDateBtn" :reception-data="receptionData"></reception-div>
+      <reception-div v-show="showPrevAndNextDateBtn && !isMassagist" :reception-data="receptionData"></reception-div>
       <div class="scroll-container" ref="refScrollContainer" :style="{height:contentHeight+'px'}">
         <div class="bed-wrapper">
           <div class="bed-item"></div>
@@ -135,9 +136,10 @@
                     <div class="flex" style="width: 100%;margin-top: 20px">
                       <div v-if="searchForm.type==1&&detail.massagist!=null" class="flex align-center">
                         <img class="avatar" :src="detail.massagist.avatarUrl"/>
-                        <img v-if="detail.specifyType ==1" src="@/assets/images/specify-type-icon.png" height="10"
+                        <img v-if="detail.specifyType"
+                             :title="detail.specifyType==1?'小程序指定疗愈师（点钟）':'后台指定疗愈师（点钟）'" src="@/assets/images/specify-type-icon.png" height="10"
                              width="10" style="margin-left: -12px;margin-top: -25px"/>
-                        <img v-else-if="!detail.isUpdateSort" src="@/assets/images/not-update-sort.png" height="10"
+                        <img v-else-if="!detail.isUpdateSort" title="本单未计入轮次（不占用该疗愈师的轮牌顺序）" src="@/assets/images/not-update-sort.png" height="10"
                              width="10" style="margin-left: -12px;margin-top: -25px"/>
                         <div>
                           <div class="username">{{
@@ -155,16 +157,16 @@
                           <div class="bedname-tag" v-if="searchForm.type==2">{{ detail.bedName }}</div>
                         </div>
                         <div class="time">
-                          <img v-if="detail.specifyType ==1" src="@/assets/images/specify-type-icon.png" height="10"
+                          <img v-if="detail.specifyType" :title="detail.specifyType==1?'小程序指定疗愈师（点钟）':'后台指定疗愈师（点钟）'" src="@/assets/images/specify-type-icon.png" height="10"
                                width="10"/>
-                          <img v-else-if="!detail.isUpdateSort&&detail.massagist!=null" src="@/assets/images/not-update-sort.png" height="10"
+                          <img v-else-if="!detail.isUpdateSort&&detail.massagist!=null" title="本单未计入轮次（不占用该疗愈师的轮牌顺序）" src="@/assets/images/not-update-sort.png" height="10"
                                width="10"/>
                           {{ detail.startTime | formatDateTime }}~{{ detail.endTime  | formatDateTime }}
                         </div>
                       </div>
                     </div>
                     <div style="margin-top: 5px" class="time">
-                      <span v-show="detail.customer.orderCount">【{{ detail.customer.orderCount }}】</span>
+                      <span v-if="isVisitCountedDetail(detail) && detail.customer.orderCount">【{{ detail.customer.orderCount }}】</span>
                       <span>{{ customerTitle(detail.customer) }}</span>
                       <span>{{ detail.customer.gender == 2 ? '♀' : detail.customer.gender == 1 ? '♂' : '' }}</span>
                       <span v-show="detail.customer.vipLevel">{{ detail.customer.vipLevel }}</span>
@@ -211,14 +213,14 @@
         </div>
       </div>
     </div>
-    <pad-order-detail ref="refPadOrderDetail" @submit-success="updateData"></pad-order-detail>
+    <pad-order-detail ref="refPadOrderDetail" :read-only="isMassagist"
+                      @submit-success="updateData"></pad-order-detail>
     <appointment-drawer ref="refAppointmentDrawer" @submit-success="updateData"></appointment-drawer>
     <password-form ref="refPasswordForm"></password-form>
-    <order-label-dialog ref="refOrderLabelDialog" @submit-success="updateData"></order-label-dialog>
     <reception-drawer ref="refReceptionDrawer" @submit-success="updateData"></reception-drawer>
     <pad-reception-order-detail ref="refPadReceptionOrderDetail"
                                 @submit-success="updateData"></pad-reception-order-detail>
-    <admin-todo-card :shop-id="searchForm.shopId"></admin-todo-card>
+    <admin-todo-card v-if="!isMassagist" :shop-id="searchForm.shopId"></admin-todo-card>
   </div>
 </template>
 
@@ -236,7 +238,6 @@ import SchedulesLine from "@/views/home/SchedulesLine";
 import dayjs from "dayjs";
 import PasswordForm from "@/views/layout/components/PasswordForm";
 import ReceptionDiv from "@/views/home/ReceptionDiv";
-import OrderLabelDialog from "./OrderLabelDialog";
 import ReceptionDrawer from "./ReceptionDrawer";
 import PadReceptionOrderDetail from "./PadReceptionOrderDetail";
 import Hamburger from "../../components/Hamburger";
@@ -251,7 +252,6 @@ export default {
     Hamburger,
     PadReceptionOrderDetail,
     ReceptionDrawer,
-    OrderLabelDialog,
     ReceptionDiv,
     SchedulesLine,
     AppointmentDrawer,
@@ -265,7 +265,8 @@ export default {
       searchForm: {
         shopId: '',
         date: '',
-        type: 1
+        type: 1,
+        massagistId: ''
       },
       timeList: [],
       timeListPeople:[],
@@ -455,6 +456,15 @@ export default {
     },
   },
   methods: {
+    isVisitCountedDetail(detail) {
+      if (!detail) return false
+      const state = detail.order ? detail.order.state : null
+      const appointmentState = detail.state
+      //取消/退款中/已退款/超时的订单不占到店次数，卡片上不显示【N】
+      const notCounted = [3, 4, 5, 6, 7]
+      if (state !== null && state !== undefined && notCounted.indexOf(Number(state)) > -1) return false
+      return appointmentState != 3
+    },
     hasShopId() {
       const id = this.searchForm.shopId
       return id !== null && id !== undefined && id !== '' && id !== 'null' && !isNaN(Number(id))
@@ -596,10 +606,19 @@ export default {
 
       return {leftOffset, width: adjustedWidth, zIndex};
     },
+    //疗愈师只读看板：只看本人列，避免暴露同事排期
+    scopeReadOnly(list) {
+      if (!this.isMassagist) return list
+      const ownId = this.massagistId
+      if (ownId === null || ownId === undefined || ownId === '') return []
+      return list.filter(item => item && item.id == ownId)
+    },
     initData() {
       this.searchForm.shopId = this.shopId
       this.searchForm.date = dateUtil.getCurrentDateCode()
-      this.searchForm.type = 1
+      // 疗愈师只有只读看板：固定按疗愈师维度，只展示本人一列
+      this.searchForm.type = this.isMassagist ? 2 : 1
+      this.searchForm.massagistId = this.isMassagist ? this.massagistId : ''
       if (!this.hasShopId()) {
         // 账号没有门店范围时不要用 null 调接口，等用户选择门店后再加载
         this.dataList = []
@@ -627,10 +646,14 @@ export default {
     async fetchData() {
       await this.updateData()
       this.updateTime();
-      this.fetchReceptionData()
+      if (!this.isMassagist) this.fetchReceptionData()
     },
     async updateData(showloading = false) {
       if (!this.hasShopId()) return
+      if (this.isMassagist) {
+        this.searchForm.type = 2
+        this.searchForm.massagistId = this.massagistId
+      }
       if (showloading){
         this.listLoading = true
         if (this.winWidth < 1600){
@@ -639,10 +662,7 @@ export default {
       }
       try {
         let res = await orderDetailApi.schedulingMap(this.searchForm)
-        console.log("res--------------")
-        console.log(res)
-        this.dataList = res.data || []
-        console.log(this.dataList)
+        this.dataList = this.scopeReadOnly(res.data || [])
         if (this.searchForm.type == 2) {
           this.fetchMassagistRound()
         }
@@ -662,10 +682,12 @@ export default {
         this.isDragging = false;
         return
       }
+      //疗愈师看板只读：允许打开订单详情查看，但接待单详情与任何写操作都不开放
       if (this.isMassagist) {
-        if (detail.type != 2 && this.massagistId == detail.massagistId) {
-          this.openAddOrderLabelDialog(detail.order)
+        if (detail.type == 2) {
+          return
         }
+        this.openDetail(detail)
         return
       }
       if (detail.type == 2) {
@@ -882,9 +904,6 @@ export default {
         type: 'warning'
       }).then(async () => {
         try {
-          console.log("sourceItem.id")
-          console.log(sourceItem.id)
-          console.log(this.searchForm)
           await orderDetailApi.updateOrderDetail({
             id: sourceItem.id,
             bedId: this.searchForm.type === 1 ? newBedId : null,
@@ -894,7 +913,10 @@ export default {
           await this.updateData();
           this.$message.success('调整成功');
         } catch (error) {
-          this.$message.error('保存失败，请重试');
+          // 落点被占用等业务失败：后端已弹出具体原因，这里只把看板刷回原位
+          if (error !== 'error') {
+            this.$message.error('保存失败，请重试');
+          }
           await this.updateData();
         }
       }).catch(() => {
@@ -953,16 +975,11 @@ export default {
       if (comment) {
         return comment
       }
-      if (nickname && nickname == '用户' + phone) {
+      //昵称被登记成「用户+手机号」或索性就是手机号时不显示昵称，避免号码随称呼露出去
+      if (!nickname || /^用户\d{11}$/.test(nickname) || /^1\d{10}$/.test(nickname)) {
         return null
       }
       return nickname
-    },
-    openAddOrderLabelDialog(order) {
-      if (!order.id) {
-        return
-      }
-      this.$refs.refOrderLabelDialog.open({orderId: order.id, oil: order.oil, parts: order.parts})
     },
     getOrderLabelStyle(order) {
       if (!order.id) {
@@ -1053,6 +1070,15 @@ export default {
   .group /deep/ .el-radio-button__inner {
     padding: 12px 37.5px;
     color: #1D1B20;
+  }
+
+  .readonly-tag {
+    margin-left: 12px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #8a6a40;
+    background-color: #f6efe4;
   }
 
   .group /deep/ .el-radio-button:first-child .el-radio-button__inner {

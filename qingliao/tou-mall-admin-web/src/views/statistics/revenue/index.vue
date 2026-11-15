@@ -289,8 +289,9 @@ export default {
       if (comment && gender) {
         return comment + (gender == 1 ? '先生' : gender == 2 ? '女士' : '')
       }
-      if (nickname && nickname == '用户' + phone) {
-        return phone
+      const maskPhone = this.$options.filters['maskPhoneFilter']
+      if (nickname && (nickname === '用户' + phone || /^1\d{10}$/.test(nickname))) {
+        return maskPhone(phone || nickname)
       }
       return nickname
     }

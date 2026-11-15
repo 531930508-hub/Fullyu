@@ -43,8 +43,10 @@ public class OrderDetail extends BaseEntity {
     @TableField(exist = false)
     private String projectTitle;
 
-    @ApiModelProperty("房间id")
+    @Deprecated
+    @ApiModelProperty("房间id（房间模块已退役，历史列保留）")
     private Long roomId;
+    @Deprecated
     @TableField(exist = false)
     private String roomName;
 

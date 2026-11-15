@@ -104,6 +104,10 @@ public class RefundApplyService extends BaseService<RefundApplyMapper, RefundApp
                 order.setAppointmentState(AppointmentState.CANCELED.getValue());
             }
             orderService.updateById(order);
+            //取消申请一旦提交这一天就当没来过，先给后续订单重排编号
+            if (RefundType.CANCEL.getValue().equals(refundApply.getType())) {
+                orderService.refreshVisitNoFrom(order.getCustomerId(), orderService.serviceDateOfOrder(orderId));
+            }
             if (refundApply.getId() == null) {
                 //增加退款申请
                 Long flowApprovalId = approvalDetailService.addRelationOrderId(refundApply.getOrderId(), refundApply.getShopId(), FlowCategoryCode.REFUND, refundApply.getCreateUser());
@@ -151,6 +155,8 @@ public class RefundApplyService extends BaseService<RefundApplyMapper, RefundApp
                 giveGiftService.updateById(giveGift);
             }
             orderService.updateById(order);
+            //审批被拒：订单恢复，这一天重新占号（退款审批通过时由退款流程重排）
+            orderService.refreshVisitNoFrom(order.getCustomerId(), orderService.serviceDateOfOrder(orderId));
         }
         refundApply.setRefundStatus(state.getValue());
         updateById(refundApply);

@@ -89,6 +89,25 @@ export default {
       data: data
     })
   },
+  internalAccounts() {
+    return request({
+      url: '/incentive/internal-accounts',
+      method: 'get'
+    })
+  },
+  saveInternalAccount(data) {
+    return request({
+      url: '/incentive/internal-accounts',
+      method: 'post',
+      data: data
+    })
+  },
+  deleteInternalAccount(id) {
+    return request({
+      url: `/incentive/internal-accounts/${id}`,
+      method: 'delete'
+    })
+  },
   exportCsv(params) {
     return request({
       url: '/incentive/export',
@@ -138,5 +157,36 @@ export default {
   },
   exportCertifications(params) {
     return request({url: '/incentive/training-certifications/export', method: 'get', params, responseType: 'blob'})
+  },
+  // ---------------- 月度结算单 ----------------
+  settlementOverview(params) {
+    return request({url: '/monthlySettlement/overview', method: 'get', params})
+  },
+  settlementPage(params) {
+    return request({url: '/monthlySettlement/page', method: 'get', params})
+  },
+  settlementDetail(id) {
+    return request({url: `/monthlySettlement/${id}`, method: 'get'})
+  },
+  mySettlement(params) {
+    return request({url: '/monthlySettlement/mine', method: 'get', params})
+  },
+  generateSettlement(data) {
+    return request({url: '/monthlySettlement/generate', method: 'post', data})
+  },
+  confirmSettlement(data) {
+    return request({url: '/monthlySettlement/confirm', method: 'post', data})
+  },
+  publishSettlement(data) {
+    return request({url: '/monthlySettlement/publish', method: 'post', data})
+  },
+  reopenSettlement(id) {
+    return request({url: `/monthlySettlement/${id}/reopen`, method: 'post'})
+  },
+  settlementRemark(id, data) {
+    return request({url: `/monthlySettlement/${id}/remark`, method: 'post', data})
+  },
+  exportSettlement(params) {
+    return request({url: '/monthlySettlement/export', method: 'get', params, responseType: 'blob'})
   }
 }

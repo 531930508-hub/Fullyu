@@ -5,19 +5,19 @@ import com.macro.mall.incentive.model.IncentiveRule;
 import java.math.BigDecimal;
 
 /**
- * 基础接单奖励与店长奖励。
+ * 基础薪资与店长奖励。
  */
 public class IncentiveCalculator {
 
     /**
-     * 基础接单奖励 = 当月折算分钟 × 当前档位系数，不分段累加。
+     * 基础薪资 = 当月折算分钟 × 当前档位单价（元/分钟），不分段累加。
      */
     public BigDecimal baseReward(BigDecimal convertedMinutes, IncentiveRule rule, boolean newPartner) {
         if (convertedMinutes == null || convertedMinutes.compareTo(BigDecimal.ZERO) <= 0 || rule == null) {
             return BigDecimal.ZERO.setScale(IncentiveMath.MONEY_SCALE);
         }
-        BigDecimal coefficient = rule.coefficientFor(convertedMinutes, newPartner);
-        return IncentiveMath.money(convertedMinutes.multiply(coefficient));
+        return BaseSalaryLadder.of(rule.getCoefficients())
+                .amountFor(convertedMinutes, newPartner, rule.getNewCoefficient());
     }
 
     /**

@@ -1,8 +1,7 @@
 <template>
   <div class="OrderDetail">
-    <el-drawer :show-close="true" :visible.sync="showDrawer" :z-index="108" append-to-body size="61%" title="订单详情"
+    <el-drawer :show-close="true" :visible.sync="showDrawer" append-to-body size="61%" title="订单详情"
                :before-close="close"
-               z-index="1000"
     >
       <div style="padding: 0 20px">
         <div>
@@ -14,7 +13,7 @@
               <el-descriptions-item label="所属门店">{{ order.shopId | shopNameFilter }}</el-descriptions-item>
               <el-descriptions-item label="订单编号">{{ order.code }}</el-descriptions-item>
               <el-descriptions-item label="产品名称">{{ order.productTitle }}</el-descriptions-item>
-              <el-descriptions-item label="客户称呼">{{ order.customerNickname }}</el-descriptions-item>
+              <el-descriptions-item label="客户称呼">{{ order.customerNickname | maskNicknameFilter }}</el-descriptions-item>
               <el-descriptions-item label="总金额">{{ order.totalAmount }}元</el-descriptions-item>
               <el-descriptions-item label="实付金额">
                 <span v-if="order.state==0 || order.state==3 || order.state==4">0</span>

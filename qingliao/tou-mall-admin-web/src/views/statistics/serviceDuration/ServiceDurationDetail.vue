@@ -1,6 +1,6 @@
 <template>
   <div class="ServiceDurationDetail">
-    <el-drawer :show-close="true" :visible.sync="showDrawer" :z-index="108" append-to-body size="61%" title="服务时长详情"
+    <el-drawer :show-close="true" :visible.sync="showDrawer" append-to-body size="61%" title="服务时长详情"
                :before-close="close">
       <el-tabs v-model="activeName" type="card">
         <el-tab-pane label="订单详情" name="first">

@@ -10,6 +10,8 @@ import com.macro.mall.enums.MassagistIdentityCode;
 import com.macro.mall.service.MassagistIdentityService;
 import com.macro.mall.service.MassagistService;
 import com.macro.mall.service.UmsAdminService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
@@ -34,8 +36,13 @@ import java.util.Set;
 @Service
 public class IncentiveAccessService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(IncentiveAccessService.class);
+
     @Value("${incentive.global-roles:超级管理员,总助,运营,财务,admin}")
     private String globalRoles;
+
+    @Value("${incentive.shop-manager-roles:店长}")
+    private String shopManagerRole;
 
     @Autowired
     private UmsAdminService adminService;
@@ -64,12 +71,15 @@ public class IncentiveAccessService {
     }
 
     public boolean isGlobal() {
-        UmsAdmin admin = currentAdmin();
-        List<UmsRole> roles = adminService.getRoleList(admin.getId());
-        if (CollectionUtils.isEmpty(roles)) {
+        return hasRoleIn(adminService.getRoleList(currentAdmin().getId()), globalRoles);
+    }
+
+    /** 角色列表里是否命中逗号分隔的任一角色名。 */
+    private boolean hasRoleIn(List<UmsRole> roles, String csvNames) {
+        if (CollectionUtils.isEmpty(roles) || csvNames == null || csvNames.trim().isEmpty()) {
             return false;
         }
-        Set<String> allowed = new LinkedHashSet<>(split(globalRoles));
+        Set<String> allowed = new LinkedHashSet<>(split(csvNames));
         for (UmsRole role : roles) {
             if (role.getName() != null && allowed.contains(role.getName().trim())) {
                 return true;
@@ -101,7 +111,52 @@ public class IncentiveAccessService {
 
     public boolean isShopManager() {
         Long massagistId = currentMassagistIdOrNull();
-        return massagistId != null && massagistIdentityService.hasCode(massagistId, MassagistIdentityCode.SHOP_MANAGER);
+        if (massagistId == null) {
+            return false;
+        }
+        try {
+            return massagistIdentityService.hasCode(massagistId, MassagistIdentityCode.SHOP_MANAGER);
+        } catch (Exception e) {
+            // 身份表未迁移的库（如旧测试库）不应让排班/考核直接 500；按非店长处理，权限只会更严。
+            LOGGER.warn("疗愈师身份表不可用，按非店长处理: massagistId={}", massagistId, e);
+            return false;
+        }
+    }
+
+    /**
+     * 后台角色名判定，用于兼容只配了 ums_role、尚未落疗愈师身份的历史账号。
+     */
+    public boolean hasRoleName(String roleName) {
+        return hasRoleIn(adminService.getRoleList(currentAdmin().getId()), roleName);
+    }
+
+    /**
+     * 能否维护门店排班：全局角色、店长（身份或后台角色），或未绑定疗愈师档案的管理账号。
+     *
+     * <p>店长本身也是疗愈师，必然有疗愈师档案，因此不能再用“有没有档案”来区分
+     * “疗愈师本人自助”和“门店管理人员”，否则所有店长都会被挡在排班管理之外。</p>
+     */
+    public boolean canManageSchedules() {
+        if (currentMassagistIdOrNull() == null) {
+            return true;
+        }
+        List<UmsRole> roles = adminService.getRoleList(currentAdmin().getId());
+        if (hasRoleIn(roles, globalRoles) || hasRoleIn(roles, shopManagerRole)) {
+            return true;
+        }
+        return isShopManager();
+    }
+
+    /**
+     * 调店目标门店校验：店长把本店疗愈师临时调往其它门店是正常操作，
+     * 其余账号仍要求目标门店在授权范围内。
+     */
+    public void requireTransferShopAccess(Long shopId) {
+        List<UmsRole> roles = adminService.getRoleList(currentAdmin().getId());
+        if (hasRoleIn(roles, globalRoles) || hasRoleIn(roles, shopManagerRole) || isShopManager()) {
+            return;
+        }
+        requireShopAccess(shopId);
     }
 
     public Long currentMassagistIdOrNull() {

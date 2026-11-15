@@ -118,8 +118,8 @@
         <el-table-column label="领取客户" prop="customerId" show-overflow-tooltip>
           <template slot-scope="scope">
             <span v-if="!scope.row.customerId">无</span>
-            <span v-else-if="scope.row.customer">{{ scope.row.customer.nickname }}：{{
-                scope.row.customer.phone
+            <span v-else-if="scope.row.customer">{{ scope.row.customer.nickname | maskNicknameFilter }}：{{
+                scope.row.customer.phone | maskPhoneFilter
               }}</span>
           </template>
         </el-table-column>

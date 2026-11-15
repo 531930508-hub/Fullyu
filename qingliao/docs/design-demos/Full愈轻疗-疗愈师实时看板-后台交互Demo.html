@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Full愈轻疗 · 疗愈师实时看板 - 后台交互 Demo</title>
+<style>
+  :root{
+    --wood-900:#2B1D17; --wood-700:#6B463C; --wood-500:#5F4A3E;
+    --ink-900:#2B211A; --ink-700:#4A3C32; --ink-500:#655547;
+    --sand-50:#FCFAF6; --sand-100:#F4EEE5; --sand-200:#EAE2D6; --sand-300:#D5C9B9; --sand-400:#B3A08C;
+    --gold:#C4A974; --cream:#F5E8D8;
+    --warn-bg:#F7ECD9; --warn-bd:#E4CBA0; --warn-tx:#6B4A1F;
+    --ok:#4E7A51;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--cream);color:var(--ink-900);font-size:14px;}
+  .demo-frame{max-width:1240px;margin:0 auto;padding:18px 20px 60px;}
+
+  /* ===== 顶部说明条 ===== */
+  .spec-strip{display:flex;gap:12px;margin-bottom:16px;}
+  .spec{flex:1;background:var(--sand-50);border:1px solid var(--sand-200);border-radius:6px;padding:12px 14px;}
+  .spec b{display:block;font-size:13px;color:var(--wood-700);margin-bottom:5px;}
+  .spec span{font-size:12px;color:var(--ink-500);line-height:1.6;}
+
+  /* ===== 后台外壳 ===== */
+  .shell{display:flex;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(43,29,23,.10);background:#fff;min-height:980px;}
+  .side{width:172px;background:var(--wood-900);color:var(--sand-100);flex-shrink:0;padding:14px 0;}
+  .side .logo{padding:6px 18px 16px;font-size:16px;letter-spacing:2px;color:var(--sand-100);border-bottom:1px solid rgba(245,232,216,.14);margin-bottom:10px;}
+  .side .mi{padding:11px 18px;font-size:13px;color:rgba(245,232,216,.72);cursor:default;display:flex;align-items:center;gap:8px;}
+  .side .mi svg{width:14px;height:14px;opacity:.8;}
+  .side .mi.on{background:var(--wood-700);color:#fff;}
+  .main{flex:1;min-width:0;background:#F0E9DD;display:flex;flex-direction:column;}
+  .topbar{height:48px;background:#fff;border-bottom:1px solid var(--sand-200);display:flex;align-items:center;justify-content:space-between;padding:0 18px;flex-shrink:0;}
+  .crumb{font-size:13px;color:var(--ink-500);}
+  .crumb b{color:var(--ink-700);font-weight:600;}
+  .who{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-700);}
+  .who .av{width:26px;height:26px;border-radius:50%;background:var(--wood-700);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;}
+  .content{padding:16px 18px;overflow:hidden;}
+
+  /* ===== 页头 ===== */
+  .page-head{background:#fff;border:1px solid var(--sand-200);border-radius:6px;padding:14px 18px;display:flex;align-items:center;gap:14px;margin-bottom:12px;}
+  .page-head .big-av{width:46px;height:46px;border-radius:50%;background:var(--wood-700);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;}
+  .ph-name{font-size:17px;font-weight:600;}
+  .ph-meta{font-size:12px;color:var(--ink-500);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:3px;line-height:18px;}
+  .tag.shop{background:var(--sand-100);color:var(--ink-700);border:1px solid var(--sand-300);}
+  .tag.job{background:#EDF3ED;color:var(--ok);border:1px solid #CBDfCB;}
+  .tag.live{background:var(--wood-700);color:#fff;}
+  .tag.live i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--gold);margin-right:4px;animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  .tag.rule{background:var(--sand-50);color:var(--ink-500);border:1px dashed var(--sand-300);}
+  .ph-right{margin-left:auto;text-align:right;font-size:12px;color:var(--ink-500);line-height:1.7;}
+  .ph-right b{color:var(--ink-700);}
+
+  /* ===== 本月冲刺激励卡（深棕底反白焦点） ===== */
+  .kpi.sprint{background:var(--wood-900);border-color:var(--wood-900);}
+  .kpi.sprint .k-lbl{color:rgba(245,232,216,.78);}
+  .kpi.sprint .k-win{background:rgba(245,232,216,.12);border-color:rgba(245,232,216,.28);color:rgba(245,232,216,.78);}
+  .sp-kicker{margin-top:12px;font-size:11px;letter-spacing:.06em;color:rgba(245,232,216,.74);}
+  .sp-kicker b{color:var(--gold);}
+  .sp-price{font-size:40px;font-weight:700;color:var(--gold);margin:2px 0 6px;line-height:1;font-variant-numeric:tabular-nums;}
+  .sp-slogan{font-size:13px;color:rgba(245,232,216,.92);line-height:1.8;}
+  .sp-slogan b{color:var(--gold);}
+  .sp-stat{margin-top:12px;font-size:13px;color:rgba(245,232,216,.92);background:rgba(245,232,216,.10);border:1px solid rgba(245,232,216,.22);border-radius:5px;padding:8px 12px;}
+  .sp-stat b,.sp-next b{color:var(--gold);}
+  .sp-next{margin-top:8px;font-size:13px;color:rgba(245,232,216,.92);}
+  .sp-seq{margin-top:8px;font-size:11px;line-height:1.7;color:rgba(245,232,216,.72);font-variant-numeric:tabular-nums;letter-spacing:.02em;}
+  .sp-seq b{color:var(--gold);font-weight:700;}
+  .sp-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;}
+  .sprint .demo-btn.light{border-color:var(--gold);color:var(--gold);background:transparent;}
+  .sprint .demo-btn.light:hover{background:var(--gold);color:var(--wood-900);}
+  .sprint .demo-btn.ghost{border-color:rgba(245,232,216,.35);color:rgba(245,232,216,.78);background:transparent;}
+  .sprint .demo-btn.ghost:hover{border-color:var(--gold);color:var(--gold);background:transparent;}
+
+  /* ===== 通用卡片 ===== */
+  .card{background:#fff;border:1px solid var(--sand-200);border-radius:6px;padding:14px 18px;margin-bottom:12px;}
+  .card-h{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;}
+  .card-h h3{font-size:14px;font-weight:600;color:var(--ink-900);}
+  .card-h .sub{font-size:12px;color:var(--ink-500);}
+  .card-h .right{margin-left:auto;font-size:12px;color:var(--ink-500);}
+
+  /* ===== 时间轴 ===== */
+  .axis-presets{display:flex;gap:8px;margin-bottom:14px;}
+  .chip{font-size:12px;padding:4px 12px;border-radius:14px;border:1px solid var(--sand-300);background:var(--sand-50);color:var(--ink-700);cursor:pointer;user-select:none;}
+  .chip.on{background:var(--wood-700);border-color:var(--wood-700);color:#fff;}
+  .axis-wrap{padding:6px 4px 2px;}
+  .axis-track{position:relative;height:34px;margin:0 8px;}
+  .axis-rail{position:absolute;left:0;right:0;top:14px;height:6px;border-radius:3px;background:var(--sand-200);}
+  .axis-fill{position:absolute;top:14px;height:6px;background:var(--gold);border-radius:3px;}
+  .handle{position:absolute;top:7px;width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid var(--wood-700);cursor:grab;transform:translateX(-50%);box-shadow:0 1px 4px rgba(43,29,23,.25);touch-action:none;z-index:2;}
+  .handle:active{cursor:grabbing;}
+  .axis-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-500);margin:2px 8px 0;}
+  .axis-now{font-size:12px;color:var(--ink-700);margin-top:8px;}
+  .axis-now b{color:var(--wood-700);}
+
+  /* ===== 成就卡 ===== */
+  .ach-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  .ach{border:1px solid var(--sand-200);border-radius:6px;padding:14px 16px;background:var(--sand-50);}
+  .ach .ic{width:30px;height:30px;border-radius:6px;background:var(--sand-100);display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
+  .ach .ic svg{width:16px;height:16px;color:var(--wood-700);}
+  .ach .num{font-size:24px;font-weight:600;color:var(--wood-700);font-variant-numeric:tabular-nums;}
+  .ach .num small{font-size:13px;font-weight:400;color:var(--ink-500);margin-left:2px;}
+  .ach .lbl{font-size:12px;color:var(--ink-500);margin-top:4px;}
+  .ach.fan .num{font-size:16px;line-height:1.5;}
+  .ach.fan .num b{color:var(--wood-700);}
+  .ach.fan .num span{color:var(--ink-500);font-size:13px;}
+  .privacy-line{margin-top:12px;font-size:12px;color:var(--ink-500);display:flex;align-items:center;gap:6px;}
+  .privacy-line svg{width:13px;height:13px;color:var(--ink-500);}
+
+  /* ===== KPI 区 ===== */
+  .kpi-grid{display:grid;grid-template-columns:1.2fr 1.2fr 1.4fr;gap:12px;}
+  .kpi{border:1px solid var(--sand-200);border-radius:6px;padding:14px 16px;background:var(--sand-50);position:relative;}
+  .kpi .k-lbl{font-size:12px;color:var(--ink-500);}
+  .kpi .k-win{font-size:11px;color:var(--ink-500);background:#fff;border:1px solid var(--sand-200);border-radius:3px;padding:1px 6px;margin-left:6px;}
+  .kpi .k-num{font-size:30px;font-weight:600;color:var(--wood-700);margin:8px 0 2px;font-variant-numeric:tabular-nums;}
+  .kpi .k-num small{font-size:14px;font-weight:400;color:var(--ink-500);}
+  .kpi .k-foot{font-size:12px;color:var(--ink-500);line-height:1.7;}
+  .kpi .k-foot b{color:var(--ink-700);}
+  .badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;line-height:16px;vertical-align:middle;margin-left:6px;}
+  .badge.obs{background:var(--warn-bg);color:var(--warn-tx);border:1px solid var(--warn-bd);}
+  .tipdot{display:inline-flex;width:14px;height:14px;border-radius:50%;background:var(--sand-200);color:var(--ink-700);font-size:10px;align-items:center;justify-content:center;cursor:help;vertical-align:middle;position:relative;}
+  .tipdot:hover::after{content:attr(data-tip);position:absolute;bottom:20px;left:50%;transform:translateX(-50%);width:220px;background:var(--wood-900);color:var(--sand-50);font-size:11px;line-height:1.6;padding:8px 10px;border-radius:5px;z-index:9;text-align:left;}
+
+  /* ===== 项目认证 ===== */
+  .proj-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .proj{border:1px solid var(--sand-200);border-radius:6px;background:var(--sand-50);padding:12px 14px;}
+  .proj .p-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;}
+  .proj .p-name svg{width:13px;height:13px;color:var(--wood-700);flex-shrink:0;}
+  .proj .p-cert{font-size:11px;color:var(--ink-500);margin:4px 0 10px;}
+  .proj .p-nums{display:flex;gap:0;border-top:1px dashed var(--sand-300);padding-top:9px;}
+  .proj .p-n{flex:1;}
+  .proj .p-n b{display:block;font-size:20px;color:var(--wood-700);font-variant-numeric:tabular-nums;}
+  .proj .p-n span{font-size:11px;color:var(--ink-500);}
+
+  /* ===== demo 注释 ===== */
+  .demo-note{margin-top:6px;font-size:12px;color:var(--ink-500);background:var(--sand-100);border:1px dashed var(--sand-300);border-radius:5px;padding:8px 12px;line-height:1.8;}
+  .demo-note b{color:var(--wood-700);}
+  .foot-privacy{margin-top:4px;font-size:12px;color:var(--ink-500);text-align:center;line-height:1.8;}
+
+  button.demo-btn{font-size:12px;padding:4px 12px;border-radius:4px;border:1px solid var(--wood-700);background:#fff;color:var(--wood-700);cursor:pointer;}
+  button.demo-btn:hover{background:var(--wood-700);color:#fff;}
+  .num-anim{transition:opacity .18s;}
+</style>
+</head>
+<body>
+<div class="demo-frame">
+
+  <!-- 顶部说明 -->
+  <div class="spec-strip">
+    <div class="spec"><b>① 实时计算</b><span>进页面现算，不依赖 T+1 跑批；口径：有效订单 = 已付款且已到店/已完成，剔除内部账号黑名单，客户手机号唯一标识</span></div>
+    <div class="spec"><b>② 两个时间维度的分界</b><span>「累计成就 / 项目认证」跟随顶部时间轴实时重算；「复购指标」按结算月固定窗口计算，拖动时间轴不变——避免疗愈师误读</span></div>
+    <div class="spec"><b>③ 隐私 + 合规</b><span>手机号前3+****+后4，只显示客户称呼；灵活用工表述——全页只用「合作 / 接单 / 结算」类词汇，奖励统一为「接单奖励」</span></div>
+  </div>
+
+  <!-- 后台外壳 -->
+  <div class="shell">
+    <div class="side">
+      <div class="logo">Full愈轻疗</div>
+      <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>首页排班</div>
+      <div class="mi on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>疗愈师看板</div>
+      <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>我的排班</div>
+      <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>我的结算</div>
+      <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/></svg>个人设置</div>
+    </div>
+    <div class="main">
+      <div class="topbar">
+        <div class="crumb">首页 / <b>疗愈师看板</b></div>
+        <div class="who"><div class="av">雨</div>张小雨 · 疗愈师</div>
+      </div>
+      <div class="content">
+
+        <!-- 页头 -->
+        <div class="page-head">
+          <div class="big-av">雨</div>
+          <div>
+            <div class="ph-name">张小雨</div>
+            <div class="ph-meta">
+              <span class="tag shop">Full愈 · 西岸店</span>
+              <span class="tag job">合作中</span>
+              <span class="tag live"><i></i>实时计算 · 数据截止 <span id="cutoff">--:--</span></span>
+              <span class="tag rule">接单奖励 · 10 天复购 · 单价逐位递增</span>
+            </div>
+          </div>
+          <div class="ph-right">加入 Full愈 <b id="headEntryDays">286</b> 天<br>加入日期 <b>2026-01-08</b></div>
+        </div>
+
+        <!-- ① 时间轴 -->
+        <div class="card">
+          <div class="card-h">
+            <h3>时间轴</h3><span class="sub">拖动两端调整范围 · 默认「全部时间」（首次服务日至今）</span>
+            <span class="right">影响下方「累计成就」与「项目认证」；「复购指标」固定窗口不受影响</span>
+          </div>
+          <div class="axis-presets" id="presets">
+            <span class="chip on" data-r="all">全部时间</span>
+            <span class="chip" data-r="30">近30天</span>
+            <span class="chip" data-r="90">近90天</span>
+            <span class="chip" data-r="year">今年至今</span>
+          </div>
+          <div class="axis-wrap">
+            <div class="axis-track" id="axisTrack">
+              <div class="axis-rail"></div>
+              <div class="axis-fill" id="axisFill"></div>
+              <div class="handle" id="hStart" role="slider" tabindex="0" aria-label="起始日期" aria-valuemin="0" aria-valuemax="285" aria-valuenow="0"></div>
+              <div class="handle" id="hEnd" role="slider" tabindex="0" aria-label="结束日期" aria-valuemin="0" aria-valuemax="285" aria-valuenow="285"></div>
+            </div>
+            <div class="axis-labels"><span id="lblStart">2026-01-08</span><span id="lblEnd">2026-10-20（今天）</span></div>
+            <div class="axis-now">当前范围：<b id="lblRange">全部时间 · 2026-01-08 ~ 2026-10-20</b></div>
+          </div>
+        </div>
+
+        <!-- ② 累计成就区 -->
+        <div class="card">
+          <div class="card-h"><h3>累计成就</h3><span class="sub">随时间轴实时重算 · 口径：已付款且已到店/已完成，已剔除内部账号</span></div>
+          <div class="ach-grid">
+            <div class="ach">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
+              <div class="num num-anim" id="aDays">286<small>天</small></div>
+              <div class="lbl">加入 Full愈 天数</div>
+            </div>
+            <div class="ach">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+              <div class="num num-anim" id="aMinutes">0<small>分钟</small></div>
+              <div class="lbl">累计疗愈分钟</div>
+            </div>
+            <div class="ach">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+              <div class="num num-anim" id="aCust">0<small>位</small></div>
+              <div class="lbl">累计服务客人（去重）</div>
+            </div>
+            <div class="ach fan">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+              <div class="num" id="aFan">—</div>
+              <div class="lbl">最积极的客人（时间轴内与你相处分钟最长）</div>
+            </div>
+          </div>
+          <div class="privacy-line">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            隐私保护：手机号脱敏显示、仅展示客户称呼；本页不提供查看完整号码或客户列表的入口。
+          </div>
+        </div>
+
+        <!-- ③ 复购指标 · 本月冲刺 -->
+        <div class="card">
+          <div class="card-h">
+            <h3>复购指标 · 本月冲刺</h3><span class="sub">按结算月固定窗口计算，不受时间轴影响</span>
+            <span class="right">2026-10 · 10 天复购奖励规则 v2026-10</span>
+          </div>
+          <div class="kpi-grid">
+            <!-- 留存率：纯展示 -->
+            <div class="kpi">
+              <div class="k-lbl">老客 60 天留存率<span class="k-win">2026-03 ~ 2026-08</span><span class="badge obs">观察期未走完</span><span class="tipdot" data-tip="窗口末月最后一天 + 60 天未到，当前值系统性偏低，仅供参考。">?</span></div>
+              <div class="k-num">63.8<small>%</small></div>
+              <div class="k-foot" style="margin-top:8px;">老客服务人次 <b>214</b><br>客人下次到店在 60 天内的占比</div>
+            </div>
+            <!-- 30天复购率：纯展示 -->
+            <div class="kpi">
+              <div class="k-lbl">新客 30 天复购率<span class="k-win">2026-07 ~ 2026-09</span><span class="badge obs">观察期未走完</span><span class="tipdot" data-tip="窗口末月 + 30 天未到；二刷无论由谁服务都计入，归属你的首单月。">?</span></div>
+              <div class="k-num">15.6<small>%</small></div>
+              <div class="k-foot" style="margin-top:8px;">窗口新客 <b>45</b> 位 · 其中 <b>7</b> 位 30 天内回头<br>回头计入客人的首单月</div>
+            </div>
+            <!-- 本月冲刺：接单奖励（全页焦点） -->
+            <div class="kpi sprint">
+              <div class="k-lbl light">本月冲刺 · 接单奖励<span class="k-win light">2026-10 · 首单月口径</span></div>
+              <div class="sp-kicker">下一位 · 第 <b id="nextSeq">5</b> 位</div>
+              <div class="sp-price" id="nextPrice">¥50</div>
+              <div class="sp-slogan">你服务的新客，<b>10 天内再复购一次</b>——<br>单价逐位递增，越往后越高</div>
+              <div class="sp-stat">本月已完成 <b id="headsCount">4</b> 位 · 累计接单奖励 <b id="earnedAmt">¥70</b></div>
+              <div class="sp-next">再完成 1 位，<b id="nextAdd">+¥50</b>，累计可达 <b id="nextAmt">¥120</b></div>
+              <div class="sp-seq" id="seqLine"></div>
+              <div class="sp-actions">
+                <button class="demo-btn light" id="simHead">模拟：再完成 1 位</button>
+                <button class="demo-btn ghost" id="simHalf">同行 0.5 位</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-note"><b>接单奖励逻辑（斐波那契递增，按口径文档 §9.1/§9.2）：</b>当月 10 天复购人头按达成顺序排位 k，单价 a(k) 由种子 10/10 递推（10、10、20、30、50、80、130…），人头奖 = Σ 权重 × a(k)；同行分摊的 0.5 头按对应位单价的 50% 计入。卡片只露一句话 + 下一个激励数；点按钮可看递增，再点「同行 0.5 位」可看半权重计价。本卡展示的是 10 天复购人头奖进度，其他结算规则以月度结算为准。</div>
+        </div>
+
+        <!-- ④ 项目认证区 -->
+        <div class="card">
+          <div class="card-h"><h3>项目认证</h3><span class="sub">仅展示已认证的项目（认证日由管理员在后台维护）；「上岗以来」随时间轴，近30天以轴终点为基准</span></div>
+          <div class="proj-grid" id="projGrid"></div>
+          <div class="demo-note"><b>试一试：</b>拖动时间轴到「近30天」，「上岗以来」列会变成时间轴范围内的次数；「新人体验 30 分钟」这类未认证项目不会出现在这里，避免误导。</div>
+        </div>
+
+        <div class="demo-note" style="margin-top:0;">
+          <b>Demo 说明：</b>本页为后台「疗愈师看板」交互原型，成就区/项目区数字由页内模拟数据实时聚合（拖动时间轴即重算），复购指标区数值为演示样本；全页文案遵循灵活用工表述（合作/接单/结算），奖励统一为「接单奖励」。
+        </div>
+        <div class="foot-privacy">Full愈轻疗 · 疗愈师实时看板 · 配套文档《docs/designs/2026-10-20-疗愈师实时看板-需求设计.md》</div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= 基础 ================= */
+var DAY = 86400000;
+var FIRST = new Date(2026,0,8);          // 首次服务日（=加入日，管理端已维护 entry_day）
+var TODAY = new Date(2026,9,20);         // Demo 固定「今天」= 2026-10-20
+var TOTAL = Math.round((TODAY-FIRST)/DAY); // 285
+function fmt(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function dOff(i){var d=new Date(FIRST.getTime()+i*DAY);return d;}
+
+document.getElementById('cutoff').textContent = (function(){var h=10,m=47;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')})();
+
+/* ================= 模拟服务数据（确定性生成） ================= */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+var rnd = mulberry32(20261020);
+var custPool = [];
+(function(){
+  var surnames='王李张刘陈杨赵黄周吴徐孙马朱胡郭何林罗郑'.split('');
+  var 称呼=['女士','先生'];
+  for(var i=0;i<64;i++){
+    var p='1'+['38','39','86','59'][i%4]+String(1000+Math.floor(rnd()*9000));
+    custPool.push({phone:p, name:surnames[i%surnames.length]+称呼[i%2]});
+  }
+})();
+var headFan = {phone:'13800005678', name:'王女士'};
+var projects = [
+  {name:'深疗 90 分钟',     cert:'2026-03-12', certOff:63,  dur:90, w:5},
+  {name:'芳香精油 60 分钟', cert:'2026-06-02', certOff:145, dur:60, w:3},
+  {name:'头部水疗 45 分钟', cert:'2026-08-20', certOff:225, dur:45, w:2},
+  {name:'新人体验 30 分钟', cert:null,              dur:30, w:2}   // 未认证：不计次、不展示
+];
+var records=[];
+(function(){
+  for(var i=0;i<=TOTAL;i++){
+    var dow=dOff(i).getDay();
+    var n = (dow===0||dow===6)?2+Math.floor(rnd()*2):(rnd()<0.75?1:0);  // 周末多
+    for(var k=0;k<n;k++){
+      var r=rnd(), acc=0, pr=projects[projects.length-1];
+      var tw=projects.reduce(function(s,p){return s+p.w},0), rr=r*tw;
+      for(var j=0;j<projects.length;j++){acc+=projects[j].w;if(rr<=acc){pr=projects[j];break;}}
+      var c = custPool[Math.floor(rnd()*custPool.length)];
+      records.push({off:i, d:dOff(i), phone:c.phone, name:c.name, min:pr.dur, proj:pr});
+    }
+  }
+  // 头号粉丝：8 次 90 分钟 = 720 分钟（近段分布）
+  var fanOffs=[120,148,176,197,219,241,262,278];
+  fanOffs.forEach(function(o){records.push({off:o,d:dOff(o),phone:headFan.phone,name:headFan.name,min:90,proj:projects[0]});});
+  records.sort(function(a,b){return a.off-b.off;});
+})();
+
+/* ================= 时间轴 ================= */
+var selStart=0, selEnd=TOTAL;
+var track=document.getElementById('axisTrack');
+function posToOff(x){
+  var rect=track.getBoundingClientRect();
+  var ratio=Math.min(1,Math.max(0,(x-rect.left)/rect.width));
+  return Math.round(ratio*TOTAL);
+}
+function setRange(s,e,silent){
+  if(s>e){var t=s;s=e;e=t;}
+  selStart=s;selEnd=e;
+  var rect=track.getBoundingClientRect(), W=rect.width;
+  document.getElementById('hStart').style.left=(s/TOTAL*100)+'%';
+  document.getElementById('hEnd').style.left=(e/TOTAL*100)+'%';
+  var f=document.getElementById('axisFill');
+  f.style.left=(s/TOTAL*100)+'%'; f.style.width=((e-s)/TOTAL*100)+'%';
+  document.getElementById('hStart').setAttribute('aria-valuenow',s);
+  document.getElementById('hEnd').setAttribute('aria-valuenow',e);
+  document.getElementById('lblStart').textContent=fmt(dOff(s));
+  document.getElementById('lblEnd').textContent=fmt(dOff(e))+(e===TOTAL?'（今天）':'');
+  document.getElementById('lblRange').textContent=(s===0&&e===TOTAL?'全部时间 · ':'')+fmt(dOff(s))+' ~ '+fmt(dOff(e));
+  if(!silent)renderAxis();
+  var chips=document.querySelectorAll('#presets .chip');
+  chips.forEach(function(ch){ch.classList.remove('on')});
+  if(s===0&&e===TOTAL)chips[0].classList.add('on');
+}
+function drag(el,isStart){
+  el.addEventListener('pointerdown',function(ev){
+    ev.preventDefault();el.setPointerCapture(ev.pointerId);
+    function mv(e){var off=posToOff(e.clientX); if(isStart)setRange(Math.min(off,selEnd),selEnd); else setRange(selStart,Math.max(off,selStart));}
+    function up(){el.removeEventListener('pointermove',mv);el.removeEventListener('pointerup',up);}
+    el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up);
+  });
+  el.addEventListener('keydown',function(ev){
+    var step=ev.shiftKey?30:7;
+    if(ev.key==='ArrowLeft'){ev.preventDefault();isStart?setRange(Math.max(0,selStart-step),selEnd):setRange(selStart,Math.max(0,selEnd-step));}
+    if(ev.key==='ArrowRight'){ev.preventDefault();isStart?setRange(Math.min(selEnd,selStart+step),selEnd):setRange(selStart,Math.min(TOTAL,selEnd+step));}
+  });
+}
+drag(document.getElementById('hStart'),true);
+drag(document.getElementById('hEnd'),false);
+document.getElementById('presets').addEventListener('click',function(ev){
+  var ch=ev.target.closest('.chip');if(!ch)return;
+  var r=ch.dataset.r;
+  if(r==='all')setRange(0,TOTAL);
+  if(r==='30')setRange(Math.max(0,TOTAL-29),TOTAL);
+  if(r==='90')setRange(Math.max(0,TOTAL-89),TOTAL);
+  if(r==='year')setRange(Math.min(TOTAL,Math.round((new Date(2026,0,1)-FIRST)/DAY)),TOTAL);
+  var chips=document.querySelectorAll('#presets .chip');
+  chips.forEach(function(c){c.classList.remove('on')});
+  ch.classList.add('on');
+});
+
+/* ================= 渲染：累计成就 & 项目 ================= */
+function renderAxis(){
+  var rows=records.filter(function(r){return r.off>=selStart&&r.off<=selEnd;});
+  var min=0, cust={}, projCnt={};
+  rows.forEach(function(r){
+    min+=r.min; cust[r.phone]=(cust[r.phone]||0)+r.min;
+    if(r.proj.cert){var k=r.proj.name;
+      projCnt[k]=projCnt[k]||{since:0,d30:0};
+      projCnt[k].since++;
+      if(r.off>=selEnd-29)projCnt[k].d30++;
+    }
+  });
+  var custCnt=Object.keys(cust).length;
+  var fan=null;for(var p in cust){if(!fan||cust[p]>fan.min)fan={phone:p,min:cust[p]};}
+  var fanRec=fan?records.find(function(r){return r.phone===fan.phone}):null;
+  var fanName=fanRec?fanRec.name:'—';
+  var masked=fan&&fan.phone.length===11?fan.phone.slice(0,3)+'****'+fan.phone.slice(7):'';
+  function setTxt(id,html){var el=document.getElementById(id);el.style.opacity=.35;setTimeout(function(){el.innerHTML=html;el.style.opacity=1;},120);}
+  setTxt('aMinutes',min.toLocaleString()+'<small>分钟</small>');
+  setTxt('aCust',custCnt+'<small>位</small>');
+  if(fan&&fan.min>0){
+    document.getElementById('aFan').innerHTML='<b>'+fanName+'</b><br><span>'+masked+'</span><br><span>累计 '+fan.min+' 分钟</span>';
+  }else{
+    document.getElementById('aFan').innerHTML='—<br><span>时间轴内暂无服务记录</span>';
+  }
+  // 项目卡（上岗以来=轴范围内；近30天以轴终点回望）
+  var html='';
+  projects.forEach(function(p){
+    if(!p.cert)return;
+    var c=projCnt[p.name]||{since:0,d30:0};
+    html+='<div class="proj">'
+      +'<div class="p-name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.9 6.26L21.5 9.3l-5 4.87 1.18 6.88L12 17.77l-5.68 3.28L7.5 14.17 2.5 9.3l6.6-1.04z"/></svg>'+p.name+'</div>'
+      +'<div class="p-cert">认证日 '+p.cert+'（管理员维护）</div>'
+      +'<div class="p-nums">'
+      +'<div class="p-n"><b>'+c.since+'</b><span>上岗以来次数'+((selStart===0&&selEnd===TOTAL)?'':'（轴内）')+'</span></div>'
+      +'<div class="p-n"><b>'+c.d30+'</b><span>近30天次数</span></div>'
+      +'</div></div>';
+  });
+  document.getElementById('projGrid').innerHTML=html;
+}
+
+/* ================= 本月冲刺 · 接单奖励（固定窗口） ================= */
+var SEED_A1=10, SEED_A2=10;   // 斐波那契种子：后台 s_incentive_config 配置（按生效月留版本）
+var headWeights=[1,1,1,1];    // 当月 10 天复购人头，按达成顺序排列；0.5 = 同行分摊
+
+function fibPrice(n){
+  if(n===1) return SEED_A1;
+  if(n===2) return SEED_A2;
+  var a=SEED_A1, b=SEED_A2, c;
+  for(var i=3;i<=n;i++){ c=a+b; a=b; b=c; }
+  return b;
+}
+function fmtMoney(v){
+  return String(Math.round(v*100)/100);
+}
+function renderSprint(){
+  var earned=0, weighted=0, i;
+  for(i=0;i<headWeights.length;i++){
+    earned += headWeights[i]*fibPrice(i+1);
+    weighted += headWeights[i];
+  }
+  var headCount=headWeights.length;
+  var nextSeq=headCount+1;
+  var nextPrice=fibPrice(nextSeq);
+  var nextTotal=earned+nextPrice;
+
+  document.getElementById('nextSeq').textContent=nextSeq;
+  document.getElementById('nextPrice').textContent='¥'+fmtMoney(nextPrice);
+  document.getElementById('headsCount').textContent=Math.round(weighted*10)/10;
+  document.getElementById('earnedAmt').textContent='¥'+fmtMoney(earned);
+  document.getElementById('nextAdd').textContent='+¥'+fmtMoney(nextPrice);
+  document.getElementById('nextAmt').textContent='¥'+fmtMoney(nextTotal);
+
+  var seq=[], last=Math.max(7,nextSeq);
+  for(i=1;i<=last;i++){
+    var price=fmtMoney(fibPrice(i));
+    seq.push(i===nextSeq ? '<b>'+price+'</b>' : price);
+  }
+  document.getElementById('seqLine').innerHTML=seq.join(' · ')+' …';
+}
+document.getElementById('simHead').addEventListener('click',function(){
+  headWeights.push(1);
+  renderSprint();
+});
+document.getElementById('simHalf').addEventListener('click',function(){
+  headWeights.push(0.5);
+  renderSprint();
+});
+
+/* ================= 启动 ================= */
+setRange(0,TOTAL,true);
+renderAxis();
+renderSprint();
+</script>
+</body>
+</html>

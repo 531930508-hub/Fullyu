@@ -8,6 +8,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 经营流水
@@ -49,6 +50,11 @@ public class OperatingRevenueDto {
     private Long customerId;//客户id
     private Long orderId;//订单id
     private Long shopId;//门店
+
+    /**
+     * 服务端收敛后的可见门店集合（不接受客户端直接传值）
+     */
+    private List<Long> shopIds;
     @ExcelProperty(value = "客户称呼")
     @ColumnWidth(20)
     private String nickname;//客户名称

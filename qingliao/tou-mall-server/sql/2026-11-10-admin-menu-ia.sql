@@ -1,19 +1,23 @@
 -- 2026-11-10 后台菜单信息架构归并（6 个一级菜单）+ 术语统一为「疗愈师」
 -- 目标库：tou_mall_demo；生产库执行前请确认已备份。脚本可重复执行（先清空再写入固定 ID）
--- 一级菜单：首页、待办中心（常驻，不落库）/ 预约与订单 / 客户与营销 / 数据与薪资 / 门店与系统
+-- 一级菜单：首页、待办中心（常驻，不落库）/ 预约与订单 / 客户与营销 / 数据与劳务服务费 / 门店与系统
 
 -- 1) 备份原菜单与授权（首次执行留存，重复执行不覆盖）
 CREATE TABLE IF NOT EXISTS ums_menu_bak_20261110 LIKE ums_menu;
-INSERT INTO ums_menu_bak_20261110 SELECT m.* FROM ums_menu m WHERE NOT EXISTS (SELECT 1 FROM ums_menu_bak_20261110 b WHERE b.id = m.id);
+-- 菜单备份同样只取一次（否则第二轮会把改动后的菜单也追加进备份表）
+SET @menubak_empty_20261110 := (SELECT COUNT(*) = 0 FROM ums_menu_bak_20261110);
+INSERT INTO ums_menu_bak_20261110 SELECT m.* FROM ums_menu m WHERE @menubak_empty_20261110;
 CREATE TABLE IF NOT EXISTS ums_role_menu_relation_bak_20261110 LIKE ums_role_menu_relation;
-INSERT INTO ums_role_menu_relation_bak_20261110 SELECT r.* FROM ums_role_menu_relation r WHERE NOT EXISTS (SELECT 1 FROM ums_role_menu_relation_bak_20261110 b WHERE b.id = r.id);
+-- 备份只取一次：本表每轮 DELETE+INSERT 后 id 自增，按 id 去重挡不住重复执行（2026-11-13 实测每轮 +131 行）
+SET @bak_empty_20261110 := (SELECT COUNT(*) = 0 FROM ums_role_menu_relation_bak_20261110);
+INSERT INTO ums_role_menu_relation_bak_20261110 SELECT r.* FROM ums_role_menu_relation r WHERE @bak_empty_20261110;
 
 -- 2) 重建菜单树
 DELETE FROM ums_menu;
 INSERT INTO ums_menu (id, parent_id, create_time, title, level, sort, name, icon, hidden) VALUES
   (101, 0, NOW(), '预约与订单', 0, 40, 'booking', 'schedules', 0),
   (102, 0, NOW(), '客户与营销', 0, 30, 'growth', 'customer', 0),
-  (103, 0, NOW(), '数据与薪资', 0, 20, 'analysis', 'statistics', 0),
+  (103, 0, NOW(), '数据与劳务服务费', 0, 20, 'analysis', 'statistics', 0),
   (104, 0, NOW(), '门店与系统', 0, 10, 'staff', 'ums-role', 0),
   (110, 101, NOW(), '预约列表', 1, 80, 'appointmentList', 'order', 0),
   (111, 101, NOW(), '预约登记', 1, 79, 'appointmentCreate', 'schedules', 0),
@@ -33,8 +37,8 @@ INSERT INTO ums_menu (id, parent_id, create_time, title, level, sort, name, icon
   (131, 103, NOW(), '服务时长', 1, 79, 'serviceDuration', 'bed', 0),
   (132, 103, NOW(), '疗愈师统计', 1, 78, 'therapistStats', 'bed', 0),
   (133, 103, NOW(), '月度统计', 1, 77, 'monthly', 'monthly', 0),
-  (134, 103, NOW(), '薪资明细', 1, 70, 'salaryDetail', 'salary', 0),
-  (135, 103, NOW(), '薪资设置', 1, 69, 'salarySet', 'salary', 0),
+  (134, 103, NOW(), '劳务服务费明细', 1, 70, 'salaryDetail', 'salary', 0),
+  (135, 103, NOW(), '劳务服务费设置', 1, 69, 'salarySet', 'salary', 0),
   (136, 103, NOW(), '激励看板', 1, 68, 'incentiveBoard', 'dashboard', 0),
   (137, 103, NOW(), '培训考核', 1, 67, 'incentiveTraining', 'comment', 0),
   (138, 103, NOW(), '奖励参数', 1, 66, 'incentiveSettings', 'salarySet', 0),

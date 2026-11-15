@@ -23,6 +23,7 @@ public class IntegrationOperation extends BaseEntity {
     @ApiModelProperty("1单笔调整 2批量导入")
     private Integer opType;
     private Long customerId;
+    @ApiModelProperty("客户手机号")
     private String phone;
     @ApiModelProperty("变动积分，正数调增、负数调减")
     private Long score;

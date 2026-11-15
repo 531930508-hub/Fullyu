@@ -103,6 +103,8 @@ const permission = {
         // 超级管理员兜底：菜单表还没同步的新页面不能被静默丢出侧边栏和路由表
         const isSuperAdmin = (roles || []).indexOf(SUPER_ADMIN_ROLE) > -1;
         const canAccess = route => {
+          // 待办中心等全员页面：不依赖菜单表授权，避免店长/内训师被过滤后 404
+          if (route.meta && route.meta.alwaysAccessible) return true;
           if (hasPermission(menus, route)) return true;
           return isSuperAdmin && route.hidden !== true;
         };

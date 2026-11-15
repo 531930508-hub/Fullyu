@@ -1,0 +1,23 @@
+-- 【生产版】由 sql/2026-11-07-reception-cap.sql 自动生成（scripts/make-prod-sql.py）。
+-- 改动仅一处：把「仅测试库执行 / 非测试库就报错」的守卫改为无条件执行。
+-- 执行前请备份；执行后跑 ./scripts/sql-audit.py 校验结构。
+-- Full愈 · 接待工时封顶（按门店配置）
+-- 适用：MySQL 5.7/8.0，执行前请先备份。
+-- 说明：
+--   1. 只新增字段，不改写现有业务数据。
+--   2. 接待工时上限 = 该疗愈师当月在该门店的排班在岗分钟 × 门店比例。
+--   3. 默认 20%；新开业等门店可单独调整，稳定后再改回 20%。
+--   4. 超出上限的接待分钟不计入工时，也不计入计薪；服务工时不受影响。
+--   5. 若疗愈师当月没有任何排班记录，则不封顶；仅某门店无排班时，该门店接待不封顶（避免调店漏排班导致工资被清零）。
+
+SET @has_reception_cap := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='s_shop' AND COLUMN_NAME='reception_cap_percent');
+SET @ddl := IF(@has_reception_cap=0,
+  'ALTER TABLE `s_shop`
+     ADD COLUMN `reception_cap_percent` TINYINT UNSIGNED NOT NULL DEFAULT 20
+       COMMENT ''接待工时占排班在岗时长的上限百分比，20=20%''',
+  'SELECT ''s_shop.reception_cap_percent exists''');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 统一初始化已有门店为默认 20%（重复执行安全）
+UPDATE `s_shop` SET `reception_cap_percent` = 20 WHERE `reception_cap_percent` IS NULL;

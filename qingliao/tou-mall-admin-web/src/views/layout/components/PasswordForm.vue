@@ -1,9 +1,11 @@
 <template>
   <div class="PasswordForm">
+    <!-- navbar 带 backdrop-filter 会成为 fixed 子元素的包含块，弹窗必须挂到 body -->
     <el-dialog
       :title="'修改密码'" :close-on-click-modal="false"
       :visible.sync="dialogVisible"
       width="30%"
+      append-to-body
       :before-close="handleClose">
       <el-form ref="refForm" label-width="100px" :model="password" :rules="passwordRules" label-position="top">
         <el-form-item label="原密码: " prop="oldPassword">

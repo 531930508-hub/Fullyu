@@ -5,6 +5,7 @@
         <shop-selector v-model="searchForm.shopId" style="width: 180px" @change="handleShopChange"
                        placeholder="请选择所属门店" class="m-r-10"></shop-selector>
         <el-date-picker
+          v-if="viewMode === 'list'"
           v-model="searchForm.day"
           align="right" style="width: 180px" class="m-r-10"
           type="date" @change="searchData"
@@ -23,6 +24,11 @@
         </el-button>
       </div>
       <div>
+        <el-radio-group v-model="viewMode" size="small" class="m-r-10" @change="handleViewChange"
+                        aria-label="排班视图切换">
+          <el-radio-button label="list">逐日列表</el-radio-button>
+          <el-radio-button label="week">周视图</el-radio-button>
+        </el-radio-group>
         <el-button icon="el-icon-plus" @click="handleAdd" type="primary">添加</el-button>
         <el-button icon="el-icon-plus" @click="handleAddTargetShop" type="primary">调店</el-button>
         <el-button icon="el-icon-sort" @click="handleSort" type="primary">排班顺序</el-button>
@@ -30,10 +36,17 @@
         <el-button icon="el-icon-document" @click="openChangeLogs">操作记录</el-button>
       </div>
     </div>
-    <el-alert v-if="listError" :title="listError" type="error" show-icon :closable="false" class="list-error">
+    <el-alert v-if="listError && viewMode === 'list'" :title="listError" type="error" show-icon :closable="false" class="list-error">
       <el-button type="text" @click="fetchData">重新加载</el-button>
     </el-alert>
-    <div class="table-container">
+    <schedule-week v-if="viewMode === 'week'"
+                   ref="weekBoard"
+                   :shop-id="searchForm.shopId"
+                   :massagist-id="searchForm.massagistId"
+                   :status="searchForm.status"
+                   @create="handleWeekCreate"
+                   @edit="handleUpdate"></schedule-week>
+    <div class="table-container" v-if="viewMode === 'list'">
       <el-table ref="roleTable"
                 :data="dataList"
                 style="width: 100%;"
@@ -66,16 +79,28 @@
         <el-table-column label="接单结束" prop="endTime">
           <template slot-scope="scope">{{ scope.row.endTime | formatTime }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="160">
+        <el-table-column label="操作" width="230">
           <template slot-scope="scope">
             <el-row>
+              <el-button
+                v-if="scope.row.schedulesType==1"
+                type="text" icon="el-icon-edit"
+                @click="handleUpdate(scope.row,scope.$index)">
+                修改调店
+              </el-button>
+              <el-button
+                v-if="scope.row.schedulesType==1"
+                type="text" icon="el-icon-refresh-left"
+                @click="handleRestoreTransfer(scope.row)">
+                恢复原排班
+              </el-button>
               <el-button
                 type="text" icon="el-icon-edit" v-if="scope.row.schedulesType!=1"
                 @click="handleUpdate(scope.row,scope.$index)">
                 编辑
               </el-button>
               <el-button
-                type="text" icon="el-icon-delete"
+                type="text" icon="el-icon-delete" v-if="scope.row.schedulesType!=1"
                 @click="handleDelete(scope.row,scope.$index)">删除
               </el-button>
             </el-row>
@@ -83,7 +108,7 @@
         </el-table-column>
       </el-table>
     </div>
-    <div class="pagination-container">
+    <div class="pagination-container" v-if="viewMode === 'list'">
       <el-pagination
         background
         @size-change="handleSizeChange"
@@ -131,14 +156,16 @@ import MassagistSchedulesTargetShopForm from "@/views/massagist/schedules/Massag
 import ShopSelector from "@/views/shop/shopList/ShopSelector";
 import MassagistSelector from "@/views/massagist/management/MassagitSelector";
 import MassagistSortDrawer from './MassagistSortDrawer.vue'
+import ScheduleWeek from './ScheduleWeek.vue'
 import dateUtil from '../../../utils/dateUtil'
 
 export default {
   name: 'index',
-  components: {MassagistSortDrawer, MassagistSelector, ShopSelector, MassagistSchedulesForm, MassagistForm,MassagistSchedulesTargetShopForm},
+  components: {ScheduleWeek, MassagistSortDrawer, MassagistSelector, ShopSelector, MassagistSchedulesForm, MassagistForm,MassagistSchedulesTargetShopForm},
   props: {},
   data() {
     return {
+      viewMode: 'list',
       searchForm: {
         page: 1,
         size: 10,
@@ -173,8 +200,34 @@ export default {
   methods: {
     searchData() {
       this.searchForm.page = 1
+      if (this.viewMode === 'week') {
+        this.reloadWeek()
+        return
+      }
       this.fetchData()
 
+    },
+    handleViewChange(mode) {
+      // 切到周视图由组件挂载时自行拉取；切回列表时补一次列表数据
+      if (mode !== 'week') this.fetchData()
+    },
+    reloadWeek() {
+      this.$nextTick(() => {
+        if (this.$refs.weekBoard) this.$refs.weekBoard.reload()
+      })
+    },
+    async handleWeekCreate(payload) {
+      // 周视图点空格子：按“该疗愈师 + 该天 + 当前门店”预填批量新增，日期默认只勾这一周的那一天
+      const shopId = this.searchForm.shopId
+      if (!shopId) {
+        this.$message.warning('请先选择门店')
+        return
+      }
+      this.$refs.refMassagistSchedulesForm.open({
+        shopId,
+        massagistIdList: payload && payload.massagistId ? [payload.massagistId] : [],
+        dates: payload && payload.day ? [payload.day] : [],
+      })
     },
     async fetchData() {
       const seq = ++this.listSeq
@@ -280,6 +333,21 @@ export default {
       await massagistSchedulesApi.remove(row.id)
       this.searchData()
       this.notifySuccess()
+    },
+    async handleRestoreTransfer(row) {
+      try {
+        await this.$confirm(`确认撤销 ${row.massagistName || ''} ${row.day} 的调店，并把原店排班恢复到调店前？`, '恢复原排班', {type: 'warning'})
+      } catch (e) {
+        return
+      }
+      const loading = this.$loading({lock: true, text: '正在恢复原排班…'})
+      try {
+        await massagistSchedulesApi.restoreTransfer(row.id)
+        this.$notify.success('已恢复原店排班')
+        this.searchData()
+      } finally {
+        loading.close()
+      }
     },
     handleShopChange() {
       this.$set(this.searchForm, 'massagistId', null)

@@ -443,3 +443,6 @@ a:hover {
     transition-duration: .01ms !important;
   }
 }
+
+// ---------- 移动端适配层（仅窄屏生效）----------
+@import './mobile.scss';

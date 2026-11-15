@@ -18,9 +18,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 审批类型 服务类
@@ -51,6 +53,16 @@ public class ApprovalCategoryService extends BaseService<ApprovalCategoryMapper,
         // 保留旧门店配置的兼容路径，绝不拿另一门店的配置充当全局流程。
         return getOnlyOne(new LambdaQueryWrapper<ApprovalCategory>()
                 .eq(ApprovalCategory::getCode, categoryCode.getCode()).eq(ApprovalCategory::getShopId, shopId));
+    }
+
+    /**
+     * 读取流程配置的抄送人，供请假申请页默认勾选。
+     */
+    public List<Long> defaultCcIds(FlowCategoryCode categoryCode, Long shopId) {
+        ApprovalCategory category = findByCode(categoryCode, shopId);
+        if (category == null) return new ArrayList<>();
+        List<Long> ids = parseUsers(category.getCcIds(), false);
+        return ids == null ? new ArrayList<>() : ids;
     }
 
     /**
@@ -130,6 +142,18 @@ public class ApprovalCategoryService extends BaseService<ApprovalCategoryMapper,
     }
     public List<ApprovalCategory> listNoPageNew(Map<String, Object> params,String shopIdArr) {
         List<ApprovalCategory> listApprovalCategory = listNoPage(params);
+        // 同一类别已有全局配置时，不再展示旧门店配置，避免审批设置里出现重复卡片。
+        Set<String> globalCodes = new HashSet<>();
+        for (ApprovalCategory item : listApprovalCategory) {
+            if (item.getShopId() == null && item.getCode() != null) globalCodes.add(item.getCode());
+        }
+        if (!globalCodes.isEmpty()) {
+            List<ApprovalCategory> visible = new ArrayList<>();
+            for (ApprovalCategory item : listApprovalCategory) {
+                if (item.getShopId() == null || !globalCodes.contains(item.getCode())) visible.add(item);
+            }
+            listApprovalCategory = visible;
+        }
         // shop_id_arr 为 null / 空串 / "null" 时按全部门店处理，避免审批列表整体 500
         JSONArray jsonArray = null;
         if (shopIdArr != null) {

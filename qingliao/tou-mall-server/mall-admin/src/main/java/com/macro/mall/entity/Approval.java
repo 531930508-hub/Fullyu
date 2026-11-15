@@ -45,6 +45,12 @@ public class Approval extends BaseEntity {
     private String rejectReason;
 
     /**
+     * 该审批的全部流转节点（按提交顺序，含发起人节点；待办中心「我提交的」列表展示进度用，非表字段）
+     */
+    @TableField(exist = false)
+    private java.util.List<com.macro.mall.dto.ApprovalFlowNodeBrief> flowNodes;
+
+    /**
      * 是否可以重提审批
      * 已撤回或已驳回状态发挥true
      *

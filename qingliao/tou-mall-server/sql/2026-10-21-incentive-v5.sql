@@ -10,8 +10,13 @@
 -- ---------------------------------------------------------------------------
 -- 1. 疗愈师加入日期（累计成就起算）
 -- ---------------------------------------------------------------------------
-ALTER TABLE s_massagist
-    ADD COLUMN entry_day DATE NULL COMMENT '加入日期，用于累计成就起算；为空回退最早有效服务日';
+SET @has_entry_day := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='s_massagist' AND COLUMN_NAME='entry_day');
+SET @ddl := IF(@has_entry_day=0,
+  'ALTER TABLE s_massagist
+     ADD COLUMN entry_day DATE NULL COMMENT ''加入日期，用于累计成就起算；为空回退最早有效服务日''',
+  'SELECT ''s_massagist.entry_day exists''');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ---------------------------------------------------------------------------
 -- 2. 激励参数版本
@@ -40,7 +45,7 @@ CREATE TABLE IF NOT EXISTS s_incentive_config (
     PRIMARY KEY (id),
     UNIQUE KEY uk_incentive_config_month_revision (effective_month, revision),
     KEY idx_incentive_config_status_month (status, effective_month)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='激励参数版本';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='激励参数版本';
 
 CREATE TABLE IF NOT EXISTS s_incentive_coefficient (
     id BIGINT NOT NULL AUTO_INCREMENT,
@@ -51,7 +56,7 @@ CREATE TABLE IF NOT EXISTS s_incentive_coefficient (
     create_time DATETIME NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_incentive_coefficient (config_id, min_minutes)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='基础接单奖励时长档位';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='基础接单奖励时长档位';
 
 CREATE TABLE IF NOT EXISTS s_incentive_tier (
     id BIGINT NOT NULL AUTO_INCREMENT,
@@ -62,7 +67,7 @@ CREATE TABLE IF NOT EXISTS s_incentive_tier (
     create_time DATETIME NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_incentive_tier (config_id, rate)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='新客30天复购档位';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='新客30天复购档位';
 
 -- ---------------------------------------------------------------------------
 -- 3. 培训项目与考核记录
@@ -85,7 +90,7 @@ CREATE TABLE IF NOT EXISTS s_training_project_config (
     PRIMARY KEY (id),
     UNIQUE KEY uk_training_project_key (config_id, project_key),
     KEY idx_training_project_config (config_id, enabled, sort)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='培训补贴项目配置';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='培训补贴项目配置';
 
 CREATE TABLE IF NOT EXISTS s_massagist_training_cert (
     id BIGINT NOT NULL AUTO_INCREMENT,
@@ -101,7 +106,7 @@ CREATE TABLE IF NOT EXISTS s_massagist_training_cert (
     PRIMARY KEY (id),
     UNIQUE KEY uk_massagist_project (massagist_id, project_key),
     KEY idx_cert_shop_passed (shop_id, passed_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='疗愈师培训项目考核记录';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='疗愈师培训项目考核记录';
 
 CREATE TABLE IF NOT EXISTS s_massagist_training_cert_log (
     id BIGINT NOT NULL AUTO_INCREMENT,
@@ -118,7 +123,7 @@ CREATE TABLE IF NOT EXISTS s_massagist_training_cert_log (
     create_time DATETIME NULL,
     PRIMARY KEY (id),
     KEY idx_cert_log_massagist (massagist_id, project_key, create_time)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='考核记录变更日志';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='考核记录变更日志';
 
 -- ---------------------------------------------------------------------------
 -- 4. 门店目标、店长提点与统计排除账号
@@ -139,7 +144,7 @@ CREATE TABLE IF NOT EXISTS s_shop_incentive_target (
     UNIQUE KEY uk_shop_incentive_target (shop_id, month_code),
     KEY idx_shop_target_month (month_code),
     KEY idx_shop_target_manager (manager_massagist_id, month_code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='门店月度业绩目标与店长提点';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='门店月度业绩目标与店长提点';
 
 CREATE TABLE IF NOT EXISTS s_stat_internal_account (
     id BIGINT NOT NULL AUTO_INCREMENT,
@@ -149,7 +154,7 @@ CREATE TABLE IF NOT EXISTS s_stat_internal_account (
     create_time DATETIME NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_stat_internal_phone (phone)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='统计排除的内部账号手机号';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='统计排除的内部账号手机号';
 
 -- ---------------------------------------------------------------------------
 -- 5. 默认参数与 8 个培训项目（仅首次初始化）

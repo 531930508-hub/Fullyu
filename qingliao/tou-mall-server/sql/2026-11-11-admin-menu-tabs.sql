@@ -1,20 +1,24 @@
 -- 2026-11-11 后台菜单二次归并：一个菜单项 = 一组 tab，侧边栏不再出现三级菜单
 -- 目标库：tou_mall_demo；生产库执行前请确认已备份。脚本可重复执行（先清空再写入固定 ID）
--- 一级菜单：首页、待办中心（常驻，不落库）/ 预约与订单 / 客户与营销 / 数据与薪资 / 门店与系统
+-- 一级菜单：首页、待办中心（常驻，不落库）/ 预约与订单 / 客户与营销 / 数据与劳务服务费 / 门店与系统
 -- 每组 3-4 项，合并页的 URL 见 web 端 router/index.js 的 ?tab= 约定
 
 -- 1) 备份（首次执行留存，重复执行不覆盖）
 CREATE TABLE IF NOT EXISTS ums_menu_bak_20261111 LIKE ums_menu;
-INSERT INTO ums_menu_bak_20261111 SELECT m.* FROM ums_menu m WHERE NOT EXISTS (SELECT 1 FROM ums_menu_bak_20261111 b WHERE b.id = m.id);
+-- 菜单备份同样只取一次（否则第二轮会把改动后的菜单也追加进备份表）
+SET @menubak_empty_20261111 := (SELECT COUNT(*) = 0 FROM ums_menu_bak_20261111);
+INSERT INTO ums_menu_bak_20261111 SELECT m.* FROM ums_menu m WHERE @menubak_empty_20261111;
 CREATE TABLE IF NOT EXISTS ums_role_menu_relation_bak_20261111 LIKE ums_role_menu_relation;
-INSERT INTO ums_role_menu_relation_bak_20261111 SELECT r.* FROM ums_role_menu_relation r WHERE NOT EXISTS (SELECT 1 FROM ums_role_menu_relation_bak_20261111 b WHERE b.id = r.id);
+-- 备份只取一次：本表每轮 DELETE+INSERT 后 id 自增，按 id 去重挡不住重复执行（2026-11-13 实测每轮 +148 行）
+SET @bak_empty_20261111 := (SELECT COUNT(*) = 0 FROM ums_role_menu_relation_bak_20261111);
+INSERT INTO ums_role_menu_relation_bak_20261111 SELECT r.* FROM ums_role_menu_relation r WHERE @bak_empty_20261111;
 
 -- 2) 重建菜单树（id 100-104 为一级分组，11x/12x/13x/14x 为组内入口）
 DELETE FROM ums_menu;
 INSERT INTO ums_menu (id, parent_id, create_time, title, level, sort, name, icon, hidden) VALUES
   (101, 0, NOW(), '预约与订单', 0, 40, 'booking', 'schedules', 0),
   (102, 0, NOW(), '客户与营销', 0, 30, 'growth', 'customer', 0),
-  (103, 0, NOW(), '数据与薪资', 0, 20, 'analysis', 'statistics', 0),
+  (103, 0, NOW(), '数据与劳务服务费', 0, 20, 'analysis', 'statistics', 0),
   (104, 0, NOW(), '门店与系统', 0, 10, 'staff', 'ums-role', 0),
 
   -- 预约与订单：排班看板 / 预约列表 / 排班与请假（疗愈师排班+请假）/ 订单列表（普通+卡券）
@@ -31,10 +35,10 @@ INSERT INTO ums_menu (id, parent_id, create_time, title, level, sort, name, icon
   (122, 102, NOW(), '礼品卡', 1, 78, 'giftCard', 'room', 0),
   (123, 102, NOW(), '活动与折扣', 1, 77, 'marketingCenter', 'sms-hot', 0),
 
-  -- 数据与薪资：经营数据（流水/时长/疗愈师/月度）/ 薪资明细 / 薪资设置 / 激励中心（看板/培训/参数）
+  -- 数据与劳务服务费：经营数据（流水/时长/疗愈师/月度）/ 劳务服务费明细 / 劳务服务费设置 / 激励中心（看板/培训/参数）
   (130, 103, NOW(), '经营数据', 1, 80, 'statisticsOverview', 'statistics', 0),
-  (131, 103, NOW(), '薪资明细', 1, 79, 'salaryDetail', 'salary', 0),
-  (132, 103, NOW(), '薪资设置', 1, 78, 'salarySet', 'salarySet', 0),
+  (131, 103, NOW(), '劳务服务费明细', 1, 79, 'salaryDetail', 'salary', 0),
+  (132, 103, NOW(), '劳务服务费设置', 1, 78, 'salarySet', 'salarySet', 0),
   (133, 103, NOW(), '激励中心', 1, 77, 'incentiveCenter', 'dashboard', 0),
 
   -- 门店与系统：门店团队（疗愈师/评价/门店/房间/床位）/ 账号权限（账号/角色/菜单/资源）/ 系统配置（审批/图片）

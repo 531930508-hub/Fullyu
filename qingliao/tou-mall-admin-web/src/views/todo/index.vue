@@ -3,7 +3,7 @@
     <div class="todo-head">
       <div class="todo-title">
         <h2>待办中心</h2>
-        <p>审批按人流转，不再受门店限制。这里汇总所有需要你处理的审批。</p>
+        <p>审批按人流转，不再受门店限制。待办、已办、我提交的和抄送我的审批都在这里。</p>
       </div>
       <div class="todo-actions">
         <span class="pending-pill" v-if="pendingCount > 0">待处理 {{ pendingCount }} 项</span>
@@ -14,30 +14,39 @@
 
     <el-tabs v-model="activeName" @tab-click="handleTabChange">
       <el-tab-pane name="pending">
-        <span slot="label">待我审批 <b class="tab-count" v-if="tabTotals.pending > 0">{{ tabTotals.pending }}</b></span>
+        <span slot="label">我的待办 <b class="tab-count" v-if="tabTotals.pending > 0">{{ tabTotals.pending }}</b></span>
       </el-tab-pane>
       <el-tab-pane name="done">
-        <span slot="label">我已处理</span>
+        <span slot="label">我的已办</span>
+      </el-tab-pane>
+      <el-tab-pane name="submitted">
+        <span slot="label">我提交的</span>
       </el-tab-pane>
       <el-tab-pane name="cc">
-        <span slot="label">抄送我的</span>
+        <span slot="label">抄送我的 <b class="tab-count" v-if="tabTotals.cc > 0">{{ tabTotals.cc }}</b></span>
       </el-tab-pane>
     </el-tabs>
 
     <div class="table-card">
       <el-table :data="dataList" v-loading="listLoading" border style="width: 100%;">
-        <el-table-column label="审批类别" prop="approval.categoryTitle" min-width="140">
-          <template slot-scope="scope">{{ scope.row.approval && scope.row.approval.categoryTitle || '—' }}</template>
+        <el-table-column label="审批类别" min-width="140">
+          <template slot-scope="scope">{{ rowCategoryTitle(scope.row) || '—' }}</template>
         </el-table-column>
         <el-table-column label="发起人" min-width="110">
           <template slot-scope="scope">{{ scope.row.createUser | adminUsernameFilter }}</template>
         </el-table-column>
         <el-table-column label="审批状态" min-width="110">
           <template slot-scope="scope">
-            <span :class="['state-tag', stateClass(scope.row)]">{{ scope.row.approval && scope.row.approval.state | approvalStateFilter }}</span>
+            <span :class="['state-tag', stateClass(scope.row)]">{{ rowState(scope.row) | approvalStateFilter }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="发起时间" prop="createTime" min-width="160"></el-table-column>
+        <!-- 我提交的：看得到「提交 → 各审批节点 → 完成/驳回」的顺序与当前卡在哪一步 -->
+        <el-table-column v-if="activeName === 'submitted'" label="流转进度" min-width="260">
+          <template slot-scope="scope">
+            <flow-progress :row="scope.row"></flow-progress>
+          </template>
+        </el-table-column>
+        <el-table-column :label="activeName === 'submitted' ? '提交时间' : '发起时间'" prop="createTime" min-width="160"></el-table-column>
         <el-table-column v-if="activeName === 'done'" label="处理时间" prop="finishTime" min-width="160"></el-table-column>
         <el-table-column label="操作" width="190" fixed="right">
           <template slot-scope="scope">
@@ -53,6 +62,7 @@
       <div class="empty-tip" v-if="!listLoading && dataList.length === 0">
         <template v-if="activeName === 'pending'">当前没有待你处理的审批，保持轻松。</template>
         <template v-else-if="activeName === 'done'">还没有处理记录。</template>
+        <template v-else-if="activeName === 'submitted'">你还没有发起过审批。</template>
         <template v-else>暂时没有抄送给你的审批。</template>
       </div>
 
@@ -79,25 +89,28 @@
 import {mapGetters} from 'vuex'
 import approvalTodoApi from '@/api/approvalTodo'
 import ApprovalProgress from '@/views/order/approval/ApprovalProgress'
+import FlowProgress from '@/views/order/approval/FlowProgress'
 import AdminNoticeSettings from './AdminNoticeSettings'
 
 export default {
   name: 'todoCenter',
-  components: {ApprovalProgress, AdminNoticeSettings},
+  components: {ApprovalProgress, FlowProgress, AdminNoticeSettings},
   data() {
     return {
       activeName: 'pending',
       listLoading: false,
+      listSeq: 0,
+      actingId: null,
       dataList: [],
       total: 0,
-      tabTotals: {pending: 0},
+      tabTotals: {pending: 0, done: 0, submitted: 0, cc: 0},
       searchForm: {page: 1, size: 10}
     }
   },
   computed: {
     ...mapGetters(['userId', 'todoCount']),
     pendingCount() {
-      return this.todoCount
+      return this.tabTotals.pending || this.todoCount
     }
   },
   watch: {
@@ -123,15 +136,21 @@ export default {
       if (this.activeName === 'done') {
         return {...base, state: '3,0'}
       }
-      return {...base, flowUserType: 3, state: null}
+      return {...base, flowUserType: 3}
     },
     refreshAll() {
       this.searchData()
       this.refreshCount()
     },
     refreshCount() {
-      this.$store.dispatch('RefreshTodoCount').then(count => {
-        this.tabTotals.pending = count
+      approvalTodoApi.tabCounts().then(res => {
+        const counts = res.data || {}
+        this.tabTotals = {
+          pending: counts.pending || 0,
+          done: counts.done || 0,
+          submitted: counts.submitted || 0,
+          cc: counts.cc || 0
+        }
       })
     },
     searchData() {
@@ -142,18 +161,19 @@ export default {
       this.fetchData()
     },
     async fetchData() {
+      const seq = ++this.listSeq
       this.listLoading = true
       try {
-        const params = {...this.buildQuery(), page: this.searchForm.page, size: this.searchForm.size}
-        const res = await approvalTodoApi.page(params)
+        const page = {page: this.searchForm.page, size: this.searchForm.size}
+        const res = this.activeName === 'submitted'
+          ? await approvalTodoApi.pageSubmitted(page)
+          : await approvalTodoApi.page({...this.buildQuery(), ...page})
+        if (seq !== this.listSeq) return
         const data = res.data || {}
         this.dataList = data.list || []
         this.total = data.total || 0
-        if (this.activeName === 'pending') {
-          this.tabTotals.pending = this.total
-        }
       } finally {
-        this.listLoading = false
+        if (seq === this.listSeq) this.listLoading = false
       }
     },
     handleTabChange() {
@@ -168,30 +188,51 @@ export default {
       this.searchForm.page = page
       this.fetchData()
     },
+    rowCategoryTitle(row) {
+      if (this.activeName === 'submitted') return row.categoryTitle
+      return row.approval && row.approval.categoryTitle
+    },
+    rowState(row) {
+      if (this.activeName === 'submitted') return row.state
+      return row.approval && row.approval.state
+    },
     stateClass(row) {
-      const state = row.approval && row.approval.state
+      const state = this.rowState(row)
       if (state === 3) return 'is-passed'
       if (state === 0) return 'is-rejected'
       if (state === 2) return 'is-approving'
       return 'is-default'
     },
     openDetail(row) {
-      this.$refs.refApprovalProgress.open(row)
+      const payload = this.activeName === 'submitted' ? {...row, approval: row, id: null} : row
+      this.$refs.refApprovalProgress.open(payload)
     },
     async handlePass(row) {
+      if (this.actingId) return
       await this.notifyConfirm('确认通过该审批？通过后将进入下一审批人或直接生效。')
-      await approvalTodoApi.pass(row.id)
+      this.actingId = row.id
+      try {
+        await approvalTodoApi.pass(row.id)
+      } finally {
+        this.actingId = null
+      }
       this.notifySuccess()
       this.refreshAll()
     },
     handleReject(row) {
+      if (this.actingId) return
       this.$prompt('请输入拒绝原因', '拒绝审批', {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         inputPattern: /^.+$/,
         inputErrorMessage: '原因不能为空'
       }).then(async ({value}) => {
-        await approvalTodoApi.reject(row.id, value)
+        this.actingId = row.id
+        try {
+          await approvalTodoApi.reject(row.id, value)
+        } finally {
+          this.actingId = null
+        }
         this.notifySuccess()
         this.refreshAll()
       }).catch(() => {

@@ -64,4 +64,11 @@ export default {
       params: {id}
     })
   },
+  restoreTransfer(id) {//撤销调店并恢复原店排班
+    return request({
+      url: '/massagistSchedules/restoreTransfer',
+      method: 'post',
+      params: {id}
+    })
+  },
 }

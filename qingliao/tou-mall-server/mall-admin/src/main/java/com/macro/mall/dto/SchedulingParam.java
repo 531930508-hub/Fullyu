@@ -45,4 +45,16 @@ public class SchedulingParam {
      * 根据客户手机号查询
      */
     private String customerPhone;
+
+    /**
+     * 只查指定疗愈师（疗愈师只读看板用，仅 type=2 生效）
+     */
+    private Long massagistId;
+
+    /**
+     * 看板查询未来日期时，已完成/已取消/已服务过的明细不再占位；当天及以前保留，便于回看历史。
+     */
+    public boolean isFutureView() {
+        return date != null && date.isAfter(LocalDate.now());
+    }
 }

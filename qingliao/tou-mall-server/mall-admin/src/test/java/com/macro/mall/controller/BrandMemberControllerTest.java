@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.macro.mall.common.api.CommonResult;
 import com.macro.mall.common.exception.BusinessException;
+import com.macro.mall.crm.brand.BrandMemberCatalog;
 import com.macro.mall.crm.brand.BrandMemberClient;
+import com.macro.mall.crm.brand.BrandMemberNaming;
+import com.macro.mall.crm.brand.CrmCardDiscountSource;
 import com.macro.mall.service.BrandCardPaymentService;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +32,8 @@ class BrandMemberControllerTest {
     private BrandMemberController controller(BrandMemberClient client,
                                              BrandCardPaymentService paymentService,
                                              Long customerId) {
-        return new BrandMemberController(client, paymentService) {
+        BrandMemberCatalog catalog = new BrandMemberCatalog(client, mock(CrmCardDiscountSource.class));
+        return new BrandMemberController(client, catalog, paymentService) {
             @Override
             public Long curCustomerId() {
                 return customerId;
@@ -40,17 +44,41 @@ class BrandMemberControllerTest {
     @Test
     void meRequiresLoginAndUsesServerSideCustomerId() throws Exception {
         BrandMemberClient client = mock(BrandMemberClient.class);
+        BrandCardPaymentService paymentService = mock(BrandCardPaymentService.class);
         JsonNode payload = objectMapper.readTree("{\"member\":{\"memberNo\":\"FY-TEST-000003\"}}");
         when(client.me("42")).thenReturn(payload);
+        Map<String, Object> profile = new LinkedHashMap<>();
+        profile.put("contactName", "林晚");
+        profile.put("contactGender", "2");
+        profile.put("contactBirthday", "1995-06-18");
+        when(paymentService.latestProfile(42L)).thenReturn(profile);
 
-        CommonResult result = controller(client, mock(BrandCardPaymentService.class), 42L).me();
+        CommonResult result = controller(client, paymentService, 42L).me();
         assertEquals(payload, result.getData());
+        // 已有档案随 me 返回，会员页开通/续费时直接带出，不再重复填写。
+        assertEquals("林晚", ((JsonNode) result.getData()).get("profile").get("contactName").asText());
+        assertEquals("1995-06-18", ((JsonNode) result.getData()).get("profile").get("contactBirthday").asText());
         verify(client).me("42");
+        verify(paymentService).latestProfile(42L);
 
         BusinessException anonymous = assertThrows(BusinessException.class,
-                () -> controller(client, mock(BrandCardPaymentService.class), null).me());
+                () -> controller(client, paymentService, null).me());
         assertTrue(anonymous.getMessage().contains("登录"));
         verify(client, never()).me("null");
+        verify(paymentService, never()).latestProfile(null);
+    }
+
+    @Test
+    void meRenamesCrmCardToUnifiedDisplayName() throws Exception {
+        BrandMemberClient client = mock(BrandMemberClient.class);
+        BrandCardPaymentService paymentService = mock(BrandCardPaymentService.class);
+        JsonNode payload = objectMapper.readTree("{\"card\":{\"productCode\":\"FY_ANNUAL\","
+                + "\"productName\":\"Full愈年卡\",\"validUntil\":\"2027-11-07\"}}");
+        when(client.me("42")).thenReturn(payload);
+
+        JsonNode data = (JsonNode) controller(client, paymentService, 42L).me().getData();
+        // CRM 旧名不再露出，卡期与价格负责区分卡型
+        assertEquals(BrandMemberNaming.DISPLAY_NAME, data.path("card").path("productName").asText());
     }
 
     @Test

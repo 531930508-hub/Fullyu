@@ -1,5 +1,6 @@
 package com.macro.mall.controller.statistics;
 
+import com.macro.mall.annotation.ExportLog;
 import com.macro.mall.common.api.CommonResult;
 import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.incentive.service.IncentiveAccessService;
@@ -37,6 +38,8 @@ public class StatisticsController {
     @Autowired
     IncentiveAccessService access;
     @Autowired
+    com.macro.mall.service.base.ShopScopeService shopScopeService;
+    @Autowired
     com.macro.mall.service.serviceStatistics.TherapistStatsService therapistStatsService;
 
     private Long[] durationScope(Long shopId, Long massagistId) {
@@ -72,6 +75,7 @@ public class StatisticsController {
 
     @GetMapping("/serviceDuration/export")
     @ApiOperation("疗愈师服务时长导出")
+    @ExportLog(module = "statistics_service_duration", value = "疗愈师服务时长")
     public void serviceDurationExport(@RequestParam String startTime,
                                       @RequestParam String endTime,
                                       @RequestParam(required = false) Long shopId,
@@ -121,6 +125,7 @@ public class StatisticsController {
 
     @GetMapping("/therapistStats/export")
     @ApiOperation("疗愈师统计导出")
+    @ExportLog(module = "statistics_therapist", value = "疗愈师统计")
     @SuppressWarnings("unchecked")
     public void therapistStatsExport(@RequestParam String startTime,
                                      @RequestParam String endTime,
@@ -145,12 +150,14 @@ public class StatisticsController {
 
     @GetMapping("/operatingRevenue/export")
     @ApiOperation("经营流水数据导出")
+    @ExportLog(module = "statistics_operating_revenue", value = "经营流水")
     public void operatingRevenueExport(@ModelAttribute OperatingRevenueDto operatingRevenueDto) {
         service.operatingRevenueExport(operatingRevenueDto);
     }
 
     @GetMapping("/operatingRevenue/dailyExport")
     @ApiOperation("经营日报导出（按入账日期汇总收入）")
+    @ExportLog(module = "statistics_operating_revenue_daily", value = "经营日报")
     public void operatingRevenueDailyExport(@ModelAttribute OperatingRevenueDto operatingRevenueDto) {
         service.operatingRevenueDailyExport(operatingRevenueDto);
     }
@@ -163,9 +170,8 @@ public class StatisticsController {
     @GetMapping("/payoutpage")
     @ApiOperation("分页查询")
     public CommonResult payoutpage(@RequestParam Map<String, Object> params,int[] shopIdArrNew) {
-        if(shopIdArrNew!=null){
-            params.put("shopIdArrNew",shopIdArrNew);
-        }
+        // 服务端收敛：客户端传入门店数组必须落在授权范围内
+        params.put("shopIdArrNew", shopScopeService.restrictShopIdArray(shopIdArrNew));
         return CommonResult.success(payoutService.pageInfo(params));
     }
     @DeleteMapping("/deletePayoutData")
@@ -178,26 +184,25 @@ public class StatisticsController {
     @GetMapping("/topAlldata")
     @ApiOperation("获取月度看板的顶部统计数据")
     public CommonResult topAlldata(@RequestParam Map<String, Object> params,int[] shopIdArrNew) {
-        if(shopIdArrNew!=null){
-            params.put("shopIdArrNew",shopIdArrNew);
-        }
+        // 服务端收敛：客户端传入门店数组必须落在授权范围内
+        params.put("shopIdArrNew", shopScopeService.restrictShopIdArray(shopIdArrNew));
         return CommonResult.success(payoutService.topAlldata(params));
     }
 
     @GetMapping("/operatingRevenueXinZi/export")
     @ApiOperation("疗愈师薪资导出")
+    @ExportLog(module = "statistics_salary", value = "疗愈师劳务服务费")
     public void operatingRevenueXinZiExport(@RequestParam Map<String, Object> params,int[] shopIdArrNew) throws IOException {
-        if(shopIdArrNew!=null){
-            params.put("shopIdArrNew",shopIdArrNew);
-        }
+        // 服务端收敛：客户端传入门店数组必须落在授权范围内
+        params.put("shopIdArrNew", shopScopeService.restrictShopIdArray(shopIdArrNew));
         payoutService.operatingRevenueXinZiExport(params);
     }
     @GetMapping("/operatingRevenueFuWu/export")
     @ApiOperation("疗愈师服务时长导出")
+    @ExportLog(module = "statistics_service_fee", value = "疗愈师服务费")
     public void operatingRevenueFuWuExport(@RequestParam Map<String, Object> params,int[] shopIdArrNew) {
-        if(shopIdArrNew!=null){
-            params.put("shopIdArrNew",shopIdArrNew);
-        }
+        // 服务端收敛：客户端传入门店数组必须落在授权范围内
+        params.put("shopIdArrNew", shopScopeService.restrictShopIdArray(shopIdArrNew));
         service.operatingRevenueFuWuExport(params);
     }
 }

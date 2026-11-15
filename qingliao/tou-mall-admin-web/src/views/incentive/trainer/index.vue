@@ -1,7 +1,7 @@
 <template>
   <div class="ta-page">
     <header class="ta-top">
-      <router-link to="/" class="ta-back">‹ 返回后台</router-link>
+      <router-link to="/home" class="ta-back">‹ 返回后台</router-link>
       <div class="ta-title">内训考核</div>
       <div class="ta-sub">每一步都算数</div>
     </header>

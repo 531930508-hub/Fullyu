@@ -31,9 +31,6 @@
         <el-table-column label="所属门店" prop="shopId" width="220">
           <template slot-scope="scope">{{ scope.row.shopId | shopNameFilter }}</template>
         </el-table-column>
-        <!--        <el-table-column label="所属房间" prop="shopId">
-                  <template slot-scope="scope">{{ scope.row.roomId | roomNameFilter }}</template>
-                </el-table-column>-->
         <el-table-column label="床位名称" prop="name"></el-table-column>
         <el-table-column label="床位序号" prop="serialNumber" width="300"></el-table-column>
         <el-table-column label="床位属性" prop="type">
@@ -128,11 +125,14 @@ export default {
     },
     async fetchData() {
       this.listLoading = true
-      let res = await bedApi.page(this.searchForm)
-      this.listLoading = false
-      let {list, total} = res.data
-      this.dataList = list || []
-      this.total = total || 0
+      try {
+        let res = await bedApi.page(this.searchForm)
+        let {list, total} = res.data
+        this.dataList = list || []
+        this.total = total || 0
+      } finally {
+        this.listLoading = false
+      }
     },
     handleSizeChange(val) {
       this.searchForm.size = val;

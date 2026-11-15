@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Full愈轻疗 · 首页会员续费提醒（7 天 · 与订单卡叠放）</title>
+<style>
+  :root{
+    --ink:#584219;
+    --ink-2:#8A6A40;
+    --gold:#C4A974;
+    --sand:#EAE0D7;
+    --cream:#FBF4E8;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0}
+  body{
+    font-family:-apple-system,'PingFang SC','Helvetica Neue',sans-serif;
+    background:radial-gradient(1100px 520px at 50% -8%,#F7F1E7 0,rgba(247,241,231,0) 62%),#EFE9E1;
+    color:#4A3C32;padding-bottom:52px;
+  }
+
+  /* ================= demo 外壳 ================= */
+  .head{
+    max-width:1200px;margin:0 auto;padding:30px 32px 0;
+    display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;
+  }
+  .eyebrow{font-size:11px;letter-spacing:.18em;color:#A08A6C}
+  .head h1{
+    margin:8px 0 8px;font-size:24px;line-height:1.4;font-weight:600;color:var(--ink);
+    font-family:SourceHanSerifSC,'Songti SC',serif;letter-spacing:.06em;
+  }
+  .head p{margin:0;max-width:640px;font-size:13px;line-height:1.85;color:#7B6B58;letter-spacing:.04em}
+  .controls{display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+  .seg{display:flex;flex-wrap:wrap;justify-content:flex-end;background:#fff;border:1px solid #E2D8C9;border-radius:999px;padding:3px;
+       box-shadow:0 6px 16px -12px rgba(88,66,25,.35)}
+  .seg button{
+    border:0;background:transparent;cursor:pointer;font:inherit;font-size:12.5px;letter-spacing:.06em;
+    color:#8A7A63;padding:7px 14px;border-radius:999px;transition:.18s;white-space:nowrap;
+  }
+  .seg button.active{background:var(--ink);color:#F6F4F2}
+  .seg button:not(.active):hover{color:var(--ink)}
+
+  .stage{display:flex;justify-content:center;padding:22px 24px 0}
+  .col{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .caption{font-size:12px;letter-spacing:.1em;color:#8A7A63;background:rgba(255,255,255,.72);
+           border:1px solid #E6DCCE;border-radius:999px;padding:6px 14px}
+
+  .phone{
+    position:relative;width:410px;height:864px;padding:10px;border-radius:46px;
+    background:linear-gradient(160deg,#2A2521,#161311 45%,#2A2521);
+    box-shadow:0 30px 60px -32px rgba(50,38,20,.6),0 1px 0 rgba(255,255,255,.15) inset;
+    transition:width .22s ease;
+  }
+  .phone[data-w="360"]{width:380px}
+  .screen{
+    --r:.52px;
+    position:relative;width:100%;height:100%;border-radius:37px;overflow:hidden;
+    background:#EAE0D7;isolation:isolate;
+  }
+  .phone[data-w="360"] .screen{--r:.48px}
+
+  /* ================= 状态栏 / 胶囊 ================= */
+  .statusbar{
+    position:absolute;top:0;left:0;right:0;height:44px;z-index:60;display:flex;align-items:center;
+    padding:0 26px;font-size:13.5px;font-weight:600;letter-spacing:.02em;color:#fff;
+    text-shadow:0 1px 3px rgba(0,0,0,.28);pointer-events:none;
+  }
+  .sb-r{display:flex;align-items:flex-end;gap:3px;margin-left:auto}
+  .sb-r i{display:block;width:3px;background:currentColor;border-radius:1px;opacity:.95}
+  .capsule{
+    position:absolute;top:50px;right:10px;width:87px;height:32px;z-index:60;
+    border:1px solid rgba(255,255,255,.42);border-radius:999px;background:rgba(30,24,14,.28);
+    backdrop-filter:blur(6px);color:#fff;display:flex;align-items:center;justify-content:space-around;
+    pointer-events:none;
+  }
+  .capsule .dots{letter-spacing:1.5px;font-size:12px}
+  .capsule .ring{width:13px;height:13px;border:1.5px solid currentColor;border-radius:50%;position:relative}
+  .capsule .ring::after{content:"";position:absolute;inset:3px;border:1.4px solid currentColor;border-radius:50%}
+
+  /* ================= 首页本体（按 rpx 还原） ================= */
+  .scroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+  .scroll::-webkit-scrollbar{display:none}
+
+  .hero{position:relative;height:calc(var(--r)*1048);width:100%}
+  .hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top}
+  .hero::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg,rgba(20,14,6,.34) 0%,rgba(20,14,6,0) 26%);
+  }
+
+  .topbar{
+    position:absolute;top:44px;left:0;right:0;height:44px;z-index:35;
+    display:flex;align-items:center;padding-left:16px;
+  }
+  .addr{
+    display:flex;align-items:center;gap:5px;border:0;background:transparent;cursor:pointer;
+    font:inherit;color:#fff;padding:0;max-width:calc(var(--r)*200);
+    text-shadow:0 1px 3px rgba(0,0,0,.3);
+  }
+  .addr .shop{font-size:13px;letter-spacing:var(--tr);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none}
+  .brand img{width:calc(var(--r)*150);height:auto;display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,.25))}
+  .floatlang{
+    position:absolute;top:92px;right:12px;z-index:55;height:32px;display:flex;align-items:center;
+    padding:2px;border-radius:999px;background:rgba(255,253,248,.92);backdrop-filter:blur(8px);
+    border:1px solid rgba(88,66,25,.12);box-shadow:0 8px 20px -12px rgba(88,66,25,.55);
+  }
+  .floatlang button{
+    border:0;background:transparent;cursor:pointer;font:inherit;font-size:11px;letter-spacing:.06em;
+    color:#6E5A3C;height:26px;padding:0 9px;border-radius:999px;display:flex;align-items:center;
+    justify-content:center;min-width:26px;text-shadow:none;
+  }
+  .floatlang button.on{background:#584219;color:#F6F4F2}
+
+  /* ================= 订单卡 / 续费条 叠放 ================= */
+  .stack-wrap{
+    position:relative;z-index:98;
+    padding:0 calc(var(--r)*40);
+    margin-top:calc(var(--r)*-300);
+  }
+  /* padding-top 撑出续费条露出的高度，订单卡从 padding 之后开始，避免 margin 塌陷把两层压成一张 */
+  .stack{position:relative;padding-bottom:calc(var(--r)*32)}
+  .stack.with-strip{padding-top:calc(var(--r)*116)}
+  /* 底层：续费条，顶部露出 116rpx，订单卡压在上面并向右下错位 20rpx */
+  .renew-back{
+    position:absolute;left:0;right:calc(var(--r)*20);top:0;height:calc(var(--r)*148);
+    display:flex;align-items:flex-start;justify-content:space-between;gap:calc(var(--r)*14);
+    padding:calc(var(--r)*18) calc(var(--r)*24) 0;cursor:pointer;
+    border-radius:calc(var(--r)*20);
+    background:linear-gradient(100deg,#EAD7B0 0%,#F8EDD6 56%,#EEDCBB 100%);
+    border:1rpx solid #D6B984;
+    box-shadow:0 12px 26px -18px rgba(80,58,20,.8);
+    overflow:hidden;
+  }
+  .renew-back::after{
+    content:"";position:absolute;right:calc(var(--r)*-10);top:calc(var(--r)*-40);
+    width:calc(var(--r)*130);height:calc(var(--r)*130);border-radius:50%;
+    background:radial-gradient(circle,rgba(196,169,116,.28),rgba(196,169,116,0) 68%);
+    pointer-events:none;
+  }
+  .rb-main{display:block;flex:1;min-width:0}
+  .rb-title{
+    display:block;font-size:calc(var(--r)*25);line-height:1.3;font-weight:600;color:#4B3714;
+    letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .rb-sub{
+    display:block;margin-top:calc(var(--r)*4);
+    font-size:calc(var(--r)*20);line-height:1.3;color:#8A6A40;letter-spacing:.03em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .rb-days{color:#8A5A12}
+  .rb-btn{
+    flex:none;align-self:flex-start;display:flex;align-items:center;justify-content:center;
+    height:calc(var(--r)*54);padding:0 calc(var(--r)*26);
+    border-radius:999px;background:#584219;color:#F3E9D8;
+    font-size:calc(var(--r)*23);letter-spacing:.08em;white-space:nowrap;
+    box-shadow:0 6px 14px -8px rgba(88,66,25,.9);cursor:pointer;
+  }
+
+  .order-card{
+    position:relative;z-index:2;
+    margin-top:0;margin-left:calc(var(--r)*20);
+    border-radius:calc(var(--r)*24);overflow:hidden;
+    background:rgba(255,255,255,.94);
+    box-shadow:0 18px 34px -24px rgba(88,66,25,.65),0 1px 0 rgba(255,255,255,.9) inset;
+    color:#584219;font-size:calc(var(--r)*26);
+  }
+  .oc-head{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--r)*10);padding:calc(var(--r)*16) calc(var(--r)*28) calc(var(--r)*8)}
+  .oc-head-l{display:flex;align-items:center;min-width:0;gap:calc(var(--r)*6)}
+  .oc-head-l svg{width:calc(var(--r)*28);height:calc(var(--r)*34);flex:none;color:#8A6A40}
+  .oc-title{font-size:calc(var(--r)*25);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .oc-title.warn{color:#B4552B;font-weight:600}
+  .oc-meta{flex:none;font-size:calc(var(--r)*22);color:#6E5A3C;white-space:nowrap}
+  .oc-meta b{font-weight:600;color:#3E2D10}
+  .oc-div{height:1px;margin:0 7.5%;background:#E4DCD5}
+  .oc-body{display:flex;align-items:center;padding:calc(var(--r)*10) calc(var(--r)*28) calc(var(--r)*20);gap:calc(var(--r)*12)}
+  .oc-ava{width:calc(var(--r)*58);height:calc(var(--r)*58);border-radius:50%;flex:none;
+          background:linear-gradient(145deg,#E8D6B8,#C4A974);display:flex;align-items:center;justify-content:center;
+          color:#4B3410;font-size:calc(var(--r)*22);font-weight:600;letter-spacing:.02em}
+  .oc-who{min-width:0;flex:1}
+  .oc-name{font-size:calc(var(--r)*26);color:#1E1E1D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .oc-shop{margin-top:calc(var(--r)*4);font-size:calc(var(--r)*22);color:#8C8B8A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .oc-acts{display:flex;align-items:center;gap:calc(var(--r)*10);flex:none}
+  .oc-btn{
+    position:relative;display:flex;align-items:center;justify-content:center;
+    height:calc(var(--r)*64);padding:0 calc(var(--r)*20);border-radius:calc(var(--r)*14);
+    border:1rpx solid #D9CFC2;background:transparent;color:#584219;
+    font:inherit;font-size:calc(var(--r)*24);letter-spacing:.03em;cursor:pointer;
+  }
+  .oc-btn.primary{background:#584219;border-color:#584219;color:#fff}
+  .oc-btn.ghost{color:#A8A29A;border-color:#E2DCD4}
+  .oc-badge{
+    position:absolute;top:calc(var(--r)*-14);right:calc(var(--r)*-6);
+    background:#FEE3E3;color:#FA5151;font-size:calc(var(--r)*18);line-height:1;
+    border-radius:calc(var(--r)*10);padding:calc(var(--r)*6) calc(var(--r)*8);
+    white-space:nowrap;
+  }
+
+  /* ================= 无订单：紧凑续费卡 ================= */
+  .renew-slim{
+    position:relative;z-index:98;margin-top:calc(var(--r)*-300);
+    padding:0 calc(var(--r)*40) calc(var(--r)*24);
+  }
+  .rs-card{
+    position:relative;display:flex;align-items:center;gap:calc(var(--r)*16);
+    padding:calc(var(--r)*22) calc(var(--r)*24) calc(var(--r)*22) calc(var(--r)*30);
+    border-radius:calc(var(--r)*22);overflow:hidden;
+    background:rgba(255,255,255,.96);
+    border:1rpx solid rgba(88,66,25,.06);
+    box-shadow:0 18px 34px -26px rgba(88,66,25,.6);
+  }
+  .rs-card::before{
+    content:"";position:absolute;left:0;top:calc(var(--r)*18);bottom:calc(var(--r)*18);
+    width:calc(var(--r)*6);border-radius:0 6px 6px 0;
+    background:linear-gradient(180deg,#D9C08A,#8A6A40);
+  }
+  .rs-text{flex:1;min-width:0}
+  .rs-saving{
+    font-size:calc(var(--r)*27);line-height:1.3;font-weight:600;color:#3F2D10;
+    letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .rs-saving b{font-weight:600;color:#8A5A12}
+  .rs-sub{
+    margin-top:calc(var(--r)*6);font-size:calc(var(--r)*22);line-height:1.3;color:#8C7A60;
+    letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .rs-sub b{font-weight:600;color:#B0552B}
+  .rs-btn{
+    flex:none;height:calc(var(--r)*64);padding:0 calc(var(--r)*28);
+    border-radius:999px;border:0;background:#584219;color:#F6F4F2;
+    font:inherit;font-size:calc(var(--r)*25);letter-spacing:.08em;cursor:pointer;
+    box-shadow:0 8px 18px -12px rgba(88,66,25,.9);
+  }
+
+  /* ================= 支付确认弹窗 ================= */
+  .sheet-mask{
+    position:absolute;inset:0;z-index:120;background:rgba(28,20,10,.46);
+    opacity:0;pointer-events:none;transition:opacity .22s ease;
+  }
+  .sheet-mask.on{opacity:1;pointer-events:auto}
+  .sheet{
+    position:absolute;left:0;right:0;bottom:0;z-index:121;
+    background:#FBF9F6;border-radius:calc(var(--r)*32) calc(var(--r)*32) 0 0;
+    padding:calc(var(--r)*16) calc(var(--r)*40) calc(var(--r)*34);
+    transform:translateY(102%);transition:transform .26s cubic-bezier(.2,.8,.3,1);
+    box-shadow:0 -20px 44px -32px rgba(0,0,0,.55);
+  }
+  .sheet.on{transform:translateY(0)}
+  .sheet-handle{width:calc(var(--r)*72);height:calc(var(--r)*6);border-radius:3px;background:#DED5C7;margin:0 auto calc(var(--r)*22)}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--r)*16)}
+  .sheet-title{font-size:calc(var(--r)*32);font-weight:600;color:#3A2A12;letter-spacing:.04em}
+  .sheet-close{
+    width:calc(var(--r)*56);height:calc(var(--r)*56);border-radius:50%;border:0;
+    background:#F0EAE0;color:#8A7A63;font:inherit;font-size:calc(var(--r)*26);line-height:1;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .sheet-plan{
+    margin-top:calc(var(--r)*22);padding:calc(var(--r)*24) calc(var(--r)*26);
+    background:#fff;border:1rpx solid #EADFCF;border-radius:calc(var(--r)*22);
+  }
+  .sp-row{display:flex;align-items:baseline;justify-content:space-between;gap:calc(var(--r)*16)}
+  .sp-name{font-size:calc(var(--r)*27);font-weight:600;color:#3A2A12;letter-spacing:.03em}
+  .sp-name span{margin-left:calc(var(--r)*10);font-size:calc(var(--r)*21);font-weight:400;color:#8C7A60}
+  .sp-price{flex:none;font-size:calc(var(--r)*38);font-weight:600;color:#584219;font-variant-numeric:tabular-nums}
+  .sp-price em{font-style:normal;font-size:calc(var(--r)*22);margin-right:2px}
+  .sp-meta{margin-top:calc(var(--r)*8);font-size:calc(var(--r)*21);line-height:1.6;color:#8C7A60;letter-spacing:.02em}
+  .sp-save{margin-top:calc(var(--r)*10);font-size:calc(var(--r)*21);line-height:1.6;color:#8A5A12;letter-spacing:.02em}
+  .sheet-pay{
+    display:flex;align-items:center;gap:calc(var(--r)*14);
+    margin-top:calc(var(--r)*18);padding:calc(var(--r)*20) calc(var(--r)*24);
+    background:#fff;border:1rpx solid #EADFCF;border-radius:calc(var(--r)*20);
+  }
+  .pay-ico{
+    flex:none;width:calc(var(--r)*44);height:calc(var(--r)*44);border-radius:50%;
+    background:#07C160;color:#fff;display:flex;align-items:center;justify-content:center;
+    font-size:calc(var(--r)*23);font-weight:600;line-height:1;
+  }
+  .pay-name{flex:1;font-size:calc(var(--r)*25);color:#3A2A12;letter-spacing:.02em}
+  .pay-name small{display:block;margin-top:2px;font-size:calc(var(--r)*19);color:#A08E76}
+  .pay-radio{width:calc(var(--r)*34);height:calc(var(--r)*34);border-radius:50%;border:2rpx solid #584219;position:relative}
+  .pay-radio::after{content:"";position:absolute;inset:calc(var(--r)*7);border-radius:50%;background:#584219}
+  .sheet-agree{
+    margin-top:calc(var(--r)*18);font-size:calc(var(--r)*19);line-height:1.6;color:#A08E76;letter-spacing:.02em;
+  }
+  .sheet-agree a{color:#8A6A40;text-decoration:underline}
+  .sheet-cta{
+    margin-top:calc(var(--r)*18);width:100%;height:calc(var(--r)*96);
+    border:0;border-radius:999px;background:#584219;color:#F6F4F2;
+    font:inherit;font-size:calc(var(--r)*30);font-weight:600;letter-spacing:.1em;cursor:pointer;
+    box-shadow:0 14px 26px -18px rgba(88,66,25,.9);
+  }
+  .sheet-more{
+    margin-top:calc(var(--r)*16);text-align:center;font-size:calc(var(--r)*22);
+    color:#8A6A40;letter-spacing:.03em;cursor:pointer;text-decoration:underline;text-underline-offset:3px;
+  }
+
+  /* ================= 白色会员卡 ================= */
+  .content{padding:calc(var(--r)*8) calc(var(--r)*40) calc(var(--r)*64);position:relative}
+  .content.solo{margin-top:calc(var(--r)*-100)}
+  .card{
+    background:#fff;border-radius:calc(var(--r)*28);
+    box-shadow:0 18px 40px -32px rgba(88,66,25,.75);overflow:hidden;
+  }
+  .card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;
+            padding:calc(var(--r)*14) calc(var(--r)*30);background:#584219;color:#fff}
+  .nick{font-size:calc(var(--r)*26);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:48%}
+  .mins{font-size:calc(var(--r)*21);color:#E5DDCE;letter-spacing:.03em;display:flex;align-items:baseline;gap:4px;white-space:nowrap}
+  .mins b{font-size:calc(var(--r)*32);font-weight:600;color:#fff}
+  .coupon{padding:calc(var(--r)*22) calc(var(--r)*30) 0}
+  .coupon-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+              font-size:calc(var(--r)*23);color:var(--ink);letter-spacing:.03em}
+  .coupon-row .l{max-width:45%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .coupon-row .r{max-width:55%;text-align:right;color:var(--ink-2)}
+  .bar{height:2px;border-radius:2px;background:#E6E3DE;margin-top:calc(var(--r)*14);overflow:hidden}
+  .bar i{display:block;height:100%;width:38%;background:var(--ink);border-radius:2px}
+  .blocks{display:flex;align-items:center;justify-content:space-around;padding:calc(var(--r)*26) calc(var(--r)*12) calc(var(--r)*30)}
+  .block{display:flex;flex-direction:column;align-items:center;cursor:pointer}
+  .block img.ico{width:calc(var(--r)*144);height:calc(var(--r)*144);object-fit:contain;margin-bottom:calc(var(--r)*8)}
+  .block img.txt{width:calc(var(--r)*290);height:auto;max-height:calc(var(--r)*86);object-fit:contain}
+  .vdiv{width:1px;height:calc(var(--r)*125);background:rgba(88,66,25,.1)}
+  .hint{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:calc(var(--r)*18);
+        font-size:calc(var(--r)*24);color:var(--ink-2);letter-spacing:.03em}
+
+  /* ================= TabBar / AI 球 ================= */
+  .tabbar{
+    position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--r)*30);
+    width:calc(var(--r)*670);height:calc(var(--r)*100);border-radius:68px;
+    background:#fff;box-shadow:0 4px 4px rgba(88,66,25,.30),0 8px 12px 6px rgba(88,66,25,.15);
+    display:flex;align-items:center;justify-content:space-around;z-index:40;
+    padding:0 calc(var(--r)*8);
+  }
+  .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;border:0;background:transparent;
+       cursor:pointer;font:inherit;padding:0;color:var(--ink-2);letter-spacing:.03em}
+  .tab .slot{width:calc(var(--r)*43);height:calc(var(--r)*28);margin-top:calc(var(--r)*-10);display:flex;align-items:center;justify-content:center}
+  .tab .slot img{width:calc(var(--r)*43);height:calc(var(--r)*28);object-fit:contain}
+  .tab span{font-size:calc(var(--r)*26);line-height:1.35}
+  .tab.on{color:var(--ink)}
+  .tab.on span{font-weight:600}
+  .aiball{
+    position:absolute;left:80%;transform:translateX(-50%);top:calc(var(--r)*640);z-index:45;
+    width:calc(var(--r)*100);height:calc(var(--r)*100);border-radius:50%;background:#fff;
+    display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 0 10px rgba(88,66,25,.5));cursor:pointer;
+  }
+  .aiball img{width:calc(var(--r)*50);height:calc(var(--r)*50);object-fit:contain}
+
+  .toast{
+    position:absolute;left:50%;bottom:150px;transform:translate(-50%,10px);z-index:130;
+    max-width:78%;padding:10px 16px;border-radius:12px;background:rgba(38,30,20,.9);color:#fff;
+    font-size:12.5px;letter-spacing:.04em;text-align:center;opacity:0;pointer-events:none;transition:.22s;
+  }
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+
+  /* ================= 说明区 ================= */
+  .notes{max-width:1200px;margin:26px auto 0;padding:0 32px;
+         display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+  .note{background:rgba(255,255,255,.75);border:1px solid #E6DCCE;border-radius:14px;padding:16px 18px}
+  .note h5{margin:0 0 8px;font-size:11.5px;letter-spacing:.12em;color:#A08A6C;font-weight:600;text-transform:uppercase}
+  .note p{margin:0;font-size:12.5px;line-height:1.85;color:#6E5E4C;letter-spacing:.03em}
+  .note p + p{margin-top:6px}
+  .note b{color:var(--ink)}
+  .note.rec{border-color:#C4A974;background:#FFFCF5}
+  .note.rec h5{color:#8A6A40}
+  .spec{margin-top:8px;font-size:11.5px;line-height:1.8;color:#8A7A63;font-variant-numeric:tabular-nums}
+  @media(max-width:880px){.head{padding:24px 20px 0}.head h1{font-size:21px}.notes{padding:0 20px}}
+</style>
+</head>
+<body>
+
+<header class="head">
+  <div>
+    <div class="eyebrow">FULL YU · LIGHT HEAL · 首页会员续费提醒</div>
+    <h1>7 天提醒：和订单卡错位叠放</h1>
+    <p>按 <b>pages/index/index.vue</b> 的真实结构还原：1048rpx 轮播、上浮 300rpx 的订单卡、白色会员卡、670rpx 悬浮 TabBar。切换场景可看「有订单叠放 / 无订单独立卡 / 已到期 / 不提醒」六种形态；点续费条、独立卡或按钮都会拉起底部 ¥299 支付面板。</p>
+  </div>
+  <div class="controls">
+    <div class="seg" id="sceneSeg">
+      <button data-scene="order5" class="active">有订单 · 剩 5 天</button>
+      <button data-scene="solo5">无订单 · 剩 5 天</button>
+      <button data-scene="orderExpired">有订单 · 已到期</button>
+      <button data-scene="soloExpired">无订单 · 已到期</button>
+      <button data-scene="none">有订单 · 不提醒</button>
+      <button data-scene="soloNone">无订单 · 不提醒</button>
+    </div>
+    <div class="seg">
+      <button class="w" data-w="390">390px</button>
+      <button class="w" data-w="360">360px</button>
+      <button id="langBtn">中 / EN</button>
+    </div>
+  </div>
+</header>
+
+<main class="stage">
+  <div class="col">
+    <div class="caption" id="caption">有订单 · 剩 5 天 · 续费条从订单卡后露出上沿</div>
+    <div class="phone" id="phone" data-w="390"></div>
+  </div>
+</main>
+
+<section class="notes">
+  <div class="note rec">
+    <h5>叠放态（有订单）</h5>
+    <p>续费条压到 <b>订单卡后面</b>，露出顶部 <b>116rpx</b> 的米金渐变带：左侧「会员还有 5 天到期 / 续费后顺延 365 天」两行都完整可读，右侧深棕「续费」胶囊。订单卡向下压 116rpx、向右错位 20rpx，投影把两层分开，一眼能看出底下是一条续费提醒而不是订单卡的一部分。</p>
+    <p class="spec">续费条：高 148rpx · 露出 116rpx · 右缩 20rpx · 圆角 20rpx<br>渐变 100deg #EAD7B0 → #F8EDD6 56% → #EEDCBB · 描边 #D6B984<br>文案 25/20rpx · 按钮 54rpx 高 #584219 · 下方留 35rpx 呼吸位</p>
+  </div>
+  <div class="note">
+    <h5>独立态（无订单）</h5>
+    <p>没有待支付或近期订单时，提醒换成一张 <b>白色紧凑卡</b> 占据卡片区：左缘一条金色竖条，主文案说「过去已为你省下 ¥86」，副行才是「还有 5 天到期」，右侧「续费」胶囊。用已省金额做锚点，比单纯催到期更容易点。</p>
+    <p class="spec">卡：padding 22/24rpx · 圆角 22rpx · 白 .96 + 细边<br>竖条 6rpx 宽 · 渐变 #D9C08A → #8A6A40<br>主文 27rpx 600 / 副文 22rpx（天数 #B0552B）· 按钮 64rpx 高</p>
+  </div>
+  <div class="note">
+    <h5>续费支付弹窗</h5>
+    <p>点续费条、独立卡或按钮，统一拉起 <b>底部支付面板</b>：卡名 + 年卡 365 天 + ¥299、权益到期说明（未到期写顺延日期，已到期写支付后立即生效）、微信支付单选、协议行和整宽「确认支付」。</p>
+    <p class="spec">面板圆角 32rpx · 遮罩 rgba(28,20,10,.46)<br>价格 38rpx / CTA 96rpx 高 · 圆角 999<br>「查看其他卡型」为次级文字入口</p>
+  </div>
+  <div class="note">
+    <h5>7 天口径</h5>
+    <p>只在 <b>已到期</b> 或 <b>剩余天数 ≤ 7</b> 时出现；服务端 EXPIRING（30 天）不动，「我的 / 卡包」仍按 30 天显示即将到期，后台统计也不受影响。</p>
+    <p>续费已排期（pendingStart）时不再提醒，避免重复引导。</p>
+  </div>
+  <div class="note">
+    <h5>落位与让位</h5>
+    <p>提醒从页顶移到轮播底部卡片区，原页顶 <b>lang-clearance</b> 只留给卡券到期提醒；顶部不再被续费条推走 80rpx。</p>
+    <p>点击续费条 / 独立卡 / 续费按钮都拉起支付面板，确认支付走 <b>/pages/user/brand-member?renew=1</b>；未登录先登后进。演示里「确认支付」只弹 toast。</p>
+  </div>
+</section>
+
+<script>
+(function () {
+  'use strict';
+
+  var A = 'demo-assets/';
+  var state = { scene: 'order5', lang: 'zh', width: 390, sheet: false, sheetExpired: false };
+  // 支持 #scene=solo5&lang=en&w=360 直接打开某一形态（便于评审与截图）
+  (function () {
+    var hash = (location.hash || '').replace(/^#/, '');
+    if (!hash) return;
+    hash.split('&').forEach(function (kv) {
+      var p = kv.split('=');
+      if (p[0] === 'scene' && ['order5', 'solo5', 'orderExpired', 'soloExpired', 'none', 'soloNone'].indexOf(p[1]) > -1) state.scene = p[1];
+      if (p[0] === 'lang' && (p[1] === 'zh' || p[1] === 'en')) state.lang = p[1];
+      if (p[0] === 'w' && (p[1] === '390' || p[1] === '360')) state.width = Number(p[1]);
+    });
+  })();
+
+  var STR = {
+    nick: { zh: '尊敬的「田小愈」', en: 'Welcome back, 田小愈' },
+    minsPrefix: { zh: '可享受 ', en: 'You have ' },
+    minsSuffix: { zh: ' mins Full愈时刻', en: ' mins of Full Yu time' },
+    coupon: { zh: '头部水疗券', en: 'Head spa pass' },
+    couponMeta: { zh: '2026-12-31 · 剩余 3 次', en: 'expires 2026-12-31 · 3 left' },
+    hint: { zh: '上滑探索更多精彩', en: 'Swipe up for more' },
+    tHome: { zh: '首页', en: 'Home' },
+    tMall: { zh: '商城', en: 'Shop' },
+    tBook: { zh: '预约', en: 'Book' },
+    tOrders: { zh: '订单', en: 'Orders' },
+    tMe: { zh: '我的', en: 'Me' },
+
+    rbTitleDays: { zh: '会员还有 <b class="rb-days">5 天</b>到期', en: 'Member expires in <b class="rb-days">5 days</b>' },
+    rbSubDays: { zh: '续费后顺延 365 天', en: 'Renewal adds 365 days' },
+    rbTitleExpired: { zh: '会员<b class="rb-days">已到期</b>', en: 'Member <b class="rb-days">expired</b>' },
+    rbSubExpired: { zh: '续费后恢复会员价', en: 'Renew to keep member pricing' },
+    rbBtn: { zh: '续费', en: 'Renew' },
+
+    rsSaveDays: { zh: '过去已为你省下 <b>¥86</b>', en: 'You have saved <b>¥86</b> so far' },
+    rsSaveExpired: { zh: '上个会员期已为你省下 <b>¥86</b>', en: 'You saved <b>¥86</b> last term' },
+    rsSubDays: { zh: '会员还有 <b>5 天</b>到期', en: 'Membership ends in <b>5 days</b>' },
+    rsSubExpired: { zh: '会员已到期，续费恢复会员价', en: 'Expired — renew to restore member pricing' },
+    rsSaveNone: { zh: '会员还有 <b>5 天</b>到期', en: 'Membership ends in <b>5 days</b>' },
+    rsSubNone: { zh: '续费继续享三店会员价', en: 'Renew to keep member pricing' },
+    rsBtn: { zh: '续费', en: 'Renew' },
+
+    shTitle: { zh: '续费 Full愈大会员', en: 'Renew your membership' },
+    shPlan: { zh: 'Full愈大会员', en: 'Full Yu Member' },
+    shPlanSub: { zh: '年卡 · 365 天', en: 'Annual · 365 days' },
+    shPrice: { zh: '299', en: '299' },
+    shMetaDays: { zh: '当前权益至 2026-11-19，续费后顺延至 2027-11-19', en: 'Current term ends 2026-11-19; renewed through 2027-11-19' },
+    shMetaExpired: { zh: '会员已到期，支付成功后立即生效，有效期 365 天', en: 'Expired — activates immediately after payment for 365 days' },
+    shSave: { zh: '上一会员期已为你省下 ¥86', en: 'You saved ¥86 last term' },
+    shPay: { zh: '微信支付', en: 'WeChat Pay' },
+    shPaySub: { zh: '推荐使用微信支付', en: 'Recommended' },
+    shAgree: { zh: '续费即同意《Full愈会员服务协议》', en: 'By renewing you agree to the Membership Terms' },
+    shCta: { zh: '确认支付 ¥299', en: 'Pay ¥299' },
+    shMore: { zh: '查看其他卡型', en: 'View other plans' },
+    shClose: { zh: '关闭', en: 'Close' },
+
+    ocPending: { zh: '订单待支付，超时自动取消', en: 'Awaiting payment — auto-cancels' },
+    ocDone: { zh: '服务已完成，评价可得积分', en: 'Session done — review to earn points' },
+    ocBooked: { zh: '预约成功，等你到店', en: 'Booked — see you soon' },
+    ocProduct: { zh: '全感舒筋', en: 'Full-sense stretch' },
+    ocShop: { zh: '轻疗 · 静安', en: 'Light Heal · Jing’an' },
+    ocPay: { zh: '立即支付', en: 'Pay now' },
+    ocReview: { zh: '评价订单', en: 'Review' },
+    ocPoints: { zh: '抽积分', en: 'Points' },
+    ocDetail: { zh: '订单详情', en: 'Details' },
+    ocRebook: { zh: '约TA', en: 'Book again' },
+
+    toastPaying: { zh: '已拉起微信支付（原型示意）', en: 'WeChat Pay opened (prototype only)' },
+    toastPlans: { zh: '去会员中心选择其他卡型（原型示意）', en: 'Opening other plans (prototype only)' },
+    toastPay: { zh: '拉起微信支付（原型仅示意）', en: 'WeChat Pay (prototype only)' },
+    toastOther: { zh: '跳转订单相关页面（原型仅示意）', en: 'Opening order page (prototype only)' },
+    toastLang: { zh: '已切换为中文', en: 'Switched to English' }
+  };
+  function L(k) { return STR[k][state.lang]; }
+
+  var NICK = '田小愈';
+  var SAVED = 86;
+  var PRICE = 299;
+  var PIN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s6.5-6 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15 12 21 12 21z"/><circle cx="12" cy="10" r="2.2"/></svg>';
+  var CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.4V12l3.2 2"/></svg>';
+  var ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5.5 15.5 12 9 18.5"/></svg>';
+
+  function statusBar() {
+    return '<div class="statusbar"><span>9:41</span>' +
+      '<span class="sb-r"><i style="height:5px"></i><i style="height:8px"></i><i style="height:11px"></i>' +
+      '<i style="height:11px;opacity:.35;margin-left:3px;width:14px;border-radius:2px"></i></span></div>' +
+      '<div class="capsule"><span class="dots">•••</span><span class="ring"></span></div>';
+  }
+
+  function topbar() {
+    return '<div class="topbar">' +
+      '<button class="addr" data-act="shop">' + PIN + '<span class="shop">' + L('ocShop') + '</span></button>' +
+      '<div class="brand"><img src="' + A + 'logo-white.png" alt="Full Yu"></div>' +
+    '</div>' +
+    '<div class="floatlang">' +
+      '<button class="' + (state.lang === 'zh' ? 'on' : '') + '" data-set="zh">中</button>' +
+      '<button class="' + (state.lang === 'en' ? 'on' : '') + '" data-set="en">EN</button>' +
+    '</div>';
+  }
+
+  function orderCard(kind) {
+    var titleKey = kind === 'pending' ? 'ocPending' : kind === 'done' ? 'ocDone' : 'ocBooked';
+    var title = L(titleKey);
+    var acts = '';
+    if (kind === 'pending') {
+      acts = '<button class="oc-btn primary" data-act="pay">' + L('ocPay') +
+        '<span class="oc-badge">14:58</span></button>';
+    } else if (kind === 'done') {
+      acts = '<button class="oc-btn" data-act="review">' + L('ocReview') +
+        '<span class="oc-badge">' + L('ocPoints') + '</span></button>' +
+        '<button class="oc-btn" data-act="other">' + L('ocDetail') + '</button>' +
+        '<button class="oc-btn" data-act="other">' + L('ocRebook') + '</button>';
+    } else {
+      acts = '<button class="oc-btn" data-act="other">' + L('ocDetail') + '</button>';
+    }
+    return '<div class="order-card">' +
+      '<div class="oc-head">' +
+        '<div class="oc-head-l">' + CLOCK + '<span class="oc-title' + (kind === 'pending' ? ' warn' : '') + '">' + title + '</span></div>' +
+        '<span class="oc-meta">' + L('ocProduct') + ' <b>60</b> mins</span>' +
+      '</div>' +
+      '<div class="oc-div"></div>' +
+      '<div class="oc-body">' +
+        '<div class="oc-ava">Yuki</div>' +
+        '<div class="oc-who"><div class="oc-name">Yuki</div><div class="oc-shop">' + L('ocShop') + '</div></div>' +
+        '<div class="oc-acts">' + acts + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renewBack(expired) {
+    return '<div class="renew-back" data-act="renew">' +
+      '<div class="rb-main">' +
+        '<span class="rb-title">' + (expired ? L('rbTitleExpired') : L('rbTitleDays')) + '</span>' +
+        '<span class="rb-sub">' + (expired ? L('rbSubExpired') : L('rbSubDays')) + '</span>' +
+      '</div>' +
+      '<span class="rb-btn">' + L('rbBtn') + '</span>' +
+    '</div>';
+  }
+
+  function renewSlim(expired) {
+    return '<div class="renew-slim" data-act="renew">' +
+      '<div class="rs-card">' +
+        '<div class="rs-text">' +
+          '<div class="rs-saving">' + (expired ? L('rsSaveExpired') : L('rsSaveDays')) + '</div>' +
+          '<div class="rs-sub">' + (expired ? L('rsSubExpired') : L('rsSubDays')) + '</div>' +
+        '</div>' +
+        '<button class="rs-btn">' + L('rsBtn') + '</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renewSheet(expired) {
+    return '<div class="sheet-mask' + (state.sheet ? ' on' : '') + '" data-act="sheetClose"></div>' +
+      '<div class="sheet' + (state.sheet ? ' on' : '') + '" role="dialog" aria-modal="true" aria-label="' + L('shTitle') + '">' +
+        '<div class="sheet-handle"></div>' +
+        '<div class="sheet-head">' +
+          '<div class="sheet-title">' + L('shTitle') + '</div>' +
+          '<button class="sheet-close" data-act="sheetClose" aria-label="' + L('shClose') + '">✕</button>' +
+        '</div>' +
+        '<div class="sheet-plan">' +
+          '<div class="sp-row">' +
+            '<div class="sp-name">' + L('shPlan') + '<span>' + L('shPlanSub') + '</span></div>' +
+            '<div class="sp-price"><em>¥</em>' + L('shPrice') + '</div>' +
+          '</div>' +
+          '<div class="sp-meta">' + (expired ? L('shMetaExpired') : L('shMetaDays')) + '</div>' +
+          '<div class="sp-save">' + L('shSave') + '</div>' +
+        '</div>' +
+        '<div class="sheet-pay">' +
+          '<span class="pay-ico">微</span>' +
+          '<span class="pay-name">' + L('shPay') + '<small>' + L('shPaySub') + '</small></span>' +
+          '<span class="pay-radio"></span>' +
+        '</div>' +
+        '<div class="sheet-agree">' + L('shAgree') + '</div>' +
+        '<button class="sheet-cta" data-act="sheetPay">' + L('shCta') + '</button>' +
+        '<div class="sheet-more" data-act="plans">' + L('shMore') + '</div>' +
+      '</div>';
+  }
+
+  function memberCard() {
+    return '<div class="card">' +
+      '<div class="card-top">' +
+        '<span class="nick">' + (state.lang === 'en' ? 'Welcome back, ' + NICK : '尊敬的「' + NICK + '」') + '</span>' +
+        '<span class="mins">' + L('minsPrefix') + '<b>268</b>' + L('minsSuffix') + '</span>' +
+      '</div>' +
+      '<div class="coupon">' +
+        '<div class="coupon-row"><span class="l">' + L('coupon') + '</span>' +
+          '<span class="r">' + L('couponMeta') + '</span></div>' +
+        '<div class="bar"><i></i></div>' +
+      '</div>' +
+      '<div class="blocks">' +
+        '<div class="block" data-act="other">' +
+          '<img class="ico" src="' + A + 'frame264.png" alt="">' +
+          '<img class="txt" src="' + A + 'frame90.png" alt="">' +
+        '</div>' +
+        '<span class="vdiv"></span>' +
+        '<div class="block" data-act="other">' +
+          '<img class="ico" src="' + A + 'frame265.png" alt="">' +
+          '<img class="txt" src="' + A + 'frame901.png" alt="">' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function home() {
+    var s = state.scene;
+    var hasOrder = s === 'order5' || s === 'orderExpired' || s === 'none';
+    var showReminder = s !== 'none' && s !== 'soloNone';
+    var expired = s === 'orderExpired' || s === 'soloExpired';
+    var orderKind = s === 'orderExpired' ? 'done' : s === 'none' ? 'booked' : 'pending';
+
+    var top = '';
+    if (showReminder && hasOrder) {
+      top = '<div class="stack-wrap"><div class="stack with-strip">' +
+        renewBack(expired) + orderCard(orderKind) +
+      '</div></div>';
+    } else if (showReminder) {
+      top = renewSlim(expired);
+    } else if (hasOrder) {
+      top = '<div class="stack-wrap"><div class="stack">' + orderCard(orderKind) + '</div></div>';
+    }
+
+    var contentCls = hasOrder || showReminder ? 'content' : 'content solo';
+
+    return '<div class="scroll">' +
+      '<div class="hero"><img src="' + A + 'banner.jpg" alt=""></div>' +
+      top +
+      '<div class="' + contentCls + '">' +
+        memberCard() +
+        '<div class="hint">' + L('hint') +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m6 15 6-6 6 6"/></svg>' +
+        '</div>' +
+      '</div>' +
+      '<div style="height:140px"></div>' +
+    '</div>';
+  }
+
+  function tabbar() {
+    var items = [{ k: 'tHome', on: true }, { k: 'tMall' }, { k: 'tBook', icon: true }, { k: 'tOrders' }, { k: 'tMe' }];
+    return '<div class="tabbar">' + items.map(function (it) {
+      return '<button class="tab' + (it.on ? ' on' : '') + '" data-act="other">' +
+        '<span class="slot">' + (it.icon ? '<img src="' + A + 'reservation.svg" alt="">' : '') + '</span>' +
+        '<span>' + L(it.k) + '</span></button>';
+    }).join('') + '</div>';
+  }
+
+  var captions = {
+    order5: { zh: '有订单 · 剩 5 天 · 续费条从订单卡后露出上沿', en: 'With order · 5 days left · renewal strip peeks from behind' },
+    solo5: { zh: '无订单 · 剩 5 天 · 独立续费卡悬在轮播底部', en: 'No order · 5 days left · standalone renewal card' },
+    orderExpired: { zh: '有订单 · 已到期 · 续费条改「已到期」文案', en: 'With order · expired · strip switches copy' },
+    soloExpired: { zh: '无订单 · 已到期 · 续费卡改用到期文案引导', en: 'No order · expired · reactivate card' },
+    none: { zh: '剩 26 天 · 首页不提醒，订单卡照常', en: '26 days left · no reminder, normal order card' },
+    soloNone: { zh: '剩 26 天 · 无订单也不提醒，白色会员卡上浮', en: '26 days left · no reminder, member card floats up' }
+  };
+
+  var toastTimer = null;
+  function toast(msg) {
+    var el = document.querySelector('.toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('on'); }, 1600);
+  }
+
+  function isExpired() {
+    return state.scene === 'orderExpired' || state.scene === 'soloExpired';
+  }
+
+  function setSheet(open) {
+    state.sheet = open;
+    var mask = document.querySelector('.sheet-mask');
+    var sheet = document.querySelector('.sheet');
+    if (!mask || !sheet) return;
+    mask.classList.toggle('on', open);
+    sheet.classList.toggle('on', open);
+  }
+
+  function render() {
+    var phone = document.getElementById('phone');
+    phone.dataset.w = state.width;
+    phone.innerHTML =
+      '<div class="screen" data-lang="' + state.lang + '">' +
+        home() + topbar() + tabbar() +
+        '<div class="aiball" data-act="other"><img src="' + A + 'ai-vector.png" alt=""></div>' +
+        statusBar() +
+        renewSheet(isExpired()) +
+        '<div class="toast"></div>' +
+      '</div>';
+
+    document.getElementById('caption').textContent = captions[state.scene][state.lang];
+    Array.prototype.forEach.call(document.querySelectorAll('#sceneSeg button'), function (b) {
+      b.classList.toggle('active', b.dataset.scene === state.scene);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.w'), function (b) {
+      b.classList.toggle('active', Number(b.dataset.w) === state.width);
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    var setBtn = e.target.closest('[data-set]');
+    if (setBtn) {
+      var lang = setBtn.dataset.set;
+      if (lang === state.lang) return;
+      state.lang = lang;
+      render();
+      toast(L('toastLang'));
+      return;
+    }
+    var actEl = e.target.closest('[data-act]');
+    if (!actEl) return;
+    e.stopPropagation();
+    var act = actEl.dataset.act;
+    if (act === 'renew') setSheet(true);
+    else if (act === 'sheetClose') setSheet(false);
+    else if (act === 'sheetPay') { setSheet(false); toast(L('toastPaying')); }
+    else if (act === 'plans') toast(L('toastPlans'));
+    else if (act === 'pay') toast(L('toastPay'));
+    else toast(L('toastOther'));
+  });
+
+  document.getElementById('sceneSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-scene]');
+    if (!b) return;
+    state.scene = b.dataset.scene;
+    state.sheet = false;
+    render();
+  });
+
+  document.querySelectorAll('.w').forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.width = Number(b.dataset.w);
+      render();
+    });
+  });
+
+  document.getElementById('langBtn').addEventListener('click', function () {
+    state.lang = state.lang === 'zh' ? 'en' : 'zh';
+    render();
+    toast(L('toastLang'));
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

@@ -2,7 +2,6 @@ export default {
   shopStatus: [{value: 1, label: '正常'}, {value: 0, label: '已停用'},],
   shopRecommend: [{value: 1, label: '是'}, {value: 0, label: '否'},],
   shopStatusMap: {available: 1, notAvailable: 0},
-  roomType: [{value: 1, label: '湿区'}, {value: 2, label: '干区'},],
   bedType: [{value: 1, label: '湿区'}, {value: 2, label: '干区'},],
   miniImageType: [{value: 1, label: '开屏图'}, {value: 3, label: '送券图'},{value: 2, label: '首页banner图'}, {value: 4, label: '子页banner图'}, {value: 5, label: '首页弹框图'}],
   jobStatus: [{value: 1, label: '在职'}, {value: 2, label: '暂挂'}, {value: 0, label: '离职'}],

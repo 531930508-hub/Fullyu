@@ -146,7 +146,7 @@ public class BaiduAsrUtil {
     }
 
     public static void main(String[] args) {
-        String utl = ""; // 调试用签名 URL 已移除，避免泄露 OSS AccessKey
+        String utl = "https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/file/voice/20250620/8adc3d6b-f98d-43cf-8f77-1bd451c07830(._.)tempVoice17504128368996263675350857755395.mp3?Expires=1753004837&OSSAccessKeyId=LTAI5tRkattW3YRJ5mqceetF&Signature=NDTv+yxHNdw+x3poNgI+G7bXDHc=";
 //        String utl = "http://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/file/voice/20250620/8adc3d6b-f98d-43cf-8f77-1bd451c07830(._.)tempVoice17504128368996263675350857755395.mp3";
         String[] split = utl.split("\\?Expires=");
         System.out.println(split[0]);

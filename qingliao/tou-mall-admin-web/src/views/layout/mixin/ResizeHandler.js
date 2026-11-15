@@ -6,9 +6,15 @@ const COMPACT_WIDTH = 1280
 export default {
   watch: {
     $route(route) {
-      if (this.device === 'mobile' && this.sidebar.opened) {
+      if (this.device === 'mobile' && this.drawerVisible) {
         store.dispatch('CloseSideBar', { withoutAnimation: false })
       }
+    }
+  },
+  computed: {
+    // 移动端抽屉是否可见
+    drawerVisible() {
+      return this.sidebar.opened
     }
   },
   beforeMount() {
@@ -32,17 +38,16 @@ export default {
       store.dispatch('ToggleDevice', isMobile ? 'mobile' : 'desktop')
 
       if (isMobile) {
+        // 抽屉默认收起
         if (this.sidebar.opened) {
           store.dispatch('CloseSideBar', { withoutAnimation: true })
         }
         return
       }
 
-      // 从窄屏回到桌面端时自动展开，桌面端内则保留用户的收起选择
+      // 从窄屏回到桌面端时，恢复用户在桌面端的偏好（展开 / 图标栏）
       if (wasMobile) {
-        if (!this.sidebar.opened) {
-          store.dispatch('ToggleSideBar')
-        }
+        store.dispatch('RestoreSideBar', { withoutAnimation: true })
         return
       }
 

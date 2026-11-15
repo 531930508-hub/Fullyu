@@ -6,12 +6,16 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.entity.Massagist;
 import com.macro.mall.entity.Shop;
+import com.macro.mall.incentive.calc.TrainingCalculator;
 import com.macro.mall.incentive.controller.IncentiveController;
 import com.macro.mall.incentive.dto.IncentiveConfigBundle;
 import com.macro.mall.incentive.dto.IncentiveDashboard;
 import com.macro.mall.incentive.entity.ShopIncentiveTarget;
 import com.macro.mall.incentive.mapper.*;
+import com.macro.mall.incentive.model.IncentiveBoard;
 import com.macro.mall.incentive.model.IncentiveRule;
+import com.macro.mall.incentive.model.TrainingProgress;
+import com.macro.mall.incentive.model.TrainingSection;
 import com.macro.mall.incentive.service.*;
 import com.macro.mall.service.shop.ShopService;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
@@ -92,7 +96,58 @@ class IncentiveExportTest {
         String csv = service.exportCsv("2026-01", null);
         assertEquals(503, csv.split("\n").length);
         assertTrue(csv.contains("合成人员501"));
-        verify(query, times(1)).selectServiceDetails(any(), any(), any(), any());
+        // 导出走整月批量查询（基础工时 + 到店人次），不做分页/500 行截断。
+        verify(query, times(1)).selectSalaryDetails(any(), any(), any(), any());
+        verify(query, times(1)).selectVisits(any(), any(), any(), any());
+    }
+
+    @Test void exportHeaderCarriesRetentionConversionAndCertifiedParts() {
+        String csv = service.exportCsv("2026-01", null);
+        String[] lines = csv.split("\n");
+        String header = lines[1];
+        assertTrue(header.contains("考核通过部位"), header);
+        assertTrue(header.contains("老客60天留存率(%)"), header);
+        assertTrue(header.contains("新客30天复购率(%)"), header);
+        assertTrue(header.contains("新客10天复购(单)"), header);
+        assertTrue(header.contains("可观察老客到店人次"), header);
+        assertTrue(header.contains("新客人数"), header);
+        int columns = header.split(",", -1).length;
+        assertEquals(22, columns);
+        assertEquals(columns, lines[2].split(",", -1).length, "数据行必须与表头列数一致");
+    }
+
+    @Test void missingSampleLeavesRateBlankInsteadOfZero() throws Throwable {
+        Method rate = IncentiveDataService.class
+                .getDeclaredMethod("rateCell", java.math.BigDecimal.class, Integer.class);
+        rate.setAccessible(true);
+        assertEquals("", rate.invoke(null, new java.math.BigDecimal("0.00"), 0));
+        assertEquals("", rate.invoke(null, new java.math.BigDecimal("55.55"), null));
+        assertEquals("55.6", rate.invoke(null, new java.math.BigDecimal("55.55"), 7));
+    }
+
+    @Test void certifiedPartsSkipsUncertifiedProjectsAndJoinsWithDunhao() throws Throwable {
+        TrainingSection training = new TrainingSection();
+        training.setProjects(Arrays.asList(
+                progress("面部", null, null, TrainingCalculator.STATUS_COMPLETED),
+                progress("手部", null, null, TrainingCalculator.STATUS_ACTIVE),
+                progress("头部", null, null, TrainingCalculator.STATUS_UNCERTIFIED),
+                progress("头部水疗", 60, "头部水疗 · 60 分钟", TrainingCalculator.STATUS_UPCOMING),
+                progress("`,=cmd", null, null, TrainingCalculator.STATUS_COMPLETED_THIS_MONTH)));
+        IncentiveBoard board = new IncentiveBoard();
+        board.setTraining(training);
+        Method parts = IncentiveDataService.class.getDeclaredMethod("certifiedParts", IncentiveBoard.class);
+        parts.setAccessible(true);
+        assertEquals("面部、手部、`,=cmd", parts.invoke(null, board));
+        assertEquals("", parts.invoke(null, new IncentiveBoard()));
+    }
+
+    private TrainingProgress progress(String partName, Integer duration, String projectName, String status) {
+        TrainingProgress progress = new TrainingProgress();
+        progress.setPartName(partName);
+        progress.setDurationMinutes(duration);
+        progress.setProjectName(projectName == null ? "合成项目" : projectName);
+        progress.setStatus(status);
+        return progress;
     }
 
     @Test void allShopExportUsesEachPersonsRealShop() {

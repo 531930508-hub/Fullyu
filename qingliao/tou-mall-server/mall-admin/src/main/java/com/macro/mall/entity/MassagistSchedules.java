@@ -46,6 +46,9 @@ public class MassagistSchedules extends BaseEntity {
     @ApiModelProperty("排班类型：0正常、1调店")
     private Long schedulesType;
 
+    @ApiModelProperty("调店前原店排班快照（仅调店记录，JSON），用于恢复原排班")
+    private String originSchedules;
+
     @ApiModelProperty("排班顺序")//字段已弃用，只用来前台显示
     @Deprecated
     private Integer sequence = 0;

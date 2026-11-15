@@ -87,6 +87,42 @@ public class ApprovalDetail extends BaseEntity {
     private Approval approval;
 
     /**
+     * 抄送人id（列表展示用，非表字段）
+     */
+    @TableField(exist = false)
+    private java.util.List<Long> ccUserIdList;
+
+    /**
+     * 休息申请的勾选日期（我的休息列表展示用，非表字段）
+     */
+    @TableField(exist = false)
+    private java.util.List<String> leaveDates;
+
+    /**
+     * 休息申请的每日开始时间（我的休息列表展示用，非表字段）
+     */
+    @TableField(exist = false)
+    private String leaveStartTime;
+
+    /**
+     * 休息申请的每日结束时间（我的休息列表展示用，非表字段）
+     */
+    @TableField(exist = false)
+    private String leaveEndTime;
+
+    /**
+     * 是否为当天请假（请假日期含今天，审批链路已提到店长及以上；列表/详情标记用，非表字段）
+     */
+    @TableField(exist = false)
+    private Boolean leaveSameDay;
+
+    /**
+     * 该审批的全部流转节点（按提交顺序，含发起人节点；待办中心列表展示进度用，非表字段）
+     */
+    @TableField(exist = false)
+    private java.util.List<com.macro.mall.dto.ApprovalFlowNodeBrief> flowNodes;
+
+    /**
      * 得到下一级审批
      *
      * @return

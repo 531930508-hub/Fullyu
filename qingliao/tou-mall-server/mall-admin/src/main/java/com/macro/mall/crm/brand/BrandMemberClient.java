@@ -4,16 +4,22 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.macro.mall.common.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPatch;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpRequestBase;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -39,9 +45,21 @@ public class BrandMemberClient {
 
     private final BrandMemberProperties properties;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    /** 用 Apache HttpClient 而不是 HttpURLConnection：JDK 的后者不支持 PATCH（资料同步要用）。 */
+    private final CloseableHttpClient httpClient;
 
     public BrandMemberClient(BrandMemberProperties properties) {
         this.properties = properties;
+        RequestConfig config = RequestConfig.custom()
+                .setConnectTimeout(properties.getTimeoutMs())
+                .setConnectionRequestTimeout(properties.getTimeoutMs())
+                .setSocketTimeout(properties.getTimeoutMs())
+                .build();
+        this.httpClient = HttpClients.custom()
+                .setDefaultRequestConfig(config)
+                // CRM 的写接口带幂等键，但 PATCH 资料没有；这里不自动重试，避免副作用重复
+                .setRetryHandler((exception, executionCount, context) -> false)
+                .build();
     }
 
     public boolean isActive() {
@@ -53,6 +71,37 @@ public class BrandMemberClient {
         String path = "/api/v1/brand-member/me?business=" + BUSINESS
                 + "&localUserId=" + encode(localUserId);
         return requireMember(call("GET", path, null, null));
+    }
+
+    /**
+     * 会员资料（昵称/头像/性别/生日）以 CRM 为唯一归档，profileVersion 是乐观锁：
+     * 本地版本必须等于 CRM 当前版本，否则 CRM 返回 409，提示顾客刷新后重试。
+     *
+     * <p>手机号不在资料里：CRM 侧手机号是身份唯一键，改号只能由 CRM 运营处理。</p>
+     */
+    public JsonNode updateProfile(String localUserId, long profileVersion, String nickname,
+                                  String avatarUrl, Integer gender, String birthday) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("business", BUSINESS);
+        payload.put("localUserId", localUserId);
+        payload.put("profileVersion", profileVersion);
+        if (nickname != null) {
+            payload.put("nickname", nickname);
+        }
+        if (avatarUrl != null) {
+            payload.put("avatarUrl", avatarUrl);
+        }
+        if (gender != null) {
+            payload.put("gender", gender);
+        }
+        if (birthday != null) {
+            payload.put("birthday", birthday);
+        }
+        JsonNode node = call("PATCH", "/api/v1/brand-member/profile", toJson(payload), null);
+        if (node == null || !node.path("member").isObject()) {
+            throw unavailable();
+        }
+        return node;
     }
 
     /** 商品目录由 CRM 定价与版本控制。 */
@@ -223,39 +272,24 @@ public class BrandMemberClient {
         if (!properties.isActive()) {
             throw new BrandMemberException("BRAND_MEMBER_DISABLED", "品牌会员服务尚未开启", 503);
         }
-        HttpURLConnection connection = null;
-        try {
-            URL url = new URL(properties.getBaseUrl() + path);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod(method);
-            connection.setConnectTimeout(properties.getTimeoutMs());
-            connection.setReadTimeout(properties.getTimeoutMs());
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setRequestProperty("x-fy-key", properties.getKeyId());
+        String timestamp = String.valueOf(System.currentTimeMillis() / 1000L);
+        String nonce = newNonce();
+        String rawBody = body == null ? "" : body;
 
-            String timestamp = String.valueOf(System.currentTimeMillis() / 1000L);
-            String nonce = newNonce();
-            String rawBody = body == null ? "" : body;
-            connection.setRequestProperty("x-fy-timestamp", timestamp);
-            connection.setRequestProperty("x-fy-nonce", nonce);
-            connection.setRequestProperty("x-fy-signature",
-                    sign(properties.getSecret(), timestamp, nonce, method, path, rawBody));
-            if (idempotencyKey != null) {
-                connection.setRequestProperty("idempotency-key", idempotencyKey);
-            }
-            if (body != null) {
-                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-                byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-                connection.setDoOutput(true);
-                connection.setFixedLengthStreamingMode(bytes.length);
-                try (OutputStream out = connection.getOutputStream()) {
-                    out.write(bytes);
-                }
-            }
-
-            int status = connection.getResponseCode();
-            String response = readAll(status >= 400 ? connection.getErrorStream() : connection.getInputStream());
-            JsonNode node = response == null || response.isEmpty() ? null : objectMapper.readTree(response);
+        HttpRequestBase request = newRequest(method, properties.getBaseUrl() + path, body);
+        request.setHeader("Accept", "application/json");
+        request.setHeader("x-fy-key", properties.getKeyId());
+        request.setHeader("x-fy-timestamp", timestamp);
+        request.setHeader("x-fy-nonce", nonce);
+        request.setHeader("x-fy-signature", sign(properties.getSecret(), timestamp, nonce, method, path, rawBody));
+        if (idempotencyKey != null) {
+            request.setHeader("idempotency-key", idempotencyKey);
+        }
+        try (CloseableHttpResponse response = httpClient.execute(request)) {
+            int status = response.getStatusLine().getStatusCode();
+            String text = response.getEntity() == null ? null
+                    : EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+            JsonNode node = text == null || text.isEmpty() ? null : objectMapper.readTree(text);
             if (status >= 200 && status < 300) {
                 return node;
             }
@@ -265,10 +299,25 @@ public class BrandMemberClient {
         } catch (IOException e) {
             log.warn("品牌会员 CRM 调用异常，method={} path={} error={}", method, path, e.getClass().getSimpleName());
             throw unavailable();
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
+        }
+    }
+
+    private HttpRequestBase newRequest(String method, String url, String body) {
+        StringEntity entity = body == null ? null
+                : new StringEntity(body, ContentType.create("application/json", StandardCharsets.UTF_8));
+        switch (method.toUpperCase()) {
+            case "GET":
+                return new HttpGet(url);
+            case "POST":
+                HttpPost post = new HttpPost(url);
+                post.setEntity(entity);
+                return post;
+            case "PATCH":
+                HttpPatch patch = new HttpPatch(url);
+                patch.setEntity(entity);
+                return patch;
+            default:
+                throw new IllegalArgumentException("品牌会员不支持的请求方法：" + method);
         }
     }
 
@@ -294,6 +343,12 @@ public class BrandMemberClient {
         }
         if ("MEMBER_NOT_FOUND".equals(code)) {
             return new BrandMemberException(code, "你的会员档案正在同步，请稍后重试", 404);
+        }
+        if ("PROFILE_CONFLICT".equals(code) || "PROFILE_VERSION_CONFLICT".equals(code)) {
+            return new BrandMemberException(code, "资料已在会员中心更新，请刷新后重新修改", 409);
+        }
+        if ("PROFILE_INVALID".equals(code)) {
+            return new BrandMemberException(code, "资料格式不正确，请核对后重试", 400);
         }
         if ("GAME_UNAVAILABLE".equals(code)) {
             return new BrandMemberException(code, "开通有效 Full愈卡后才能进入愈行之旅", 403);
@@ -380,19 +435,5 @@ public class BrandMemberClient {
             builder.append(Character.forDigit(b & 0xF, 16));
         }
         return builder.toString();
-    }
-
-    private static String readAll(InputStream stream) throws IOException {
-        if (stream == null) {
-            return null;
-        }
-        try (InputStream in = stream; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[4096];
-            int len;
-            while ((len = in.read(buffer)) != -1) {
-                out.write(buffer, 0, len);
-            }
-            return new String(out.toByteArray(), StandardCharsets.UTF_8);
-        }
     }
 }

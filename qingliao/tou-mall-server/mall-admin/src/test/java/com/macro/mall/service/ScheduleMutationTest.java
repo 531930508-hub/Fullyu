@@ -92,6 +92,7 @@ class ScheduleMutationTest {
         verify(service,never()).saveOrUpdate(any());
     }
     @Test void auditFailureIsNotReportedAsSuccessfulWrite() {
+        rows.add(row(10, today.plusDays(1), 9, 22)); // 调店须落在原店当天排班内
         when(logs.save(any())).thenReturn(false);
         assertThrows(BusinessException.class,()->service.batchTargetShop(transfer()));
     }
@@ -112,6 +113,7 @@ class ScheduleMutationTest {
         verify(service, never()).saveOrUpdate(any());
     }
     @Test void transferResetsUnstartedRotationForBothShopsOnThatDay() {
+        rows.add(row(10, today.plusDays(1), 9, 22)); // 原店 09-22，调出 14-18
         MassagistSchedules t = transfer();
         service.batchTargetShop(t);
         verify(service.roundScheduleService).removeExistData(t.getDay(), 1L);

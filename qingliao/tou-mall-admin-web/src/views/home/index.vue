@@ -7,7 +7,7 @@
         <h1 class="dash-hero__title">{{ greeting }}，今天也轻盈一点。</h1>
         <p class="dash-hero__sub">
           <template v-if="nextSession">
-            下一场 {{ nextSession.time }} · {{ nextSession.customerName || '客户' }} ·
+            下一场 {{ nextSession.time }} · {{ (nextSession.customerName | maskNicknameFilter) || '客户' }} ·
             {{ nextSession.projectTitle || '疗愈项目' }}
             <span class="dash-hero__gap">{{ countdownLabel }}</span>
           </template>
@@ -63,7 +63,10 @@
         <header class="panel__head">
           <div>
             <h2 class="panel__title">今日服务安排</h2>
-            <p class="panel__desc">按预约时间排序，含床位与疗愈师</p>
+            <p class="panel__desc">
+              按预约时间排序，含床位与疗愈师
+              <span v-if="birthdayCount" class="panel__desc-birthday">今日 {{ birthdayCount }} 位客户生日</span>
+            </p>
           </div>
           <router-link v-if="hasPerm('board')" to="/appointment/board" class="panel__link">完整看板 <i class="el-icon-arrow-right"></i></router-link>
         </header>
@@ -81,7 +84,8 @@
               </span>
               <div class="schedule-row__body">
                 <div class="schedule-row__title">
-                  <strong>{{ item.customerName || '匿名客户' }}</strong>
+                  <strong>{{ (item.customerName | maskNicknameFilter) || '匿名客户' }}</strong>
+                  <span v-if="item.isBirthday" class="birthday-badge" title="今天是该客户生日">生日</span>
                   <span class="schedule-row__project">{{ item.projectTitle || '疗愈项目' }}</span>
                 </div>
                 <p class="schedule-row__meta">
@@ -182,6 +186,7 @@ import orderApi from '@/api/order/order'
 import statisticsApi from '@/api/statistics'
 import approvalTodoApi from '@/api/approvalTodo'
 import { fetchMine } from '@/api/homeConfig'
+import { isBirthdayToday as checkBirthdayToday } from '@/utils/birthday'
 import { HOME_LINKS, presetFor } from './catalog'
 
 const SUPER_ADMIN_ROLE = '超级管理员'
@@ -238,6 +243,8 @@ export default {
       return this.enabledLinks
         .map(key => lookup[key])
         .filter(item => item && this.hasPerm(item.perm))
+        // 我的请假只对绑定疗愈师的账号有意义，未绑定的人点进去后端只会报「未关联疗愈师」
+        .filter(item => !item.requiresMassagist || !!this.massagistId)
     },
     heroCta() {
       if (!this.cfgReady) return null
@@ -287,7 +294,9 @@ export default {
             uid: `${order.id || order.code}-${index}`,
             time: this.timePart(startTime),
             endTime: this.timePart(endTime),
-            customerName: order.customerNickname || order.nickname || order.customerName,
+            customerName: this.displayCustomerName(order),
+            customerBirthday: order.customerBirthday || '',
+            isBirthday: this.isBirthdayToday(order.customerBirthday),
             projectTitle: detail.projectTitle || order.productTitle,
             massagistName: detail.massagistName || this.massagistName(detail.massagistId),
             bedName: detail.bedName,
@@ -316,6 +325,13 @@ export default {
     },
     doneCount() {
       return this.scheduleItems.filter(item => item.state === 2).length
+    },
+    birthdayCount() {
+      const names = new Set()
+      this.scheduleItems.forEach(item => {
+        if (item.isBirthday) names.add(item.customerName || item.uid.split('-')[0])
+      })
+      return names.size
     },
     waitingCount() {
       return this.scheduleItems.filter(item => item.state === 0).length
@@ -551,9 +567,22 @@ export default {
         this.todoLoading = false
       }
     },
+    isBirthdayToday(birthday) {
+      return checkBirthdayToday(birthday)
+    },
     stateLabel(state) {
       const map = { 0: '待到店', 1: '服务中', 2: '已完成', 3: '已取消' }
       return map[state] || '待确认'
+    },
+    // 今日预约列表展示用：有备注显示「李女士 7229」（称呼+手机号后四位），没有备注只显示后四位
+    displayCustomerName(order) {
+      if (!order) return ''
+      const title = order.customerTitle || ''
+      const phone = String(order.customerPhone || '').trim()
+      const tail = phone.length >= 4 ? phone.slice(-4) : ''
+      if (title && tail) return `${title} ${tail}`
+      if (title || tail) return title || tail
+      return order.customerNickname || order.nickname || order.customerName || ''
     },
     massagistName(id) {
       if (!id) return ''
@@ -1034,6 +1063,22 @@ export default {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.birthday-badge {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgba(255, 138, 101, 0.16);
+  color: #e8590c;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.panel__desc-birthday {
+  margin-left: 8px;
+  color: #e8590c;
+  font-weight: 600;
 }
 
 .schedule-row__meta {

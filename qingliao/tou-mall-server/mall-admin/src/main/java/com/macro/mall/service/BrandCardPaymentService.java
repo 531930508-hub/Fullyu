@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.crm.brand.BrandMemberClient;
 import com.macro.mall.crm.brand.BrandMemberException;
+import com.macro.mall.crm.brand.BrandMemberNaming;
+import com.macro.mall.crm.brand.BrandMemberProfileSync;
 import com.macro.mall.entity.Customer;
 import com.macro.mall.entity.CustomerMemberCard;
 import com.macro.mall.entity.MemberCardConfig;
@@ -107,6 +109,60 @@ public class BrandCardPaymentService {
      * 创建品牌会员卡支付单。只接收产品编码，价格由 CRM 报价决定。
      */
     public Map<String, Object> createOrder(Long customerId, Map<String, Object> params) {
+        MemberCardOrder order = createPendingOrder(customerId, params, true);
+        String productCode = order.getProductCode();
+        Map<String, Object> form = params == null ? new HashMap<>() : params;
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("orderSn", order.getOrderSn());
+        result.put("productCode", productCode);
+        result.put("productName", productName(productCode));
+        result.put("amount", order.getAmount());
+        result.put("priceCents", order.getPaidCents());
+        result.put("payChannel", PayChannel.WX_MINI);
+
+        if (memberCardService.isTestMode()) {
+            result.put("testMode", true);
+            return result;
+        }
+
+        String openId = stringValue(form.get("openId"));
+        if (openId == null) {
+            throw new BusinessException("微信支付参数缺失，请重试");
+        }
+        Order payOrder = new Order();
+        payOrder.setId(order.getId());
+        payOrder.setCode(order.getOrderSn());
+        payOrder.setPayAmount(order.getAmount());
+        payOrder.setPayType(1);
+        payOrder.setPayChannel(PayChannel.WX_MINI);
+        payOrder.setProductTitle(productName(productCode));
+        Map<?, ?> payResult;
+        try {
+            // generatePay 的 payParams 实际是嵌套 Map，静态泛型为 String，这里按 Object 读取避免强转失败
+            payResult = payService.generatePay(payOrder, openId, productName(productCode));
+        } catch (RuntimeException e) {
+            log.warn("品牌会员卡发起支付失败, orderSn={}, error={}", order.getOrderSn(), e.getMessage());
+            throw new BusinessException("发起微信支付失败，请稍后重试");
+        }
+        Object payOrderSn = payResult.get("orderSn");
+        order.setMerOrdId(payOrderSn == null ? null : payOrderSn.toString());
+        orderMapper.updateById(order);
+        result.put("testMode", false);
+        result.put("payParams", payResult.get("payParams"));
+        result.put("payOrderSn", payOrderSn);
+        return result;
+    }
+
+    /**
+     * 只落一张未支付的会员卡单（不发起汇付支付）。
+     *
+     * <p>单独抽出来是给「预约 + 会员卡续费合并支付」复用：合并支付由 {@code PayGroupService}
+     * 统一发起一笔收款，卡单本身不单独走汇付。</p>
+     *
+     * @param dedupCheck 是否需要做 60 秒重复提交防护；合并支付由支付单维度去重，这里传 false
+     */
+    public MemberCardOrder createPendingOrder(Long customerId, Map<String, Object> params, boolean dedupCheck) {
         if (customerId == null) {
             throw new BusinessException("请先登录", 401);
         }
@@ -134,16 +190,12 @@ public class BrandCardPaymentService {
             throw new BusinessException("该会员卡暂未开放");
         }
         // 防重：重复点击/网络重试不能生成第二笔未支付单；买卡成功后立刻续费是合法行为，不在此拦截
-        guardRecentOrder(customerId, productCode);
+        if (dedupCheck) {
+            guardRecentOrder(customerId, productCode);
+        }
 
         // 真实支付必须先拿到微信 openId，缺失时不落单，避免产生无法支付的孤儿订单
-        String openId = null;
-        if (!memberCardService.isTestMode()) {
-            openId = stringValue(form.get("openId"));
-            if (openId == null) {
-                throw new BusinessException("微信支付参数缺失，请重试");
-            }
-        }
+        // （合并支付由 PayGroupService 统一校验 openId）
 
         JsonNode quote = brandMemberClient.quote(String.valueOf(customerId), productCode);
         int priceCents = quote.path("priceCents").asInt(0);
@@ -172,42 +224,9 @@ public class BrandCardPaymentService {
         if (orderMapper.insert(order) != 1) {
             throw new BusinessException("开卡订单保存失败");
         }
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("orderSn", order.getOrderSn());
-        result.put("productCode", productCode);
-        result.put("productName", productName(productCode));
-        result.put("amount", order.getAmount());
-        result.put("priceCents", priceCents);
-        result.put("payChannel", PayChannel.WX_MINI);
-
-        if (memberCardService.isTestMode()) {
-            result.put("testMode", true);
-            return result;
-        }
-
-        Order payOrder = new Order();
-        payOrder.setId(order.getId());
-        payOrder.setCode(order.getOrderSn());
-        payOrder.setPayAmount(order.getAmount());
-        payOrder.setPayType(1);
-        payOrder.setPayChannel(PayChannel.WX_MINI);
-        payOrder.setProductTitle(productName(productCode));
-        Map<?, ?> payResult;
-        try {
-            // generatePay 的 payParams 实际是嵌套 Map，静态泛型为 String，这里按 Object 读取避免强转失败
-            payResult = payService.generatePay(payOrder, openId, productName(productCode));
-        } catch (RuntimeException e) {
-            log.warn("品牌会员卡发起支付失败, orderSn={}, error={}", order.getOrderSn(), e.getMessage());
-            throw new BusinessException("发起微信支付失败，请稍后重试");
-        }
-        Object payOrderSn = payResult.get("orderSn");
-        order.setMerOrdId(payOrderSn == null ? null : payOrderSn.toString());
-        orderMapper.updateById(order);
-        result.put("testMode", false);
-        result.put("payParams", payResult.get("payParams"));
-        result.put("payOrderSn", payOrderSn);
-        return result;
+        // 开卡填的称呼/性别/生日同时归档到客户资料，会员中心与个人中心才能看到
+        syncProfileToCustomer(order);
+        return order;
     }
 
     /**
@@ -266,13 +285,41 @@ public class BrandCardPaymentService {
     }
 
     /**
+     * 卡单上的汇付支付流水号。合并支付结算时用它判断卡单是否已被本次合并收款结算过。
+     */
+    public String cardMerOrdId(String orderSn) {
+        MemberCardOrder order = findOrder(orderSn);
+        return order == null ? null : order.getMerOrdId();
+    }
+
+    /**
      * 汇付支付成功回调。金额不符或订单已终止时只记录不重试；
      * CRM 暂时不可用时抛出异常让汇付继续重试。
      */
     public void handlePayCallback(String merOrdId, BigDecimal transAmount, String hfSeqId,
                                   String partyOrderId, String outTransId, Integer payType,
                                   String payChannel) {
-        String orderSn = baseOrderSn(merOrdId);
+        settleWithRetry(baseOrderSn(merOrdId), merOrdId, transAmount, hfSeqId, partyOrderId,
+                outTransId, payType, payChannel);
+    }
+
+    /**
+     * 合并支付（预约单 + 会员卡续费）里的卡单结算：卡单本身不走汇付，mer_ord_id 是合并支付单号，
+     * 不能靠 {@link #baseOrderSn(String)} 反推卡单号，所以由调用方显式传入。
+     */
+    public void handleGroupPayCallback(String cardOrderSn, String merOrdId, BigDecimal transAmount,
+                                       String hfSeqId, String partyOrderId, String outTransId,
+                                       Integer payType, String payChannel) {
+        settleWithRetry(cardOrderSn, merOrdId, transAmount, hfSeqId, partyOrderId, outTransId,
+                payType, payChannel);
+    }
+
+    /**
+     * 把「结算 + 失败原因回写」的固定收口收在一处，单独支付与合并支付共用。
+     */
+    private void settleWithRetry(String orderSn, String merOrdId, BigDecimal transAmount,
+                                 String hfSeqId, String partyOrderId, String outTransId,
+                                 Integer payType, String payChannel) {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         try {
             tx.executeWithoutResult(status -> settleInTransaction(orderSn, merOrdId, transAmount,
@@ -601,6 +648,116 @@ public class BrandCardPaymentService {
         }
         result.put("orders", rows);
         return result;
+    }
+
+    /**
+     * 会员档案（称呼/性别/生日）回填：以客户资料为准，历史订单只作兜底。
+     *
+     * <p>2026-11 起这三项同时写进 c_customer 并推会员中心，个人中心与会员卡看到的是同一份；
+     * 老订单里只有订单字段，所以客户资料缺失时才回退到最近一笔品牌卡订单。</p>
+     */
+    public Map<String, Object> latestProfile(Long customerId) {
+        Map<String, Object> profile = new LinkedHashMap<>();
+        if (customerId == null) {
+            return profile;
+        }
+        Customer customer = customerService.getById(customerId);
+        MemberCardOrder order = latestOrder(customerId);
+        String name = customer != null && customer.getNickname() != null
+                ? customer.getNickname().trim()
+                : "";
+        if (name.isEmpty() && order != null && order.getContactName() != null) {
+            name = order.getContactName().trim();
+        }
+        if (!name.isEmpty()) {
+            profile.put("contactName", name);
+        }
+        Integer gender = customer != null && customer.getGender() != null
+                ? customer.getGender()
+                : (order == null ? null : order.getContactGender());
+        if (gender != null && (gender == 1 || gender == 2)) {
+            profile.put("contactGender", String.valueOf(gender));
+        }
+        LocalDate birthday = customer != null && customer.getBirthday() != null
+                ? customer.getBirthday()
+                : (order == null ? null : order.getContactBirthday());
+        if (birthday != null) {
+            profile.put("contactBirthday", birthday.toString());
+        }
+        return profile;
+    }
+
+    /**
+     * 会员档案（称呼/性别/生日）保存：以客户资料为唯一归档，先推 CRM 成功再回写订单。
+     *
+     * <p>历史实现只把这三项写在开卡订单上，会员中心查不到性别与生日；
+     * 现在统一落到 c_customer（称呼即会员昵称），CRM 与个人中心看到的是同一份资料。</p>
+     */
+    public Map<String, Object> saveMemberProfile(Long customerId, Map<String, Object> form) {
+        if (customerId == null) {
+            throw new BusinessException("请先登录", 401);
+        }
+        Map<String, Object> data = form == null ? new HashMap<>() : form;
+        String name = stringValue(data.get("contactName"));
+        if (name == null || name.codePointCount(0, name.length()) > BrandMemberProfileSync.NICKNAME_MAX) {
+            throw new BusinessException("称呼需在 1-" + BrandMemberProfileSync.NICKNAME_MAX + " 个字之间");
+        }
+        String genderText = stringValue(data.get("contactGender"));
+        if (!"1".equals(genderText) && !"2".equals(genderText)) {
+            throw new BusinessException("请选择性别");
+        }
+        Integer gender = Integer.valueOf(genderText);
+        LocalDate birthday = parseDate(stringValue(data.get("contactBirthday")));
+        if (birthday == null) {
+            throw new BusinessException("请选择生日");
+        }
+        if (birthday.isAfter(LocalDate.now())) {
+            throw new BusinessException("生日不能晚于今天");
+        }
+        // 会员中心是唯一归档：推失败直接报错，绝不让顾客以为改好了而两边不一致
+        customerService.updateProfile(customerId, customer -> {
+            customer.setNickname(name);
+            customer.setGender(gender);
+            customer.setBirthday(birthday);
+        });
+        MemberCardOrder order = latestOrder(customerId);
+        if (order != null) {
+            order.setContactName(name);
+            order.setContactGender(gender);
+            order.setContactBirthday(birthday);
+            orderMapper.updateById(order);
+        }
+        return latestProfile(customerId);
+    }
+
+    /**
+     * 下单时顺带填的会员档案：本地已保存，这里尽力同步到客户资料与会员中心，失败只记日志。
+     */
+    private void syncProfileToCustomer(MemberCardOrder order) {
+        if (order == null || order.getCustomerId() == null) {
+            return;
+        }
+        if (order.getContactName() == null && order.getContactGender() == null
+                && order.getContactBirthday() == null) {
+            return;
+        }
+        Customer patch = new Customer();
+        patch.setId(order.getCustomerId());
+        patch.setNickname(order.getContactName());
+        patch.setGender(order.getContactGender());
+        patch.setBirthday(order.getContactBirthday());
+        try {
+            customerService.updateById(patch);
+        } catch (Exception e) {
+            log.warn("开卡档案同步客户资料失败，customerId={} error={}", order.getCustomerId(), e.getMessage());
+        }
+    }
+
+    private MemberCardOrder latestOrder(Long customerId) {
+        return orderMapper.selectOne(new LambdaQueryWrapper<MemberCardOrder>()
+                .eq(MemberCardOrder::getCustomerId, customerId)
+                .orderByDesc(MemberCardOrder::getId)
+                .last("limit 1"));
     }
 
     /**
@@ -1388,7 +1545,7 @@ public class BrandCardPaymentService {
     }
 
     private String productName(String productCode) {
-        return PRODUCT_MONTH.equals(productCode) ? "Full愈月卡" : "Full愈年卡";
+        return BrandMemberNaming.DISPLAY_NAME;
     }
 
     private String stateText(Integer state) {

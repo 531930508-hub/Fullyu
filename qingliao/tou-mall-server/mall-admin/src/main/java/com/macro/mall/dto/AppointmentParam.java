@@ -9,6 +9,7 @@ import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -25,6 +26,9 @@ public class AppointmentParam {
     private String comment;//客户称呼
 
     private String note;//客户备注
+
+    @ApiModelProperty("客户生日 yyyy-MM-dd")
+    private LocalDate birthday;//客户生日，提交后写入客户档案
 
     private Long productId;
 
@@ -66,4 +70,10 @@ public class AppointmentParam {
 
     //1标识加钟，0标识新建
     private Integer addType = 0;
+
+    /**
+     * 加钟来源订单id：前台「加钟」弹窗会把原订单id带上来，用于把加钟单关联到原单
+     */
+    @ApiModelProperty("加钟来源订单id")
+    private Long orderId;
 }

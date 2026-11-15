@@ -1,8 +1,9 @@
 <template>
   <header class="navbar">
     <div class="navbar__left">
-      <button type="button" class="navbar-icon-btn" :title="sidebar.opened ? '收起导航' : '展开导航'"
-              :aria-label="sidebar.opened ? '收起导航' : '展开导航'" @click="toggleSideBar">
+      <!-- 桌面：展开 ⇄ 图标栏；移动端：抽屉开合 -->
+      <button type="button" class="navbar-icon-btn" :title="toggleTitle" :aria-label="toggleTitle"
+              @click="toggleSideBar">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
             <path d="M4 6.5h16M4 12h10M4 17.5h16"/>
@@ -14,8 +15,8 @@
     </div>
 
     <div class="navbar__right">
-      <router-link v-if="massagistId" to="/appointment/shift?tab=leave" class="todo-entry leave-entry"
-                   :class="{ 'is-active': $route.path === '/appointment/shift' && $route.query.tab === 'leave' }"
+      <router-link v-if="massagistId" to="/my-leave" class="todo-entry leave-entry"
+                   :class="{ 'is-active': $route.path === '/my-leave' }"
                    title="申请休息 / 我的请假">
         <span class="todo-entry__icon">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -41,6 +42,19 @@
         </span>
         <span class="todo-entry__label">待办</span>
       </router-link>
+
+      <button type="button" class="todo-entry message-entry" title="站内消息" @click="openInbox">
+        <span class="todo-entry__icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8.5a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16s-2-1.5-2-6.5Z"/>
+              <path d="M10.3 19a1.9 1.9 0 0 0 3.4 0"/>
+            </g>
+          </svg>
+          <span v-if="unreadCount" class="todo-entry__badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+        </span>
+        <span class="todo-entry__label">消息</span>
+      </button>
 
       <span class="navbar__divider" aria-hidden="true"></span>
 
@@ -81,6 +95,13 @@
     </div>
 
     <password-form ref="refPasswordForm"></password-form>
+
+    <!--
+      站内消息面板不复用 el-drawer：navbar 带 backdrop-filter 会成为 fixed 子元素的包含块，
+      而 el-drawer 的定位/动画/共享遮罩在个别浏览器里会出现「只有灰色遮罩、面板不见、整页点不动」。
+      这里改成自绘浮层（挂到 body 上、自己管理遮罩与层级），彻底摆脱这些问题。
+    -->
+    <inbox-panel :visible.sync="inboxVisible" :unread-count="unreadCount" @refresh="refreshUnread"></inbox-panel>
   </header>
 </template>
 
@@ -88,15 +109,26 @@
 import { mapGetters } from 'vuex'
 import Breadcrumb from '@/components/Breadcrumb'
 import PasswordForm from '@/views/layout/components/PasswordForm'
+import InboxPanel from '@/views/layout/components/InboxPanel'
+import messageApi from '@/api/adminMessage'
 
 export default {
   components: {
     PasswordForm,
+    InboxPanel,
     Breadcrumb
+  },
+  data() {
+    return {
+      unreadCount: 0,
+      inboxVisible: false,
+      messageTimer: null
+    }
   },
   computed: {
     ...mapGetters([
       'sidebar',
+      'device',
       'avatar',
       'name',
       'roles',
@@ -104,6 +136,15 @@ export default {
       'massagistId',
       'trainer'
     ]),
+    drawerVisible() {
+      return this.sidebar.opened
+    },
+    toggleTitle() {
+      if (this.device === 'mobile') {
+        return this.drawerVisible ? '收起导航' : '展开导航'
+      }
+      return this.sidebar.opened ? '收起为图标栏' : '展开导航'
+    },
     initial() {
       const text = (this.name || '愈').trim()
       return text.charAt(0).toUpperCase()
@@ -113,7 +154,32 @@ export default {
       return role || '运营成员'
     }
   },
+  mounted() {
+    this.refreshUnread()
+    // 轮询保持轻量：一分钟一次未读数，抽屉打开时才拉列表
+    // 用箭头函数包一层，直接传方法会丢 this，定时器里读不到组件实例
+    this.messageTimer = setInterval(() => this.refreshUnread(), 60000)
+  },
+  beforeDestroy() {
+    if (this.messageTimer) {
+      clearInterval(this.messageTimer)
+      this.messageTimer = null
+    }
+  },
   methods: {
+    async refreshUnread() {
+      try {
+        const res = await messageApi.unreadCount()
+        this.unreadCount = Number(res.data || 0)
+      } catch (e) {
+        // 消息服务异常不影响主流程
+      }
+    },
+    openInbox() {
+      // 再次点击铃铛即收起，避免误以为页面卡住
+      this.inboxVisible = !this.inboxVisible
+      if (this.inboxVisible) this.refreshUnread()
+    },
     toggleSideBar() {
       this.$store.dispatch('ToggleSideBar')
     },
@@ -121,7 +187,7 @@ export default {
       if (command === 'home') {
         this.$router.push('/')
       } else if (command === 'leave') {
-        this.$router.push({ path: '/appointment/shift', query: { tab: 'leave' } })
+        this.$router.push('/my-leave')
       } else if (command === 'rewards') {
         this.$router.push('/my-rewards')
       } else if (command === 'trainer') {
@@ -204,6 +270,12 @@ export default {
   }
 
   &:hover {
+    background: $brand-soft;
+    color: $brand;
+  }
+
+  // 侧边栏处于完全隐藏状态时的「显示导航」按钮
+  &.is-active {
     background: $brand-soft;
     color: $brand;
   }
@@ -339,6 +411,13 @@ export default {
     font-size: 12px;
     margin-left: 2px;
   }
+}
+
+.message-entry {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .leave-entry .todo-entry__icon {

@@ -72,7 +72,7 @@
       </el-form>
       <span slot="footer" class="dialog-footer">
         <el-button @click="handleClose">取 消</el-button>
-        <el-button type="primary" @click="onSubmit">确 定</el-button>
+        <el-button type="primary" :loading="submitting" @click="onSubmit">确 定</el-button>
       </span>
     </el-dialog>
   </div>
@@ -109,6 +109,8 @@ export default {
         },
       },
       isEdit: false,
+      submitting: false,
+      pendingMassagistIdList: null,
       clockInTime: '',
       clockOutTime: '',
     }
@@ -129,6 +131,8 @@ export default {
     },
     open(form = {}) {
       this.form = {...form}
+      // 周视图点空格子会带着“疗愈师 + 日期”进来，切换门店会清空人员，需要在切换后回填
+      this.pendingMassagistIdList = form.massagistIdList || null
       if (form.startTime) {
         this.$set(this.form, 'startTime', this.formatTime(form.startTime))
       }
@@ -139,9 +143,15 @@ export default {
       this.dialogVisible = true
       if (!form.id) {
         this.$nextTick(() => {
-          this.$refs.refShopSelector.change(this.shopId)
+          if (form.shopId) this.$refs.refShopSelector.change(form.shopId)
+          else this.$refs.refShopSelector.change(this.shopId)
           this.changeDate(this.formatTime(this.clockInTime), this.formatTime(this.clockOutTime))
+          if (this.pendingMassagistIdList && this.pendingMassagistIdList.length) {
+            this.$set(this.form, 'massagistIdList', this.pendingMassagistIdList)
+          }
+          this.pendingMassagistIdList = null
         })
+        return
       }
       if (form.shopId) {
         this.$nextTick(() => {
@@ -169,24 +179,31 @@ export default {
       this.form = {}
     },
     async onSubmit() {
+      if (this.submitting) return
       let validate = await this.$refs.refForm.validate().catch(() => false);
       if (!validate) {
         return
       }
+      this.submitting = true
       this.showFullLoading()
-      if(this.form.endTime=='24:00'){
-        this.form.endTime='23:59'
+      try {
+        const payload = {...this.form}
+        if (payload.endTime === '24:00') {
+          payload.endTime = '23:59'
+        }
+        if (this.isEdit) {
+          await massagistSchedulesApi.saveOrUpd(payload)
+        } else {
+          await massagistSchedulesApi.batchAdd(payload)
+        }
+        this.handleClose()
+        this.$notify.success('操作成功')
+        this.$store.dispatch('setMassagistList', true)
+        this.$emit('submit-success')
+      } finally {
+        this.hideFullLoading()
+        this.submitting = false
       }
-      if (this.isEdit) {
-        await massagistSchedulesApi.saveOrUpd(this.form)
-      } else {
-        await massagistSchedulesApi.batchAdd(this.form)
-      }
-      this.handleClose()
-      this.hideFullLoading()
-      this.$notify.success('操作成功')
-      this.$store.dispatch('setMassagistList', true)
-      this.$emit('submit-success')
     },
     selectedMassagit(item) {
       if (item) {

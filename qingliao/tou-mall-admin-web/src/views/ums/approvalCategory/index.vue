@@ -42,6 +42,13 @@
         </template>
       </div>
       <div class="legacy-line" v-else>
+        <div class="builtin-rule" v-if="item.code === 'askForLeave'">
+          <span class="builtin-tag">系统内置请假规则</span>
+          <span class="builtin-step">提前请假：店长审批</span>
+          <span class="builtin-step">当天请假：店长审批 → 总部CEO审批（二级）</span>
+          <span class="builtin-step">店长本人请假：直接由总部CEO审批</span>
+          <span class="muted">店长按本店在职的“店长”身份自动派单，本店没有在岗店长时请假会被拦下提示去配置；二级审批人为总部 CEO 账号（系统配置项指定）。点“配置”可改成自定义节点。</span>
+        </div>
         当前审批人：{{ legacyText(item) }}
         <span class="muted">（旧版逐级审批，点“配置”可改为流程节点）</span>
       </div>
@@ -288,6 +295,31 @@ export default {
   font-size: 13px;
   color: #606266;
   line-height: 1.8;
+}
+
+.builtin-rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f6f2ff;
+  border: 1px solid #e4dbff;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.builtin-tag {
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: #6a4bc4;
+  color: #fff;
+}
+
+.builtin-step {
+  color: #4b3f72;
 }
 
 .cc-line {

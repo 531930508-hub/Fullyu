@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.macro.mall.aspect.FullLog;
 import com.macro.mall.common.api.CommonResult;
 import com.macro.mall.dto.SchedulingParam;
+import com.macro.mall.entity.OrderDetail;
 import com.macro.mall.service.OrderDetailService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -12,6 +13,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -55,8 +57,7 @@ public class OrderDetailController {
     @PutMapping("/doing/exceArganizeMassagist")
     @ApiOperation("一键分配疗愈师")
     public CommonResult exceArganizeMassagist(@RequestParam Long id) {
-        service.exceArganizeMassagist(id);
-        return CommonResult.success();
+        return CommonResult.success(service.exceArganizeMassagist(id));
     }
 
     @ApiOperation("排班，按（床位/疗愈师）分组")

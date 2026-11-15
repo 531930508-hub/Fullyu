@@ -1,5 +1,6 @@
 package com.macro.mall.controller;
 
+import com.macro.mall.annotation.ExportLog;
 import com.macro.mall.common.api.CommonResult;
 import com.macro.mall.config.ContextMixin;
 import com.macro.mall.entity.GiftCard;
@@ -90,6 +91,7 @@ public class GiftCardController implements ContextMixin {
 
     @GetMapping("/export")
     @ApiOperation("导出")
+    @ExportLog(module = "gift_card", value = "礼品卡列表")
     public void export(@RequestParam Map<String, Object> params) {
         giftCardService.export(params);
     }

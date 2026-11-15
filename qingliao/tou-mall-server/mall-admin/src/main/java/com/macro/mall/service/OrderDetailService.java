@@ -16,7 +16,6 @@ import com.macro.mall.service.base.BaseService;
 import com.macro.mall.service.base.WrapperBuilder;
 import com.macro.mall.service.job.MassagistScheduled;
 import com.macro.mall.service.shop.BedService;
-import com.macro.mall.service.shop.RoomService;
 import com.macro.mall.service.shop.ShopService;
 import com.macro.mall.utils.DateUtil;
 import com.macro.mall.utils.BookingAvailability;
@@ -53,8 +52,6 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
     @Autowired
     ProjectService projectService;
     @Autowired
-    RoomService roomService;
-    @Autowired
     BedService bedService;
     @Autowired
     MassagistService massagistService;
@@ -78,6 +75,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
     @Autowired
     CustomerMassagistBlockService customerMassagistBlockService;
 
+    /** 床位周转间隔统一由 {@link com.macro.mall.utils.BookingAvailability#BED_TURNOVER_MINUTES} 提供。 */
+    private static final int BED_TURNOVER_MINUTES = BookingAvailability.BED_TURNOVER_MINUTES;
 
     @Override
     protected QueryWrapper<OrderDetail> buildWrapper(Map<String, Object> params, QueryWrapper<OrderDetail> queryWrapper) {
@@ -98,6 +97,36 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
      * @param isCreate       是否为新建订单
      */
     @Transactional(rollbackFor = Exception.class)
+    /**
+     * 已到店/已服务的明细行已经进了不可回退的阶段：改单时既不能删、也不能重建，
+     * 否则技师、到店状态、完成时间和点数归属都会被覆盖。
+     */
+    public static boolean isServedDetail(OrderDetail detail) {
+        if (detail == null) {
+            return false;
+        }
+        Integer state = detail.getState();
+        return AppointmentState.DOING.getValue().equals(state)
+                || AppointmentState.FINISHED.getValue().equals(state)
+                || detail.getFinishTime() != null;
+    }
+
+    /** 按项目统计已到店/已服务的行数，用于扣减改单时还需要重建的人数。 */
+    private Map<Long, Integer> countServedByProject(List<OrderDetail> servedDetails) {
+        if (CollectionUtils.isEmpty(servedDetails)) {
+            return Collections.emptyMap();
+        }
+        return servedDetails.stream()
+                .filter(d -> d.getProjectId() != null)
+                .collect(Collectors.groupingBy(OrderDetail::getProjectId, Collectors.summingInt(d -> 1)));
+    }
+
+    /** 单项目还需要重建的人数 = 下单人数 - 该项目已到店/已服务的人数。 */
+    private int effectivePersonCount(Integer personCount, Map<Long, Integer> servedByProject, Long projectId) {
+        int total = personCount == null ? 0 : personCount;
+        return Math.max(0, total - servedByProject.getOrDefault(projectId, 0));
+    }
+
     public void createDetail(OrderDetailDto orderDetailDto, boolean isManage, boolean isCreate) {
         Long shopId = orderDetailDto.getShopId();
         String key = "lockKey" + shopId;
@@ -121,6 +150,14 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             }
             List<OrderDetail> oldOrderDetailList = orderDetailDto.getOldOrderDetails();
             if (!CollectionUtils.isEmpty(oldOrderDetailList)) {
+                //已到店/已服务的行不参与重建，避免被换技师或回退成待服务
+                List<OrderDetail> editableOldList = oldOrderDetailList.stream()
+                        .filter(d -> !isServedDetail(d))
+                        .collect(Collectors.toList());
+                oldOrderDetailList = editableOldList.isEmpty() ? null : editableOldList;
+                orderDetailDto.setOldOrderDetails(oldOrderDetailList);
+            }
+            if (!CollectionUtils.isEmpty(oldOrderDetailList)) {
                 OrderDetail orderDetail = oldOrderDetailList.get(0);
                 if (DateUtil.toYYYYMMDD(orderDetail.getStartTime()).compareTo(DateUtil.toYYYYMMDD(orderDetailDto.getStartTime())) != 0) {
                     recoverSortId(oldOrderDetailList, RoundScheduleState.UPDATE_DATE);
@@ -139,36 +176,57 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 }
             }
             LocalDateTime startTime = orderDetailDto.getStartTime();
-            if (isManage) {
-                projectIdList.forEach(s -> detailList.addAll(pcNoCheckAndBuildOrderList(orderDetailDto.getShopId(), s, startTime,
-                        orderDetailDto.getDurationMinutes(),
-                        orderDetailDto.getPersonCount(),
-                        orderDetailDto.getMassagistIdList(),
-                        orderDetailDto.getBedIdList(),
-                        orderDetailDto.getOldOrderDetails(),
-                        isCreate, orderDetailDto.getAddType(), orderDetailDto.getCustomerId()
-                )));
-            } else {
-                projectIdList.forEach(s -> detailList.addAll(checkAndBuildOrderList(orderDetailDto.getShopId(), s, startTime,
-                        orderDetailDto.getDurationMinutes(),
-                        orderDetailDto.getPersonCount(),
-                        orderDetailDto.getMassagistIdList(),
-                        orderDetailDto.getBedIdList(),
-                        orderDetailDto.getOldOrderDetails(),
-                        isCreate, orderDetailDto.getCustomerId()
-                )));
+            Map<Long, Integer> servedByProject = countServedByProject(orderDetailDto.getServedOrderDetails());
+            for (Long projectId : projectIdList) {
+                int personCount = effectivePersonCount(orderDetailDto.getPersonCount(), servedByProject, projectId);
+                if (personCount <= 0) {
+                    //该项目的人已经全部到店/服务完毕，保留原明细行即可
+                    continue;
+                }
+                if (isManage) {
+                    detailList.addAll(pcNoCheckAndBuildOrderList(orderDetailDto.getShopId(), projectId, startTime,
+                            orderDetailDto.getDurationMinutes(),
+                            personCount,
+                            orderDetailDto.getMassagistIdList(),
+                            orderDetailDto.getBedIdList(),
+                            orderDetailDto.getOldOrderDetails(),
+                            isCreate, orderDetailDto.getAddType(), orderDetailDto.getCustomerId()
+                    ));
+                } else {
+                    detailList.addAll(checkAndBuildOrderList(orderDetailDto.getShopId(), projectId, startTime,
+                            orderDetailDto.getDurationMinutes(),
+                            personCount,
+                            orderDetailDto.getMassagistIdList(),
+                            orderDetailDto.getBedIdList(),
+                            orderDetailDto.getOldOrderDetails(),
+                            isCreate, orderDetailDto.getCustomerId(), orderDetailDto.getAddType()
+                    ));
+                }
             }
+            Long fromOrderId = orderDetailDto.getFromOrderId();
+            boolean isAddService = orderDetailDto.getAddType() != null && orderDetailDto.getAddType() == 1;
             detailList.forEach(s -> {
                 s.setOrderId(orderDetailDto.getOrderId());
                 s.setCustomerId(orderDetailDto.getCustomerId());
+                //加钟单记下原订单，后续自动分配疗愈师时据此优先原单疗愈师
+                if (fromOrderId != null && fromOrderId > 0) {
+                    s.setFromOrderId(fromOrderId);
+                }
                 if (isCreate) {
                     s.setIsUpdateSort(orderDetailDto.getIsUpdateSort());
                 }
+                //加钟是原单的延续，不占新一轮轮牌（视同指定疗愈师）
+                if (isAddService) {
+                    s.setIsUpdateSort(false);
+                }
             });
+            if (CollectionUtils.isEmpty(detailList)) {
+                return;
+            }
             saveBatch(detailList);
             extendShifts(detailList);
             //updateMassagistSort(detailList, DateUtil.toYYYYMMDD(startTime), shopId);
-            if (orderDetailDto.getIsUpdateSort()&&orderDetailDto.getMassagistIdList().size()>0) {
+            if (orderDetailDto.getIsUpdateSort() && !CollectionUtils.isEmpty(orderDetailDto.getMassagistIdList())) {
                 updateMassagistSort(detailList, DateUtil.toYYYYMMDD(startTime), shopId);//更新技师排序
             }
         }
@@ -187,8 +245,10 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
      * @return 填充了预约信息的订单详情列表
      */
     @Transactional(rollbackFor = Exception.class)
-    public List<OrderDetail> checkAndBuildOrderList(Long shopId, Long projectId, LocalDateTime startTime, Integer durationMinutes, Integer personCount, List<Long> massgistIdList, List<Long> bedIdList, List<OrderDetail> oldOrderDetails, boolean isCreate, Long customerId) {
+    public List<OrderDetail> checkAndBuildOrderList(Long shopId, Long projectId, LocalDateTime startTime, Integer durationMinutes, Integer personCount, List<Long> massgistIdList, List<Long> bedIdList, List<OrderDetail> oldOrderDetails, boolean isCreate, Long customerId, Integer addType) {
         boolean isSelectJiShi=!CollectionUtils.isEmpty(massgistIdList);//用于判断是否选了技师
+        //加钟是原单的延续，不占新一轮轮牌：全程不碰轮次排序，没指定疗愈师就留空待分配
+        boolean isAddService = Objects.equals(addType, 1);
         if (shopId == null) {
             shopId = 1L;
         }
@@ -211,12 +271,23 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         /*List<MassagistSchedules> allMassagistList = massagistSchedulesService.simpleListByDateAndShopId(date, shopId);*/
         List<MassagistSchedules> allMassagistList = massagistSchedulesService.getBaseMapper().findListByProjectIdAndShopId(shopId,"%"+projectId+"%",date);
         if (CollectionUtils.isEmpty(allMassagistList)) {
-            log.error("查询到店时间失败，没有疗愈师排班数据，date={}", date);
-            throw new BusinessException("抱歉，没有疗愈师排班数据");
-        } else if (personCount > allMassagistList.size()) {
+            if (!isAddService) {
+                log.error("查询到店时间失败，没有疗愈师排班数据，date={}", date);
+                throw new BusinessException("抱歉，没有疗愈师排班数据");
+            }
+            allMassagistList = new ArrayList<>();
+        } else if (!isAddService && personCount > allMassagistList.size()) {
             throw new BusinessException("抱歉，疗愈师不满足人数要求");
         }
-        List<OrderDetail> detailList = getBaseMapper().findSimpleListByStartDateAndShop(date, shopId);
+        //加钟可以超过下班时间：与前台加钟口径一致，下班时间顺延119分钟，否则原单疗愈师过了下班点就选不上
+        if (isAddService) {
+            allMassagistList.forEach(m -> {
+                if (m.getEndTime() != null) {
+                    m.setEndTime(m.getEndTime().plusMinutes(119));
+                }
+            });
+        }
+        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
         Map<Long, List<OrderDetail>> bedDetailMap = new HashMap<>(detailList.size());
         Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
         detailList.forEach(d -> {
@@ -246,7 +317,6 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             massagistDetailMap.put(d.getMassagistId(), massagistDetailList);
         });
         LocalDateTime endTime = DateUtil.addTimeByMinutes(startTime, durationMinutes);
-        LocalDateTime aEndTime = DateUtil.addTimeByMinutes(endTime, shop.getIntervalMinute());
         List<Bed> availableBedList = new ArrayList<>();
         allBedList.forEach(bed -> {
             List<OrderDetail> bedDetailList = bedDetailMap.get(bed.getId());
@@ -254,15 +324,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             if (CollectionUtils.isEmpty(bedDetailList)) {
                 isAvailable = true;
             } else {
-                isAvailable = bedDetailList.stream().allMatch(d -> {
-                    LocalDateTime detailEndTime = d.getEndTime();
-                    if(d.getProjectId()!=3){
-                        detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, shop.getIntervalMinute());//间隔15分钟；去掉间隔的
-                    }
-                   // detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, 0);//去掉打扫房间的15分钟shop.getIntervalMinute()
-                    return DateUtil.toHHmm(startTime).compareTo(DateUtil.toHHmm(detailEndTime)) >= 0
-                            || DateUtil.toHHmm(aEndTime).compareTo(DateUtil.toHHmm(d.getStartTime())) <= 0;
-                });
+                isAvailable = bedDetailList.stream().noneMatch(d ->
+                        BookingAvailability.bedOccupied(startTime, endTime, d, customerId));
             }
             if (isAvailable) {
                 availableBedList.add(bed);
@@ -312,8 +375,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
 
         List<MassagistSchedules> allPeople = massagistSchedulesService.getBaseMapper()
                 .findListByProjectIdAndShopId(shopId, "%%", date);
-        if (personCount > BookingAvailability.freeCount(startTime, endTime, allPeople, detailList, null)
-                || personCount > BookingAvailability.freeCount(startTime, endTime, allMassagistList, detailList, projectId)) {
+        if (!isAddService && (personCount > BookingAvailability.freeCount(startTime, endTime, allPeople, detailList, null)
+                || personCount > BookingAvailability.freeCount(startTime, endTime, allMassagistList, detailList, projectId))) {
             throw new BusinessException("抱歉，疗愈师不满足人数要求!");
         }
         if (!CollectionUtils.isEmpty(massgistIdList)) {
@@ -352,8 +415,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 availableMassagistList.add(m);
             }
         });
-        //luxin增加下单人数是否大于空闲技师人数，大于抛出异常
-        if(availableMassagistList.size() < personCount){
+        //luxin增加下单人数是否大于空闲技师人数，大于抛出异常；加钟只校验指定技师是否可用，不校验空闲总人数
+        if(!isAddService && availableMassagistList.size() < personCount){
             throw new BusinessException("抱歉，疗愈师不满足人数要求!");
         }
         /*if (CollectionUtils.isEmpty(availableMassagistList)) {
@@ -375,7 +438,10 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         List<Long> availableMassagistIdList = availableMassagistList.stream().map(MassagistSchedules::getMassagistId).collect(Collectors.toList());
         //自动派单跳过客户已设为暂别的疗愈师；员工明确指定的技师不受影响
         availableMassagistIdList = customerMassagistBlockService.excludeBlocked(customerId, availableMassagistIdList);
-        List<Long> sortedMassagistIdList = sortMassagist(availableMassagistIdList, startTime, endTime, shopId, personCount);
+        // 空闲疗愈师排序：加钟不碰轮牌（不读轮次、不写跳过原因），所以不做轮次排序
+        List<Long> sortedMassagistIdList = isAddService
+                ? new ArrayList<>()
+                : sortMassagist(availableMassagistIdList, startTime, endTime, shopId, personCount);
         List<Long> specifyMassagistIdList = new ArrayList<>();
         if (!CollectionUtils.isEmpty(massgistIdList)) {
             if (CollectionUtils.isEmpty(oldOrderDetails)) {//没有老详情，代表是创建，创建时记录指定技师
@@ -422,7 +488,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             }
         }
         int massagistRemainingCount = personCount - massgistIdList.size();
-        if (massagistRemainingCount > 0) {
+        //加钟不从轮牌里补人：没指定疗愈师的行留空待分配
+        if (massagistRemainingCount > 0 && !isAddService) {
             List<Long> allMassagistIdList = allMassagistList.stream().map(MassagistSchedules::getMassagistId).collect(Collectors.toList());
             allMassagistIdList = customerMassagistBlockService.excludeBlocked(customerId, allMassagistIdList);
             allMassagistIdList = sortMassagist(allMassagistIdList, startTime, endTime, shopId, personCount);
@@ -454,7 +521,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         Set<Long> idSet = orderDetailMap.keySet();
         Iterator<Long> iterator = idSet.iterator();
         for (int i = 0; i < personCount; i++) {
-            Long massagistId = massgistIdList.get(i);
+            //加钟单没指定疗愈师的行留空：人数比已排的疗愈师多时不再取人，直接待分配
+            Long massagistId = i < massgistIdList.size() ? massgistIdList.get(i) : null;
             OrderDetail detail = new OrderDetail();
             detail.setShopId(shopId);
             detail.setProjectId(projectId);
@@ -508,6 +576,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             lxCk=1;
         }
             boolean isSelectJiShi = !CollectionUtils.isEmpty(massgistIdList);//用于判断是否选了技师
+            //加钟是原单的延续，不占新一轮轮牌：全程不碰轮次排序，没指定疗愈师就留空待分配
+            boolean isAddService = Objects.equals(addType, 1);
             if (shopId == null) {
                 shopId = 1L;
             }
@@ -533,12 +603,15 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             List<MassagistSchedules> allMassagistList = massagistSchedulesService.getBaseMapper().findListByProjectIdAndShopId(shopId, "%" + projectId + "%", date);
 
             if (CollectionUtils.isEmpty(allMassagistList)) {
-                log.error("查询到店时间失败，没有疗愈师排班数据，date={}", date);
-                throw new BusinessException("抱歉，没有疗愈师排班数据");
-            } else if (personCount > allMassagistList.size()) {
+                if (!isAddService) {
+                    log.error("查询到店时间失败，没有疗愈师排班数据，date={}", date);
+                    throw new BusinessException("抱歉，没有疗愈师排班数据");
+                }
+                allMassagistList = new ArrayList<>();
+            } else if (!isAddService && personCount > allMassagistList.size()) {
                 throw new BusinessException("抱歉，疗愈师不满足人数要求");
             }
-            List<OrderDetail> detailList = getBaseMapper().findSimpleListByStartDateAndShop(date, shopId);
+            List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
             Map<Long, List<OrderDetail>> bedDetailMap = new HashMap<>(detailList.size());
             Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
             detailList.forEach(d -> {
@@ -568,7 +641,6 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 massagistDetailMap.put(d.getMassagistId(), massagistDetailList);
             });
             LocalDateTime endTime = DateUtil.addTimeByMinutes(startTime, durationMinutes);
-            LocalDateTime aEndTime = DateUtil.addTimeByMinutes(endTime, 0);
             List<Bed> availableBedList = new ArrayList<>();
             allBedList.forEach(bed -> {
                 List<OrderDetail> bedDetailList = bedDetailMap.get(bed.getId());
@@ -576,12 +648,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 if (CollectionUtils.isEmpty(bedDetailList)) {
                     isAvailable = true;
                 } else {
-                    isAvailable = bedDetailList.stream().allMatch(d -> {
-                        LocalDateTime detailEndTime = d.getEndTime();
-                        detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, 0);
-                        return DateUtil.toHHmm(startTime).compareTo(DateUtil.toHHmm(detailEndTime)) >= 0
-                                || DateUtil.toHHmm(aEndTime).compareTo(DateUtil.toHHmm(d.getStartTime())) <= 0;
-                    });
+                    isAvailable = bedDetailList.stream().noneMatch(d ->
+                            BookingAvailability.bedOccupied(startTime, endTime, d, customerId));
                 }
                 if (isAvailable) {
                     availableBedList.add(bed);
@@ -644,14 +712,16 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             allPeopleCountNew.add(m);
         }});*/
             allPeople.forEach(m -> {
-                //增加,如果是加钟，给疗愈师下班时间增加100分钟+++++++++++++++++++
-                if (addType == 1) {
-                    m.setEndTime(m.getEndTime().plusMinutes(119));
+                //如果是加钟，给疗愈师下班时间增加119分钟（只参与判断，不改排班对象，避免后面再叠加一次）
+                LocalDateTime closeAt = BookingAvailability.shiftEnd(m, startTime);
+                if (closeAt == null) return;
+                if (Objects.equals(addType, 1)) {
+                    closeAt = DateUtil.addTimeByMinutes(closeAt, 119);
                 }
                 // 判断预约开始时间是否不早于疗愈师上班时间 (>=)
-                boolean isAfterStart = !startTime.toLocalTime().isBefore(m.getStartTime());
-                // 判断预约开始时间是否不晚于疗愈师下班时间 (<=)
-                boolean isBeforeEnd = startTime.toLocalTime().isBefore(m.getEndTime());
+                boolean isAfterStart = m.getStartTime() != null && !startTime.toLocalTime().isBefore(m.getStartTime());
+                // 判断预约开始时间是否不晚于疗愈师下班时间 (<=)，普通下单必须早于下班时间
+                boolean isBeforeEnd = Objects.equals(addType, 1) ? !startTime.isAfter(closeAt) : startTime.isBefore(closeAt);
                 if (isAfterStart && isBeforeEnd) {
                     // 显示疗愈师
                     allPeopleCountNew.add(m);
@@ -664,23 +734,24 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             projectAllPeopleCountNew.add(m);
         }});*/
             projectAllPeople.forEach(m -> {
-                //增加,如果是加钟，给疗愈师下班时间增加100分钟+++++++++++++++++++
-                if (addType == 1) {
-                    m.setEndTime(m.getEndTime().plusMinutes(119));
+                //如果是加钟，给疗愈师下班时间增加119分钟（只参与判断，不改排班对象，避免后面再叠加一次）
+                LocalDateTime closeAt = BookingAvailability.shiftEnd(m, startTime);
+                if (closeAt == null) return;
+                if (Objects.equals(addType, 1)) {
+                    closeAt = DateUtil.addTimeByMinutes(closeAt, 119);
                 }
 
                 // 判断预约开始时间是否不早于疗愈师上班时间 (>=)
-                boolean isAfterStart = !startTime.toLocalTime().isBefore(m.getStartTime());
-                // 判断预约开始时间是否不晚于疗愈师下班时间 (<=)
-                boolean isBeforeEnd = startTime.toLocalTime().isBefore(m.getEndTime());
+                boolean isAfterStart = m.getStartTime() != null && !startTime.toLocalTime().isBefore(m.getStartTime());
+                // 判断预约开始时间是否不晚于疗愈师下班时间 (<=)，普通下单必须早于下班时间
+                boolean isBeforeEnd = Objects.equals(addType, 1) ? !startTime.isAfter(closeAt) : startTime.isBefore(closeAt);
                 if (isAfterStart && isBeforeEnd) {
-                    // 显示疗愈师
                     projectAllPeopleCountNew.add(m);
                 }
             });
             projectAllPeople = projectAllPeopleCountNew;
 
-            //需要增加判断开始下单时间以后的每个15分钟
+            //需要增加判断开始下单时间以后的每个15分钟（加钟不占轮牌，不做人数拦截）
             for (int i = 1; i <= (durationMinutes / 15); i++) {
                 count = personCount;
                 LocalDateTime startTimeCheck = startTime.plusMinutes((i - 1) * 15);
@@ -701,11 +772,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
 
                     for (OrderDetail d : detailList) {
                         LocalDateTime detailStartTime = d.getStartTime();
-                        //为每个订单结束时间增加15分钟
+                        //0 分钟周转：服务结束即可接下一单
                         LocalDateTime detailEndTime = d.getEndTime();
-                        if (addType != 1 && d.getProjectId() != 3) {//不是加钟指定订单，需要增加15分钟验证
-                            detailEndTime = d.getEndTime().plusMinutes(15);
-                        }
                         boolean bl = DateUtil.toHHmm(startTimeCheck).compareTo(DateUtil.toHHmm(detailStartTime)) >= 0
                                 && DateUtil.toHHmm(endTimeCheck).compareTo(DateUtil.toHHmm(detailEndTime)) <= 0;
                         if (bl) {
@@ -715,7 +783,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     }
                     count = count - result.size();
                 }
-                if (count > allPeople.size()&&lxCk != 1) {//lxck==1  说明订单是跨天订单 ，不再验证人数，只对结束的订单起作用
+                if (count > allPeople.size()&&lxCk != 1 && !isAddService) {//lxck==1  说明订单是跨天订单 ，不再验证人数，只对结束的订单起作用
                     throw new BusinessException("抱歉，疗愈师不满足人数要求!");
                 }
                 count = personCount;
@@ -734,10 +802,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     for (OrderDetail d : detailList) {
                         if (d.getProjectId() == projectId) {
                             LocalDateTime detailStartTime = d.getStartTime();
+                            // 0 分钟周转：服务结束即可接下一单
                             LocalDateTime detailEndTime = d.getEndTime();
-                            if (addType != 1 && d.getProjectId() != 3) {//不是加钟指定订单，需要增加15分钟验证
-                                detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, shop.getIntervalMinute());//间隔15分钟；去掉间隔的
-                            }
                             boolean bl = DateUtil.toHHmm(startTimeCheck).compareTo(DateUtil.toHHmm(detailStartTime)) >= 0
                                     && DateUtil.toHHmm(endTimeCheck).compareTo(DateUtil.toHHmm(detailEndTime)) <= 0;
                             if (bl) {
@@ -748,7 +814,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     }
                     count = count - result.size();
                 }
-                if (count > projectAllPeople.size()&&lxCk != 1) {
+                if (count > projectAllPeople.size()&&lxCk != 1 && !isAddService) {
                     throw new BusinessException("抱歉，疗愈师不满足人数要求!");
                 }
             }
@@ -764,26 +830,23 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 LocalDateTime lt=m.getEndTime().atDate(LocalDate.now());
                 m.setEndTime(DateUtil.addTimeByMinutes(lt, 100).toLocalTime());
             }*/
-                //将技师的下班时间往后延迟100分钟，避免有的订单在他下边前无法接待
-                //如果订单是在技师下边前下的，给技师增加100分下边时间
-                LocalDateTime lt = m.getEndTime().atDate(startTime.toLocalDate());
-                if (startTime.isBefore(lt) && addType == 0) {
-                    m.setEndTime(DateUtil.addTimeByMinutes(lt, 119).toLocalTime());
-                }
+                //下班时间换算成当天的绝对时间点：不晚于到店时间说明跨了午夜（自动延班到 00:xx），按次日算
+                LocalDateTime closeAt = BookingAvailability.shiftEnd(m, startTime);
+                //下班后还能接的截止时间：加钟客户还在店里，可以开在下班点之后；普通下单只按老口径算服务结束时间
+                LocalDateTime closeLimit = closeAt == null ? null : DateUtil.addTimeByMinutes(closeAt, 119);
+                //加钟允许在下班点上直接接续，普通下单仍需在下班前开始
+                boolean startingInShift = closeAt != null && (startTime.isBefore(closeAt)
+                        || (Objects.equals(addType, 1) && startTime.isBefore(closeLimit)));
+                boolean beforeShiftStart = m.getStartTime() != null && startTime.toLocalTime().isBefore(m.getStartTime());
 
-                if (DateUtil.toHHmm(m.getStartTime()).compareTo(DateUtil.toHHmm(startTime)) > 0
-                        || DateUtil.toHHmm(m.getEndTime()).compareTo(DateUtil.toHHmm(endTime)) < 0) {
+                if (!startingInShift || beforeShiftStart || endTime.isAfter(closeLimit)) {
                     log.info("技师id={},{}", m.getMassagistId(), "不在排班时间");
                     isAvailable = false;
                 } else if (CollectionUtils.isEmpty(massagistDetailList)) {
                     isAvailable = true;
                 } else {
-                    isAvailable = massagistDetailList.stream().allMatch(d -> {
-                        LocalDateTime detailEndTime = d.getEndTime();
-                        detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, 0);
-                        return DateUtil.toHHmm(startTime).compareTo(DateUtil.toHHmm(detailEndTime)) >= 0
-                                || DateUtil.toHHmm(aEndTime).compareTo(DateUtil.toHHmm(d.getStartTime())) <= 0;
-                    });
+                    isAvailable = massagistDetailList.stream().noneMatch(d ->
+                            BookingAvailability.overlaps(startTime, endTime, d.getStartTime(), d.getEndTime(), 0));
                     if (!isAvailable) {
                         log.info("技师id={},{}", massagistService.findNameById(m.getMassagistId()), "时间冲突");
                     }
@@ -793,8 +856,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 }
             });
 
-            //luxin增加下单人数是否大于空闲技师人数，大于抛出异常
-            if (availableMassagistList.size() < personCount&&lxCk != 1) {
+            //luxin增加下单人数是否大于空闲技师人数，大于抛出异常（加钟不占轮牌，没疗愈师也要能先建单）
+            if (availableMassagistList.size() < personCount && lxCk != 1 && !isAddService) {
                 throw new BusinessException("抱歉，疗愈师不满足人数要求!");
             }
 
@@ -810,8 +873,10 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             List<Long> availableMassagistIdList = availableMassagistList.stream().map(MassagistSchedules::getMassagistId).collect(Collectors.toList());
             //自动派单跳过客户已设为暂别的疗愈师；员工明确指定的技师不受影响
             availableMassagistIdList = customerMassagistBlockService.excludeBlocked(customerId, availableMassagistIdList);
-            // 空闲疗愈师排序
-            List<Long> sortedMassagistIdList = sortMassagist(availableMassagistIdList, startTime, endTime, shopId, personCount);
+            // 空闲疗愈师排序：加钟不碰轮牌（不读轮次、不写跳过原因），所以不做轮次排序
+            List<Long> sortedMassagistIdList = isAddService
+                    ? new ArrayList<>()
+                    : sortMassagist(availableMassagistIdList, startTime, endTime, shopId, personCount);
             //记录客户指定的技师
             List<Long> specifyMassagistIdList = new ArrayList<>();
             if (!CollectionUtils.isEmpty(massgistIdList)) {
@@ -860,7 +925,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 }
             }
             int massagistRemainingCount = personCount - massgistIdList.size();
-            if (massagistRemainingCount > 0) {
+            //加钟不从轮牌里补人：没指定疗愈师的行留空待分配
+            if (massagistRemainingCount > 0 && !isAddService) {
                 List<Long> allMassagistIdList = allMassagistList.stream().map(MassagistSchedules::getMassagistId).collect(Collectors.toList());
                 allMassagistIdList = customerMassagistBlockService.excludeBlocked(customerId, allMassagistIdList);
                 allMassagistIdList = sortMassagist(allMassagistIdList, startTime, endTime, shopId, personCount);
@@ -892,7 +958,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             Set<Long> idSet = orderDetailMap.keySet();
             Iterator<Long> iterator = idSet.iterator();
             for (int i = 0; i < personCount; i++) {
-                Long massagistId = massgistIdList.get(i);
+                //加钟单没指定疗愈师的行留空：人数比已排的疗愈师多时不再取人，直接待分配
+                Long massagistId = i < massgistIdList.size() ? massgistIdList.get(i) : null;
                 OrderDetail detail = new OrderDetail();
                 detail.setShopId(shopId);
                 detail.setProjectId(projectId);
@@ -1109,22 +1176,6 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         list.forEach(e -> e.setOrder(orderMap.get(e.getOrderId())));
     }
 
-    public void buildRoomName(List<OrderDetail> list) {
-        if (CollectionUtils.isEmpty(list)) {
-            return;
-        }
-        List<Long> roomIds = list.stream().filter(e -> !ObjUtil.isEmpty(e.getRoomId())).map(OrderDetail::getRoomId).collect(Collectors.toList());
-        if (CollectionUtils.isEmpty(roomIds)) {
-            return;
-        }
-        List<Room> rooms = roomService.listByIds(roomIds);
-        if (CollectionUtils.isEmpty(rooms)) {
-            return;
-        }
-        Map<Long, String> idNameMap = rooms.stream().filter(e -> !ObjUtil.isEmpty(e.getName())).collect(Collectors.toMap(Room::getId, Room::getName));
-        list.forEach(e -> e.setRoomName(idNameMap.get(e.getRoomId())));
-    }
-
     /**
      * 根据订单获取订单详情
      *
@@ -1254,41 +1305,83 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         //luxin增加，判断订单是否有技师，没有技师将系统自动安排技师
         if (detail.getMassagistId() == null||detail.getMassagistId()<=0) {
             int durationMinutes= (int) DateUtil.diffMinutes(detail.getStartTime(),detail.getEndTime());
-            long massagistId= getCustmerArriverShopDivideMessageId(detail.getShopId(),detail.getProjectId(),detail.getStartTime(),durationMinutes,1);
+            //加钟单优先安排被加钟单的疗愈师
+            List<Long> addSourceMassagistIdList = findAddSourceMassagistIdList(detail);
+            long massagistId= getCustmerArriverShopDivideMessageId(detail.getShopId(),detail.getProjectId(),detail.getStartTime(),durationMinutes,1,addSourceMassagistIdList);
             detail.setMassagistId(massagistId);
-            //更新技师排班顺序
+            if (addSourceMassagistIdList.contains(massagistId)) {
+                //加钟单沿用原单疗愈师：按"指定疗愈师、不计轮次"处理（看板显示指定角标，轮牌不前进）
+                detail.setIsUpdateSort(false);
+                detail.setSpecifyType(SpecifyType.PC.getValue());
+            } else {
+                // 系统按轮牌顺序指派的这一单必须计入轮次，否则该疗愈师轮次不前进、看板上会一直挂着"未计入轮次"角标
+                detail.setIsUpdateSort(true);
+                // 系统指派不是点名，清掉历史遗留的点钟标记
+                detail.setSpecifyType(0);
+            }
+            //更新技师排班顺序（updateMassagistSort 内部会跳过不计轮次的明细）
             List<OrderDetail> detailList = new ArrayList<>();
             detailList.add(detail);
             updateMassagistSort(detailList, DateUtil.toYYYYMMDD(detail.getStartTime()), detail.getShopId());//更新技师排序
         }
-        updateById(detail);
+        if (!updateById(detail)) {
+            throw new BusinessException("确认到店失败，请刷新后重试");
+        }
     }
     /**
      * 一键分配疗愈师
      *
-     * @param id
-     * @return
+     * @param id 订单详情id
+     * @return 实际生效的疗愈师信息，供前端确认"真的安排上了"，而不是只回一个空洞的成功
      */
     @Transactional(rollbackFor = Exception.class)
-    public void exceArganizeMassagist(Long id) {
+    public JSONObject exceArganizeMassagist(Long id) {
         OrderDetail detail = getById(id);
         if (detail == null) {
             throw new BusinessException("记录不存在");
         }
-        if (!AppointmentState.WAITING.getValue().equals(detail.getState())) {
-            //throw new BusinessException("状态异常");
+        if (AppointmentState.FINISHED.getValue().equals(detail.getState())
+                || AppointmentState.CANCELED.getValue().equals(detail.getState())) {
+            throw new BusinessException("订单已" + AppointmentState.getLabel(detail.getState()) + "，不能再安排疗愈师");
         }
-        //luxin增加，判断订单是否有技师，没有技师将系统自动安排技师
-        if (detail.getMassagistId() == null||detail.getMassagistId()<=0) {
-            int durationMinutes= (int) DateUtil.diffMinutes(detail.getStartTime(),detail.getEndTime());
-            long massagistId= getCustmerArriverShopDivideMessageId(detail.getShopId(),detail.getProjectId(),detail.getStartTime(),durationMinutes,1);
+        Long massagistId = detail.getMassagistId();
+        // 已有疗愈师时，先确认这位疗愈师还在职（避免历史脏id：库里是 0/-1 或疗愈师已被删除，前端却一直显示"未安排"）
+        boolean alreadyAssigned = massagistId != null && massagistId > 0 && massagistService.getById(massagistId) != null;
+        if (!alreadyAssigned) {
+            int durationMinutes = (int) DateUtil.diffMinutes(detail.getStartTime(), detail.getEndTime());
+            //加钟单优先安排被加钟单的疗愈师
+            List<Long> addSourceMassagistIdList = findAddSourceMassagistIdList(detail);
+            massagistId = getCustmerArriverShopDivideMessageId(detail.getShopId(), detail.getProjectId(),
+                    detail.getStartTime(), durationMinutes, 1, addSourceMassagistIdList);
             detail.setMassagistId(massagistId);
-            //更新技师排班顺序
+            if (addSourceMassagistIdList.contains(massagistId)) {
+                //加钟单沿用原单疗愈师：按"指定疗愈师、不计轮次"处理（看板会显示指定角标，轮牌不前进）
+                detail.setIsUpdateSort(false);
+                detail.setSpecifyType(SpecifyType.PC.getValue());
+            } else {
+                // 系统按轮牌顺序指派的这一单必须计入轮次，否则该疗愈师轮次不前进、下次一键安排还会优先选到同一个人，
+                // 看板上也会一直挂着"未计入轮次"的角标（一键安排完成后本不该出现这个角标）
+                detail.setIsUpdateSort(true);
+                // 系统指派不是客户/前台点名，清掉历史遗留的点钟标记（与拖拽换疗愈师的清理口径一致）
+                detail.setSpecifyType(0);
+            }
+            //更新技师排班顺序（updateMassagistSort 内部会跳过不计轮次的明细）
             List<OrderDetail> detailList = new ArrayList<>();
             detailList.add(detail);
             updateMassagistSort(detailList, DateUtil.toYYYYMMDD(detail.getStartTime()), detail.getShopId());//更新技师排序
+            if (!updateById(detail)) {
+                throw new BusinessException("安排疗愈师失败，请刷新后重试");
+            }
         }
-        updateById(detail);
+        Massagist massagist = massagistService.getById(massagistId);
+        if (massagist == null) {
+            throw new BusinessException("安排疗愈师失败，疗愈师信息不存在");
+        }
+        JSONObject result = new JSONObject();
+        result.put("massagistId", massagist.getId());
+        result.put("massagistName", massagist.getName());
+        result.put("alreadyAssigned", alreadyAssigned);
+        return result;
     }
 
 
@@ -1475,9 +1568,15 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     }
                 });
             }
+            //疗愈师只读看板：只返回本人一列
+            List<Massagist> viewResources = resources;
+            if (schedulingParam.getMassagistId() != null) {
+                Long onlyId = schedulingParam.getMassagistId();
+                viewResources = resources.stream().filter(e -> onlyId.equals(e.getId())).collect(Collectors.toList());
+            }
             List<OrderDetail> orderDetails = baseMapper.listBySchedulingParam(schedulingParam).stream().filter(t->t.getMassagistId()!=null).collect(Collectors.toList());
             return getScheduledResources(
-                    resources,
+                    viewResources,
                     orderDetails,
                     OrderDetail::getMassagistId
             );
@@ -1521,18 +1620,36 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
     }
 
     private void buildOrderCount(List<OrderDetail> orderDetails) {
-        List<Long> customerIds = orderDetails.stream().filter(e -> !ObjUtil.isEmpty(e.getCustomerId())).map(OrderDetail::getCustomerId).collect(Collectors.toList());
-        Map<Long, Long> customerIdCountMap = orderService.countMapByCustomerIds(customerIds);
-        if (CollectionUtils.isEmpty(customerIdCountMap)) {
-            return;
-        }
+        //到店次数优先用订单上静态写入的自然日编号；历史订单没写编号时按自然日排名现算（不回填库）
+        Set<Long> legacyCustomerIds = orderDetails.stream()
+                .filter(e -> e.getOrder() != null && e.getOrder().getVisitNo() == null)
+                .map(OrderDetail::getCustomerId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Integer> legacyOrderVisitNoMap = new HashMap<>();
+        legacyCustomerIds.forEach(customerId ->
+                legacyOrderVisitNoMap.putAll(orderService.visitNoMapByCustomer(customerId)));
         orderDetails.forEach(e -> {
             Customer customer = e.getCustomer();
-            if (customer != null) {
-                Long orderCount = customerIdCountMap.get(e.getCustomerId());
-                long l = orderCount != null ? orderCount : 0;
-                customer.setOrderCount(l + 1);//已完成订单数+1
+            if (customer == null) {
+                return;
             }
+            Order order = e.getOrder();
+            if (order != null) {
+                //取消/退款/超时的订单不占自然日，也不显示到店次数
+                if (!orderService.isVisitCounted(order)) {
+                    return;
+                }
+                Integer visitNo = order.getVisitNo() != null
+                        ? order.getVisitNo() : legacyOrderVisitNoMap.get(order.getId());
+                if (visitNo != null) {
+                    customer.setOrderCount(visitNo.longValue());
+                    return;
+                }
+            }
+            Long orderCount = orderService.countByCustomerId(e.getCustomerId());
+            long l = orderCount != null ? orderCount : 0;
+            customer.setOrderCount(l + 1);//已完成订单数+1
         });
     }
 
@@ -1607,6 +1724,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             Long oldBedId = orderDetail.getBedId();
             Long oldMassagistId = orderDetail.getMassagistId();
             Integer duration = orderDetail.getDuration();
+            LocalDateTime endDateTime = DateUtil.addTimeByMinutes(startDateTime, duration);
 
             //变更前数据用于补充日志
             JSONObject jsonObject = new JSONObject();
@@ -1614,11 +1732,27 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             jsonObject.put("startTime", oldStartDateTime);
             jsonObject.put("massagistId", oldMassagistId);
 
-            OrderDetail detail = null;
+            // 已完成/已取消的明细只是运营动作的事后调整：只挪它自己，不校验冲突、不互换、不动别人的排期
+            if (isFinishedState(orderDetail.getState())) {
+                if (bedId != null) {
+                    orderDetail.setBedId(bedId);
+                    orderDetail.setIsLockBed(true);
+                }
+                if (massagistId != null) {
+                    orderDetail.setMassagistId(massagistId);
+                }
+                orderDetail.setStartTime(startDateTime);
+                orderDetail.setEndTime(endDateTime);
+                updateById(orderDetail);
+                return jsonObject;
+            }
+
             Map<Long, Integer> typeMap = new HashMap<>();
             Map<Integer, Long> projectIdMap = new HashMap<>();
             if (bedId != null) {
-                //detail = getDetailByDateRange(bedId, null, startTime, id);
+                //目标床位在该时段已经有单：本次拖动直接不生效，不去改原来那单
+                throwIfOccupied(findOverlappingSchedules(shopId, null, bedId, startDateTime, endDateTime, id),
+                        "床位「" + (bed != null ? bed.getName() : bedId) + "」");
                 orderDetail.setBedId(bedId);
                 //换床位可能涉及到换项目
                 typeMap = bedService.findTypeMapByIdList(Arrays.asList(bedId, oldBedId));
@@ -1628,7 +1762,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     projectIdMap = projectService.findIdMapByTypeList(Arrays.asList(oldType, type));
                     orderDetail.setProjectId(projectIdMap.getOrDefault(type, orderDetail.getProjectId()));
 
-                    if (oldMassagistId != null&&orderDetail.getState()!= 2) {
+                    if (oldMassagistId != null) {
                         //将表OrderDetail 中massagistid 列设置为null
                         UpdateWrapper<OrderDetail> updateWrapper = new UpdateWrapper<>();
                         updateWrapper.eq("id", id)
@@ -1656,96 +1790,231 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 }
                 orderDetail.setIsLockBed(true);
             } else if (massagistId != null) {
+                //该疗愈师在这个时段已有排单或正在服务：本次拖动直接不生效，不去改原来那单
+                String massagistName = massagistService.findNameById(massagistId);
+                throwIfOccupied(findOverlappingSchedules(shopId, massagistId, null, startDateTime, endDateTime, id),
+                        "疗愈师「" + (massagistName != null ? massagistName : massagistId) + "」");
                 if (!massagistId.equals(oldMassagistId)) {
                     recoverSortId(Collections.singletonList(orderDetail), RoundScheduleState.UPDATE);
                     if (!ObjectUtils.isEmpty(orderDetail.getSpecifyType())) {
                         orderDetail.setSpecifyType(0);
                     }
                 }
-                detail = getDetailByDateRange(null, massagistId, startTime, id);
 
-                //查询床位是否被占用,换个空床位,接待任务除外
-                if (!projectService.isReceptionOrder(orderDetail.getProjectId())) {
-                    OrderDetail bedDetail = getDetailByDateRange(orderDetail.getBedId(), null, startTime, id);
-                    if (bedDetail != null) {
-                        Long availableBedId = findAvailableBedId(startDateTime, orderDetail.getProjectId(), orderDetail.getDuration(), shopId);
-                        if (availableBedId != null) {
-                            orderDetail.setBedId(availableBedId);
-                        }
+                //本单原来的床位在新时段被占用时，换一张同类型空床位（只动本单），接待任务除外
+                if (!projectService.isReceptionOrder(orderDetail.getProjectId())
+                        && !CollectionUtils.isEmpty(findOverlappingSchedules(shopId, null, orderDetail.getBedId(),
+                        startDateTime, endDateTime, id))) {
+                    Long availableBedId = findAvailableBedId(startDateTime, orderDetail.getProjectId(), orderDetail.getDuration(), shopId);
+                    if (availableBedId != null) {
+                        orderDetail.setBedId(availableBedId);
                     }
                 }
                 orderDetail.setMassagistId(massagistId);
             }
             orderDetail.setStartTime(startDateTime);
-            orderDetail.setEndTime(DateUtil.addTimeByMinutes(startDateTime, duration));
+            orderDetail.setEndTime(endDateTime);
 
-            if (detail == null) {
-                updateById(orderDetail);
-                extendShifts(Collections.singletonList(orderDetail));
-                if (massagistId != null && !massagistId.equals(oldMassagistId)) {
-                    updateMassagistSort(Collections.singletonList(orderDetail), DateUtil.toYYYYMMDD(startDateTime), orderDetail.getShopId());
-                }
-                return jsonObject;
+            updateById(orderDetail);
+            extendShifts(Collections.singletonList(orderDetail));
+            if (massagistId != null && !massagistId.equals(oldMassagistId)) {
+                updateMassagistSort(Collections.singletonList(orderDetail), DateUtil.toYYYYMMDD(startDateTime), orderDetail.getShopId());
             }
-
-            List<OrderDetail> orderDetailList = Arrays.asList(detail, orderDetail);
-            if (detail.getMassagistId().equals(oldMassagistId)) {
-                massagistId = null;
-            }
-            if (bedId != null) {
-                detail.setBedId(oldBedId);
-
-                //换床位可能涉及到换项目
-                Integer oldType = typeMap.getOrDefault(oldBedId, null);
-                Integer type = typeMap.getOrDefault(bedId, null);
-                if (oldType != null && type != null && !oldType.equals(type)) {
-                    detail.setProjectId(projectIdMap.getOrDefault(oldType, detail.getProjectId()));
-                }
-                detail.setIsLockBed(true);
-            }
-            if (massagistId != null) {
-                //交换技师：计入释放轮次
-                recoverSortId(orderDetailList, RoundScheduleState.UPDATE);
-                detail.setMassagistId(oldMassagistId);
-                //交换技师：计入技师轮次
-                updateMassagistSort(orderDetailList, DateUtil.toYYYYMMDD(startDateTime), detail.getShopId());
-            }
-            detail.setStartTime(oldStartDateTime);
-            detail.setEndTime(DateUtil.addTimeByMinutes(oldStartDateTime, detail.getDuration()));
-            updateBatchById(orderDetailList);
-            extendShifts(orderDetailList);
             return jsonObject;
         }
     }
 
-    private OrderDetail getDetailByDateRange(Long bedId, Long massagistId, String startTime, Long neId) {
-        LambdaQueryWrapper<OrderDetail> lqw = new LambdaQueryWrapper<>();
-        if (bedId != null) {
-            lqw.eq(OrderDetail::getBedId, bedId);
+    /**
+     * 改单弹窗原地更新：只换到店日期/时间、床位、疗愈师（改单弹窗没有人数、项目、时长字段，金额不变）。
+     * 因此不删明细行、不重建，保留明细 id、到店状态、排序与金额归属，避免"改个时间把单搞乱"。
+     * 已到店/已完成的行保持原样（只跟随支付方式）。
+     *
+     * @param orderDetails 订单现有明细（含已到店行）
+     * @param startDateTime 改单弹窗里的到店时间
+     * @param bedIdList     改单弹窗勾选的床位（为空表示不改床位）
+     * @param massagistIdList 改单弹窗勾选的疗愈师（null 表示没传、保留原值；空集合表示运营清空了疗愈师）
+     * @param shopId        改单弹窗里的门店（为空表示不改门店）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void applyOrderEdit(List<OrderDetail> orderDetails, LocalDateTime startDateTime,
+                               List<Long> bedIdList, List<Long> massagistIdList, Long shopId) {
+        if (CollectionUtils.isEmpty(orderDetails) || startDateTime == null) {
+            return;
         }
-        if (massagistId != null) {
-            lqw.eq(OrderDetail::getMassagistId, massagistId);
+        List<OrderDetail> details = orderDetails.stream()
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(OrderDetail::getId))
+                .collect(Collectors.toList());
+        for (int i = 0; i < details.size(); i++) {
+            OrderDetail detail = details.get(i);
+            if (isServedDetail(detail) || isFinishedState(detail.getState())) {
+                continue;
+            }
+            Long targetBedId = pickByIndex(bedIdList, i);
+            boolean massagistProvided = massagistIdList != null;
+            Long targetMassagistId = massagistProvided ? pickByIndex(massagistIdList, i) : detail.getMassagistId();
+            editDetailInPlace(detail, startDateTime, targetBedId, targetMassagistId, massagistProvided, shopId);
         }
-        if (neId != null) {
-            lqw.ne(OrderDetail::getId, neId);
-        }
-        lqw.eq(OrderDetail::getStartTime, startTime);
-        lqw.notIn(OrderDetail::getState, Arrays.asList(AppointmentState.FINISHED.getValue(), AppointmentState.CANCELED.getValue()));
-        OrderDetail onlyOne = getOnlyOne(lqw);
-        if (onlyOne == null) {
-            return null;
-        }
-        Integer specifyType = onlyOne.getSpecifyType();
-        if (!ObjectUtils.isEmpty(specifyType) && specifyType == 1) {
-            return null;
-        }
-        return onlyOne;
     }
 
+    /** 多人单已拆单，一般只有一行；按下标对齐勾选项，缺失时保留原值。 */
+    private Long pickByIndex(List<Long> list, int index) {
+        if (CollectionUtils.isEmpty(list) || index < 0 || index >= list.size()) {
+            return null;
+        }
+        return list.get(index);
+    }
+
+    /**
+     * 单行原地更新：时间/床位/疗愈师。只校验本次真正变化的资源，冲突时直接报错并说明被哪条单挡住。
+     */
+    private void editDetailInPlace(OrderDetail orderDetail, LocalDateTime startDateTime, Long bedId,
+                                   Long massagistId, boolean massagistProvided, Long shopId) {
+        Long oldBedId = orderDetail.getBedId();
+        Long oldMassagistId = orderDetail.getMassagistId();
+        LocalDateTime oldStart = orderDetail.getStartTime();
+        Long oldShopId = orderDetail.getShopId();
+        Long targetShopId = shopId != null ? shopId : oldShopId;
+        Integer duration = orderDetail.getDuration() == null ? 0 : orderDetail.getDuration();
+
+        boolean timeChanged = !startDateTime.equals(oldStart);
+        boolean bedChanged = bedId != null && !bedId.equals(oldBedId);
+        boolean massagistChanged = massagistProvided && !Objects.equals(massagistId, oldMassagistId);
+        boolean shopChanged = !Objects.equals(targetShopId, oldShopId);
+        if (!timeChanged && !bedChanged && !massagistChanged && !shopChanged) {
+            return;
+        }
+        Long effectiveBedId = bedId != null ? bedId : oldBedId;
+        LocalDateTime endDateTime = DateUtil.addTimeByMinutes(startDateTime, duration);
+        String date = DateUtil.toYYYYMMDD(startDateTime);
+        boolean dateChanged = oldStart == null || !date.equals(DateUtil.toYYYYMMDD(oldStart));
+
+        Bed bed = effectiveBedId != null ? bedService.getById(effectiveBedId) : null;
+        if (bed != null && NormalState.INVALID.getValue().equals(bed.getStatus())) {
+            throw new BusinessException(bed.getName() + "床位已经被关闭了");
+        }
+        String key = "lockKey" + targetShopId;
+        synchronized (key.intern()) {
+            //床位占用：15 分钟整理期只约束不同客户，同一客户紧接着的加钟段不算冲突
+            if (effectiveBedId != null && (bedChanged || timeChanged || shopChanged)) {
+                throwIfOccupied(
+                        withoutOwnContinuation(findOverlappingSchedules(targetShopId, null, effectiveBedId,
+                                startDateTime, endDateTime, orderDetail.getId()), orderDetail.getCustomerId(), startDateTime),
+                        "床位「" + (bed != null ? bed.getName() : effectiveBedId) + "」");
+            }
+            if (massagistId != null && (massagistChanged || timeChanged || shopChanged)) {
+                String massagistName = massagistService.findNameById(massagistId);
+                throwIfOccupied(findOverlappingSchedules(targetShopId, massagistId, null,
+                                startDateTime, endDateTime, orderDetail.getId()),
+                        "疗愈师「" + (massagistName != null ? massagistName : massagistId) + "」");
+            }
+            //轮到序号的还原：换天/换技师后先撤掉旧的轮次占用，再按新时间重排
+            if (dateChanged || massagistChanged) {
+                recoverSortId(Collections.singletonList(orderDetail),
+                        dateChanged ? RoundScheduleState.UPDATE_DATE : RoundScheduleState.UPDATE);
+            }
+            if (massagistChanged && !ObjectUtils.isEmpty(orderDetail.getSpecifyType())) {
+                orderDetail.setSpecifyType(0);
+            }
+            if (bedId != null) {
+                orderDetail.setBedId(bedId);
+                orderDetail.setIsLockBed(true);
+            }
+            if (massagistProvided) {
+                orderDetail.setMassagistId(massagistId);
+            }
+            orderDetail.setShopId(targetShopId);
+            orderDetail.setStartTime(startDateTime);
+            orderDetail.setEndTime(endDateTime);
+            updateById(orderDetail);
+            extendShifts(Collections.singletonList(orderDetail));
+            if (orderDetail.getMassagistId() != null && (massagistChanged || timeChanged || shopChanged)) {
+                updateMassagistSort(Collections.singletonList(orderDetail), date, targetShopId);
+            }
+        }
+    }
+
+    /** 同一客户在同一床位上的连续服务（加钟）不占用 15 分钟整理期。 */
+    private List<OrderDetail> withoutOwnContinuation(List<OrderDetail> conflicts, Long customerId, LocalDateTime start) {
+        if (CollectionUtils.isEmpty(conflicts)) {
+            return conflicts;
+        }
+        return conflicts.stream()
+                .filter(d -> !BookingAvailability.sameCustomerContinuation(customerId, start, d))
+                .collect(Collectors.toList());
+    }
+
+    /** 已完成/已取消：明细已进终态，看板上的拖动只是运营的事后调整。 */
+    private boolean isFinishedState(Integer state) {
+        return AppointmentState.FINISHED.getValue().equals(state)
+                || AppointmentState.CANCELED.getValue().equals(state);
+    }
+
+    /**
+     * 拖动落点的占用明细：同门店当天、状态 0/1/2 的明细，按半开区间判重叠（首尾相接不算冲突）。
+     * 已取消的单不占位；未来日期的已完成单不占位（与建单口径一致），当天已过去的已完成单仍然占位，
+     * 避免新单叠在已服务的疗愈师明细上把它盖住。massagistId / bedId 只按传入的一项校验。
+     */
+    private List<OrderDetail> findOverlappingSchedules(Long shopId, Long massagistId, Long bedId,
+                                                       LocalDateTime start, LocalDateTime end, Long excludeId) {
+        if (start == null || end == null || (massagistId == null && bedId == null)) {
+            return Collections.emptyList();
+        }
+        String date = DateUtil.toYYYYMMDD(start);
+        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(
+                getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
+        if (CollectionUtils.isEmpty(detailList)) {
+            return Collections.emptyList();
+        }
+        List<OrderDetail> conflicts = new ArrayList<>();
+        for (OrderDetail d : detailList) {
+            if (d == null || d.getId() == null) {
+                continue;
+            }
+            if (excludeId != null && excludeId.equals(d.getId())) {
+                continue;
+            }
+            if (AppointmentState.CANCELED.getValue().equals(d.getState())) {
+                continue;
+            }
+            if (massagistId != null && !massagistId.equals(d.getMassagistId())) {
+                continue;
+            }
+            if (massagistId == null && !bedId.equals(d.getBedId())) {
+                continue;
+            }
+            if (!BookingAvailability.overlaps(start, end, d.getStartTime(), d.getEndTime(), 0)) {
+                continue;
+            }
+            conflicts.add(d);
+        }
+        return conflicts;
+    }
+
+    /** 落点被占用时直接让本次拖动失败，并说清是哪条单挡住了，便于运营先调整它。 */
+    private void throwIfOccupied(List<OrderDetail> conflicts, String resourceLabel) {
+        if (CollectionUtils.isEmpty(conflicts)) {
+            return;
+        }
+        OrderDetail occupied = conflicts.get(0);
+        String range = occupied.getStartTime().toLocalTime() + "~" + occupied.getEndTime().toLocalTime();
+        throw new BusinessException(resourceLabel + " " + range + " 已有预约，本次拖动没有生效，请先调整原来那单或换个时段");
+    }
+
+    /**
+     * 预约时间窗口内的订单id
+     * 明细在窗口内开始，或昨日/更早开始但仍在窗口内服务（跨零点），都算命中
+     *
+     * @param startAppointmentTime 窗口起点
+     * @param endAppointmentTime   窗口终点
+     */
     public List<Long> orderIdListByStartTime(Object startAppointmentTime, Object endAppointmentTime) {
+        String start = startAppointmentTime.toString();
+        String end = endAppointmentTime.toString();
         LambdaQueryWrapper<OrderDetail> lqw = new LambdaQueryWrapper<>();
         lqw.select(OrderDetail::getOrderId);
-        lqw.between(OrderDetail::getStartTime, startAppointmentTime.toString(), endAppointmentTime.toString());
+        lqw.and(w -> w.between(OrderDetail::getStartTime, start, end)
+                .or(n -> n.lt(OrderDetail::getStartTime, start).gt(OrderDetail::getEndTime, start)));
         List<OrderDetail> list = list(lqw);
         if (!CollectionUtils.isEmpty(list)) {
             return list.stream().map(OrderDetail::getOrderId).distinct().collect(Collectors.toList());
@@ -1820,7 +2089,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         } else if (personCount > allMassagistList.size()) {
             throw new BusinessException("抱歉，疗愈师不满足人数要求");
         }
-        List<OrderDetail> detailList = getBaseMapper().findSimpleListByStartDateAndShop(date, shopId);
+        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
         Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
         detailList.forEach(d -> {
             List<OrderDetail> massagistDetailList = massagistDetailMap.get(d.getMassagistId());
@@ -1831,7 +2100,6 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             massagistDetailMap.put(d.getMassagistId(), massagistDetailList);
         });
         LocalDateTime endTime = DateUtil.addTimeByMinutes(startTime, durationMinutes);
-        LocalDateTime aEndTime = DateUtil.addTimeByMinutes(endTime, 0);
         // 空余疗愈师列表
         List<MassagistSchedules> availableMassagistList = new ArrayList<>();
         // 空余疗愈师列表
@@ -1847,15 +2115,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             } else if (CollectionUtils.isEmpty(massagistDetailList)) {
                 isAvailable = true;
             } else {
-                isAvailable = massagistDetailList.stream().allMatch(d -> {
-                    LocalDateTime detailEndTime = d.getEndTime();
-                   if(d.getProjectId()!=3){
-                       //接待订单去除验证服务订单的间隔15分钟
-                       detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, 15);
-                   }
-                    return DateUtil.toHHmm(startTime).compareTo(DateUtil.toHHmm(detailEndTime)) >= 0
-                            || DateUtil.toHHmm(aEndTime).compareTo(DateUtil.toHHmm(d.getStartTime())) <= 0;
-                });
+                isAvailable = massagistDetailList.stream().noneMatch(d ->
+                        BookingAvailability.overlaps(startTime, endTime, d.getStartTime(), d.getEndTime(), 0));
                 if (!isAvailable) {
                     log.info("技师id={},{}", massagistService.findNameById(m.getMassagistId()), "时间冲突");
                 }
@@ -1920,10 +2181,6 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 for (OrderDetail d : detailList) {
                     LocalDateTime detailStartTime = d.getStartTime();
                     LocalDateTime detailEndTime = d.getEndTime();
-                    if(d.getProjectId()!=3){
-                        //接待订单去除验证服务订单的间隔15分钟
-                        detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, 15);
-                    }
                     boolean bl = DateUtil.toHHmm(startTimeCheck).compareTo(DateUtil.toHHmm(detailStartTime)) >= 0
                             && DateUtil.toHHmm(endTimeCheck).compareTo(DateUtil.toHHmm(detailEndTime)) <= 0;
                     if (bl) {
@@ -2121,6 +2378,13 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
      * @return
      */
     public Long findAvailableBedId(LocalDateTime startTime, Long projectId, Integer durationMinutes, Long shopId) {
+        return findAvailableBedId(startTime, projectId, durationMinutes, shopId, null);
+    }
+
+    /**
+     * @param customerId 客户 id：同一客户在同一床位的连续服务（加钟）不占用 15 分钟整理期
+     */
+    public Long findAvailableBedId(LocalDateTime startTime, Long projectId, Integer durationMinutes, Long shopId, Long customerId) {
         Project project = projectService.getById(projectId);
         if (project == null) {
             log.error("查询正常床位失败，所有项目不可用");
@@ -2132,7 +2396,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             return null;
         }
         String date = DateUtil.toYYYYMMDD(startTime);
-        List<OrderDetail> detailList = getBaseMapper().findSimpleListByStartDateAndShop(date, shopId);
+        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
         Map<Long, List<OrderDetail>> bedDetailMap = new HashMap<>(detailList.size());
         Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
         detailList.forEach(d -> {
@@ -2152,7 +2416,6 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             massagistDetailMap.put(d.getMassagistId(), massagistDetailList);
         });
         LocalDateTime endTime = DateUtil.addTimeByMinutes(startTime, durationMinutes);
-        LocalDateTime aEndTime = DateUtil.addTimeByMinutes(endTime, 0);
         // 空余床位列表
         List<Bed> availableBedList = new ArrayList<>();
         allBedList.forEach(bed -> {
@@ -2161,13 +2424,9 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             if (CollectionUtils.isEmpty(bedDetailList)) {
                 isAvailable = true;
             } else {
-                isAvailable = bedDetailList.stream().allMatch(d -> {
-                    LocalDateTime detailEndTime = d.getEndTime();
-                    // 15分钟冗余用于应对收拾床位或上个客户迟到的情况
-                    detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, 0);
-                    return DateUtil.toHHmm(startTime).compareTo(DateUtil.toHHmm(detailEndTime)) >= 0
-                            || DateUtil.toHHmm(aEndTime).compareTo(DateUtil.toHHmm(d.getStartTime())) <= 0;
-                });
+                // 床位需要 15 分钟整理时间：上一单结束后 15 分钟内不再接单，下一单开始前 15 分钟内也不接
+                isAvailable = bedDetailList.stream().noneMatch(d ->
+                        BookingAvailability.bedOccupied(startTime, endTime, d, customerId));
             }
             if (isAvailable) {
                 availableBedList.add(bed);
@@ -2220,6 +2479,15 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
      * luxin新增；点击到店后，给未分配技师的订单分配技师
      */
     public long getCustmerArriverShopDivideMessageId(long shopId,long projectId, LocalDateTime startTime, int durationMinutes, int personCount) {
+        return getCustmerArriverShopDivideMessageId(shopId, projectId, startTime, durationMinutes, personCount, null);
+    }
+
+    /**
+     * 自动分配疗愈师，支持"优先疗愈师"（加钟单优先安排被加钟单的疗愈师，其余仍按轮牌顺序）。
+     *
+     * @param preferredMassagistIdList 优先疗愈师id列表，按优先级从高到低；在空闲列表内时排在轮牌排序结果最前面
+     */
+    public long getCustmerArriverShopDivideMessageId(long shopId,long projectId, LocalDateTime startTime, int durationMinutes, int personCount, List<Long> preferredMassagistIdList) {
 
         Shop shop = shopService.findAvailableById(shopId);
         if (shop == null) {
@@ -2238,7 +2506,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         } else if (personCount > allMassagistList.size()) {
             throw new BusinessException("抱歉，疗愈师不满足人数要求");
         }
-        List<OrderDetail> detailList = getBaseMapper().findSimpleListByStartDateAndShop(date, shopId);
+        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
         Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
         detailList.forEach(d -> {
             //luxin新增，当项目为全感项目时，把采耳项目加进来，并且采耳项目id为4
@@ -2250,7 +2518,6 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             massagistDetailMap.put(d.getMassagistId(), massagistDetailList);
         });
         LocalDateTime endTime = DateUtil.addTimeByMinutes(startTime, durationMinutes);
-        LocalDateTime aEndTime = DateUtil.addTimeByMinutes(endTime, 0);
 
         // 空余疗愈师列表
         List<MassagistSchedules> availableMassagistList = new ArrayList<>();
@@ -2272,15 +2539,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             } else if (CollectionUtils.isEmpty(massagistDetailList)) {
                 isAvailable = true;
             } else {
-                isAvailable = massagistDetailList.stream().allMatch(d -> {
-                    LocalDateTime detailEndTime = d.getEndTime();
-                    if(d.getProjectId()!=3){
-                        detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, shop.getIntervalMinute());//间隔15分钟；去掉间隔的
-                    }
-                    //detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, 15);//增加15分钟为每一单订单结束增加15分钟
-                    return DateUtil.toHHmm(startTime).compareTo(DateUtil.toHHmm(detailEndTime)) >= 0
-                            || DateUtil.toHHmm(aEndTime).compareTo(DateUtil.toHHmm(d.getStartTime())) <= 0;
-                });
+                isAvailable = massagistDetailList.stream().noneMatch(d ->
+                        BookingAvailability.overlaps(startTime, endTime, d.getStartTime(), d.getEndTime(), 0));
                 if (!isAvailable) {
                     log.info("技师id={},{}", m.getMassagistId(), "时间冲突");
                 }
@@ -2295,10 +2555,107 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             throw new BusinessException("抱歉，暂时没有空闲的疗愈师!");
         }
 
-        List<Long> availableMassagistIdList = availableMassagistList.stream().map(MassagistSchedules::getMassagistId).collect(Collectors.toList());
+        // 过滤脏数据：排班表里可能出现空值/0/-1 这类非法疗愈师id，不能带进排序，更不能写回订单
+        List<Long> availableMassagistIdList = availableMassagistList.stream()
+                .map(MassagistSchedules::getMassagistId)
+                .filter(Objects::nonNull)
+                .filter(massagistId -> massagistId > 0)
+                .distinct()
+                .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(availableMassagistIdList)) {
+            throw new BusinessException("抱歉，暂时没有空闲的疗愈师!");
+        }
         // 空闲疗愈师排序
         List<Long> sortedMassagistIdList = sortMassagist(availableMassagistIdList, startTime, endTime, shopId, personCount);
-        return sortedMassagistIdList.get(0);
+        //加钟单优先安排被加钟单的疗愈师：只要他此刻空闲就排到最前面，其余疗愈师顺序不变
+        sortedMassagistIdList = prioritizeMassagistIdList(sortedMassagistIdList, preferredMassagistIdList);
+        Long massagistId = CollectionUtils.isEmpty(sortedMassagistIdList) ? null : sortedMassagistIdList.get(0);
+        // 兜底校验：排序结果必须是一个真实存在的疗愈师，否则宁可报错回滚，也不写 0/-1 这类脏数据（前端会因此一直显示"未安排"）
+        if (massagistId == null || massagistId <= 0 || massagistService.getById(massagistId) == null) {
+            log.error("一键安排疗愈师失败，排序结果不可用，shopId={}, projectId={}, startTime={}, availableMassagistIdList={}, sortedMassagistIdList={}",
+                    shopId, projectId, startTime, availableMassagistIdList, sortedMassagistIdList);
+            throw new BusinessException("抱歉，暂时没有可安排的疗愈师，请检查疗愈师排班后重试");
+        }
+        return massagistId;
+    }
+
+    /**
+     * 把优先疗愈师提到排序结果最前面（只保留确实在可用列表里的），其余疗愈师顺序不变
+     */
+    private List<Long> prioritizeMassagistIdList(List<Long> sortedMassagistIdList, List<Long> preferredMassagistIdList) {
+        if (CollectionUtils.isEmpty(preferredMassagistIdList) || CollectionUtils.isEmpty(sortedMassagistIdList)) {
+            return sortedMassagistIdList;
+        }
+        List<Long> result = new ArrayList<>(sortedMassagistIdList.size());
+        for (Long preferredId : preferredMassagistIdList) {
+            if (preferredId != null && preferredId > 0 && sortedMassagistIdList.contains(preferredId) && !result.contains(preferredId)) {
+                result.add(preferredId);
+            }
+        }
+        for (Long massagistId : sortedMassagistIdList) {
+            if (!result.contains(massagistId)) {
+                result.add(massagistId);
+            }
+        }
+        log.info("加钟优先疗愈师排序：preferred={}, available={}, result={}", preferredMassagistIdList, sortedMassagistIdList, result);
+        return result;
+    }
+
+    /**
+     * 加钟来源疗愈师：加钟单应当优先安排"被加钟那一单"的疗愈师。
+     * 优先按加钟单上的 fromOrderId 找原单；小程序没传时按"同一客户、同门店、上一单结束时间正好是本单开始时间"推断。
+     *
+     * @return 来源明细上的疗愈师id（同床位、结束时间正好衔接的排在前面），没有则返回空列表
+     */
+    public List<Long> findAddSourceMassagistIdList(OrderDetail detail) {
+        if (detail == null || detail.getStartTime() == null) {
+            return Collections.emptyList();
+        }
+        List<OrderDetail> sourceList;
+        Long fromOrderId = detail.getFromOrderId();
+        if (fromOrderId != null && fromOrderId > 0) {
+            LambdaQueryWrapper<OrderDetail> lqw = new LambdaQueryWrapper<>();
+            lqw.eq(OrderDetail::getOrderId, fromOrderId);
+            if (detail.getId() != null && detail.getId() > 0) {
+                lqw.ne(OrderDetail::getId, detail.getId());
+            }
+            sourceList = list(lqw);
+        } else if (detail.getCustomerId() != null) {
+            LambdaQueryWrapper<OrderDetail> lqw = new LambdaQueryWrapper<>();
+            lqw.eq(OrderDetail::getCustomerId, detail.getCustomerId())
+                    .eq(OrderDetail::getEndTime, detail.getStartTime())
+                    .in(OrderDetail::getState, AppointmentState.WAITING.getValue(), AppointmentState.DOING.getValue())
+                    .ne(OrderDetail::getProjectId, 3);
+            if (detail.getShopId() != null) {
+                lqw.eq(OrderDetail::getShopId, detail.getShopId());
+            }
+            if (detail.getId() != null && detail.getId() > 0) {
+                lqw.ne(OrderDetail::getId, detail.getId());
+            }
+            sourceList = list(lqw);
+        } else {
+            return Collections.emptyList();
+        }
+        if (CollectionUtils.isEmpty(sourceList)) {
+            return Collections.emptyList();
+        }
+        //原单可能有多行（多人单）：先挑结束时间正好衔接本单的，再挑同床位的
+        List<OrderDetail> sorted = new ArrayList<>(sourceList);
+        sorted.sort(Comparator.comparingInt((OrderDetail d) -> Objects.equals(d.getEndTime(), detail.getStartTime()) ? 0 : 1)
+                .thenComparingInt(d -> Objects.equals(d.getBedId(), detail.getBedId()) ? 0 : 1)
+                .thenComparing(d -> d.getId() == null ? Long.MAX_VALUE : d.getId()));
+        List<Long> result = new ArrayList<>();
+        for (OrderDetail source : sorted) {
+            Long massagistId = source.getMassagistId();
+            if (massagistId != null && massagistId > 0 && !result.contains(massagistId)) {
+                result.add(massagistId);
+            }
+        }
+        if (!result.isEmpty()) {
+            log.info("加钟来源疗愈师：detailId={}, startTime={}, fromOrderId={}, sourceMassagistIdList={}",
+                    detail.getId(), detail.getStartTime(), fromOrderId, result);
+        }
+        return result;
     }
 
     /**
@@ -2328,6 +2685,14 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             }
             List<OrderDetail> oldOrderDetailList = orderDetailDto.getOldOrderDetails();
             if (!CollectionUtils.isEmpty(oldOrderDetailList)) {
+                //已到店/已服务的行不参与重建，避免被换技师或回退成待服务
+                List<OrderDetail> editableOldList = oldOrderDetailList.stream()
+                        .filter(d -> !isServedDetail(d))
+                        .collect(Collectors.toList());
+                oldOrderDetailList = editableOldList.isEmpty() ? null : editableOldList;
+                orderDetailDto.setOldOrderDetails(oldOrderDetailList);
+            }
+            if (!CollectionUtils.isEmpty(oldOrderDetailList)) {
                 OrderDetail orderDetail = oldOrderDetailList.get(0);
                 if (DateUtil.toYYYYMMDD(orderDetail.getStartTime()).compareTo(DateUtil.toYYYYMMDD(orderDetailDto.getStartTime())) != 0) {
                     if(orderDetail.getIsUpdateSort()){
@@ -2349,14 +2714,22 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             }
             LocalDateTime startTime = orderDetailDto.getStartTime();
 
-            projectIdList.forEach(s -> detailList.addAll(pcNoCheckAndBuildOrderList0410(orderDetailDto.getShopId(), s, startTime,
-                    orderDetailDto.getDurationMinutes(),
-                    orderDetailDto.getPersonCount(),
-                    orderDetailDto.getMassagistIdList(),
-                    orderDetailDto.getBedIdList(),
-                    orderDetailDto.getOldOrderDetails(),
-                    isCreate, orderDetailDto.getCustomerId()
-            )));
+            Map<Long, Integer> servedByProject = countServedByProject(orderDetailDto.getServedOrderDetails());
+            for (Long projectId : projectIdList) {
+                int personCount = effectivePersonCount(orderDetailDto.getPersonCount(), servedByProject, projectId);
+                if (personCount <= 0) {
+                    //该项目的人已经全部到店/服务完毕，保留原明细行即可
+                    continue;
+                }
+                detailList.addAll(pcNoCheckAndBuildOrderList0410(orderDetailDto.getShopId(), projectId, startTime,
+                        orderDetailDto.getDurationMinutes(),
+                        personCount,
+                        orderDetailDto.getMassagistIdList(),
+                        orderDetailDto.getBedIdList(),
+                        orderDetailDto.getOldOrderDetails(),
+                        isCreate, orderDetailDto.getCustomerId()
+                ));
+            }
             detailList.forEach(s -> {
                 s.setOrderId(orderDetailDto.getOrderId());
                 s.setCustomerId(orderDetailDto.getCustomerId());
@@ -2364,10 +2737,13 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     s.setIsUpdateSort(orderDetailDto.getIsUpdateSort());
                 }
             });
+            if (CollectionUtils.isEmpty(detailList)) {
+                return;
+            }
             saveBatch(detailList);
             extendShifts(detailList);
             //updateMassagistSort(detailList, DateUtil.toYYYYMMDD(startTime), shopId);
-            if (orderDetailDto.getIsUpdateSort()&&orderDetailDto.getMassagistIdList().size()>0) {
+            if (orderDetailDto.getIsUpdateSort() && !CollectionUtils.isEmpty(orderDetailDto.getMassagistIdList())) {
                 updateMassagistSort(detailList, DateUtil.toYYYYMMDD(startTime), shopId);//更新技师排序
             }
         }
@@ -2403,7 +2779,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         } else if (personCount > allMassagistList.size()) {
             throw new BusinessException("抱歉，疗愈师不满足人数要求");
         }
-        List<OrderDetail> detailList = getBaseMapper().findSimpleListByStartDateAndShop(date, shopId);
+        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
         Map<Long, List<OrderDetail>> bedDetailMap = new HashMap<>(detailList.size());
         Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
         detailList.forEach(d -> {
@@ -2433,7 +2809,6 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             massagistDetailMap.put(d.getMassagistId(), massagistDetailList);
         });
         LocalDateTime endTime = DateUtil.addTimeByMinutes(startTime, durationMinutes);
-        LocalDateTime aEndTime = DateUtil.addTimeByMinutes(endTime, 0);
 
 
 
@@ -2536,12 +2911,9 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             } else if (CollectionUtils.isEmpty(massagistDetailList)) {
                 isAvailable = true;
             } else {
-                isAvailable = massagistDetailList.stream().allMatch(d -> {
-                    LocalDateTime detailEndTime = d.getEndTime();
-                    detailEndTime = DateUtil.addTimeByMinutes(detailEndTime, 0);
-                    return DateUtil.toHHmm(startTime).compareTo(DateUtil.toHHmm(detailEndTime)) >= 0
-                            || DateUtil.toHHmm(aEndTime).compareTo(DateUtil.toHHmm(d.getStartTime())) <= 0;
-                });
+                // 疗愈师侧没有周转间隔：上一单结束即是下一单可开始时间
+                isAvailable = massagistDetailList.stream().noneMatch(d ->
+                        BookingAvailability.overlaps(startTime, endTime, d.getStartTime(), d.getEndTime(), 0));
                 if (!isAvailable) {
                     log.info("技师id={},{}", massagistService.findNameById(m.getMassagistId()), "时间冲突");
                 }

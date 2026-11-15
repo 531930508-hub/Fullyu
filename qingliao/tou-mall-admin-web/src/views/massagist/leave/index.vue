@@ -24,7 +24,12 @@
       <el-table :data="dataList"
                 style="width: 100%;"
                 v-loading="listLoading" border>
-        <el-table-column label="审批类别" prop="approval.categoryTitle"></el-table-column>
+        <el-table-column label="审批类别" prop="approval.categoryTitle">
+          <template slot-scope="scope">
+            {{ scope.row.approval.categoryTitle }}
+            <span v-if="scope.row.leaveSameDay" class="same-day-tag">当天请假</span>
+          </template>
+        </el-table-column>
 <!--        <el-table-column label="当前审批人" prop="approvingUserId">
           <template slot-scope="scope">{{ scope.row.approvingUserId | adminUsernameFilter }}</template>
         </el-table-column>-->
@@ -32,6 +37,12 @@
         <el-table-column label="审批状态" prop="approval.state">
 
           <template slot-scope="scope">{{ scope.row.approval.state | approvalStateFilter }}</template>
+        </el-table-column>
+        <el-table-column label="抄送人员" min-width="160">
+          <template slot-scope="scope">
+            <span v-if="ccNames(scope.row).length">{{ ccNames(scope.row).join('、') }}</span>
+            <span v-else class="c-info">未抄送</span>
+          </template>
         </el-table-column>
         <el-table-column label="创建时间" prop="createTime"></el-table-column>
         <el-table-column label="创建人" prop="createUser">
@@ -82,18 +93,13 @@
 <script>
 import {mapGetters} from 'vuex'
 import approvalDetailApi from "@/api/approvalDetail";
-import approvalCategoryApi from "@/api/shop/approvalCategory";
 import massagistLeaveApi from "@/api/massagistLeave";
 import ApprovalProgress from "@/views/order/approval/ApprovalProgress";
-import RefundForm from "@/views/order/RefundForm";
-import ApprovalCategorySelector from "@/views/ums/approvalCategory/ApprovalCategorySelector";
-import ShopSelector from "@/views/shop/shopList/ShopSelector";
 import MassagistLeaveForm from "@/views/massagist/leave/MassagistLeaveForm";
-import {getInfoNew} from "@/api/login";
 
 export default {
   name: 'index',
-  components: {ApprovalCategorySelector, RefundForm, ApprovalProgress,ShopSelector,MassagistLeaveForm},
+  components: {ApprovalProgress, MassagistLeaveForm},
   props: {},
   data() {
     return {
@@ -103,7 +109,6 @@ export default {
         targetUserId: this.userId,
         flowUserType: 1,
         order: '-id',
-       /* shopId:this.shopId*/
       },
       total: 0,
       listError: '',
@@ -112,13 +117,11 @@ export default {
     }
   },
   computed: {
-    ...mapGetters(['userId','shopId','massagistId'])
+    ...mapGetters(['userId', 'adminUserList'])
   },
   created() {
-    this.searchForm.shopId=this.shopId
     this.$store.dispatch('setAdminUserList')
-    this.$store.dispatch('setShopList')
-    this.getApprovalCategory();
+    this.searchData()
   },
   methods: {
     handleAdd(){
@@ -128,27 +131,12 @@ export default {
       this.searchForm.page = 1
       this.fetchData()
     },
-    async getApprovalCategory() {
-      console.log(this.massagistId)
-      //获取疗愈师真正的店铺id
-      let memberInfo=await getInfoNew()
-      let res = await approvalCategoryApi.listByShopId({shopId:memberInfo.data.shopId})
-      let list = res.data;
-      if (list.length) {
-        list.forEach(item => {
-          if(item.title=='请假审批'){
-            this.searchForm.categoryId=item.id
-          }
-        });
-      }
-      this.searchData()
-    },
     async fetchData() {
       const seq = ++this.fetchSeq
       this.showFullLoading()
       try {
         this.searchForm.targetUserId = this.userId
-        const res = await approvalDetailApi.page({...this.searchForm})
+        const res = await approvalDetailApi.pageLeave({...this.searchForm})
         if (seq !== this.fetchSeq) return
         const {list, total} = (res && res.data) || {}
         this.dataList = list || []
@@ -198,6 +186,12 @@ export default {
     },
     info(row) {
       this.$refs.refApprovalProgress.open(row)
+    },
+    //抄送人id转姓名，账号已删除时显示ID
+    ccNames(row) {
+      const ids = (row && row.ccUserIdList) || []
+      const list = this.adminUserList || []
+      return ids.map(id => (list.find(u => u.id == id) || {}).nickName || ('#' + id))
     }
   },
   filters: {
@@ -219,5 +213,16 @@ export default {
 }
 .button-container {
   text-align: right; /* 或者使用 flex 布局 */
+}
+.same-day-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #a33a12;
+  background: #fdf0e9;
+  border: 1px solid #f0bfa6;
 }
 </style>

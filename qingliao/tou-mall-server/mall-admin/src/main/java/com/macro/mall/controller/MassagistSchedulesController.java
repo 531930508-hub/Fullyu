@@ -25,20 +25,28 @@ public class MassagistSchedulesController {
     @Autowired MassagistSchedulesService massagistSchedulesService;
     @Autowired IncentiveAccessService access;
     @Autowired ControllerLogService controllerLogService;
+    @Autowired com.macro.mall.service.MassagistService massagistService;
+    @Autowired com.macro.mall.service.shop.ShopService shopService;
 
     private void requireManage(Long shopId) {
-        if (access.currentAdmin().getMassagistId() != null && !access.isGlobal())
+        if (!access.canManageSchedules())
             throw new BusinessException("请由门店管理人员操作排班");
         access.requireShopAccess(shopId);
     }
+    private void requireManageTarget(Long shopId) {
+        if (shopId == null || shopId <= 0) return;
+        if (!access.canManageSchedules())
+            throw new BusinessException("请由门店管理人员操作排班");
+        access.requireTransferShopAccess(shopId);
+    }
     private void requireManage(MassagistSchedules request) {
         requireManage(request.getShopId());
-        if (request.getTargetShopId() != null && request.getTargetShopId() > 0) requireManage(request.getTargetShopId());
+        requireManageTarget(request.getTargetShopId());
         if (request.getId() != null) {
             MassagistSchedules old = massagistSchedulesService.getById(request.getId());
             if (old == null) throw new BusinessException("排班记录不存在");
             requireManage(old.getShopId());
-            if (old.getTargetShopId() != null && old.getTargetShopId() > 0) requireManage(old.getTargetShopId());
+            requireManageTarget(old.getTargetShopId());
         }
     }
 
@@ -100,29 +108,69 @@ public class MassagistSchedulesController {
         for (MassagistSchedules s : massagistSchedulesService.list(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<MassagistSchedules>()
                 .eq(MassagistSchedules::getMassagistId,massagistId).eq(MassagistSchedules::getShopId,shopId)
                 .ge(MassagistSchedules::getDay,java.time.LocalDate.now()))) {
-            if (s.getTargetShopId() != null && s.getTargetShopId() > 0) requireManage(s.getTargetShopId());
+            if (s.getTargetShopId() != null && s.getTargetShopId() > 0) requireManageTarget(s.getTargetShopId());
         }
         return CommonResult.success(massagistSchedulesService.clearFuture(massagistId,shopId,LocalDateTime.now()));
     }
+    @PostMapping("/restoreTransfer")
+    @ApiOperation("撤销调店并恢复原店排班")
+    public CommonResult restoreTransfer(@RequestParam Long id) {
+        MassagistSchedules row = massagistSchedulesService.getById(id);
+        if (row == null) throw new BusinessException("调店记录不存在");
+        requireManage(row);
+        return CommonResult.success(massagistSchedulesService.restoreTransfer(id));
+    }
     @GetMapping("/changeLogs")
     @ApiOperation("排班变更前后值与操作者")
-    public CommonResult changeLogs(@RequestParam Long shopId, @RequestParam(required=false) Long massagistId,
+    public CommonResult changeLogs(@RequestParam(required=false) Long shopId, @RequestParam(required=false) Long massagistId,
+                                   @RequestParam(required=false) String startDate, @RequestParam(required=false) String endDate,
                                    @RequestParam(defaultValue="1") int page, @RequestParam(defaultValue="10") int size) {
-        requireManage(shopId);
+        // 变动日志页可能不传门店（授权内只有一家时自动定位），因此先按授权范围解析门店再校验。
+        Long resolvedShopId = access.resolveShopId(shopId);
+        if (resolvedShopId == null) throw new BusinessException("请选择门店");
+        requireManage(resolvedShopId);
         QueryWrapper<ControllerLog> query = new QueryWrapper<ControllerLog>().eq("source","schedule-audit")
-                .likeRight("title","排班变更:" + shopId + ":" + (massagistId == null ? "" : massagistId + ":"))
+                .likeRight("title","排班变更:" + resolvedShopId + ":" + (massagistId == null ? "" : massagistId + ":"))
                 .orderByDesc("id");
+        if (org.springframework.util.StringUtils.hasText(startDate)) query.ge("create_time", startDate.trim() + " 00:00:00");
+        if (org.springframework.util.StringUtils.hasText(endDate)) query.le("create_time", endDate.trim() + " 23:59:59");
         PageHelper.startPage(Math.max(1,page),Math.max(1,Math.min(100,size)));
         List<ControllerLog> rows;
         try { rows = controllerLogService.list(query); } finally { PageHelper.clearPage(); }
         PageInfo<ControllerLog> info = new PageInfo<>(rows);
+        Map<Long,String> massagistNames = massagistNameMap(rows);
+        String shopName = shopName(resolvedShopId);
         List<JSONObject> result = new ArrayList<>();
         for (ControllerLog row : rows) {
             JSONObject item = JSONObject.parseObject(row.getParams());
             item.put("id",row.getId()); item.put("operatorId",row.getCreateUser()); item.put("createTime",row.getCreateTime());
+            item.put("shopId",resolvedShopId); item.put("shopName",shopName);
+            Long mid = item.getLong("massagistId");
+            item.put("massagistName",mid == null ? null : massagistNames.get(mid));
             result.add(item);
         }
         JSONObject response = new JSONObject(); response.put("list",result); response.put("total",info.getTotal());
         return CommonResult.success(response);
+    }
+
+    /** 日志里只有疗愈师 id，列表需要显示姓名；一次批量取回，避免逐行查询。 */
+    private Map<Long,String> massagistNameMap(List<ControllerLog> rows) {
+        Set<Long> ids = new HashSet<>();
+        for (ControllerLog row : rows) {
+            JSONObject item = JSONObject.parseObject(row.getParams());
+            Long mid = item == null ? null : item.getLong("massagistId");
+            if (mid != null && mid > 0) ids.add(mid);
+        }
+        if (ids.isEmpty()) return Collections.emptyMap();
+        Map<Long,String> names = new HashMap<>();
+        for (com.macro.mall.entity.Massagist m : massagistService.listByIds(ids)) {
+            names.put(m.getId(), m.getName());
+        }
+        return names;
+    }
+
+    private String shopName(Long shopId) {
+        com.macro.mall.entity.Shop shop = shopService.getById(shopId);
+        return shop == null ? null : shop.getName();
     }
 }

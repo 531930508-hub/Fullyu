@@ -18,14 +18,6 @@ export function shopRecommendFilter(value) {
   return '无'
 }
 
-export function roomTypeFilter(value) {
-  const list = constant.roomType
-  if (list && list.length) {
-    return (list.find(u => u.value == value) || {label: '未设置'}).label
-  }
-  return '无'
-}
-
 export function miniImageTypeFilter(value) {
   const list = constant.miniImageType
   if (list && list.length) {
@@ -62,14 +54,6 @@ export function shopNameFilter(value) {
   const shopList = store.getters.shopListAll
   if (shopList && shopList.length) {
     return (shopList.find(u => u.id == value) || {name: '-'}).name
-  }
-  return '无'
-}
-
-export function roomNameFilter(value) {
-  const shopList = store.getters.roomList
-  if (shopList && shopList.length) {
-    return (shopList.find(u => u.id == value) || {name: '未设置'}).name
   }
   return '无'
 }
@@ -268,6 +252,47 @@ export function activityFilter(value) {
     return (list.find(u => u.id == value) || {title: '无'}).title
   }
   return '无'
+}
+
+// 超级管理员需要看到完整手机号/称呼（对账、客服回拨、导出核对），其余角色一律脱敏
+const SUPER_ADMIN_ROLE = '超级管理员'
+
+export function isSuperAdminUser() {
+  return (store.getters.roles || []).indexOf(SUPER_ADMIN_ROLE) > -1
+}
+
+// 顾客手机号展示脱敏：11 位保留前 4 位与后 4 位，中间以 *** 占位；异常长度只保留首尾各 1-2 位
+// 只用于「显示」，行数据本身保持真实号码，编辑回填、查询条件、拨号链接都不会被污染
+function maskPhoneValue(value) {
+  const phone = value == null ? '' : String(value).trim()
+  if (!phone) return ''
+  if (phone.indexOf('*') >= 0) return phone
+  if (phone.length === 11) {
+    return phone.slice(0, 4) + '***' + phone.slice(-4)
+  }
+  if (phone.length <= 4) {
+    return new Array(phone.length + 1).join('*')
+  }
+  const keep = phone.length >= 8 ? 2 : 1
+  const maskLength = Math.max(phone.length - keep * 2, 1)
+  return phone.slice(0, keep) + new Array(maskLength + 1).join('*') + phone.slice(-keep)
+}
+
+// 顾客手机号展示脱敏（表格列 / 详情文本用）
+export function maskPhoneFilter(value) {
+  if (isSuperAdminUser()) return value == null ? '' : String(value).trim()
+  return maskPhoneValue(value)
+}
+
+// 客户称呼脱敏：系统按「用户+手机号」生成的昵称、或昵称本身就是号码时，一并遮住中间三位
+export function maskNicknameFilter(value) {
+  const name = value == null ? '' : String(value).trim()
+  if (!name) return name
+  if (isSuperAdminUser()) return name
+  const auto = /^用户(1\d{10})$/.exec(name)
+  if (auto) return '用户' + maskPhoneValue(auto[1])
+  if (/^1\d{10}$/.test(name)) return maskPhoneValue(name)
+  return name
 }
 
 //疗愈师技能

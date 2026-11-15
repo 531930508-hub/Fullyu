@@ -36,6 +36,7 @@
       </div>
       <div style="width: 30%" class="flex justify-end">
         <el-popover
+          v-if="isAdmin"
           placement="bottom"
           width="200"
           trigger="click">
@@ -46,64 +47,86 @@
             <el-button type="primary" size="mini" @click="handleExport('vcf')">vCard</el-button>
           </div>
         </el-popover>
-        <el-button @click="openBasicCustomerTag" icon="el-icon-files" style="margin-left: 20px">
-          基础标签
+        <el-button @click="goTagManage" icon="el-icon-files" style="margin-left: 20px">
+          标签管理
         </el-button>
       </div>
     </div>
     <div class="table-container">
       <el-table ref="refTable" :data="dataList" style="width: 100%;" border>
-        <!--        <el-table-column label="账号" min-width="200" header-align="center" align="left" prop="userName"
-                                  show-overflow-tooltip></el-table-column>-->
-
-        <el-table-column label="手机号" header-align="center" align="center" prop="phone"
-                         min-width="200"></el-table-column>
-        <el-table-column label="昵称" header-align="center" align="left" prop="nickname" min-width="200"
-                         show-overflow-tooltip>
+        <el-table-column label="客户" header-align="left" align="left" min-width="190" fixed="left">
           <template slot-scope="scope">
-            {{ scope.row.nickname }}
+            <div class="customer-cell hover-click" @click="handleEditCustomer(scope.row)">
+              <el-image v-if="scope.row.avatar" class="customer-avatar" :src="scope.row.avatar"
+                        :preview-src-list="[scope.row.avatar]" fit="cover" @click.stop></el-image>
+              <span v-else class="customer-avatar customer-avatar--empty">
+                {{ (scope.row.nickname || '客')[0] }}
+              </span>
+              <div class="customer-cell__main">
+                <span class="ellipsis">{{ (scope.row.nickname | maskNicknameFilter) || '未设置昵称' }}</span>
+                <i v-if="scope.row.gender == 1" class="el-icon-male c-blue" title="男"></i>
+                <i v-else-if="scope.row.gender == 2" class="el-icon-female c-danger" title="女"></i>
+              </div>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="称呼 Name" header-align="center" align="left" prop="comment" min-width="120"
+        <el-table-column label="手机号" header-align="left" align="left" prop="phone" width="130">
+          <template slot-scope="scope">{{ scope.row.phone | maskPhoneFilter }}</template>
+        </el-table-column>
+        <el-table-column label="称呼" header-align="left" align="left" prop="comment" min-width="100"
                          show-overflow-tooltip>
           <template slot-scope="scope">
-            <span class="hover-click" @click="handleEditCustomer(scope.row)">
+            <span v-if="scope.row.comment" class="hover-click" @click="handleEditCustomer(scope.row)">
               {{ scope.row.comment }}
               <i class="el-icon-edit"></i>
             </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="性别 Gender" header-align="center" align="left" prop="gender" min-width="120"
-                         show-overflow-tooltip>
-          <template slot-scope="scope">
-            <span class="hover-click" @click="handleEditCustomer(scope.row)">
-              <span v-if="scope.row.gender">
-                <i v-if="scope.row.gender == 1" class="el-icon-male c-blue bold"></i>
-                <i v-else-if="scope.row.gender == 2" class="el-icon-female c-danger bold"></i>
-              </span>
-              <i class="el-icon-edit"></i>
+            <span v-else class="text-placeholder hover-click" @click="handleEditCustomer(scope.row)">
+              待补充 <i class="el-icon-edit"></i>
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="备注 Note" header-align="center" align="left" prop="comment" min-width="120"
+        <el-table-column label="备注" header-align="left" align="left" prop="note" min-width="150"
                          show-overflow-tooltip>
           <template slot-scope="scope">
-            <span class="hover-click" @click="handleEditCustomer(scope.row)">
+            <span v-if="scope.row.note" class="hover-click" @click="handleEditCustomer(scope.row)">
               {{ scope.row.note }}
               <i class="el-icon-edit"></i>
             </span>
+            <span v-else class="text-placeholder hover-click" @click="handleEditCustomer(scope.row)">
+              待补充 <i class="el-icon-edit"></i>
+            </span>
           </template>
         </el-table-column>
-        <el-table-column label="头像" header-align="center" align="center" min-width="100" prop="coverImageUrls">
+        <el-table-column label="生日" header-align="center" align="center" prop="birthday" width="130">
           <template slot-scope="scope">
-            <el-image v-if="scope.row.avatar" style="height: 40px;width: 40px"
-                      :src="scope.row.avatar" :preview-src-list="[scope.row.avatar]"
-                      fit="fill"></el-image>
-            <span v-else>无</span>
+            <span v-if="scope.row.birthday" class="hover-click" @click="handleEditCustomer(scope.row)">
+              {{ birthdayLabel(scope.row.birthday) }}
+              <span v-if="isBirthdayToday(scope.row.birthday)" class="birthday-flag">今天</span>
+            </span>
+            <span v-else class="text-placeholder hover-click" @click="handleEditCustomer(scope.row)">
+              待补充
+            </span>
           </template>
         </el-table-column>
-        <el-table-column label="可用券数" header-align="center" align="center" prop="couponCount"
-                         width="140">
+        <el-table-column label="注册时间" header-align="center" align="center" prop="createTime"
+                         width="155"></el-table-column>
+
+        <el-table-column label="客户标签" header-align="left" align="left" min-width="230">
+          <template slot-scope="scope">
+            <div class="tag-cell hover-click" @click="openCustomerTag(scope.row)">
+              <template v-if="scope.row.customerTagNames && scope.row.customerTagNames.length">
+                <el-tag v-for="name in scope.row.customerTagNames.slice(0, 2)" :key="name" size="mini"
+                        class="tag-cell__item">{{ name }}</el-tag>
+                <el-tooltip v-if="scope.row.customerTagNames.length > 2"
+                            :content="scope.row.customerTagNames.join('、')" placement="top">
+                  <el-tag size="mini" type="info">+{{ scope.row.customerTagNames.length - 2 }}</el-tag>
+                </el-tooltip>
+              </template>
+              <span v-else class="text-placeholder">点击添加</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="可用券" header-align="center" align="center" prop="couponCount" width="90">
           <template slot-scope="scope">
             <el-tag class="hover-click" size="mini" @click="openCustomerCoupon(scope.row)">
               {{ scope.row.couponCount || 0 }}张
@@ -111,42 +134,26 @@
           </template>
         </el-table-column>
         <el-table-column label="积分" header-align="center" align="center" prop="integration"
-                         width="140">
+                         width="90">
         </el-table-column>
-        <el-table-column label="品牌会员" header-align="center" align="center" width="140">
+        <el-table-column label="品牌会员" header-align="center" align="center" width="100">
           <template slot-scope="scope">
             <el-tag v-if="scope.row.brandCardLocked === 1" size="mini" type="danger">已锁定</el-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="注册时间" header-align="center" align="center" prop="createTime"
-                         width="155"></el-table-column>
-        <el-table-column label="疗愈师偏好" header-align="center" align="center" min-width="160">
+        <el-table-column label="疗愈师偏好" header-align="center" align="center" min-width="140">
           <template slot-scope="scope">
             <span class="hover-click" @click.stop="openTherapistDrawer(scope.row)">
               收藏 {{ getPreference(scope.row.id).favorite }} · 暂别 {{ getPreference(scope.row.id).block }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="客户标签" header-align="center" align="center" min-width="100">
-          <template slot-scope="scope">
-            <span v-if="scope.row.customerTagList && scope.row.customerTagList.length" class="hover-click"
-                  @click="openCustomerTag(scope.row)">
-              <el-tag size="mini">{{ scope.row.customerTagList.length }}个标签</el-tag>
-            </span>
-            <span v-else class="hover-click" @click="openCustomerTag(scope.row)">点击添加</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="推荐人" min-width="200" header-align="center" align="center"
+        <el-table-column label="推荐人" min-width="120" header-align="center" align="center"
                          prop="referrerCustomerName">
         </el-table-column>
         <el-table-column label="更新时间" header-align="center" align="center" prop="updateTime"
                          width="155"></el-table-column>
-        <!--        <el-table-column label="操作" width="140" header-align="center" align="center">
-                  <template slot-scope="scope">
-
-                  </template>
-                </el-table-column>-->
       </el-table>
     </div>
     <div class="pagination-container">
@@ -162,8 +169,7 @@
         :total="total">
       </el-pagination>
     </div>
-    <basic-customer-tag-drawer ref="refBasicCustomerTagDrawer"></basic-customer-tag-drawer>
-    <customer-tag-drawer ref="refCustomerTagDrawer"></customer-tag-drawer>
+    <customer-tag-drawer ref="refCustomerTagDrawer" @change="fetchData"></customer-tag-drawer>
     <customer-coupon-drawer ref="refCustomerCouponDrawer" @submit-success="fetchData"></customer-coupon-drawer>
     <customer-form-dialog ref="refCustomerFormDialog" @submit-success="fetchData"></customer-form-dialog>
     <customer-therapist-drawer ref="refCustomerTherapistDrawer" @change="loadPreferenceCounts(dataList)"/>
@@ -173,7 +179,6 @@
 <script>
 import {mapGetters} from 'vuex'
 import customerApi from '@/api/customer';
-import BasicCustomerTagDrawer from './components/BasicCustomerTagDrawer.vue'
 import BasicCustomerTagCascader from './components/BasicCustomerTagCascader.vue'
 import CustomerTagDrawer from './components/CustomerTagDrawer.vue'
 import CustomerCouponDrawer from "./components/CustomerCouponDrawer"
@@ -182,6 +187,8 @@ import BasicCustomerTagSelector from "./components/BasicCustomerTagSelector";
 import fileUtil from "@/utils/fileUtil"
 import CustomerTherapistDrawer from "./components/CustomerTherapistDrawer"
 import customerMassagistBlockApi from "@/api/customer/customerMassagistBlock"
+import { isBirthdayToday as checkBirthdayToday, birthdayMonthDayLabel } from "@/utils/birthday"
+import basicCustomerTagApi from "@/api/customer/basicCustomerTag"
 import dateUtil from "../../utils/dateUtil"
 
 export default {
@@ -190,7 +197,7 @@ export default {
     CustomerTherapistDrawer,
     BasicCustomerTagSelector,
     CustomerFormDialog,
-    CustomerCouponDrawer, CustomerTagDrawer, BasicCustomerTagCascader, BasicCustomerTagDrawer
+    CustomerCouponDrawer, CustomerTagDrawer, BasicCustomerTagCascader
   },
   props: {},
   data() {
@@ -202,33 +209,96 @@ export default {
       },
       total: 0,
       dataList: [],
+      basicTagTitleMap: {},
       preferenceCountMap: {},
+      listSeq: 0,
       dateTime: [],
       dateTime2: []
     }
   },
   computed: {
-    ...mapGetters([])
+    ...mapGetters(['roles']),
+    // 导出含完整手机号，仅超级管理员可见入口
+    isAdmin() {
+      return (this.roles || []).indexOf('超级管理员') > -1
+    }
   },
   created() {
-    this.searchData()
+    this.init()
   },
   methods: {
+    isBirthdayToday(birthday) {
+      return checkBirthdayToday(birthday)
+    },
+    birthdayLabel(birthday) {
+      return birthdayMonthDayLabel(birthday)
+    },
+    async init() {
+      await this.loadBasicTagTitles()
+      this.searchData()
+    },
+    async loadBasicTagTitles() {
+      try {
+        const res = await basicCustomerTagApi.all()
+        const map = {}
+        const walk = (list) => {
+          (list || []).forEach(item => {
+            if (!item) return
+            if (item.id != null && item.title) {
+              map[item.id] = item.title
+            }
+            walk(item.children)
+          })
+        }
+        walk(res.data)
+        this.basicTagTitleMap = map
+      } catch (e) {
+        this.basicTagTitleMap = {}
+      }
+    },
+    resolveCustomerTagNames(tags) {
+      if (!Array.isArray(tags)) return []
+      const names = []
+      tags.forEach(tag => {
+        if (tag == null) return
+        const isEntity = typeof tag === 'object'
+        const basicTagId = isEntity
+          ? (tag.basicCustomerTagId != null ? tag.basicCustomerTagId : tag.id)
+          : tag
+        let name = isEntity ? (tag.title || tag.name) : ''
+        if (!name || /^\d+$/.test(String(name).trim())) {
+          name = this.basicTagTitleMap[basicTagId]
+        }
+        name = name == null ? '' : String(name).trim()
+        if (name && names.indexOf(name) === -1) {
+          names.push(name)
+        }
+      })
+      return names
+    },
     searchData() {
       this.searchForm.page = 1
       this.fetchData()
     },
     async fetchData() {
-      this.showFullLoading()
-      let res = await customerApi.page({
-        ...this.searchForm,
-        customerTag: this.searchForm.customerTag != null ? this.searchForm.customerTag.join(",") : ''
-      })
-      this.hideFullLoading()
-      let {list, total} = res.data
-      this.dataList = list || []
-      this.total = total || 0
-      this.loadPreferenceCounts(this.dataList)
+      const seq = ++this.listSeq
+      try {
+        this.showFullLoading()
+        let res = await customerApi.page({
+          ...this.searchForm,
+          customerTag: this.searchForm.customerTag != null ? this.searchForm.customerTag.join(",") : ''
+        })
+        if (seq !== this.listSeq) return
+        let {list, total} = res.data
+        this.dataList = (list || []).map(item => ({
+          ...item,
+          customerTagNames: this.resolveCustomerTagNames(item.customerTagList)
+        }))
+        this.total = total || 0
+        this.loadPreferenceCounts(this.dataList)
+      } finally {
+        if (seq === this.listSeq) this.hideFullLoading()
+      }
     },
     async loadPreferenceCounts(customers) {
       const customerIds = (customers || []).map(c => c.id).filter(id => id != null)
@@ -261,8 +331,8 @@ export default {
       this.searchForm.page = val;
       this.fetchData();
     },
-    openBasicCustomerTag() {
-      this.$refs.refBasicCustomerTagDrawer.open()
+    goTagManage() {
+      this.$router.push({path: '/crm/tag'})
     },
     openCustomerTag(row) {
       let nickname = this.customerTitle(row)
@@ -326,8 +396,9 @@ export default {
       if (comment && gender) {
         return comment + (gender == 1 ? '先生' : gender == 2 ? '女士' : '')
       }
-      if (nickname && nickname == '用户' + phone) {
-        return phone
+      const maskPhone = this.$options.filters['maskPhoneFilter']
+      if (nickname && (nickname === '用户' + phone || /^1\d{10}$/.test(nickname))) {
+        return maskPhone(phone || nickname)
       }
       return nickname
     }
@@ -338,5 +409,76 @@ export default {
 <style rel="stylesheet/less" lang="less" scoped>
 .index {
   padding: 0 20px;
+}
+
+.customer-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.customer-avatar {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 50%;
+}
+
+.customer-avatar--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f3f6;
+  color: #98a2b3;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.customer-cell__main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #1d2939;
+  font-weight: 500;
+
+  .ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.tag-cell {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+
+  .tag-cell__item {
+    display: inline-block;
+    max-width: 108px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+}
+
+.text-placeholder {
+  color: #b0b7c3;
+}
+
+.birthday-flag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: rgba(255, 138, 101, 0.16);
+  color: #e8590c;
+  font-size: 11px;
+  line-height: 17px;
 }
 </style>

@@ -22,6 +22,12 @@ export default {
       params:{approvalId}
     })
   },
+  defaultCcUsers() {
+    return request({
+      url: '/massagistLeave/defaultCcUsers',
+      method: 'get'
+    })
+  },
   getMessagistShopId(massagistId) {
     return request({
       url: '/massagistLeave/getMessagistShopId',

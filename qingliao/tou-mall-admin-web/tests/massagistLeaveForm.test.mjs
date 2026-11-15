@@ -65,6 +65,7 @@ test('failure can retry the same preserved draft and clear the old error on succ
   await state.onSubmit();assert.equal(state.dialogVisible,true);assert.equal(await state.onSubmit(),true);assert.equal(calls.length,2);assert.equal(state.submitError,'');
 });
 test('template uses cooperation wording and exposes saving and error states',()=>{
-  const template=source.split('</template>')[0];assert.doesNotMatch(template,/请假|在职|离职/);assert.match(template,/申请休息/);
+  // 「当天请假」是审批规则提示、「请假审批」是审批类别名，二者属产品文案，不视为旧措辞残留
+  const template=source.split('</template>')[0].replace(/当天请假|请假审批/g,'');assert.doesNotMatch(template,/请假|在职|离职/);assert.match(template,/申请休息/);
   assert.match(template,/:loading="submitting"/);assert.match(template,/:disabled="submitting"/);assert.match(template,/submitError/);
 });

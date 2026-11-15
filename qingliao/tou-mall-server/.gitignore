@@ -12,3 +12,5 @@ target/
 
 /logs/*
 /*/logs/*
+# 本地发布配置（含服务器地址，不进仓库）
+scripts/deploy.local.env

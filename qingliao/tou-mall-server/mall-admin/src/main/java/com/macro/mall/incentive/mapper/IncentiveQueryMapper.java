@@ -1,6 +1,7 @@
 package com.macro.mall.incentive.mapper;
 
 import com.macro.mall.incentive.model.CustomerVisit;
+import com.macro.mall.incentive.model.SalaryDetailRow;
 import com.macro.mall.incentive.model.ServiceDetailRow;
 import org.apache.ibatis.annotations.Param;
 
@@ -18,6 +19,15 @@ public interface IncentiveQueryMapper {
                                                 @Param("massagistId") Long massagistId,
                                                 @Param("start") LocalDateTime start,
                                                 @Param("end") LocalDateTime end);
+
+    /**
+     * 算薪口径的有效订单明细：不要求客户填手机号，其余有效单条件与
+     * {@link #selectServiceDetails} 一致。
+     */
+    List<SalaryDetailRow> selectSalaryDetails(@Param("shopIds") List<Long> shopIds,
+                                             @Param("massagistId") Long massagistId,
+                                             @Param("start") LocalDateTime start,
+                                             @Param("end") LocalDateTime end);
 
     List<ServiceDetailRow> selectServiceDetailsForMassagists(@Param("shopIds") List<Long> shopIds,
                                                             @Param("massagistIds") List<Long> massagistIds,

@@ -102,12 +102,14 @@ export default {
     },
     async fetchData() {
       this.listLoading = true
-      let res = await massagistApi.pageComment(this.searchForm)
-      console.log(res.data)
-      this.listLoading = false
-      let {list, total} = res.data
-      this.dataList = list || []
-      this.total = total || 0
+      try {
+        let res = await massagistApi.pageComment(this.searchForm)
+        let {list, total} = res.data
+        this.dataList = list || []
+        this.total = total || 0
+      } finally {
+        this.listLoading = false
+      }
     },
     handleSizeChange(val) {
       this.searchForm.size = val;

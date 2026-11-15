@@ -19,7 +19,19 @@
         </div>
         <div class="hero-foot">
           <span>数据截止 {{ board.cutoff }}</span>
-          <span>预估，最终以财务结算为准</span>
+          <span v-if="meta && meta.snapshot">生成时快照，金额不随排班/考核/规则变化</span>
+          <span v-else>预估，最终以财务结算为准</span>
+        </div>
+        <div v-if="meta" class="hero-meta">
+          <span v-if="meta.snapshot" class="meta-tag snapshot">结算快照</span>
+          <span class="meta-tag">{{ meta.statusLabel }}</span>
+          <span v-if="meta.generatedTime">生成 {{ meta.generatedBy || '—' }} · {{ shortTime(meta.generatedTime) }}</span>
+          <span v-if="meta.confirmedTime">确认 {{ meta.confirmedBy || '—' }} · {{ shortTime(meta.confirmedTime) }}</span>
+          <span v-if="meta.publishedTime">发布 {{ meta.publishedBy || '—' }} · {{ shortTime(meta.publishedTime) }}</span>
+          <span v-if="meta.configRevision">参数 v{{ meta.configRevision }}</span>
+          <span v-if="meta.usingDefaultConfig" class="meta-warn">系统默认参数</span>
+          <span v-if="meta.frozen" class="meta-warn">金额已冻结</span>
+          <span v-if="meta.remark" class="meta-remark">备注：{{ meta.remark }}</span>
         </div>
       </div>
 
@@ -36,7 +48,7 @@
         </div>
         <div class="amount-grid">
           <div class="amount-item">
-            <small>基础接单奖励</small>
+            <small>基础薪资</small>
             <strong>{{ money(board.base.amount) }}</strong>
           </div>
           <div class="amount-item">
@@ -67,8 +79,8 @@
 
       <section class="detail-section">
         <div class="section-title">
-          <h3>基础接单奖励</h3>
-          <span>{{ money(board.base.minutes) }} 分钟 × {{ decimal(board.base.coefficient) }}</span>
+          <h3>基础薪资</h3>
+          <span>{{ money(board.base.minutes) }} 分钟 × {{ decimal(board.base.coefficient) }} 元/分钟</span>
         </div>
         <div class="band-track">
           <div
@@ -76,12 +88,43 @@
             :key="band.minMinutes"
             :class="['band-step', {reached: reachedBand(index), current: currentBandIndex === index}]">
             <i class="dot"></i>
-            <b>{{ band.minMinutes }} 分钟</b>
-            <small>× {{ decimal(band.coefficient) }}</small>
+            <b>{{ bandLabel(band.minMinutes) }}</b>
+            <small>{{ decimal(band.coefficient) }} 元/分</small>
           </div>
         </div>
         <p class="hint-line">{{ board.base.nextBandHint || '当前时长档位已记录' }}</p>
-        <p v-if="board.base.newPartner" class="hint-line">新人合作期系数单独适用，不参与上述档位累加。</p>
+        <p v-if="board.base.newPartner" class="hint-line">新人合作期单价单独适用，不参与上述档位累加。</p>
+
+        <div class="compose-box">
+          <div class="compose-head">
+            <span>折算时长构成</span>
+            <small>服务 + 接待 + 工时调整 = 计入基础薪资的分钟</small>
+          </div>
+          <div class="compose-row">
+            <span>服务折算</span>
+            <b>{{ money(board.base.serviceWeightedMinutes, 0) }} 分</b>
+            <em>服务 {{ money(board.base.serviceMinutes, 0) }} 分 · {{ board.base.serviceOrderCount || 0 }} 单</em>
+          </div>
+          <div class="compose-row">
+            <span>接待计入</span>
+            <b>{{ money(board.base.receptionCountedMinutes, 0) }} 分</b>
+            <em>
+              接待 {{ money(board.base.receptionMinutes, 0) }} 分 · {{ board.base.receptionOrderCount || 0 }} 单
+              <template v-if="board.base.receptionCapApplied"> · 超出上限 {{ money(board.base.receptionExcessMinutes, 0) }} 分不计入</template>
+              <template v-else-if="board.base.receptionCapMinutes"> · 上限 {{ money(board.base.receptionCapMinutes, 0) }} 分</template>
+            </em>
+          </div>
+          <div class="compose-row">
+            <span>工时/排班调整</span>
+            <b>{{ signed(board.base.adjustMinutes) }} 分</b>
+            <em>补单、请假等人力调整，可为负数</em>
+          </div>
+          <div class="compose-row total">
+            <span>合计折算</span>
+            <b>{{ money(board.base.minutes, 0) }} 分 × ¥{{ decimal(board.base.coefficient) }} = ¥{{ money(board.base.amount) }}</b>
+            <em>按上月计入时长档位取单价</em>
+          </div>
+        </div>
       </section>
 
       <section class="detail-section">
@@ -100,9 +143,81 @@
             :show-text="false"
             :color="board.repurchase.retentionEligible ? '#6750A4' : '#C7A15A'"/>
           <p>
-            样本 {{ board.repurchase.retentionSample || 0 }} 人次，60 天内再次到店 {{ board.repurchase.retainedVisits || 0 }} 人次。
-            {{ board.repurchase.retentionEligible ? '门槛已达成，复购奖励计入本月。' : '门槛未达成，复购奖励暂不计入。' }}
+            窗口内老客到店 {{ board.repurchase.retentionSample || 0 }} 人次，其中 {{ board.repurchase.retainedVisits || 0 }} 人次在 60 天内再次到店。
+            <template v-if="board.repurchase.retentionSample === 0">暂无满 60 天的老客到店样本，留存率不参与判定。</template>
+            <template v-else-if="board.repurchase.retentionSample < (board.repurchase.minRetentionSample || 0)">
+              样本不足 {{ board.repurchase.minRetentionSample }} 人次，留存率仅展示、不判定合格。
+            </template>
+            <template v-else-if="!board.repurchase.retentionEligible">门槛未达成，复购奖励暂不计入。</template>
+            <template v-else-if="numberValue(board.repurchase.appliedTierAmount) === 0">门槛已达成，但本月未达复购档位。</template>
+            <template v-else>门槛已达成，复购奖励计入本月。</template>
           </p>
+        </div>
+
+        <div class="progress-grid">
+          <div class="progress-item">
+            <div class="progress-head">
+              <span>老客留存率</span>
+              <b>{{ percent(board.repurchase.retentionRate) }} / {{ percent(board.repurchase.retentionThreshold, 0) }}</b>
+            </div>
+            <el-progress
+              :percentage="clampPercent(ratePercent(board.repurchase.retentionRate, board.repurchase.retentionThreshold))"
+              :stroke-width="6"
+              :show-text="false"
+              :color="board.repurchase.retentionEligible ? '#6750A4' : '#C7A15A'"/>
+            <small>门槛 {{ percent(board.repurchase.retentionThreshold, 0) }}，未达成时复购奖励不计入</small>
+          </div>
+          <div class="progress-item">
+            <div class="progress-head">
+              <span>老客样本充足度</span>
+              <b>{{ board.repurchase.retentionSample || 0 }} / {{ board.repurchase.minRetentionSample || 0 }}</b>
+            </div>
+            <el-progress
+              :percentage="clampPercent(samplePercent(board.repurchase.retentionSample, board.repurchase.minRetentionSample))"
+              :stroke-width="6"
+              :show-text="false"
+              color="#8E7CC3"/>
+            <small>样本不足时留存率仅展示，不参与合格判定</small>
+          </div>
+          <div class="progress-item">
+            <div class="progress-head">
+              <span>新客样本充足度</span>
+              <b>{{ board.repurchase.newCustomerCount || 0 }} / {{ board.repurchase.minNewSample || 0 }}</b>
+            </div>
+            <el-progress
+              :percentage="clampPercent(samplePercent(board.repurchase.newCustomerCount, board.repurchase.minNewSample))"
+              :stroke-width="6"
+              :show-text="false"
+              :color="board.repurchase.conversionSampleSufficient ? '#6750A4' : '#C7A15A'"/>
+            <small>新客样本不足 {{ board.repurchase.minNewSample || 0 }} 人时，30 天档位暂不计入</small>
+          </div>
+          <div class="progress-item">
+            <div class="progress-head">
+              <span>30 天档位进度</span>
+              <b>{{ percent(board.repurchase.conversionRate) }} → {{ board.repurchase.nextTierRate ? percent(board.repurchase.nextTierRate, 0) : '已到顶' }}</b>
+            </div>
+            <el-progress
+              :percentage="clampPercent(tierProgress)"
+              :stroke-width="6"
+              :show-text="false"
+              color="#6750A4"/>
+            <small v-if="board.repurchase.nextTierRate">
+              还差 {{ decimal(board.repurchase.neededForNextTier, 1) }} 个加权新客，可达 ¥{{ money(board.repurchase.nextTierAmount, 0) }}
+            </small>
+            <small v-else>已达成最高档 30 天复购奖励</small>
+          </div>
+          <div class="progress-item wide">
+            <div class="progress-head">
+              <span>复购奖励计入进度</span>
+              <b>¥{{ money(repurchaseApplied) }} / ¥{{ money(board.repurchase.potentialAmount) }}</b>
+            </div>
+            <el-progress
+              :percentage="clampPercent(repurchaseProgress)"
+              :stroke-width="8"
+              :show-text="false"
+              :color="repurchaseProgress >= 100 ? '#6750A4' : '#C7A15A'"/>
+            <small>理论可得 ¥{{ money(board.repurchase.potentialAmount) }}，未计入部分待门槛/档位达成后自动补入</small>
+          </div>
         </div>
 
         <div class="metric-row">
@@ -223,7 +338,7 @@
           <span>仅作预览，不写入正式结算单</span>
         </div>
         <div class="settlement-grid">
-          <div><span>基础接单奖励</span><b>¥{{ money(board.settlement.baseReward) }}</b></div>
+          <div><span>基础薪资</span><b>¥{{ money(board.settlement.baseReward) }}</b></div>
           <div><span>店长奖励</span><b>¥{{ money(board.settlement.managerReward) }}</b></div>
           <div><span>培训达标奖励</span><b>¥{{ money(board.settlement.trainingReward) }}</b></div>
           <div><span>复购接单奖励</span><b>¥{{ money(board.settlement.repurchaseReward) }}</b></div>
@@ -255,7 +370,9 @@ export default {
     visible: {type: Boolean, default: false},
     board: {type: Object, default: null},
     config: {type: Object, default: null},
-    loading: {type: Boolean, default: false}
+    loading: {type: Boolean, default: false},
+    /** 结算单场景附带的快照元信息（状态/生成/确认/发布），看板场景不传 */
+    meta: {type: Object, default: null}
   },
   computed: {
     bands() {
@@ -302,6 +419,34 @@ export default {
         groups[indexByName[name]].projects.push(project)
       })
       return groups
+    },
+    /** 30 天档位进度：当前复购率 / 下一档门槛，到顶视为 100。 */
+    tierProgress() {
+      const repurchase = this.board && this.board.repurchase
+      if (!repurchase) {
+        return 0
+      }
+      const next = numberValue(repurchase.nextTierRate)
+      if (next <= 0) {
+        return 100
+      }
+      return numberValue(repurchase.conversionRate) / next * 100
+    },
+    /** 已计入的复购奖励占理论可得比例。 */
+    repurchaseApplied() {
+      const repurchase = this.board && this.board.repurchase
+      if (!repurchase) {
+        return 0
+      }
+      return numberValue(repurchase.appliedTierAmount) + numberValue(repurchase.appliedTenDayAmount)
+    },
+    repurchaseProgress() {
+      const repurchase = this.board && this.board.repurchase
+      const potential = numberValue(repurchase && repurchase.potentialAmount)
+      if (potential <= 0) {
+        return this.repurchaseApplied > 0 ? 100 : 0
+      }
+      return this.repurchaseApplied / potential * 100
     }
   },
   methods: {
@@ -315,8 +460,58 @@ export default {
     reachedBand(index) {
       return this.currentBandIndex >= 0 && index <= this.currentBandIndex
     },
+    /** 档位起点展示：整小时显示为 h，其余显示分钟。 */
+    bandLabel(minutes) {
+      const value = numberValue(minutes)
+      if (value <= 0) {
+        return '0'
+      }
+      if (value % 60 === 0) {
+        return (value / 60) + 'h'
+      }
+      return value + ' 分'
+    },
     reachedTier(index) {
       return this.currentTierIndex >= 0 && index <= this.currentTierIndex
+    },
+    /** 带符号展示分钟调整，0 不显示正号。 */
+    signed(value, digits) {
+      const num = numberValue(value)
+      const text = this.decimal(Math.abs(num), digits === undefined ? 1 : digits)
+      if (num > 0) {
+        return '+' + text
+      }
+      if (num < 0) {
+        return '-' + text
+      }
+      return '0'
+    },
+    clampPercent(value) {
+      const num = numberValue(value)
+      if (num <= 0) return 0
+      if (num >= 100) return 100
+      return Math.round(num * 10) / 10
+    },
+    /** 比率相对门槛的完成度（0-100）。 */
+    ratePercent(rate, threshold) {
+      const target = numberValue(threshold)
+      if (target <= 0) {
+        return 100
+      }
+      return numberValue(rate) / target * 100
+    },
+    samplePercent(sample, min) {
+      const target = numberValue(min)
+      if (target <= 0) {
+        return 100
+      }
+      return numberValue(sample) / target * 100
+    },
+    shortTime(value) {
+      if (!value) {
+        return '—'
+      }
+      return String(value).replace('T', ' ').slice(0, 16)
     }
   }
 }
@@ -373,6 +568,36 @@ export default {
   justify-content: space-between;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.8);
+}
+
+.hero-meta {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+
+  .meta-tag {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    padding: 1px 10px;
+
+    &.snapshot {
+      background: #FFFFFF;
+      color: #4A3B63;
+      font-weight: 600;
+    }
+  }
+
+  .meta-warn {
+    color: #FFE1A8;
+  }
+
+  .meta-remark {
+    width: 100%;
+    color: rgba(255, 255, 255, 0.78);
+  }
 }
 
 .warning-box {
@@ -767,5 +992,124 @@ export default {
   padding: 80px 20px;
   text-align: center;
   color: #79747E;
+}
+
+/* 基础薪资构成明细 */
+.compose-box {
+  margin-top: 14px;
+  border: 1px solid #EDE8F2;
+  border-radius: 9px;
+  padding: 12px 14px;
+  background: #FAF9FC;
+}
+
+.compose-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+
+  span {
+    font-size: 12px;
+    font-weight: 600;
+    color: #49454F;
+  }
+
+  small {
+    font-size: 10px;
+    color: #79747E;
+  }
+}
+
+.compose-row {
+  display: grid;
+  grid-template-columns: 96px 120px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px dashed #EDE8F2;
+
+  &:first-of-type {
+    border-top: 0;
+  }
+
+  span {
+    font-size: 11px;
+    color: #79747E;
+  }
+
+  b {
+    font-size: 12px;
+    color: #2B2930;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  em {
+    font-style: normal;
+    font-size: 10px;
+    color: #9A94A3;
+    line-height: 1.5;
+  }
+
+  &.total {
+    border-top: 1px solid #E3DCEC;
+    background: #F4F0FA;
+    border-radius: 7px;
+    padding: 8px 10px;
+    margin-top: 6px;
+
+    span, b {
+      color: #4A3B63;
+      font-weight: 600;
+    }
+  }
+}
+
+/* 复购门槛进度 */
+.progress-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.progress-item {
+  border: 1px solid #EDE8F2;
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: #fff;
+
+  &.wide {
+    grid-column: 1 / -1;
+  }
+
+  .progress-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+
+    span {
+      font-size: 11px;
+      color: #79747E;
+    }
+
+    b {
+      font-size: 12px;
+      color: #2B2930;
+      font-weight: 600;
+    }
+  }
+
+  small {
+    display: block;
+    margin-top: 6px;
+    font-size: 10px;
+    color: #9A94A3;
+    line-height: 1.6;
+  }
 }
 </style>

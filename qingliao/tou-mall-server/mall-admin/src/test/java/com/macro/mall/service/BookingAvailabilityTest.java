@@ -82,4 +82,54 @@ class BookingAvailabilityTest {
         MassagistSchedules s = shift(1); s.setEndTime(start.plusMinutes(30).toLocalTime());
         assertEquals(1, free(Arrays.asList(s), Collections.emptyList(), null));
     }
-}
+
+    /** 需求2：结束时刻恰好等于开始时刻属于边界相邻，不判冲突。 */
+    @Test void touchingBoundariesAreAdjacentNotConflicting() throws Exception {
+        assertFalse(overlap(start, start.plusHours(1), start.plusHours(1), start.plusHours(2), 0));
+        assertFalse(overlap(start, start.plusHours(1), start.minusHours(1), start, 0));
+        assertTrue(overlap(start, start.plusHours(1), start.plusHours(1).minusMinutes(1), start.plusHours(2), 0));
+    }
+
+    /**
+     * 加钟：同一客户在同一床位上紧接着做下一段（10:00-11:30 → 11:30 加钟）不算床位被占；
+     * 换一个客户仍要等 15 分钟整理期。
+     */
+    @Test void bedOccupiedSkipsTurnoverForSameCustomerContinuation() throws Exception {
+        LocalDateTime bookedStart = LocalDateTime.of(2026, 11, 8, 10, 0);
+        OrderDetail booked = order(1L, 2, bookedStart, bookedStart.plusMinutes(90));
+        booked.setCustomerId(7L);
+        booked.setBedId(11L);
+        LocalDateTime nextStart = booked.getEndTime();
+        LocalDateTime nextEnd = nextStart.plusMinutes(60);
+        assertFalse((Boolean) call("bedOccupied",
+                new Class[]{LocalDateTime.class, LocalDateTime.class, OrderDetail.class, Long.class},
+                nextStart, nextEnd, booked, 7L));
+        assertTrue((Boolean) call("bedOccupied",
+                new Class[]{LocalDateTime.class, LocalDateTime.class, OrderDetail.class, Long.class},
+                nextStart, nextEnd, booked, 8L));
+        //没有客户上下文（例如看板手动拖动）仍按整理期算
+        assertTrue((Boolean) call("bedOccupied",
+                new Class[]{LocalDateTime.class, LocalDateTime.class, OrderDetail.class, Long.class},
+                nextStart, nextEnd, booked, null));
+        //同一客户但中间空出了时间，下一段仍与已服务段重叠时照常判占用
+        assertTrue((Boolean) call("bedOccupied",
+                new Class[]{LocalDateTime.class, LocalDateTime.class, OrderDetail.class, Long.class},
+                nextStart.minusMinutes(30), nextEnd, booked, 7L));
+    }
+
+    /** 需求7：已完成/已服务明细不再占用未来时段，但当天已过去的占用保留。 */
+    @Test void finishedFutureDetailsNoLongerOccupySlots() throws Exception {
+        LocalDateTime tomorrow = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+        OrderDetail served = order(1L, 2, tomorrow, tomorrow.plusHours(1)); served.setState(2);
+        OrderDetail canceled = order(2L, 2, tomorrow, tomorrow.plusHours(1)); canceled.setState(3);
+        OrderDetail pending = order(3L, 2, tomorrow, tomorrow.plusHours(1)); pending.setState(1);
+        LocalDateTime yesterday = LocalDateTime.now().minusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+        OrderDetail pastServed = order(4L, 2, yesterday, yesterday.plusHours(1)); pastServed.setState(2);
+        List<OrderDetail> kept = (List<OrderDetail>) call("withoutFinishedFuture", new Class[]{List.class},
+                Arrays.asList(served, canceled, pending, pastServed));
+        assertEquals(2, kept.size());
+        assertSame(pending, kept.get(0));
+        assertSame(pastServed, kept.get(1));
+    }
+
+    }

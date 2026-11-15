@@ -5,7 +5,7 @@
       :visible.sync="dialogVisible"
       width="30%"
       :before-close="handleClose">
-      <el-alert title="临时调店仅作用于所选当天：清除原店当天全部普通排班，其他日期保留；目标店同轮次优先安排，次日回到档案归属门店。" type="info" :closable="false" show-icon class="margin-lr-16"></el-alert>
+      <el-alert title="临时调店只在所选「排班时间」内生效：该时段疗愈师到目标店接单，原店其余时段照常排班；调店前原店排班已留底，可随时「恢复原排班」。" type="info" :closable="false" show-icon class="margin-lr-16"></el-alert>
       <el-form :model="form" ref="refForm" label-width="80px" label-position="left" class="margin-lr-16">
 
         <el-form-item label="所属门店" prop="shopId"
@@ -46,25 +46,27 @@
           </el-date-picker>
         </el-form-item>
         <div class="flex">
-          <el-form-item label="排班时间" prop="startTime"
-                        :rules="[{required: true, message: '请选择接单开始时间', trigger: ['blur', 'change']}]">
+          <el-form-item label="调店时段" prop="startTime"
+                        :rules="[{required: true, message: '请选择调店开始时间', trigger: ['blur', 'change']}]">
             <el-time-select
-              placeholder="接单开始时间" style="width: 100%"
+              placeholder="调店开始时间" style="width: 100%"
               v-model="form.startTime" format="HH:mm" value-format="HH:mm"
               :picker-options="{ start: clockInTime,step: '00:30',end: clockOutTime}">
             </el-time-select>
           </el-form-item>
           <el-form-item prop="endTime" label-width="0"
-                        :rules="[{required: true, message: '请选择接单结束时间', trigger: ['blur', 'change']}]">
+                        :rules="[{required: true, message: '请选择调店结束时间', trigger: ['blur', 'change']}]">
             <el-time-select
-              placeholder="接单结束时间" style="width: 100%"
+              placeholder="调店结束时间" style="width: 100%"
               v-model="form.endTime" format="HH:mm" value-format="HH:mm"
               :picker-options="{start: clockInTime,step: '00:30',end: clockOutTime,minTime: form.startTime}">
             </el-time-select>
           </el-form-item>
         </div>
+        <p class="margin-lr-16 tip">时段需落在当天原店排班内；只调中间时段时，原店会自动保留时段前后的排班。</p>
       </el-form>
       <span slot="footer" class="dialog-footer">
+        <el-button v-if="isEdit && form.schedulesType==1" type="text" class="restore-btn" @click="onRestore">恢复原排班</el-button>
         <el-button @click="handleClose">取 消</el-button>
         <el-button type="primary" :loading="submitting" @click="onSubmit">确 定</el-button>
       </span>
@@ -200,6 +202,22 @@ export default {
       if (item) {
         this.$set(this.form, 'shopId', item.shopId)
       }
+    },
+    async onRestore() {
+      try {
+        await this.$confirm('确认撤销本次调店，并把原店排班恢复到调店前？', '恢复原排班', {type: 'warning'})
+      } catch (e) {
+        return
+      }
+      const loading = this.$loading({lock: true, text: '正在恢复原排班…'})
+      try {
+        await massagistSchedulesApi.restoreTransfer(this.form.id)
+        this.$notify.success('已恢复原店排班')
+        this.handleClose()
+        this.$emit('submit-success')
+      } finally {
+        loading.close()
+      }
     }
   }
 }
@@ -207,5 +225,7 @@ export default {
 
 <style rel="stylesheet/less" lang="less" scoped>
 .MassagistSchedulesTargetShopForm {
+  .tip { margin: 0 0 6px; color: #909399; font-size: 12px; line-height: 1.6; }
+  .restore-btn { float: left; }
 }
 </style>

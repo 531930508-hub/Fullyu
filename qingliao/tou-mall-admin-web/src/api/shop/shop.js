@@ -22,6 +22,14 @@ export default {
       params
     })
   },
+  // 当前账号可查看的门店（受限账号仅授权门店），前端门店下拉唯一数据源
+  authorized(params) {
+    return request({
+      url: '/shop/authorized',
+      method: 'get',
+      params
+    })
+  },
   list(params) {
     return request({
       url: '/shop/list',

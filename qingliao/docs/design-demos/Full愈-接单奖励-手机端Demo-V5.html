@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="color-scheme" content="light"><meta name="theme-color" content="#6B463C"><title>Full愈 · 我的接单奖励 V5</title><style>/* Brand source: Full愈/packages/design-tokens/src/colors.ts; accessible text uses primary/dark tokens. */
+:root{--wood-700:#6B463C;--wood-hover:#5A3A32;--wood-900:#4B3621;--cream:#F5E8D8;--paper:#FFFFFF;--soft:#FFF3E0;--disabled:#F1E7DF;--line:#D8CBBB;--line-light:#E8DED2;--ink:#4B3621;--muted:#6B463C;--on-dark:#F5E8D8;--on-dark-muted:#EEE0C6;--gold:#D8C6A8;--error:#C0392B;--radius:16px;--shadow:0 20px 70px #4b36212b;--font:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font:14px/1.6 var(--font);color:var(--ink);background:var(--cream)}button,input,select{font:inherit;color:inherit}button,a,summary,input,select{-webkit-tap-highlight-color:transparent}button,a{touch-action:manipulation}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.6}a{color:var(--wood-700);text-underline-offset:4px}button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--wood-700);outline-offset:3px}h1,h2,h3,p{margin:0}h1{font-size:27px;font-weight:650;letter-spacing:-.04em}h2{font-size:19px;letter-spacing:-.02em}h3{font-size:15px}small,.small{font-size:12px}.muted{color:var(--muted)}.mono,.money{font-variant-numeric:tabular-nums}.money{letter-spacing:-.04em}.eyebrow{font-size:10px;letter-spacing:.18em;text-transform:uppercase}.btn{border:1px solid var(--line);background:var(--paper);padding:9px 16px;border-radius:8px;min-height:42px;display:inline-flex;gap:7px;align-items:center;justify-content:center;text-decoration:none;line-height:1.4;white-space:nowrap}.btn:hover{background:var(--disabled)}.btn.primary{background:var(--wood-700);border-color:var(--wood-700);color:var(--paper)}.btn.primary:hover{background:var(--wood-hover)}.btn.text{background:none;border-color:transparent;padding:8px}.btn.sm{font-size:12px;min-height:34px;padding:6px 10px}.icon{width:20px;height:20px;display:inline-block;vertical-align:middle;flex-shrink:0}.icon-btn{width:42px;height:42px;border:0;background:transparent;border-radius:50%;display:grid;place-items:center}.icon-btn:hover{background:var(--disabled)}.tag{display:inline-flex;padding:3px 8px;border:1px solid var(--line);border-radius:5px;font-size:11px;white-space:nowrap;line-height:1.5;background:var(--paper)}.tag.filled{background:var(--wood-700);color:var(--paper);border-color:var(--wood-700)}.tag.soft{background:var(--soft)}.row{display:flex;align-items:center;justify-content:space-between;gap:12px}.stack{display:grid;gap:12px}.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.field{display:grid;gap:5px;min-width:0}.field>span{font-size:12px}.field input,.field select,select.control,input.control{border:1px solid var(--line);background:var(--paper);border-radius:7px;padding:9px 11px;min-width:0;max-width:100%;height:42px}.field input{width:100%}.field input[readonly]{background:var(--disabled)}.panel{background:var(--paper);border:1px solid var(--line-light);border-radius:var(--radius);padding:22px}.panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.notice{background:var(--soft);padding:12px 16px;border-radius:8px;border:1px solid var(--line);font-size:12px;line-height:1.8}.notice.error{color:var(--error);background:var(--paper);border-color:var(--error)}.divider{border:0;border-top:1px solid var(--line-light);margin:20px 0}.linklike{color:var(--wood-700);text-decoration:underline;text-underline-offset:4px}.avatar{height:40px;width:40px;border-radius:50%;background:var(--disabled);display:grid;place-items:center;font-size:16px;flex-shrink:0}.progress{height:5px;background:var(--disabled);border-radius:10px;overflow:hidden}.progress>i{height:100%;display:block;background:var(--wood-700);border-radius:10px}.empty{text-align:center;padding:55px 20px}.empty .icon{width:34px;height:34px;margin-bottom:12px}.empty p{margin:10px 0 20px}.section-label{display:flex;align-items:baseline;justify-content:space-between;margin:27px 0 12px;gap:8px}.section-label small{color:var(--muted);font-size:11px}.keyval{display:flex;justify-content:space-between;gap:16px;padding:8px 0}.keyval span:last-child{text-align:right;font-variant-numeric:tabular-nums}.keyval.total{border-top:1px solid var(--line);margin-top:8px;padding-top:14px;font-weight:650}.subnote{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.8}.badge-round{display:inline-grid;place-items:center;border:1px solid var(--line);width:25px;height:25px;border-radius:50%;font-size:10px;margin-right:7px}.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--wood-900);color:var(--on-dark);border:1px solid var(--gold);border-radius:9px;padding:12px 20px;z-index:100;max-width:90vw;box-shadow:var(--shadow)}.toast[hidden]{display:none}
+/* PC: compact, table-first management shell */
+.admin-shell{display:grid;grid-template-columns:206px minmax(0,1fr);min-height:100vh;background:var(--disabled)}.sidebar{background:var(--wood-900);color:var(--on-dark);padding:30px 18px;display:flex;flex-direction:column}.brand{font-size:27px;letter-spacing:-1px;margin-bottom:5px}.sidebar .eyebrow{color:var(--on-dark-muted);margin-bottom:40px}.nav-label{font-size:11px;color:var(--on-dark-muted);margin:20px 10px 8px}.side-item{padding:12px;display:flex;align-items:center;gap:12px;border-radius:8px;font-size:13px;color:var(--on-dark-muted)}.side-item.active{background:var(--cream);color:var(--ink)}.sidebar-bottom{margin-top:auto;font-size:11px;padding-top:60px;color:var(--on-dark-muted)}.admin-top{height:68px;background:var(--paper);border-bottom:1px solid var(--line-light);padding:0 32px;display:flex;justify-content:space-between;align-items:center;gap:14px}.admin-content{max-width:1700px;margin:auto;padding:30px 32px 60px}.admin-title{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:22px}.admin-title p{margin-top:7px;color:var(--muted);font-size:12px}.admin-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:18px 0}.summary-card{padding:20px;background:var(--paper);border:1px solid var(--line-light);border-radius:12px}.summary-card:first-child{background:var(--wood-900);color:var(--on-dark)}.summary-card:first-child .muted{color:var(--on-dark-muted)}.summary-card .value{font-size:30px;letter-spacing:-1px;margin:6px 0}.summary-card .value small{font-size:14px}.summary-card .muted{font-size:11px}.shop-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:18px 0}.shop-card{padding:18px 20px;background:var(--paper);border:1px solid var(--line-light);border-radius:12px}.shop-card .progress{margin:12px 0 8px}.filterbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.filterbar .grow{flex:1;min-width:160px}.table-wrap{overflow:auto;margin:0 -22px;border-top:1px solid var(--line-light)}table{border-collapse:collapse;width:100%;font-size:12px;text-align:left}th{font-weight:500;color:var(--muted);background:var(--disabled);padding:13px 12px;white-space:nowrap}td{padding:15px 12px;border-bottom:1px solid var(--line-light);white-space:nowrap;font-variant-numeric:tabular-nums}td small{display:block;font-size:10px;color:var(--muted)}th:first-child,td:first-child{padding-left:22px;position:sticky;left:0;z-index:1;background:var(--paper)}th:first-child{background:var(--disabled)}tbody tr:hover td{background:var(--soft)}.person-cell{display:flex;gap:10px;align-items:center}.person-cell .avatar{width:30px;height:30px;font-size:12px}.amount-col{font-weight:650}.table-footer{display:flex;justify-content:space-between;margin-top:13px;font-size:11px;color:var(--muted)}.preview-note{font-size:11px;color:var(--muted);margin-top:20px}
+/* Mobile: no desktop shell, fully fluid on actual phone viewport */
+.mobile-stage{min-height:100vh;background:var(--cream)}.prototype-bar{max-width:460px;margin:auto;padding:12px 16px;border-bottom:1px solid var(--line);font-size:11px}.prototype-bar summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;min-height:25px}.prototype-controls{padding-top:12px;display:grid;gap:10px}.prototype-controls .toolbar>.btn{flex:1}.prototype-controls select{width:100%}.mobile-app{max-width:460px;margin:0 auto;padding:0 18px 38px;min-width:0}.mobile-nav{padding:22px 0 16px;display:flex;align-items:center;justify-content:space-between}.mobile-nav .brand{font-size:22px;margin:0}.mobile-nav .tag{background:none}.mobile-head{display:flex;align-items:center;gap:12px;margin:10px 0 23px}.mobile-head .avatar{width:49px;height:49px;background:var(--wood-700);color:var(--paper);font-size:20px}.mobile-head h1{font-size:22px}.mobile-head p{font-size:11px;margin-top:3px;color:var(--muted)}.mobile-head .head-right{margin-left:auto}.month-pick{font-size:12px;background:var(--paper);border:1px solid var(--line);border-radius:7px;padding:8px 9px;max-width:140px}.achievement{background:var(--paper);border-radius:var(--radius);border:1px solid var(--line-light);padding:18px}.axis-chips{display:flex;gap:5px;margin:13px 0}.chip{border:1px solid var(--line);border-radius:6px;background:transparent;font-size:11px;min-height:34px;padding:4px 9px;flex:1}.chip.on{background:var(--wood-700);border-color:var(--wood-700);color:var(--paper)}.axis-inputs{display:flex;gap:12px}.axis-inputs label{font-size:10px;flex:1;min-width:0}.axis-inputs input{width:100%;display:block;accent-color:var(--wood-700)}.axis-caption{font-size:10px;color:var(--muted);margin-top:5px}.ach-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:16px 0}.ach-grid div+div{border-left:1px solid var(--line-light);padding-left:12px}.ach-grid strong{font-size:21px;display:block;font-weight:600;letter-spacing:-.05em}.ach-grid small{font-size:10px;display:block;color:var(--muted)}.fan-row{border-top:1px solid var(--line-light);padding-top:13px;display:flex;gap:10px;align-items:center;font-size:12px}.fan-row .icon{width:29px;height:29px}.fan-row p{font-size:10px;color:var(--muted);margin-top:2px}.fan-row b{font-weight:550}.fan-row>span:last-child{margin-left:auto;white-space:nowrap;font-size:12px}.income-hero{border-radius:18px;background:var(--wood-900);color:var(--on-dark);padding:23px;position:relative}.income-hero .tag{background:transparent;border-color:var(--gold);color:var(--on-dark);font-size:10px}.income-hero .hero-label{font-size:12px;color:var(--on-dark-muted)}.income-hero .hero-value{font-size:44px;font-weight:550;line-height:1.2;letter-spacing:-2px;margin:12px 0 8px}.income-hero .hero-value small{font-size:22px;margin-right:5px}.income-hero .hero-bottom{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--gold);margin-top:20px;padding-top:14px;font-size:11px;color:var(--on-dark-muted)}.income-hero a{color:var(--on-dark)}.income-hero .money-button{background:none;border:0;color:inherit;padding:4px}.income-components{background:var(--paper);border:1px solid var(--line-light);border-radius:16px;margin-top:12px;overflow:hidden}.income-item{padding:17px 18px;border-bottom:1px solid var(--line-light)}.income-item:last-child{border-bottom:0}.item-title{display:flex;gap:9px;align-items:center;font-size:13px}.item-title>.icon{color:var(--wood-700);width:18px;height:18px}.item-title>strong{margin-left:auto;font-size:18px;font-weight:600;letter-spacing:-.5px}.income-item>p{font-size:11px;color:var(--muted);padding-left:27px;margin-top:5px}.next-hint{font-size:11px;margin:10px 0 0 27px;background:var(--disabled);border-radius:6px;padding:8px 10px}.reward-block{margin-top:12px;padding:19px;background:var(--paper);border:1px solid var(--line-light);border-radius:16px}.reward-block .gate{margin:13px 0;background:var(--disabled);border-radius:8px;padding:11px 12px;font-size:11px}.gate .progress{background:var(--paper);margin-top:8px}.gate .progress>i{background:var(--wood-700)}.reward-block .row{font-size:12px}.metric-duo{display:grid;grid-template-columns:1fr 1fr;margin:13px 0;gap:15px}.metric-duo>div+div{border-left:1px solid var(--line-light);padding-left:15px}.metric-duo strong{display:block;font-size:22px;font-weight:550;letter-spacing:-1px}.metric-duo small{font-size:10px;color:var(--muted)}.incentive-focus{background:var(--wood-700);color:var(--on-dark);border-radius:11px;padding:15px 16px;display:flex;align-items:center;gap:10px}.incentive-focus>div:first-child{flex:1}.incentive-focus p{font-size:12px;line-height:1.7}.incentive-focus small{font-size:10px;display:block;color:var(--on-dark-muted);margin-top:4px}.incentive-focus .boost{font-size:29px;white-space:nowrap;letter-spacing:-1px}.tier-hint{border:1px solid var(--line);border-radius:8px;padding:11px 12px;margin:12px 0;font-size:11px}.tier-hint b{font-weight:650}.fineprint{font-size:10px;color:var(--muted);line-height:1.8}.plain-details{border-top:1px solid var(--line-light);margin-top:12px;padding-top:9px}.plain-details summary{cursor:pointer;font-size:11px;min-height:30px;display:flex;align-items:center;justify-content:space-between}.rule-chips{display:flex;gap:6px;flex-wrap:wrap;padding:7px 0;font-size:10px}.rule-chips span{border:1px solid var(--line);border-radius:5px;padding:4px 7px}.ledger{background:var(--paper);border:1px solid var(--line-light);border-radius:16px;padding:18px;margin-top:12px;scroll-margin-top:12px}.ledger .keyval{font-size:12px}.ledger h3{margin-bottom:10px}.taxgrid{background:var(--disabled);border-radius:8px;padding:10px 12px;margin-top:8px}.taxgrid .keyval{font-size:10px}.cert-card{background:var(--paper);border-radius:12px;padding:16px;border:1px solid var(--line-light);margin:9px 0}.cert-title{display:flex;gap:8px;align-items:center;font-size:13px}.cert-title .icon{width:16px;height:16px}.cert-card>p{font-size:10px;margin:6px 0 13px;color:var(--muted)}.cert-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cert-stats>div+div{border-left:1px solid var(--line-light);padding-left:18px}.cert-stats b{font-size:21px;font-weight:550}.cert-stats small{display:block;font-size:10px;color:var(--muted)}.mobile-footer{text-align:center;font-size:10px;color:var(--muted);padding:25px 8px 0;line-height:1.9}.mobile-footer .brand{font-size:21px}
+/* V3: one money hierarchy, progressively disclosed service metrics. */
+.mobile-v3 .mobile-nav{padding:18px 0 8px}.mobile-v3 .mobile-head{margin:12px 0 20px}.partner-identity{min-width:0}.partner-identity h1{overflow-wrap:anywhere}.mobile-v3 .mobile-head h1{font-size:19px}.mobile-v3 .month-pick{max-width:124px;font-size:11px}.mobile-v3 .mobile-head .avatar{height:42px;width:42px;font-size:17px}
+.reward-overview{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--paper)}.reward-hero.income-hero{border-radius:0;padding:20px 22px}.reward-hero h2{font-size:14px;font-weight:500;letter-spacing:0}.reward-hero .hero-value{font-size:42px;margin:10px 0 5px;overflow-wrap:anywhere}.hero-note{font-size:11px;color:var(--on-dark-muted)}.reward-breakdown{padding:6px 20px}.reward-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;border-bottom:1px solid var(--line-light);font-size:13px}.reward-row:last-child{border-bottom:0}.reward-row strong{font-size:17px;font-weight:550;white-space:nowrap}
+.next-reward{margin-top:16px;padding:17px 19px;background:var(--soft);border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:12px}.mini-label{font-size:10px;color:var(--muted);letter-spacing:.06em}.next-reward p{font-size:13px;margin:3px 0}.next-reward small{font-size:11px;color:var(--muted)}.next-reward strong{font-size:25px;font-weight:550;color:var(--wood-700);white-space:nowrap}.next-footnote{font-size:10px;color:var(--muted);margin:7px 3px 16px}
+.detail-group{border:1px solid var(--line);background:var(--paper);border-radius:12px;overflow:hidden}.disclosure+.disclosure{border-top:1px solid var(--line-light)}.disclosure>summary{min-height:53px;padding:13px 17px;display:flex;align-items:center;justify-content:space-between;gap:10px;list-style:none;font-size:13px;cursor:pointer}.disclosure>summary::-webkit-details-marker{display:none}.disclosure>summary small{display:block;font-size:10px;color:var(--muted);margin-top:3px}.disclosure>summary>.icon{width:17px;height:17px;transition:transform .18s}.disclosure[open]>summary>.icon{transform:rotate(180deg)}.disclosure[open]>summary{font-weight:600}.disclosure-body{padding:0 17px 16px;border-top:1px solid var(--line-light);font-size:12px}.disclosure-body h4{font-size:12px;margin:20px 0 7px;font-weight:650}.disclosure-body p{font-size:11px;color:var(--muted);line-height:1.8;margin:8px 0}.disclosure-body .keyval{font-size:12px;align-items:flex-start;overflow-wrap:anywhere}.disclosure-body .keyval>span:last-child{flex-shrink:0;max-width:62%}.detail-intro{padding-top:8px}.adjustment-line{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:12px;padding:4px 10px}.service-heading{display:flex;align-items:baseline;justify-content:space-between;margin:25px 2px 11px;gap:8px}.service-heading h2{font-size:15px}.service-heading>span{font-size:10px;color:var(--muted)}.service-group .cert-card{padding:12px 0;border:0;border-radius:0;border-bottom:1px solid var(--line-light);margin:0}.service-group .cert-card:last-child{border-bottom:0}.mobile-v3 .mobile-footer{padding-top:22px}.shop-rule{margin:22px 0}.training-setting{max-width:320px}.drawer-preview{margin:20px 0;width:100%}
+/* Touch and focus affordances for the phone surface. */
+body[data-surface="mobile"] .chip,body[data-surface="mobile"] .btn.sm,body[data-surface="mobile"] summary,body[data-surface="mobile"] .month-pick{min-height:44px}
+.income-hero .money-button{min-width:44px;min-height:44px;display:grid;place-items:center}
+.income-hero :focus-visible{outline-color:var(--on-dark)}
+/* Parameter dialog & member drawer */
+dialog{padding:0;border:1px solid var(--line);border-radius:16px;color:var(--ink);background:var(--paper);box-shadow:var(--shadow);width:min(940px,calc(100vw - 40px));max-height:90vh}dialog::backdrop{background:#4b362166}.dialog-head{padding:20px 24px;border-bottom:1px solid var(--line-light);display:flex;align-items:center;justify-content:space-between;gap:12px}.dialog-head p{font-size:11px;color:var(--muted);margin-top:4px}.dialog-body{display:grid;grid-template-columns:160px minmax(0,1fr);height:min(560px,66vh)}.settings-nav{background:var(--disabled);padding:14px 12px;display:flex;flex-direction:column;gap:6px}.settings-nav button{padding:11px 12px;text-align:left;background:none;border:0;border-radius:7px;font-size:12px}.settings-nav button.on{background:var(--wood-700);color:var(--paper)}.settings-content{overflow:auto;padding:22px 24px}.settings-section h3{margin-bottom:8px}.settings-section>p{font-size:12px;color:var(--muted);margin-bottom:18px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px 18px}.form-grid .full{grid-column:1/-1}.settings-content .notice{margin:18px 0}.settings-content table input{width:92px;border:1px solid var(--line);padding:7px;border-radius:5px}.settings-content table td,.settings-content table th{padding:9px 8px;position:static}.settings-content .calc-box{background:var(--disabled);padding:16px;border-radius:8px;margin-top:18px;font-size:12px}.settings-content .calc-box strong{font-size:20px}.dialog-footer{padding:14px 24px;border-top:1px solid var(--line-light);display:flex;align-items:center;justify-content:space-between;gap:14px}.dialog-footer small{max-width:60%;font-size:10px}.drawer{margin:0 0 0 auto;height:100vh;max-height:100vh;width:min(520px,100%);border-radius:16px 0 0 16px}.drawer .dialog-head{position:sticky;top:0;z-index:2;background:var(--paper)}.drawer-body{padding:20px;background:var(--cream)}.drawer-body .income-hero{margin-top:12px}.drawer-body .mobile-app{padding:0}.history-entry{border-bottom:1px solid var(--line-light);padding:12px 0;font-size:12px}.settings-content input:invalid{border-color:var(--error)}.form-error{font-size:12px;color:var(--error);min-height:24px}.is-hidden{display:none!important}
+@media(min-width:800px){body[data-surface="mobile"] .mobile-stage{padding:25px 0 40px}body[data-surface="mobile"] .mobile-app{background:var(--cream);border:1px solid var(--line);border-top:0;border-radius:0 0 24px 24px}body[data-surface="mobile"] .prototype-bar{border:1px solid var(--line);border-radius:24px 24px 0 0;padding:14px 18px}body[data-surface="mobile"]{background:var(--disabled)}}
+@media(max-width:1150px){.admin-shell{grid-template-columns:170px minmax(0,1fr)}.admin-content{padding:24px 20px}.admin-top{padding:0 20px}.admin-kpis{gap:10px}.summary-card{padding:15px}.summary-card .value{font-size:24px}.sidebar{padding:25px 12px}.admin-title{flex-direction:column}.admin-title .toolbar{align-self:stretch}.shop-grid{gap:10px}}
+@media(max-width:760px){.admin-shell{grid-template-columns:minmax(0,1fr)}.sidebar{display:none}.admin-top{padding:12px 16px;height:auto;align-items:flex-start;flex-wrap:wrap}.admin-kpis{grid-template-columns:1fr 1fr}.shop-grid{grid-template-columns:1fr}.admin-content{padding:20px 14px}.admin-title h1{font-size:24px}.dialog-body{grid-template-columns:1fr;height:65vh;display:flex;flex-direction:column}.settings-nav{flex-direction:row;overflow:auto;flex-shrink:0;padding:8px}.settings-nav button{white-space:nowrap}.settings-content{padding:18px}.dialog-head{padding:15px 18px}.dialog-footer{padding:12px 18px}.dialog-footer small{display:none}.form-grid{gap:12px}.form-grid .field{min-width:0}dialog{width:calc(100vw - 20px)}.drawer{width:100%}.drawer-body{padding:16px}.panel{padding:17px}.table-wrap{margin:0 -17px}.filterbar .field{flex:1;min-width:120px}}
+@media(max-width:360px){.mobile-app{padding:0 12px 25px}.income-hero{padding:19px}.income-hero .hero-value{font-size:39px}.achievement{padding:15px}.ach-grid strong{font-size:19px}.incentive-focus{padding:12px}.incentive-focus .boost{font-size:25px}.income-item{padding:16px 14px}.item-title{font-size:12px}.item-title>strong{font-size:16px}.mobile-head{gap:9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+@media print{.sidebar,.prototype-bar,.admin-top,.admin-title .toolbar,.filterbar,dialog,.btn,.preview-note{display:none!important}.admin-shell{display:block}.admin-content{padding:0}.table-wrap{overflow:visible}body{background:white}.panel{break-inside:avoid}}
+
+/* V4 extends the verified V3 brand tokens; charts are ordinal tier tracks. */
+:root{--v4-gap:14px;--v4-pad:18px;--v4-metric:28px;--v4-track-height:3px;--v4-dot:11px;--v4-chart-text:11px}
+.mobile-v4 .mobile-head{margin-bottom:16px}
+.mobile-v4 .month-label{font-size:11px;color:var(--muted);white-space:nowrap}
+.mobile-v4 .achievement{padding:var(--v4-pad);margin-bottom:18px}
+.achievement-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.achievement-head h2{font-size:15px}
+.achievement-head small{font-size:10px;color:var(--muted)}
+.mobile-v4 .ach-grid{margin:13px 0}
+.mobile-v4 .ach-grid strong{font-size:23px}
+.mobile-v4 .ach-grid small{font-size:11px}
+.mobile-v4 .fan-row{padding-top:10px}
+.mobile-v4 .fan-row>.icon{width:23px;height:23px}
+.mobile-v4 .fan-row>div{min-width:0}
+.mobile-v4 .reward-overview{border:0;margin-bottom:var(--v4-gap)}
+.mobile-v4 .reward-hero{padding:14px 20px 18px}
+.mobile-v4 .reward-hero .hero-value{margin:0 0 5px;font-size:38px}
+.business-card{padding:var(--v4-pad);background:var(--paper);border:1px solid var(--line-light);border-radius:var(--radius);margin-bottom:var(--v4-gap);min-width:0}
+.business-title{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--line-light)}
+.business-title h2{font-size:14px;font-weight:600}
+.business-title .money{font-size:21px;font-weight:600;white-space:nowrap}
+.metric-head{display:flex;justify-content:space-between;align-items:end;gap:12px;margin:16px 0 10px}
+.metric-head small{display:block;font-size:11px;color:var(--muted)}
+.metric-head .metric-value{font-size:var(--v4-metric);font-weight:550;line-height:1.5;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.metric-head .metric-value em{font-size:12px;font-weight:400;font-style:normal;margin-left:4px;letter-spacing:0}
+.metric-head .current-state{text-align:right;font-size:11px;line-height:1.8}
+.current-state b{display:block;font-weight:600;font-size:12px}
+.milestone-list{list-style:none;display:grid;grid-template-columns:repeat(var(--count),minmax(0,1fr));gap:0;padding:0;margin:17px 0 11px}
+.milestone{position:relative;min-width:0;text-align:center;font-size:var(--v4-chart-text);color:var(--muted);padding-top:4px}
+.milestone:before{content:'';position:absolute;top:9px;left:-50%;right:50%;height:var(--v4-track-height);background:var(--line-light)}
+.milestone:first-child:before{display:none}
+.milestone.reached:before{background:var(--wood-700)}
+.milestone .dot{position:relative;z-index:1;display:block;margin:0 auto 9px;width:var(--v4-dot);height:var(--v4-dot);border-radius:50%;background:var(--paper);border:2px solid var(--line)}
+.milestone.reached .dot{border-color:var(--wood-700);background:var(--wood-700)}
+.milestone.current .dot{outline:2px solid var(--wood-700);outline-offset:3px}
+.milestone .threshold{display:block;font-weight:600;white-space:nowrap;color:var(--ink)}
+.milestone .tier-value{display:block;white-space:nowrap;font-size:10px;letter-spacing:-.02em;line-height:1.9}
+.milestone .position-label{display:block;font-size:10px;min-height:20px}
+.milestone.current .position-label{font-weight:600;color:var(--ink)}
+.milestone-list.pending .milestone.reached:before{background:var(--line)}
+.milestone-list.pending .milestone.reached .dot{background:var(--paper);border-color:var(--wood-700)}
+.milestone-note{padding:9px 11px;background:var(--disabled);border-radius:7px;font-size:11px;line-height:1.8}
+.business-note{font-size:10px;color:var(--muted);line-height:1.8;margin-top:8px}
+.retention-summary{background:var(--soft);border:1px solid var(--line-light);border-radius:9px;padding:12px;margin-top:14px}
+.retention-summary .metric-head{margin:0;align-items:center}
+.retention-summary .metric-value{font-size:25px}
+.retention-summary .gate-note{font-size:10px;color:var(--muted);border-top:1px solid var(--line);padding-top:7px;margin-top:7px}
+.rate-section{padding-bottom:14px;border-bottom:1px solid var(--line-light)}
+.applied-reward{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:12px;margin:12px 0 8px}
+.applied-reward strong{font-size:17px;font-weight:550}
+.ten-day-section{padding-top:15px}
+.ten-day-section .applied-reward{margin:0 0 5px}
+.ten-day-section .applied-reward>span{font-weight:600}
+.mobile-v4 .next-reward{padding:12px;margin-top:12px;border:0;background:var(--disabled);border-radius:8px}
+.mobile-v4 .next-reward p{font-size:12px}
+.mobile-v4 .next-reward strong{font-size:23px}
+.mobile-v4 .next-footnote{margin:7px 0 0}
+.other-rewards{padding-top:3px;padding-bottom:3px}
+.other-rewards .reward-row{min-height:51px}
+.mobile-v4 .detail-group{margin-top:var(--v4-gap)}
+.mobile-v4 .service-group{margin-top:12px}
+.mobile-v4 .mobile-footer{padding-top:20px}
+@media(max-width:360px){:root{--v4-pad:14px;--v4-chart-text:10px}.mobile-v4 .ach-grid strong{font-size:21px}.business-title .money{font-size:19px}.milestone .tier-value{font-size:9px}.mobile-v4 .month-label{font-size:10px}.mobile-v4 .fan-row>span:last-child{font-size:11px}}
+
+/* V5: eight independent training projects, next-day progress, admin record management. */
+.side-item{width:100%;border:0;background:none;text-align:left;font:inherit;cursor:pointer}
+.side-item:hover{background:#5a4530;color:var(--on-dark)}
+.side-item.active:hover{background:var(--cream);color:var(--ink)}
+.side-item.placeholder{cursor:default;opacity:.72}
+.side-item.placeholder:hover{background:none;color:var(--on-dark-muted)}
+.side-item small{margin-left:auto;border:1px solid currentColor;border-radius:4px;padding:0 4px;font-size:9px;line-height:1.6;opacity:.8}
+.admin-main{min-width:0}
+.admin-kpis.five{grid-template-columns:repeat(5,minmax(0,1fr))}
+.summary-card .value small{font-size:13px;font-weight:500;letter-spacing:0}
+.training-teaser{display:flex;align-items:center;gap:24px;margin:18px 0;padding:18px 22px}
+.teaser-copy{flex:1;min-width:230px}
+.teaser-copy h2{margin:4px 0 5px}
+.teaser-copy p{font-size:12px;color:var(--muted);line-height:1.7}
+.teaser-stats{display:flex;gap:26px}
+.teaser-stats strong{display:block;font-size:25px;font-weight:550;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.teaser-stats small{display:block;font-size:10px;color:var(--muted);white-space:nowrap}
+.training-projects-panel{margin:18px 0}
+.project-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:4px}
+.project-chip{display:grid;gap:3px;text-align:left;padding:12px;border:1px solid var(--line-light);background:var(--paper);border-radius:10px;min-width:0;font:inherit;color:var(--ink)}
+.project-chip:hover{background:var(--soft)}
+.project-chip.on{border-color:var(--wood-700);background:var(--soft);box-shadow:inset 0 0 0 1px var(--wood-700)}
+.project-name{font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.project-rule{font-size:11px;color:var(--muted)}
+.project-stat{font-size:10px;color:var(--muted);line-height:1.65}
+.training-table td:nth-child(2){white-space:normal;min-width:148px;max-width:215px}
+.training-table td b{font-weight:550}
+.progress-cell{display:flex;align-items:center;gap:8px;min-width:135px}
+.progress-cell .progress{flex:1;min-width:48px}
+.progress-cell span{font-size:10px;color:var(--muted);white-space:nowrap}
+.training-table .tag{margin:0}
+.training-table td .btn{min-height:32px}
+.training-dialog-body{display:block;height:auto;max-height:74vh;overflow:auto;padding:22px 24px}
+#trainingDialog{width:min(600px,calc(100vw - 32px))}
+.training-form .form-grid .full{grid-column:1/-1}
+.training-form .keyval{font-size:12px;border-bottom:1px dashed var(--line-light)}
+.training-form .keyval:last-of-type{border-bottom:0}
+.training-form .calc-box{background:var(--disabled);padding:12px 14px;border-radius:8px;font-size:12px;line-height:1.8;margin-top:15px}
+.training-form .notice{margin:14px 0}
+.training-form-actions{justify-content:flex-end;margin-top:4px}
+.training-form .form-error{min-height:20px}
+.training-setting-table{overflow:auto;margin:16px 0;border:1px solid var(--line-light);border-radius:8px}
+.training-setting-table table{margin:0}
+.training-setting-table th{font-size:11px}
+.training-setting-table td{white-space:normal;vertical-align:middle;padding:10px 12px}
+.training-setting-table td:first-child{min-width:180px;background:var(--paper)}
+.training-setting-table td b{display:block;font-size:12px}
+.training-setting-table td small{display:block;font-size:10px;color:var(--muted)}
+.training-setting-table input{width:100%;max-width:130px;border:1px solid var(--line);border-radius:5px;padding:7px;min-height:36px;background:var(--paper)}
+.training-setting-table input:invalid{border-color:var(--error)}
+.training-setting-table tr:hover td{background:var(--soft)}
+.training-setting-table tr:hover td:first-child{background:var(--soft)}
+/* Mobile training card: current projects only; full eight-item list stays in the disclosure. */
+.training-card .business-title{margin-bottom:2px}
+.training-intro{font-size:11px;color:var(--muted);line-height:1.8;margin:12px 0 3px}
+.training-list{display:grid}
+.training-item{padding:13px 0;border-bottom:1px solid var(--line-light);min-width:0}
+.training-item:last-child{border-bottom:0;padding-bottom:2px}
+.training-item-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.training-item-head>div{min-width:0}
+.training-item-head b{display:block;font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.training-item-head small{display:block;font-size:10px;color:var(--muted);margin-top:2px;line-height:1.6}
+.training-line{display:flex;align-items:center;gap:9px;margin-top:10px}
+.training-line .progress{flex:1;min-width:40px}
+.training-line span{font-size:10px;color:var(--muted);white-space:nowrap}
+.training-foot{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:7px;font-size:10px;color:var(--muted)}
+.training-foot>span{min-width:0}
+.training-foot .money{font-size:12px;font-weight:550;color:var(--ink);white-space:nowrap;letter-spacing:0}
+.training-summary{display:flex;justify-content:space-between;gap:10px;font-size:10px;color:var(--muted);border-top:1px solid var(--line-light);margin-top:12px;padding-top:10px}
+.training-summary span:last-child{text-align:right}
+.training-past{font-size:10px;color:var(--muted);line-height:1.7;margin-top:8px}
+.training-empty{font-size:11px;color:var(--muted);padding:15px 0 8px;line-height:1.8}
+.tag.done{background:var(--cream);border-color:var(--line);color:var(--wood-700)}
+.tag.plain{background:var(--paper);color:var(--muted)}
+.training-all-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed var(--line-light);font-size:11px}
+.training-all-row:last-child{border-bottom:0}
+.training-all-row b{display:block;font-size:11px;font-weight:600;overflow-wrap:anywhere}
+.training-all-row small{display:block;font-size:9px;color:var(--muted);margin-top:2px}
+.training-all-progress{text-align:right;white-space:nowrap;font-size:10px;color:var(--muted)}
+.training-all-progress .tag{display:inline-flex;margin-left:6px;vertical-align:middle}
+@media(max-width:1350px){.admin-kpis.five{grid-template-columns:repeat(3,minmax(0,1fr))}.project-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1000px){.training-teaser{flex-wrap:wrap}.teaser-copy{flex-basis:100%}.teaser-stats{flex:1}.training-teaser>.toolbar{width:100%}.training-teaser>.toolbar .btn{flex:1}.project-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.admin-kpis.five{grid-template-columns:1fr 1fr}.training-teaser{padding:17px}.teaser-stats{gap:18px}.teaser-stats strong{font-size:22px}.project-grid{grid-template-columns:1fr 1fr}.training-dialog-body{padding:18px}.training-form .form-grid{grid-template-columns:1fr}.training-form .form-grid .full{grid-column:auto}.training-setting-table td:first-child{min-width:150px}}
+@media(max-width:480px){.project-grid{grid-template-columns:1fr}.teaser-stats{width:100%;justify-content:space-between}.teaser-stats strong{font-size:20px}.training-teaser>.toolbar{flex-direction:column}.training-teaser>.toolbar .btn{width:100%}}
+@media(max-width:360px){.training-item-head b{font-size:11px}.training-foot{font-size:9px;gap:6px}.training-foot .money{font-size:11px}.training-summary{font-size:9px}.training-card .business-title .money{font-size:19px}}
+@media print{.training-teaser,.project-grid,.filterbar{display:none!important}}
+/* Locked identity/project fields in the training dialog must read as non-editable. */
+.field select:disabled,.field input:disabled{background:var(--disabled);color:var(--muted);cursor:not-allowed;opacity:1;border-color:var(--line-light)}
+</style></head>
+<body data-surface="mobile"><div id="app"></div>
+<dialog id="settingsDialog" aria-labelledby="settingsTitle"><header class="dialog-head"><div><h2 id="settingsTitle">接单奖励参数</h2><p>仅修改本机演示配置，不写入正式系统</p></div><button class="icon-btn" data-close="settingsDialog" aria-label="关闭设置">×</button></header><div class="dialog-body"><nav class="settings-nav" id="settingsNav" aria-label="参数类别"></nav><div class="settings-content" id="settingsContent"></div></div><footer class="dialog-footer"><label class="field"><span>生效月份</span><input id="effective" type="month" value="2026-10" min="2026-10"></label><div><p id="settingsError" class="form-error" role="alert"></p><div class="toolbar"><button class="btn" data-close="settingsDialog">取消</button><button class="btn primary" id="saveSettings">保存演示版本</button></div></div></footer></dialog>
+<dialog class="drawer" id="detailDialog" aria-labelledby="detailTitle"><header class="dialog-head"><div><h2 id="detailTitle">伙伴明细</h2><p>接单奖励与合作结算</p></div><button class="icon-btn" data-close="detailDialog" aria-label="关闭明细">×</button></header><div class="drawer-body" id="detailBody"></div></dialog>
+<dialog id="trainingDialog" aria-labelledby="trainingTitle"><header class="dialog-head"><div><h2 id="trainingTitle">登记培训考核</h2><p>通过日期决定累计起点；次日起计算</p></div><button class="icon-btn" data-close="trainingDialog" aria-label="关闭考核登记">×</button></header><div class="dialog-body training-dialog-body" id="trainingFormBody"></div></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div><script>/* V5 交互原型共享引擎；不连接生产服务，不写正式账单。 */
+(function(root){
+'use strict';
+const clone=x=>JSON.parse(JSON.stringify(x));
+const round=x=>Math.round((x+Number.EPSILON)*100)/100;
+const TODAY='2026-10-21';
+
+/* 培训项目范围固定：全感舒筋 6 个部位 + 头部水疗 60/90 分钟。 */
+const TRAINING_PROJECTS=[
+ {id:'sujin-face',group:'全感舒筋',name:'面部',part:'面部',projectId:2,duration:null,target:5,amount:500},
+ {id:'sujin-hand',group:'全感舒筋',name:'手部',part:'手部',projectId:2,duration:null,target:5,amount:500},
+ {id:'sujin-head',group:'全感舒筋',name:'头部',part:'头部',projectId:2,duration:null,target:5,amount:500},
+ {id:'sujin-shoulder',group:'全感舒筋',name:'肩部',part:'肩部',projectId:2,duration:null,target:5,amount:500},
+ {id:'sujin-eye',group:'全感舒筋',name:'眼部',part:'眼部',projectId:2,duration:null,target:5,amount:500},
+ {id:'sujin-leg',group:'全感舒筋',name:'腿部',part:'腿部',projectId:2,duration:null,target:5,amount:500},
+ {id:'headspa-60',group:'头部水疗',name:'60 分钟',part:null,projectId:1,duration:60,target:5,amount:500},
+ {id:'headspa-90',group:'头部水疗',name:'90 分钟',part:null,projectId:1,duration:90,target:5,amount:500}
+];
+
+/* 模拟有效已完成订单：日期固定，不随考核日期移动。 */
+const ORDER_DATES={
+ rain:{
+  'sujin-head':['2026-01-20','2026-02-04','2026-02-18','2026-03-05','2026-03-19','2026-04-02','2026-04-16'],
+  'sujin-face':['2026-05-30','2026-06-16','2026-06-28','2026-07-10','2026-08-01'],
+  'sujin-shoulder':['2026-09-10','2026-09-26','2026-09-30','2026-10-05','2026-10-12','2026-10-18'],
+  'headspa-60':['2026-10-11','2026-10-15','2026-10-20']
+ },
+ sylvia:{
+  'sujin-eye':['2026-04-20','2026-05-07','2026-05-20','2026-06-02','2026-06-18','2026-07-01'],
+  'sujin-leg':['2026-08-01','2026-08-19','2026-09-02','2026-09-20','2026-10-03'],
+  'headspa-90':['2026-08-20','2026-09-02','2026-09-15','2026-09-29','2026-10-06','2026-10-14']
+ },
+ lin:{
+  'sujin-shoulder':['2026-03-30','2026-04-11','2026-04-25','2026-05-08','2026-05-22','2026-06-04'],
+  'sujin-head':['2026-09-01','2026-09-16','2026-09-25','2026-10-02','2026-10-09','2026-10-16'],
+  'headspa-60':['2026-06-02','2026-06-20','2026-07-05','2026-07-30'],
+  'sujin-face':['2026-10-13','2026-10-17']
+ },
+ tom:{
+  'sujin-head':['2026-03-10','2026-03-21','2026-04-04','2026-04-20','2026-05-06','2026-05-25'],
+  'headspa-90':['2026-09-20','2026-10-06','2026-10-10','2026-10-16']
+ },
+ ivy:{
+  'sujin-face':['2026-09-21','2026-10-02','2026-10-12']
+ },
+ ning:{
+  'sujin-eye':['2026-07-02','2026-07-18','2026-08-02','2026-08-19','2026-09-03','2026-09-22'],
+  'sujin-leg':['2026-08-28','2026-09-11','2026-09-24','2026-10-01','2026-10-08'],
+  'headspa-60':['2026-09-26','2026-09-30','2026-10-05','2026-10-11','2026-10-17'],
+  'sujin-shoulder':['2026-06-09','2026-06-22','2026-07-04','2026-07-19','2026-08-04']
+ }
+};
+const TRAINING_ORDERS=Object.entries(ORDER_DATES).flatMap(([personId,projects])=>Object.entries(projects).flatMap(([projectId,dates])=>dates.map(date=>({personId,projectId,date}))));
+
+/* 考核通过日期由管理端单独维护；同一疗愈师同一项目保留一条当前记录。 */
+const TRAINING_RECORDS=[
+ {personId:'rain',projectId:'sujin-head',passedAt:'2026-02-03'},
+ {personId:'rain',projectId:'sujin-face',passedAt:'2026-06-15'},
+ {personId:'rain',projectId:'sujin-shoulder',passedAt:'2026-09-25'},
+ {personId:'rain',projectId:'headspa-60',passedAt:'2026-10-10'},
+ {personId:'sylvia',projectId:'sujin-eye',passedAt:'2026-05-06'},
+ {personId:'sylvia',projectId:'sujin-leg',passedAt:'2026-08-18'},
+ {personId:'sylvia',projectId:'headspa-90',passedAt:'2026-09-01'},
+ {personId:'lin',projectId:'sujin-shoulder',passedAt:'2026-04-10'},
+ {personId:'lin',projectId:'sujin-head',passedAt:'2026-09-15'},
+ {personId:'lin',projectId:'headspa-60',passedAt:'2026-06-01'},
+ {personId:'lin',projectId:'sujin-face',passedAt:'2026-10-12'},
+ {personId:'tom',projectId:'sujin-head',passedAt:'2026-03-20'},
+ {personId:'tom',projectId:'headspa-90',passedAt:'2026-10-05'},
+ {personId:'ivy',projectId:'sujin-face',passedAt:'2026-09-20'},
+ {personId:'ning',projectId:'sujin-eye',passedAt:'2026-07-01'},
+ {personId:'ning',projectId:'sujin-leg',passedAt:'2026-09-10'},
+ {personId:'ning',projectId:'headspa-60',passedAt:'2026-09-25'},
+ {personId:'ning',projectId:'sujin-shoulder',passedAt:'2026-06-08'}
+];
+
+const DEFAULT={
+ schema:5,version:'2026-10 · V5示例',effective:'2026-10',
+ a1:10,a2:10,cap:130,retention:60,minNew:30,retentionLength:6,retentionOffset:2,conversionLength:3,conversionOffset:1,
+ coefficients:[1,1.2,1.3,1.5],newCoefficient:0.8,
+ tiers:[{rate:10,amount:200},{rate:12,amount:400},{rate:15,amount:800},{rate:18,amount:1100},{rate:20,amount:1500}],
+ trainingProjects:clone(TRAINING_PROJECTS),
+ shops:[{id:'west',name:'西岸店',target:200000,commissionRate:1},{id:'raffles',name:'来福士店',target:180000,commissionRate:1}]
+};
+
+const PEOPLE=[
+ {id:'rain',name:'张小雨',initial:'雨',shop:'west',manager:false,minutes:8100,retained:136,senior:214,newCount:45,returned:7,weights:[1,1,1,1],adjustments:[{name:'服务时长补记',amount:120},{name:'前期结算修正',amount:-20}],priorIncome:18000,priorTax:132,entry:'2026-01-08'},
+ {id:'sylvia',name:'雅雅 Sylvia',initial:'雅',shop:'west',manager:false,minutes:8640,retained:90,senior:150,newCount:40,returned:5,weights:[1,1,1,1,0.5],adjustments:[],priorIncome:19000,priorTax:156,entry:'2025-11-12'},
+ {id:'lin',name:'林然',initial:'林',shop:'west',manager:true,minutes:6900,retained:126,senior:180,newCount:50,returned:10,weights:[1,1,1,1,1,1,1,1],adjustments:[],priorIncome:16000,priorTax:84,entry:'2025-08-10'},
+ {id:'tom',name:'阿周 Tom',initial:'周',shop:'raffles',manager:false,minutes:7800,retained:116,senior:200,newCount:40,returned:6,weights:[1,1,1,0.5],adjustments:[],priorIncome:15000,priorTax:60,entry:'2026-02-03'},
+ {id:'ivy',name:'豆子 Ivy',initial:'豆',shop:'raffles',manager:false,newPartner:true,minutes:3600,retained:19,senior:30,newCount:20,returned:3,weights:[1,1],adjustments:[],priorIncome:3000,priorTax:0,entry:'2026-09-15'},
+ {id:'ning',name:'周宁',initial:'宁',shop:'raffles',manager:true,minutes:9601,retained:145,senior:210,newCount:50,returned:9,weights:[1,1,1,1,1,1],adjustments:[],priorIncome:21000,priorTax:204,entry:'2025-09-12'}
+];
+const REVENUE={west:216800,raffles:169200};
+
+function sequence(count,c){let a=Math.round(c.a1*100),b=Math.round(c.a2*100),cap=Math.round(c.cap*100),out=[];for(let n=0;n<count;n++){const raw=n===0?a:n===1?b:Math.min(a+b,cap);if(n>1){a=b;b=raw;}out.push(Math.min(raw,cap)/100);}return out;}
+function fib(weights,c){const prices=sequence(weights.length+1,c);return {amount:round(weights.reduce((s,w,i)=>s+w*prices[i],0)),heads:round(weights.reduce((s,w)=>s+w,0)),count:weights.length,nextSeq:weights.length+1,next:prices[weights.length],prices};}
+function coefficient(minutes,c,newPartner=false){return newPartner?c.newCoefficient:c.coefficients[minutes<7200?0:minutes<8400?1:minutes<9600?2:3];}
+function shiftMonth(month,delta){const [y,m]=month.split('-').map(Number);const d=new Date(Date.UTC(y,m-1+delta,1));return d.toISOString().slice(0,7);}
+function windowFor(month,len,offset){return shiftMonth(month,-offset-len+1)+' ~ '+shiftMonth(month,-offset);}
+function ruleFor(month,versions){return versions.filter(x=>x.effective<=month).sort((a,b)=>b.effective.localeCompare(a.effective))[0];}
+function monthEnd(month){const [y,m]=month.split('-').map(Number);return new Date(Date.UTC(y,m,0)).toISOString().slice(0,10);}
+function addDays(date,days){const [y,m,d]=date.split('-').map(Number);return new Date(Date.UTC(y,m-1,d+days)).toISOString().slice(0,10);}
+
+function trainingSummary(p,c,month='2026-10',data,asOf=TODAY){
+ const records=data?.records||TRAINING_RECORDS,orders=data?.orders||TRAINING_ORDERS;
+ const end=monthEnd(month),cutoff=month===TODAY.slice(0,7)?(asOf<end?asOf:end):end;
+ const rows=(c.trainingProjects||[]).map(project=>{
+  const record=records.filter(r=>r.personId===p.id&&r.projectId===project.id).sort((a,b)=>String(b.passedAt).localeCompare(String(a.passedAt)))[0]||null;
+  if(!record)return {projectId:project.id,project,passedAt:null,start:null,status:'uncertified',count:0,rawCount:0,target:project.target,remaining:project.target,completionDate:null,completionMonth:null,completedThisMonth:false,earnedThisMonth:0};
+  const start=addDays(record.passedAt,1);
+  const through=orders.filter(o=>o.personId===p.id&&o.projectId===project.id&&o.date>=start&&o.date<=cutoff).sort((a,b)=>a.date.localeCompare(b.date));
+  const reached=through.length>=project.target,completionDate=reached?through[project.target-1].date:null,completionMonth=completionDate?completionDate.slice(0,7):null;
+  const completedThisMonth=completionMonth===month;
+  const status=start>cutoff?'upcoming':reached?(completedThisMonth?'completed-this-month':'completed'):'active';
+  return {projectId:project.id,project,passedAt:record.passedAt,start,status,count:Math.min(through.length,project.target),rawCount:through.length,target:project.target,remaining:Math.max(0,project.target-through.length),completionDate,completionMonth,completedThisMonth,earnedThisMonth:completedThisMonth?project.amount:0};
+ });
+ return {rows,total:round(rows.reduce((s,r)=>s+r.earnedThisMonth,0)),registered:rows.filter(r=>r.passedAt).length,active:rows.filter(r=>r.status==='active').length,completedThisMonth:rows.filter(r=>r.completedThisMonth).length};
+}
+
+function calculate(p,c,month='2026-10',revenue=REVENUE,trainingData){
+ const coeff=coefficient(p.minutes,c,p.newPartner),base=round(p.minutes*coeff);
+ const retention=p.senior?p.retained/p.senior*100:0,conversion=p.newCount?p.returned/p.newCount*100:0;
+ const eligible=p.senior>0&&retention+1e-10>=c.retention;
+ const tier=c.tiers.filter(x=>conversion+1e-10>=x.rate).at(-1),tierPotential=p.newCount>=c.minNew&&tier?tier.amount:0;
+ const nextTier=c.tiers.find(x=>x.rate>conversion+1e-10)||null;
+ const f=fib(p.weights,c),repurchase=eligible?round(tierPotential+f.amount):0;
+ const trainingDataFinal=trainingData||{records:TRAINING_RECORDS,orders:TRAINING_ORDERS};
+ const trainingResult=trainingSummary(p,c,month,trainingDataFinal,TODAY);
+ const training=trainingResult.total;
+ const shop=c.shops.find(x=>x.id===p.shop),sales=revenue[p.shop]||0,manager=p.manager&&sales>=shop.target?round(sales*shop.commissionRate/100):0;
+ const adjustment=round(p.adjustments.reduce((s,x)=>s+x.amount,0));
+ const subtotal=round(base+manager+training+repurchase),gross=round(subtotal+adjustment);
+ const preTax=Math.max(0,Math.round(gross/1.068)),serviceDifference=round(gross-preTax);
+ const priorIncome=p.priorIncome||0,priorTax=p.priorTax||0,continuousMonths=month==='2026-09'?2:3;
+ const annual=round(priorIncome+preTax),taxable=Math.max(0,round(annual*0.8-continuousMonths*5000));
+ const taxTable=[[36000,3,0],[144000,10,2520],[300000,20,16920],[420000,25,31920],[660000,30,52920],[960000,35,85920],[Infinity,45,181920]];
+ const bracket=taxTable.find(x=>taxable<=x[0]),taxRate=taxable?bracket[1]:0,quick=taxable?bracket[2]:0;
+ const tax=Math.max(0,round(taxable*taxRate/100-quick-priorTax)),net=round(preTax-tax);
+ return {coeff,base,retention,conversion,eligible,tierPotential,tier:eligible?tierPotential:0,nextTier,needed:nextTier?Math.max(0,Math.ceil(nextTier.rate*p.newCount/100-p.returned-1e-10)):0,f,repurchase,training,trainingResult,manager,shop,sales,adjustment,subtotal,gross,preTax,serviceDifference,annual,taxable,taxRate,quick,priorTax,tax,net,continuousMonths};
+}
+
+function validation(c){
+ if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(c.effective))return '请选择有效的生效月份';
+ if(c.schema!==5)return '请使用 V5 规则配置';
+ if(!Array.isArray(c.trainingProjects)||!c.trainingProjects.length)return '至少保留一个培训项目';
+ if(c.trainingProjects.some(p=>!p.name||!String(p.name).trim()))return '培训项目名称不能为空';
+ if(new Set(c.trainingProjects.map(p=>p.id)).size!==c.trainingProjects.length)return '培训项目编号须唯一';
+ if(c.trainingProjects.some(p=>!Number.isInteger(p.target)||p.target<1||p.target>999))return '培训项目次数须为 1–999 的整数';
+ if(c.trainingProjects.some(p=>!Number.isFinite(p.amount)||p.amount<0))return '培训补贴金额须为非负金额';
+ if([c.a1,c.a2,c.cap,...c.coefficients,c.newCoefficient,...c.shops.map(x=>x.target),...c.tiers.map(x=>x.amount)].some(x=>!Number.isFinite(x)||x<=0))return '单价、系数、目标和奖励金额须大于 0';
+ if(c.shops.some(x=>!Number.isFinite(x.commissionRate)||x.commissionRate<0||x.commissionRate>100))return '店长提点须在 0% 至 100% 之间';
+ if(c.a2<c.a1||c.cap<Math.max(c.a1,c.a2))return '第二项不得低于第一项；单价上限不得低于两项种子';
+ if(!Number.isFinite(c.retention)||c.retention<0||c.retention>100)return '留存率条件须在 0% 至 100% 之间';
+ if(!Number.isInteger(c.minNew)||c.minNew<1)return '新客样本数须为正整数';
+ if([c.retentionLength,c.conversionLength].some(x=>!Number.isInteger(x)||x<1||x>12)||[c.retentionOffset,c.conversionOffset].some(x=>!Number.isInteger(x)||x<1||x>12))return '窗口长度和偏移须为 1 至 12 的整数';
+ if(c.tiers.some((x,i)=>!Number.isFinite(x.rate)||x.rate<=0||x.rate>100||(i>0&&(x.rate<=c.tiers[i-1].rate||x.amount<c.tiers[i-1].amount))))return '复购率档位须从小到大且金额不递减';
+ if(c.coefficients.some((x,i)=>i>0&&x<c.coefficients[i-1]))return '基础系数应随时长区间递增或持平';
+ return '';
+}
+
+root.Incentive={DEFAULT,PEOPLE,REVENUE,TODAY,TRAINING_PROJECTS,TRAINING_RECORDS,TRAINING_ORDERS,clone,round,sequence,fib,coefficient,calculate,validation,shiftMonth,windowFor,ruleFor,monthEnd,addDays,trainingSummary};
+if(typeof module!=='undefined')module.exports=root.Incentive;
+})(typeof window!=='undefined'?window:globalThis);
+
+(function(root){
+'use strict';
+const E=Incentive;
+function duration(p,c){
+ const boundaries=[7200,8400,9600];
+ const stage=p.newPartner?-1:p.minutes<7200?0:p.minutes<8400?1:p.minutes<9600?2:3;
+ const nextBoundary=stage>=0&&stage<3?boundaries[stage]:null;
+ return {stage,minutes:p.minutes,hours:p.minutes/60,coeff:E.coefficient(p.minutes,c,p.newPartner),nextBoundary,remaining:nextBoundary===null?0:Math.max(0,nextBoundary-p.minutes)};
+}
+function conversion(p,c){
+ const r=E.calculate(p,c);
+ const stage=p.newCount?c.tiers.reduce((found,t,i)=>r.conversion+1e-10>=t.rate?i:found,-1):-1;
+ const reason=!r.eligible?'retention':p.newCount<c.minNew?'sample':null;
+ return {stage,applied:reason===null&&stage>=0,reason,amount:r.tier,next:r.nextTier,needed:r.needed};
+}
+root.Milestones={duration,conversion};
+})(typeof window!=='undefined'?window:globalThis);
+
+/* V5 presentation shell. Demo only; all state remains local. */
+(function(){
+'use strict';
+const E=Incentive,$=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const SURFACE=document.body.dataset.surface,STORE='fullyu-incentive-demo-v5',TODAY=E.TODAY;
+const MOBILE='Full愈-接单奖励-手机端Demo-V5.html',PC='Full愈-激励管理-PC端Demo-V5.html';
+const initial=E.clone(E.DEFAULT),sep={...E.clone(initial),effective:'2026-09',version:'2026-09 · 历史演示'};
+let versions=[sep,initial],audit=[],people=E.clone(E.PEOPLE),revenues=E.clone(E.REVENUE),month='2026-10';
+let trainingRecords=E.clone(E.TRAINING_RECORDS),trainingOrders=E.clone(E.TRAINING_ORDERS);
+let personId=new URLSearchParams(location.search).get('person')||'rain',role='admin',shopFilter='all',query='',gateFilter='all';
+let adminView='dashboard',trainingFilter={shop:'all',project:'all',status:'registered',query:''};
+let hiddenMoney=false;
+function normalizeRecords(records){
+ const peopleIds=new Set(people.map(p=>p.id)),projectIds=new Set(E.DEFAULT.trainingProjects.map(p=>p.id)),seen=new Set();
+ return (Array.isArray(records)?records:[]).filter(r=>r&&peopleIds.has(r.personId)&&projectIds.has(r.projectId)&&/^\d{4}-\d{2}-\d{2}$/.test(r.passedAt)&&r.passedAt<=TODAY).filter(r=>{const k=r.personId+'|'+r.projectId;if(seen.has(k))return false;seen.add(k);return true;}).map(r=>({personId:r.personId,projectId:r.projectId,passedAt:r.passedAt}));
+}
+function normalizeOrders(orders){
+ const peopleIds=new Set(people.map(p=>p.id)),projectIds=new Set(E.DEFAULT.trainingProjects.map(p=>p.id));
+ return (Array.isArray(orders)?orders:[]).filter(o=>o&&peopleIds.has(o.personId)&&projectIds.has(o.projectId)&&/^\d{4}-\d{2}-\d{2}$/.test(o.date)&&o.date<=TODAY).map(o=>({personId:o.personId,projectId:o.projectId,date:o.date}));
+}
+try{const s=JSON.parse(localStorage.getItem(STORE)||'null');if(s?.versions?.length&&s.versions.every(c=>!E.validation(c))){versions=s.versions;audit=s.audit||[];trainingRecords=normalizeRecords(s.trainingRecords||trainingRecords);if(Array.isArray(s.trainingOrders))trainingOrders=normalizeOrders(s.trainingOrders);}}catch(e){}
+try{if(location.hash.startsWith('#v5=')){const s=JSON.parse(decodeURIComponent(location.hash.slice(4)));if(s?.versions?.length&&s.versions.every(c=>!E.validation(c)))versions=s.versions;if(Array.isArray(s.records))trainingRecords=normalizeRecords(s.records);if(Array.isArray(s.orders))trainingOrders=normalizeOrders(s.orders);}}catch(e){}
+if(!people.some(p=>p.id===personId))personId='rain';
+const paths={grid:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',chart:'M4 3v17h17 M8 15l4-5 4 2 5-7',settings:'M4 7h16 M4 17h16 M8 4v6 M16 14v6',arrow:'M5 12h14 M14 7l5 5-5 5',clock:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18 M12 7v5l3 2',heart:'M20 5a5 5 0 0 0-8 1 5 5 0 0 0-8-1c-5 5 8 15 8 15s13-10 8-15z',book:'M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1z M12 5v15',award:'M12 3l3 5 6 1-4 5 1 6-6-3-6 3 1-6-4-5 6-1z',eye:'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6',download:'M12 3v12 M7 10l5 5 5-5 M4 16v5h16v-5',user:'M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M4 21v-2a8 8 0 0 1 16 0v2',lock:'M7 11V7a5 5 0 0 1 10 0v4 M5 11h14v10H5z',chevron:'M5 9l7 7 7-7',edit:'M4 20h4l11-11-4-4L4 16z M13 5l4 4',plus:'M12 5v14 M5 12h14',calendar:'M4 6h16v15H4z M8 3v6 M16 3v6 M4 10h16'};
+function icon(n){return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[n]||paths.grid}"/></svg>`;}
+function fmt(n,d=2){return Number(n).toLocaleString('zh-CN',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function cash(n){return hiddenMoney?'••••':'¥'+fmt(n);}
+function num(n){return Number(n).toLocaleString('zh-CN',{maximumFractionDigits:2});}
+function cfg(){return E.ruleFor(month,versions)||initial;}
+function currentCfg(){return E.ruleFor(TODAY.slice(0,7),versions)||initial;}
+function person(){return people.find(p=>p.id===personId);}
+function pm(p){return month==='2026-09'?{...p,minutes:Math.max(0,p.minutes-660),weights:p.weights.slice(0,-1),priorIncome:8000,priorTax:42}:p;}
+function trainingData(){return {records:trainingRecords,orders:trainingOrders};}
+function calc(p){return E.calculate(pm(p),cfg(),month,revenues,trainingData());}
+function trainingSummaryFor(p,m=month,asOf=TODAY,c=cfg()){return E.trainingSummary(p,c,m,trainingData(),asOf);}
+function trainingProject(id){return E.DEFAULT.trainingProjects.find(p=>p.id===id);}
+function trainingName(project){return project?project.group+' · '+project.name:'未知项目';}
+function trainingStatusLabel(row){
+ if(row.status==='completed-this-month')return '本月达标';
+ if(row.status==='completed')return '已达标';
+ if(row.status==='upcoming')return '待开始';
+ if(row.status==='active')return '进行中';
+ return '未登记';
+}
+function trainingStatusClass(row){
+ if(row.status==='completed-this-month')return 'filled';
+ if(row.status==='completed')return 'done';
+ if(row.status==='active')return 'soft';
+ return 'plain';
+}
+function trainingRowsForPeople(list,asOf=TODAY){
+ const c=currentCfg(),m=TODAY.slice(0,7);
+ return list.flatMap(p=>{
+  const s=E.trainingSummary(p,c,m,trainingData(),asOf);
+  return s.rows.filter(r=>r.passedAt).map(r=>({...r,person:p,shop:c.shops.find(x=>x.id===p.shop)}));
+ });
+}
+function progress(n){return `<div class="progress"><i style="width:${Math.max(0,Math.min(n,100))}%"></i></div>`;}
+function kv(k,v,cl=''){return `<div class="keyval ${cl}"><span>${k}</span><span>${v}</span></div>`;}
+function option(v,t,cur){return `<option value="${esc(v)}" ${String(cur)===String(v)?'selected':''}>${esc(t)}</option>`;}
+function monthOptions(){return option('2026-10','2026 年 10 月',month)+option('2026-09','2026 年 9 月',month)+option('2026-08','2026 年 8 月 · 无记录',month);}
+function link(file,id){const payload={versions,records:trainingRecords,orders:trainingOrders};return file+(id?'?person='+encodeURIComponent(id):'')+'#v5='+encodeURIComponent(JSON.stringify(payload));}
+function toast(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('toast').hidden=true,3000);}
+function persist(){try{localStorage.setItem(STORE,JSON.stringify({versions,audit,trainingRecords,trainingOrders}));}catch(e){toast('本次设置已应用；浏览器未开放本地存储');}}
+function render(){
+ const active=document.activeElement,id=active?.id,action=active?.dataset.sim;
+ const open=[...document.querySelectorAll('#app details[id][open]')].map(n=>n.id);
+ SURFACE==='admin'?renderAdmin():renderMobile();
+ open.forEach(id=>{if($(id))$(id).open=true;});
+ const target=id?$(id):action?document.querySelector(`[data-sim="${action}"]`):null;
+ target?.focus({preventScroll:true});
+}
+function selectedPeople(){return people.filter(p=>(role!=='manager'||p.shop==='west')&&(shopFilter==='all'||p.shop===shopFilter)&&(!query||p.name.toLowerCase().includes(query.toLowerCase()))&&(gateFilter==='all'||(gateFilter==='yes')===calc(p).eligible));}
+function exportCsv(list){
+ if(!list.length){toast('当前没有可导出的记录');return;}
+ const rows=[['月份','门店','伙伴','折算分钟','系数','基础接单奖励','60天留存率','30天复购率','10天加权复购数','30天奖励','10天奖励','店长提点比例','店长接单奖励','培训补贴','培训项目进度','其他调整','接单奖励合计','费用换算后金额','预扣税额','预计合作结算'],...list.map(p=>{const r=calc(p);const progress=r.trainingResult.rows.filter(x=>x.passedAt).map(x=>`${trainingName(x.project)} ${x.count}/${x.target}单${x.status==='completed-this-month'?'（本月达标）':x.status==='completed'?'（'+x.completionMonth+'已计入）':''}`).join('；')||'未登记';return [month,r.shop.name,p.name,pm(p).minutes,r.coeff,r.base,fmt(r.retention)+'%',fmt(r.conversion)+'%',r.f.heads,r.tier,r.eligible?r.f.amount:0,p.manager?r.shop.commissionRate+'%':'—',r.manager,r.training,progress,r.adjustment,r.subtotal,r.preTax,r.tax,r.net];})];
+ const blob=new Blob(['\uFEFF'+rows.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Full愈-接单奖励报表-V5-模拟数据-'+month+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('已导出当前筛选的模拟报表');
+}
+/* Mobile and admin detail use the same reward presentation and calculator. */
+function disclosure(id,title,content,caption=''){
+ return `<details class="disclosure" id="${id}"><summary><span>${title}${caption?`<small>${caption}</small>`:''}</span>${icon('chevron')}</summary><div class="disclosure-body">${content}</div></details>`;
+}
+function milestoneHTML(id,items,stage,pending=false){
+ return `<ol id="${id}" class="milestone-list ${pending?'pending':''}" style="--count:${items.length}" aria-label="${id==='durationTrack'?'基础系数档位':'30天复购档位'}">${items.map((t,i)=>`<li class="milestone ${i<=stage?'reached':''} ${i===stage?'current':''}" ${i===stage?'aria-current="step"':''}><i class="dot" aria-hidden="true"></i><span class="threshold">${t.label}</span><span class="tier-value">${t.value}</span><span class="position-label">${i===stage?(pending?'指标所在档':'当前档'):''}</span></li>`).join('')}</ol>`;
+}
+function durationHTML(q,c,r){
+ const d=Milestones.duration(q,c),labels=['不足120h','120–&lt;140h','140–&lt;160h','≥160h'];
+ const note=q.newPartner?'当前采用新伙伴专属系数，标准时长阶梯暂不适用。':d.stage===3?`已在最高时长档，继续接单仍按 ${num(d.coeff)} 元/分钟累计。`:`再累计 ${num(d.remaining)} 分钟达到 ${num(d.nextBoundary/60)} 小时，进入第 ${d.stage+2} 档。`;
+ return `<section class="business-card" id="baseCard"><header class="business-title"><h2>基础接单奖励</h2><strong class="money" id="baseAmount">${cash(r.base)}</strong></header><div class="metric-head"><div><small>当月累计时长 · 折算上钟</small><div class="metric-value" id="durationValue">${num(d.hours)}<em>小时</em></div></div><div class="current-state" id="durationState"><b>${q.newPartner?'新伙伴专属':'当前第 '+(d.stage+1)+' 档'}</b>${num(d.coeff)} 元 / 分钟</div></div>${milestoneHTML('durationTrack',c.coefficients.map((v,i)=>({label:labels[i],value:num(v)+' 元/分钟'})),d.stage)}<p class="milestone-note" id="durationNext">${note}</p><p class="business-note">本月 ${num(d.minutes)} 分钟 × ${num(d.coeff)} 元/分钟；全月按同一系数计算。<br>达到 120 / 140 / 160 小时即进入下一档。</p></section>`;
+}
+function repurchaseHTML(q,c,r){
+ const t=Milestones.conversion(q,c),hasSample=q.newCount>=c.minNew;
+ const rate=n=>fmt(Math.floor((n+1e-10)*100)/100,2)+'%';
+ const state=!hasSample?'样本不足，暂不计档':t.stage<0?'尚未进入首档':r.eligible?'当前 '+c.tiers[t.stage].rate+'% 档':'指标在 '+c.tiers[t.stage].rate+'% 档';
+ const next=!hasSample?`新客样本 ${num(q.newCount)} / ${c.minNew}，补足后才参与 30 天档位。`:t.next?`达到 ${t.next.rate}% 档还需 ${num(t.needed)} 位复购，奖励至少增加 ${cash(t.next.amount-r.tierPotential)}。`:'已在最高复购档，10 天复购仍可继续累计。';
+ return `<section class="business-card" id="repurchaseCard"><header class="business-title"><h2>复购接单奖励</h2><strong class="money" id="repurchaseAmount">${cash(r.repurchase)}</strong></header>
+ <div class="retention-summary"><div class="metric-head"><div><small>老客 60 天留存率</small><div class="metric-value" id="retentionValue">${q.senior?rate(r.retention):'—'}</div></div><div class="current-state" id="retentionState"><b>${r.eligible?'已达标':'未达标'}</b>门槛 ${c.retention}%</div></div><p class="gate-note">${r.eligible?'已满足两类复购奖励的共同前提':'留存达标后，30 天与 10 天复购奖励才计入'}${q.senior<50?' · 老客样本较少':''}</p></div>
+ <div class="rate-section"><div class="metric-head"><div><small>新客 30 天复购率</small><div class="metric-value" id="conversionValue">${q.newCount?rate(r.conversion):'—'}</div></div><div class="current-state" id="conversionState"><b>${state}</b>${num(q.returned)} / ${num(q.newCount)} 位</div></div>${milestoneHTML('conversionTrack',c.tiers.map(t=>({label:t.rate+'%',value:cash(t.amount)})),t.stage,!t.applied)}<div class="applied-reward"><span>30 天档位奖励${t.applied?'':' · 尚未计入'}</span><strong class="money" id="thirtyDayAmount">${cash(r.tier)}</strong></div><p class="milestone-note" id="conversionNext">${next}${r.eligible?'':' 须先满足留存条件。'}</p><p class="business-note">取最高一档，不叠加；下一档人数按新客分母不变试算。</p></div>
+ <div class="ten-day-section"><div class="applied-reward"><span>新客 10 天复购奖励</span><strong class="money" id="tenDayAmount">${cash(r.eligible?r.f.amount:0)}</strong></div><p class="business-note">${num(r.f.heads)} 位加权复购 · ${r.eligible?'按递增单价累计':'留存未达标，暂未计入'}</p><div class="next-reward"><div><p>下一位新客 10 天内再来</p><small>${r.eligible?'接单奖励可再增加':'满足留存条件后可增加'}</small></div><strong class="money" id="nextReward">${hiddenMoney?'••••':'+'+cash(r.f.next)}</strong></div><p class="next-footnote">第 ${r.f.nextSeq} 位 · ${r.f.next>=c.cap?'已到单价上限，后续继续累计':'按完整归属一位试算'}</p></div></section>`;
+}
+function trainingItemHTML(row){
+ const project=row.project,certified=!!row.passedAt;
+ const status=trainingStatusLabel(row),cls=trainingStatusClass(row);
+ let note='',amount='';
+ if(!certified){note='未登记考核，暂不累计';amount='—';}
+ else if(row.status==='completed-this-month'){note=`${row.completionDate} 达标 · 计入本月`;amount='+'+cash(row.project.amount);}
+ else if(row.status==='completed'){note=`已于 ${row.completionMonth} 计入 · 不重复发放`;amount='已计入 '+cash(row.project.amount);}
+ else if(row.status==='upcoming'){note=`${row.start} 起开始累计`;amount=`达标 ${cash(row.project.amount)}`;}
+ else {note=`还差 ${row.remaining} 单`;amount=`达标 ${cash(row.project.amount)}`;}
+ return `<article class="training-item" data-training-project="${project.id}" data-training-status="${row.status}"><div class="training-item-head"><div><b>${trainingName(project)}</b><small>${certified?row.passedAt+' 通过考核 · 次日起累计':'管理端尚未登记考核'}</small></div><span class="tag ${cls}">${status}</span></div><div class="training-line">${progress(row.count/row.target*100)}<span>${row.count} / ${row.target} 单</span></div><div class="training-foot"><span>${note}</span><strong class="money">${amount}</strong></div></article>`;
+}
+function trainingHTML(p,c,r){
+ const s=trainingSummaryFor(p),registered=s.rows.filter(x=>x.passedAt),visible=registered.filter(x=>x.status!=='completed'),past=registered.filter(x=>x.status==='completed'),uncertified=s.rows.length-registered.length;
+ visible.sort((a,b)=>{const order={ 'completed-this-month':0,active:1,upcoming:2};return (order[a.status]??3)-(order[b.status]??3);});
+ return `<section class="business-card training-card" id="trainingCard"><header class="business-title"><h2>培训补贴</h2><strong class="money" id="trainingAmount">${cash(r.training)}</strong></header><p class="training-intro">通过考核的次日起累计对应项目订单，达到目标后补贴计入达标当月。</p><div class="training-list">${visible.length?visible.map(trainingItemHTML).join(''):`<div class="training-empty">本月没有进行中的培训项目${past.length?`；${past.length} 个已在此前月份达标`:''}。</div>`}</div><div class="training-summary"><span>已登记 ${registered.length} / ${s.rows.length} 个项目</span><span>${s.completedThisMonth?`本月达标 ${s.completedThisMonth} 项`:(uncertified?uncertified+' 项未登记考核':'本月暂无达标')}</span></div>${past.length?`<p class="training-past">此前已达标 ${past.length} 项，已计入历史月份；详情见下方“培训项目与考核”。</p>`:''}<p class="business-note">未登记考核的项目不累计；考核日期与项目参数由管理端维护。每个项目只计入达标当月，不在后续月份重复发放。</p></section>`;
+}
+function trainingDetailHTML(s){
+ return `<div class="training-all" id="trainingAllList">${s.rows.map(row=>`<div class="training-all-row" data-training-detail="${row.project.id}"><div><b>${trainingName(row.project)}</b><small>${row.passedAt?row.passedAt+' 通过':'未登记考核'}</small></div><div class="training-all-progress">${row.passedAt?`${row.count} / ${row.target} 单`:'—'}<span class="tag ${trainingStatusClass(row)}">${trainingStatusLabel(row)}</span></div></div>`).join('')}</div><p>每个项目独立累计；舒筋 6 个部位与头部水疗 60/90 分钟分别计算。修改考核日期会按同一批有效订单重新计算进度，但已计入的达标月份需要按正式结算冻结规则处理。</p>`;
+}
+function rewardHTML(p,drawer=false){
+ const r=calc(p),c=cfg(),q=pm(p),prefix=drawer?'drawer-':'',history=month==='2026-09';
+ const train=trainingSummaryFor(p);
+ const moneyButton=drawer?'':`<button id="moneyToggle" class="money-button" aria-label="${hiddenMoney?'显示':'隐藏'}奖励金额">${icon('eye')}</button>`;
+ const rows=[...(p.manager?[['店长接单奖励',r.manager,'managerAmount']]:[])];
+ const breakdown=rows.length?`<section class="business-card other-rewards" aria-label="其他奖励构成">${rows.map(([title,amount,id])=>`<div class="reward-row" ${id==='managerAmount'?'data-manager-reward':''}><span>${title}</span><strong class="money" id="${prefix+id}">${cash(amount)}</strong></div>`).join('')}</section>`:'';
+ const baseRule=`<h4>基础接单奖励</h4>${kv('折算上钟时长',num(q.minutes)+' 分钟')}${kv('当前系数',r.coeff+' 元 / 分钟')}<p>全月折算分钟乘同一系数，不分段累加；与累计成就中的服务分钟分开统计。达到 120 / 140 / 160 小时即进入下一档。</p>`;
+ const managerRule=p.manager?`<h4>店长接单奖励</h4>${kv('本月整店实际业绩',cash(r.sales))}${kv('整店目标',cash(r.shop.target))}${kv('提点比例',r.shop.commissionRate+'%')}<p>${r.sales>=r.shop.target?'目标已完成，按全部实际业绩计算提点。':'目标尚未完成，当前为零；完成后按全部实际业绩计算提点，不只计算超出部分。'}</p><p>计算：${cash(r.sales)} × ${r.shop.commissionRate}%${r.sales>=r.shop.target?' = '+cash(r.manager):'，完成目标后计入'}。</p>`:'';
+ const certified=train.rows.filter(x=>x.passedAt);
+ const trainingRule=`<h4>培训补贴</h4>${kv('累计起点','通过考核的次日')}${kv('本月达标项目',train.completedThisMonth+' 项')}${kv('已登记项目',certified.length+' / '+train.rows.length+' 项')}${certified.length?certified.map(x=>kv(trainingName(x.project),x.count+' / '+x.target+' 单 · '+trainingStatusLabel(x))).join(''):'<p>尚未登记考核记录。</p>'}<p>每个项目独立设置目标次数与补贴金额；达标补贴只计入达标当月，不重复发放。未登记项目不累计。</p>`;
+ const nextTier=q.newCount<c.minNew?`当前新客样本 ${num(q.newCount)} / ${c.minNew}，补足后计算 30 天档位。`:r.nextTier?`下一档 ${r.nextTier.rate}%：${cash(r.nextTier.amount)}，比当前档增加 ${cash(r.nextTier.amount-r.tierPotential)}。在 ${num(q.newCount)} 位新客分母不变时，还需 ${num(r.needed)} 位完整归属的新客复购。`:'已到 30 天最高档；10 天复购仍可继续积累。';
+ const repurchaseData=`<h4>复购数据 · 比例与人数</h4>${kv('老客 60 天留存率',fmt(r.retention,1)+'%')}${kv('老客留存人次',num(q.retained)+' / '+num(q.senior))}${kv('新客 30 天复购率',fmt(r.conversion,1)+'%')}${kv('30 天复购 / 新客数',num(q.returned)+' / '+num(q.newCount))}${kv('10 天加权复购数',num(r.f.heads)+' 位')}<p>${r.eligible?'已满足':'待满足'} ${c.retention}% 留存条件。${q.senior<50?'老客样本较少；不自动免除条件。':''}</p>
+ <h4>奖励金额 · 与上方数据分开</h4>${kv('30 天档位奖励',cash(r.tier))}${kv('10 天递增奖励',cash(r.eligible?r.f.amount:0))}${!r.eligible?kv('待满足条件的参考金额',cash(r.tierPotential+r.f.amount)):''}<p>${nextTier}${r.eligible?'':'以上金额需先满足留存条件。'}</p>
+ <h4>规则与窗口</h4><p>老客：${E.windowFor(month,c.retentionLength,c.retentionOffset)}；新客：${E.windowFor(month,c.conversionLength,c.conversionOffset)}。10 天复购按 ${month} 首单月归属。</p><p>30 天档位取最高一档，不叠加：${c.tiers.map(t=>t.rate+'% → '+cash(t.amount)).join('；')}。</p><p>10 天实际单价：${E.sequence(9,c).map(x=>cash(x)).join('、')}……每位上限 ${cash(c.cap)}，封顶后继续累计；共同服务按该位单价乘归属权重。</p><p>未满足留存条件时，两类复购奖励均不计入合计。观察期、有效服务或退款变化可能改变预估。</p>`;
+ const ledger=`<p class="detail-intro">接单奖励合计与合作结算是两个口径，下列明细展示换算过程。</p>${kv('接单奖励合计',cash(r.subtotal))}${kv('其他调整',(r.adjustment>=0?'+':'−')+cash(Math.abs(r.adjustment)))}${q.adjustments.map(a=>`<div class="adjustment-line">${esc(a.name)}<span>${a.amount>=0?'+':'−'}${cash(Math.abs(a.amount))}</span></div>`).join('')}${kv('调整后合计',cash(r.gross),'total')}${kv('服务费换算差额','−'+cash(r.serviceDifference))}${kv('费用换算后金额',cash(r.preTax))}${kv('预扣税额','−'+cash(r.tax))}${kv(history?'合作结算 · 演示':'预计合作结算',cash(r.net),'total')}<p>调整后合计 ÷ 1.068，四舍五入到元，再扣除预扣税额。分类已包含的款项不重复进入其他调整。</p>
+ <details class="plain-details" id="${prefix}taxDetails"><summary>税费计算依据 ${icon('chevron')}</summary>${kv('年度累计换算后金额',cash(r.annual))}${kv('年度计税基数',cash(r.taxable))}${kv('累计连续月份',r.continuousMonths+' 个月')}${kv('适用税率',r.taxRate+'%')}${kv('速算扣除数',cash(r.quick))}${kv('此前已缴税额',cash(r.priorTax))}<p>历史累计为模拟数据，正式结果由既有结算服务统一返回。</p></details>`;
+ return `<section class="reward-overview"><div class="income-hero reward-hero"><div class="row"><h2>本月接单奖励</h2><div class="toolbar"><span class="tag">预估</span>${moneyButton}</div></div><div class="hero-value money" id="rewardTotal">${cash(r.subtotal)}</div><p class="hero-note">按当前规则估算，仅含已满足条件的奖励</p></div></section>
+ ${durationHTML(q,c,r)}${repurchaseHTML(q,c,r)}${trainingHTML(p,c,r)}${breakdown}
+ <div class="detail-group">${disclosure(prefix+'calculationDetails','奖励计算说明',baseRule+managerRule+trainingRule)}${disclosure(prefix+'repurchaseDetails','统计口径与复购规则',repurchaseData)}${disclosure(prefix+'trainingDetails','培训项目与考核',trainingDetailHTML(train))}${disclosure(prefix+'settlementDetails','合作结算明细',ledger)}</div>`;
+}
+function achievementHTML(p){
+ return `<div class="achievement-head"><h2>累计成就</h2><small>加入于 ${p.entry}</small></div><div class="ach-grid"><div><strong id="achDays"></strong><small>加入天数</small></div><div><strong id="achMinutes"></strong><small>累计服务分钟</small></div><div><strong id="achPeople"></strong><small>服务客人 · 位</small></div></div><div class="fan-row">${icon('heart')}<div><b id="fanName"></b><p id="fanPhone"></p></div><span id="fanMinutes"></span></div>`;
+}
+const certs=[{name:'深疗 90 分钟',date:'2026-03-12',duration:90},{name:'芳香 60 分钟',date:'2026-06-02',duration:60},{name:'头部水疗 45 分钟',date:'2026-08-20',duration:45}];
+function dateAt(offset){const d=new Date('2026-01-08T00:00:00Z');d.setUTCDate(d.getUTCDate()+offset);return d.toISOString().slice(0,10);}
+function renderAchievements(){
+ const p=person(),records=[];
+ for(let i=0;i<=286;i+=3){const date=dateAt(i),proj=certs[Math.floor(i/3)%3];if(date>=p.entry&&date>proj.date)records.push({date,project:proj.name,minutes:proj.duration,customer:i%27===0?'王女士':'客人'+i%17});}
+ const by={};records.forEach(r=>by[r.customer]=(by[r.customer]||0)+r.minutes);const top=Object.entries(by).sort((a,b)=>b[1]-a[1])[0];
+ $('achDays').textContent=num(Math.max(0,Math.round((Date.parse(TODAY)-Date.parse(p.entry))/86400000)+1));$('achMinutes').textContent=num(records.reduce((s,r)=>s+r.minutes,0));$('achPeople').textContent=Object.keys(by).length;
+ $('fanName').textContent=top?'头号粉丝 · '+top[0]:'暂无服务记录';$('fanPhone').textContent=top?'138****5678 · 号码已脱敏':'完成服务后在这里积累';$('fanMinutes').textContent=top?top[1]+' 分钟':'';
+}
+function renderMobile(){
+ const p=person();
+ $('app').innerHTML=`<div class="mobile-stage"><details class="prototype-bar" id="scenario"><summary><span>V5 原型 · 模拟数据</span><span>演示场景 ${icon('chevron')}</span></summary><div class="prototype-controls"><label class="field"><span>演示人物（正式页面无此切换）</span><select id="demoPerson">${people.map(x=>option(x.id,x.name+' · '+(x.manager?'店长':'疗愈师'),personId)).join('')}</select></label>${[['head','模拟 +1 位10天复购','half','模拟 +0.5 权重'],['return','模拟30天窗口 +1位','gate','切换留存条件'],['minutes','模拟 +90 分钟','train-order','模拟 +1 单培训'],['train-cert','登记一项培训考核','shop','切换整店目标状态']].map(a=>`<div class="toolbar"><button class="btn sm" data-sim="${a[0]}">${a[1]}</button><button class="btn sm" data-sim="${a[2]}">${a[3]}</button></div>`).join('')}<div class="toolbar"><button class="btn sm" data-sim="reset">重置演示数据</button></div><a href="${esc(link(PC))}" target="_blank">打开管理端参数与考核管理 →</a></div></details>
+ <main class="mobile-app mobile-v3 mobile-v4 mobile-v5"><nav class="mobile-nav"><span class="brand">Full愈</span><span class="small muted">我的接单</span></nav><header class="mobile-head"><div class="avatar">${p.initial}</div><div class="partner-identity"><h1>${esc(p.name)}</h1><p>${cfg().shops.find(s=>s.id===p.shop).name} · ${p.manager?'店长':'疗愈师'}</p></div><div class="head-right"><span class="month-label">2026 年 10 月</span></div></header>
+ <section class="achievement" id="achievementOverview">${achievementHTML(p)}</section>
+ ${rewardHTML(p)}
+ <div class="detail-group service-group">${disclosure('certificationDetails','项目认证与服务记录','<p>累计成就中的服务次数用于能力积累；培训补贴按各项目考核通过次日起的有效订单单独累计，详见上方培训补贴卡与“培训项目与考核”。</p>','与培训补贴分开统计')}</div>
+ <footer class="mobile-footer">${icon('lock')} 仅本人可见 · 客户号码已脱敏<br>累计成就截至今日 · 奖励按本月统计<br>全部为演示数据，不作为实际结算依据</footer></main></div>`;
+ $('demoPerson').onchange=e=>{personId=e.target.value;hiddenMoney=false;render();$('scenario').open=true;};
+ $('moneyToggle').onclick=()=>{hiddenMoney=!hiddenMoney;render();};
+ document.querySelectorAll('[data-sim]').forEach(b=>b.onclick=()=>simulate(b.dataset.sim));
+ renderAchievements();
+}
+function simulate(kind){
+ const p=person();if(month!=='2026-10'&&kind!=='reset'){toast('历史月份为演示快照，请切回 10 月试算');return;}
+ switch(kind){
+  case'head':p.weights.push(1);break;
+  case'half':p.weights.push(.5);break;
+  case'return':p.returned=Math.min(p.newCount,p.returned+1);break;
+  case'gate':p.retained=calc(p).eligible?Math.floor(p.senior*(cfg().retention-2)/100):Math.ceil(p.senior*cfg().retention/100);break;
+  case'minutes':p.minutes+=90;break;
+  case'train-order':{
+   const s=trainingSummaryFor(p),row=s.rows.find(x=>x.passedAt&&x.status==='active');
+   if(!row){toast('当前没有进行中的培训项目');return;}
+   trainingOrders.push({personId:p.id,projectId:row.projectId,date:TODAY});break;
+  }
+  case'train-cert':{
+   const s=trainingSummaryFor(p),row=s.rows.find(x=>!x.passedAt);
+   if(!row){toast('该疗愈师已登记全部培训项目');return;}
+   trainingRecords.push({personId:p.id,projectId:row.projectId,passedAt:E.addDays(TODAY,-15)});
+   trainingOrders.push({personId:p.id,projectId:row.projectId,date:E.addDays(TODAY,-10)},{personId:p.id,projectId:row.projectId,date:E.addDays(TODAY,-6)});break;
+  }
+  case'shop':{const s=cfg().shops.find(s=>s.id===p.shop);revenues[p.shop]=revenues[p.shop]>=s.target?s.target-10000:s.target+10000;break;}
+  case'reset':people=E.clone(E.PEOPLE);revenues=E.clone(E.REVENUE);trainingRecords=E.clone(E.TRAINING_RECORDS);trainingOrders=E.clone(E.TRAINING_ORDERS);month='2026-10';hiddenMoney=false;adminView='dashboard';trainingFilter={shop:'all',project:'all',status:'registered',query:''};break;
+ }
+ render();$('scenario').open=true;toast(kind==='reset'?'演示数据已重置，规则配置保留':'模拟数据已更新，未写入正式系统');
+}
+
+const TRAIN_STATUS_ORDER={'completed-this-month':0,active:1,upcoming:2,completed:3,uncertified:4};
+const TRAIN_STATUS_OPTIONS=[['all','全部状态'],['registered','已登记考核'],['active','进行中'],['completed-this-month','本月达标'],['completed','已达标'],['upcoming','待开始'],['uncertified','未登记']];
+function authorizedPeople(){return people.filter(p=>role!=='manager'||p.shop==='west');}
+function sidebarHTML(active){
+ return `<aside class="sidebar"><div class="brand">Full愈</div><div class="eyebrow">伙伴服务管理</div><div class="nav-label">经营中心</div><button class="side-item ${active==='dashboard'?'active':''}" data-admin-view="dashboard">${icon('chart')}接单奖励</button><button class="side-item ${active==='training'?'active':''}" data-admin-view="training">${icon('award')}培训考核</button><div class="side-item placeholder">${icon('grid')}门店运营 <small>示意</small></div><div class="side-item placeholder">${icon('user')}伙伴档案 <small>示意</small></div><div class="sidebar-bottom">放松有道　自在生活<br>交互原型 · V5<br>全部人物与数据均为示例</div></aside>`;
+}
+function adminChrome(active,crumb,content){
+ return `<div class="admin-shell">${sidebarHTML(active)}<div class="admin-main"><header class="admin-top"><span class="small">经营中心 / ${crumb}</span><div class="toolbar"><label class="small" for="role">演示身份</label><select class="control" id="role">${option('admin','管理人员 · 全部门店',role)}${option('manager','西岸店长 · 授权门店',role)}</select><span class="tag">仅演示</span></div></header><main class="admin-content">${content}</main></div></div>`;
+}
+function bindAdminChrome(){
+ $('role').onchange=e=>{role=e.target.value;shopFilter='all';trainingFilter.shop='all';render();};
+ document.querySelectorAll('[data-admin-view]').forEach(b=>b.onclick=()=>{adminView=b.dataset.adminView;render();});
+}
+function trainingScopePeople(){return authorizedPeople().filter(p=>(trainingFilter.shop==='all'||p.shop===trainingFilter.shop)&&(!trainingFilter.query||p.name.toLowerCase().includes(trainingFilter.query.toLowerCase())));}
+function trainingAdminRows(){const c=currentCfg(),m=TODAY.slice(0,7);return trainingScopePeople().flatMap(p=>E.trainingSummary(p,c,m,trainingData(),TODAY).rows.map(row=>({...row,person:p,shop:c.shops.find(x=>x.id===p.shop)})));}
+function filteredTrainingRows(rows){
+ return rows.filter(r=>{
+  if(trainingFilter.project!=='all'&&r.projectId!==trainingFilter.project)return false;
+  if(trainingFilter.status==='registered')return !!r.passedAt;
+  return trainingFilter.status==='all'||r.status===trainingFilter.status;
+ }).sort((a,b)=>(TRAIN_STATUS_ORDER[a.status]-TRAIN_STATUS_ORDER[b.status])||a.person.name.localeCompare(b.person.name,'zh-CN')||a.projectId.localeCompare(b.projectId));
+}
+function trainingStatusNote(row){
+ if(row.status==='completed-this-month')return '本月计入';
+ if(row.status==='completed')return row.completionMonth+' 已计入，不重复';
+ if(row.status==='active')return '还差 '+row.remaining+' 单';
+ if(row.status==='upcoming')return row.start+' 起开始累计';
+ return '尚未登记考核';
+}
+function downloadCsv(rows,filename,message){
+ if(!rows.length){toast('当前没有可导出的记录');return;}
+ const blob=new Blob(['\uFEFF'+rows.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast(message);
+}
+function exportTrainingCsv(rows){
+ downloadCsv([['疗愈师','门店','培训项目','通过考核日','累计起点','有效订单数','目标次数','达标日期','计入月份','本月补贴','状态'],...rows.map(r=>[r.person.name,r.shop.name,trainingName(r.project),r.passedAt||'',r.start||'',r.passedAt?r.rawCount:'',r.target,r.completionDate||'',r.completionMonth||'',r.earnedThisMonth,r.passedAt?trainingStatusLabel(r):'未登记'])],'Full愈-培训考核-V5-模拟数据-'+TODAY+'.csv','已导出当前筛选的培训考核记录');
+}
+function renderAdmin(){
+ if(adminView==='training')return renderTrainingAdmin();
+ const c=cfg(),list=month==='2026-08'?[]:selectedPeople(),rs=list.map(calc),sum=k=>E.round(rs.reduce((s,r)=>s+r[k],0));
+ const shops=c.shops.filter(s=>(role!=='manager'||s.id==='west')&&(shopFilter==='all'||s.id===shopFilter));
+ const trainingTotal=sum('training'),trainingCompleted=rs.reduce((s,r)=>s+r.trainingResult.completedThisMonth,0),trainingRegistered=rs.reduce((s,r)=>s+r.trainingResult.registered,0),trainingSlots=list.length*c.trainingProjects.length;
+ $('app').innerHTML=adminChrome('dashboard','接单奖励',`<div class="admin-title"><div><div class="eyebrow muted">INCENTIVE OVERVIEW</div><h1>伙伴接单奖励看板</h1><p>当月预估、门店提点与培训考核，集中管理。</p></div><div class="toolbar"><a class="btn" href="${esc(link(MOBILE,'rain'))}" target="_blank">${icon('user')}手机端预览</a><button class="btn primary" id="settingsOpen">${icon('settings')}参数设置</button></div></div>
+ <div class="panel"><div class="filterbar"><label class="field"><span>月份</span><select id="month">${monthOptions()}</select></label><label class="field"><span>门店范围</span><select id="shop">${option('all',role==='manager'?'全部授权门店':'全部门店',shopFilter)}${c.shops.filter(s=>role!=='manager'||s.id==='west').map(s=>option(s.id,s.name,shopFilter)).join('')}</select></label><label class="field grow"><span>伙伴姓名</span><input id="search" value="${esc(query)}" placeholder="搜索疗愈师或店长"></label><label class="field"><span>复购条件</span><select id="gate">${option('all','全部',gateFilter)}${option('yes','已满足',gateFilter)}${option('no','待满足',gateFilter)}</select></label><button class="btn" id="searchBtn">查询</button><button class="btn text" id="clearFilters">重置筛选</button></div></div>
+ <div class="admin-kpis five"><div class="summary-card"><div class="small">接单奖励合计</div><div class="value money">${cash(sum('subtotal'))}</div><div class="muted">基础 + 店长 + 培训 + 复购</div></div><div class="summary-card"><div class="small">复购接单奖励</div><div class="value money">${cash(sum('repurchase'))}</div><div class="muted">不含待满足条件的参考金额</div></div><div class="summary-card"><div class="small">店长接单奖励</div><div class="value money">${cash(sum('manager'))}</div><div class="muted">整店实际业绩 × 提点比例</div></div><div class="summary-card"><div class="small">培训补贴</div><div class="value money">${cash(trainingTotal)}</div><div class="muted">本月达标 ${trainingCompleted} 项 · 已登记 ${trainingRegistered} / ${trainingSlots} 项</div></div><div class="summary-card"><div class="small">预计合作结算合计</div><div class="value money">${cash(sum('net'))}</div><div class="muted">包含调整、服务费换算与预扣税额</div></div></div>
+ <div class="shop-grid">${shops.map(s=>{const sales=month==='2026-08'?0:revenues[s.id],done=sales>=s.target,award=done?E.round(sales*s.commissionRate/100):0;return `<article class="shop-card"><div class="row"><h3>${esc(s.name)} · 整店目标</h3><span class="tag ${done?'filled':'soft'}">${done?'已完成':'进行中'} ${fmt(sales/s.target*100,1)}%</span></div>${progress(sales/s.target*100)}<div class="row small"><span>${cash(sales)} <span class="muted">/ ${cash(s.target)}</span></span><span>店长提点 <b>${s.commissionRate}%</b></span></div><div class="subnote">${done?`店长接单奖励：${cash(sales)} × ${s.commissionRate}% = ${cash(award)}`:`距目标还差 ${cash(s.target-sales)}，完成后按整店全部实际业绩提点。`}</div></article>`;}).join('')}</div>
+ <section class="panel training-teaser"><div class="teaser-copy"><div class="eyebrow muted">TRAINING</div><h2>培训考核</h2><p>8 个独立项目 · 通过考核的次日起累计 · 达标只计入当月</p></div><div class="teaser-stats"><div><strong>${trainingRegistered}</strong><small>已登记考核</small></div><div><strong>${trainingSlots-trainingRegistered}</strong><small>待登记项目</small></div><div><strong>${trainingCompleted}</strong><small>本月达标</small></div></div><div class="toolbar"><button class="btn primary" id="trainingManage">${icon('calendar')}管理考核日期</button></div></section>
+ <section class="panel"><div class="panel-head"><div><h2>伙伴月度报表</h2><p class="small muted">${month==='2026-09'?'历史演示':'截止 2026-10-21 14:30'} · ${list.length} 位伙伴 · 满足复购条件 ${rs.filter(r=>r.eligible).length} 位</p></div><button class="btn sm" id="export">${icon('download')}导出当前筛选 CSV</button></div><div class="table-wrap"><table><thead><tr><th>伙伴 / 门店</th><th>折算分钟 / 系数</th><th>基础接单奖励</th><th>60 天留存率</th><th>30 天复购率</th><th>10 天复购</th><th>复购接单奖励</th><th>店长接单奖励</th><th>培训补贴</th><th>接单奖励合计</th><th>预计合作结算</th><th>操作</th></tr></thead><tbody>${list.map(p=>{const r=calc(p);return `<tr><td><div class="person-cell"><span class="avatar">${p.initial}</span><div>${esc(p.name)}<small>${r.shop.name} · ${p.manager?'店长':'疗愈师'}</small></div></div></td><td>${num(pm(p).minutes)} / ${r.coeff}<small>${p.newPartner?'新伙伴系数':'达到起点即跳档'}</small></td><td>${cash(r.base)}</td><td>${fmt(r.retention,1)}%<small>${r.eligible?'条件已满足':'条件待满足'}</small></td><td>${fmt(r.conversion,1)}%<small>${p.returned} / ${p.newCount} 位${p.newCount<c.minNew?' · 样本待补足':''}</small></td><td>${num(r.f.heads)} 位<small>下一位 ${cash(r.f.next)}</small></td><td>${cash(r.repurchase)}<small>${r.eligible?cash(r.tier)+' + '+cash(r.f.amount):'暂未计入'}</small></td><td>${p.manager?cash(r.manager):'—'}${p.manager?`<small>整店提点 ${r.shop.commissionRate}%</small>`:''}</td><td>${cash(r.training)}<small>本月达标 ${r.trainingResult.completedThisMonth} 项 · 已登记 ${r.trainingResult.registered}/${c.trainingProjects.length}</small></td><td class="amount-col">${cash(r.subtotal)}</td><td class="amount-col">${cash(r.net)}</td><td><button class="btn sm" data-detail="${p.id}">查看明细</button></td></tr>`;}).join('')}</tbody></table>${list.length?'':`<div class="empty">${icon('book')}<h3>暂无符合条件的记录</h3><p>试试其他月份、门店或姓名。</p><button class="btn" id="emptyReset">返回本月报表</button></div>`}</div><div class="table-footer"><span>金额统一为元。未满足条件的复购金额不计入合计；培训补贴只含本月达标项目。</span><span>横向滚动查看完整报表 →</span></div></section>
+ <div class="notice" style="margin-top:18px">老客窗口 ${E.windowFor(month,c.retentionLength,c.retentionOffset)}；新客窗口 ${E.windowFor(month,c.conversionLength,c.conversionOffset)}。培训补贴按考核通过次日起累计，8 个项目互不合并。店长按授权门店查看，角色切换仅用于原型演示。</div><p class="preview-note">当前规则：${esc(c.version)}。提点 ${c.shops.map(s=>s.commissionRate+'%').join(' / ')}、门店目标、培训次数与金额为示例配置；修改仅保存在本机。</p>`);
+ bindAdminChrome();
+ $('month').onchange=e=>{month=e.target.value;render();};$('shop').onchange=e=>{shopFilter=e.target.value;render();};$('gate').onchange=e=>{gateFilter=e.target.value;render();};
+ $('searchBtn').onclick=()=>{query=$('search').value.trim();render();};$('search').onkeydown=e=>{if(e.key==='Enter')$('searchBtn').click();};$('clearFilters').onclick=()=>{shopFilter='all';query='';gateFilter='all';render();};
+ if($('emptyReset'))$('emptyReset').onclick=()=>{month='2026-10';shopFilter='all';query='';gateFilter='all';render();};
+ $('settingsOpen').onclick=()=>openSettings();$('export').onclick=()=>exportCsv(list);document.querySelectorAll('[data-detail]').forEach(b=>b.onclick=()=>openDetail(b.dataset.detail));
+ $('trainingManage').onclick=()=>{adminView='training';trainingFilter.shop=shopFilter;render();};
+}
+function renderTrainingAdmin(){
+ const c=currentCfg(),scope=trainingAdminRows(),rows=filteredTrainingRows(scope),registered=scope.filter(r=>r.passedAt),active=scope.filter(r=>r.status==='active'),completed=scope.filter(r=>r.completedThisMonth),total=scope.reduce((s,r)=>s+r.earnedThisMonth,0),peopleCount=trainingScopePeople().length;
+ const projectStats=c.trainingProjects.map(project=>{const list=scope.filter(r=>r.projectId===project.id);return {project,registered:list.filter(r=>r.passedAt).length,active:list.filter(r=>r.status==='active').length,completed:list.filter(r=>r.completedThisMonth).length};});
+ $('app').innerHTML=adminChrome('training','培训考核',`<div class="admin-title"><div><div class="eyebrow muted">TRAINING RECORDS</div><h1>培训考核与补贴</h1><p>逐人维护 8 个项目的考核通过日期；进度从次日起累计，达标只计入当月。</p></div><div class="toolbar"><button class="btn" id="trainSettings">${icon('settings')}调整次数与补贴</button><button class="btn" id="exportTraining">${icon('download')}导出考核 CSV</button><button class="btn primary" id="trainAdd">${icon('plus')}登记考核</button></div></div>
+ <div class="admin-kpis training-kpis"><div class="summary-card"><div class="small">本月培训补贴</div><div class="value money">${cash(total)}</div><div class="muted">只含 ${TODAY.slice(0,7)} 达标项目</div></div><div class="summary-card"><div class="small">本月达标项目</div><div class="value">${completed.length}<small> 项</small></div><div class="muted">每个项目只计入一次</div></div><div class="summary-card"><div class="small">进行中</div><div class="value">${active.length}<small> 项</small></div><div class="muted">已登记且尚未达到目标次数</div></div><div class="summary-card"><div class="small">已登记考核</div><div class="value">${registered.length}<small> / ${scope.length}</small></div><div class="muted">覆盖 ${peopleCount} 位疗愈师 · 8 个项目独立</div></div></div>
+ <section class="panel training-projects-panel"><div class="panel-head"><div><h2>项目概览</h2><p class="small muted">全感舒筋 6 个部位与头部水疗 60 / 90 分钟分别累计；点击项目筛选表格。</p></div><button class="btn sm ${trainingFilter.project==='all'?'primary':''}" data-project-filter="all">全部项目</button></div><div class="project-grid">${projectStats.map(s=>`<button class="project-chip ${trainingFilter.project===s.project.id?'on':''}" data-project-filter="${s.project.id}" aria-pressed="${trainingFilter.project===s.project.id}"><span class="project-name">${esc(s.project.group)} · ${esc(s.project.name)}</span><span class="project-rule">${s.project.target} 次 · ${cash(s.project.amount)}</span><span class="project-stat">已登记 ${s.registered} / ${peopleCount} · 进行中 ${s.active} · 本月达标 ${s.completed}</span></button>`).join('')}</div></section>
+ <section class="panel"><div class="panel-head"><div><h2>考核记录</h2><p class="small muted">统计至 ${TODAY} · 当前 ${rows.length} 条${trainingFilter.status==='uncertified'?'未登记项目':'记录'}</p></div><span class="tag soft">次日起累计</span></div><div class="filterbar"><label class="field"><span>门店范围</span><select id="trainShop">${option('all',role==='manager'?'全部授权门店':'全部门店',trainingFilter.shop)}${c.shops.filter(s=>role!=='manager'||s.id==='west').map(s=>option(s.id,s.name,trainingFilter.shop)).join('')}</select></label><label class="field"><span>培训项目</span><select id="trainProject">${option('all','全部项目',trainingFilter.project)}${c.trainingProjects.map(p=>option(p.id,trainingName(p),trainingFilter.project)).join('')}</select></label><label class="field"><span>状态</span><select id="trainStatus">${TRAIN_STATUS_OPTIONS.map(([v,t])=>option(v,t,trainingFilter.status)).join('')}</select></label><label class="field grow"><span>疗愈师姓名</span><input id="trainSearch" value="${esc(trainingFilter.query)}" placeholder="搜索姓名"></label><button class="btn" id="trainSearchBtn">查询</button><button class="btn text" id="trainReset">重置筛选</button></div><div class="table-wrap training-table-wrap"><table class="training-table"><thead><tr><th>疗愈师 / 门店</th><th>培训项目</th><th>通过考核日</th><th>累计起点</th><th>有效订单进度</th><th>达标日期</th><th>本月补贴</th><th>状态</th><th>操作</th></tr></thead><tbody>${rows.map(r=>`<tr><td><div class="person-cell"><span class="avatar">${r.person.initial}</span><div>${esc(r.person.name)}<small>${r.shop.name} · ${r.person.manager?'店长':'疗愈师'}</small></div></div></td><td><b>${esc(trainingName(r.project))}</b><small>${r.project.duration?r.project.duration+' 分钟课程':'独立服务部位'}</small></td><td>${r.passedAt||'—'}${r.passedAt?'<small>管理端登记</small>':'<small>尚未登记</small>'}</td><td>${r.start||'—'}${r.start?'<small>通过次日起</small>':''}</td><td>${r.passedAt?`<div class="progress-cell">${progress(r.count/r.target*100)}<span>${r.count} / ${r.target} 单</span></div><small>${r.status==='completed'||r.status==='completed-this-month'?'已满 '+r.target+' 单':'还差 '+r.remaining+' 单'}</small>`:'—'}</td><td>${r.completionDate||'—'}${r.completionDate?'<small>'+(r.completedThisMonth?'本月达标':'历史达标')+'</small>':''}</td><td class="amount-col">${r.earnedThisMonth?cash(r.earnedThisMonth):'—'}<small>${trainingStatusNote(r)}</small></td><td><span class="tag ${trainingStatusClass(r)}">${trainingStatusLabel(r)}</span></td><td>${r.passedAt?`<button class="btn sm" data-train-edit="${r.person.id}|${r.projectId}">修改日期</button>`:`<button class="btn sm" data-train-add="${r.person.id}|${r.projectId}">登记考核</button>`}</td></tr>`).join('')}</tbody></table>${rows.length?'':'<div class="empty">'+icon('book')+'<h3>当前筛选没有记录</h3><p>可以调整项目、状态或姓名，也可以直接登记考核。</p><button class="btn" id="trainEmptyReset">重置筛选</button></div>'}</div><div class="table-footer"><span>共 ${rows.length} 条 · 统计截止 ${TODAY}</span><span>修改考核日会按同一批模拟订单重算，正式历史结算需冻结</span></div></section>
+ <div class="notice" style="margin-top:18px">补贴计算：通过考核的次日起，累计对应项目订单；第 ${c.trainingProjects[0].target} 单完成当日达标，补贴计入达标当月，同一项目不重复计入。舒筋 6 个部位与头部水疗 60 / 90 分钟各自独立，参数当前为 ${trainingBrief(c)}。</div><p class="preview-note">真实数据缺口：现有订单只有项目与时长，没有服务部位字段，也没有培训考核表；正式接入需新增部位服务记录与考核记录来源。当前表格与订单均为模拟数据。</p>`);
+ bindAdminChrome();
+ $('trainShop').onchange=e=>{trainingFilter.shop=e.target.value;render();};$('trainProject').onchange=e=>{trainingFilter.project=e.target.value;render();};$('trainStatus').onchange=e=>{trainingFilter.status=e.target.value;render();};
+ $('trainSearchBtn').onclick=()=>{trainingFilter.query=$('trainSearch').value.trim();render();};$('trainSearch').onkeydown=e=>{if(e.key==='Enter')$('trainSearchBtn').click();};
+ $('trainReset').onclick=()=>{trainingFilter={shop:'all',project:'all',status:'registered',query:''};render();};
+ if($('trainEmptyReset'))$('trainEmptyReset').onclick=()=>{trainingFilter={shop:'all',project:'all',status:'registered',query:''};render();};
+ $('trainSettings').onclick=()=>openSettings('training');$('exportTraining').onclick=()=>exportTrainingCsv(rows);$('trainAdd').onclick=()=>openTrainingDialog();
+ document.querySelectorAll('[data-project-filter]').forEach(b=>b.onclick=()=>{const id=b.dataset.projectFilter;trainingFilter.project=id==='all'||trainingFilter.project===id?'all':id;trainingFilter.status='registered';render();});
+ document.querySelectorAll('[data-train-edit],[data-train-add]').forEach(b=>b.onclick=()=>{const edit=!!b.dataset.trainEdit,[personId,projectId]=(b.dataset.trainEdit||b.dataset.trainAdd).split('|');openTrainingDialog(personId,projectId,edit);});
+}
+function openDetail(id){
+ const p=selectedPeople().find(p=>p.id===id);if(!p){toast('当前授权范围内无此伙伴');return;}
+ $('detailTitle').textContent=p.name+' · '+month;
+ $('detailBody').innerHTML=rewardHTML(p,true)+`<a class="btn primary drawer-preview" href="${esc(link(MOBILE,p.id))}" target="_blank">打开该人物的手机原型 ${icon('arrow')}</a>`;
+ $('detailDialog').showModal();
+}
+let trainingFormState=null;
+function openTrainingDialog(personId,projectId,locked){
+ const list=authorizedPeople();
+ if(!list.length){toast('当前身份没有可管理的疗愈师');return;}
+ let person=list.find(p=>p.id===personId);
+ let project=currentCfg().trainingProjects.find(p=>p.id===projectId);
+ if(!person){person=list.find(p=>!trainingRecords.some(r=>r.personId===p.id))||list[0];}
+ if(!project){const summary=E.trainingSummary(person,currentCfg(),TODAY.slice(0,7),trainingData(),TODAY);project=(summary.rows.find(r=>!r.passedAt)||summary.rows[0]).project;}
+ trainingFormState={personId:person.id,projectId:project.id,locked:!!locked&&!!personId&&!!projectId};
+ renderTrainingForm();
+ $('trainingDialog').showModal();
+}
+function renderTrainingForm(){
+ if(!trainingFormState)return;
+ const c=currentCfg(),list=authorizedPeople(),person=list.find(p=>p.id===trainingFormState.personId)||list[0],project=c.trainingProjects.find(p=>p.id===trainingFormState.projectId)||c.trainingProjects[0];
+ trainingFormState.personId=person.id;trainingFormState.projectId=project.id;
+ const existing=trainingRecords.find(r=>r.personId===person.id&&r.projectId===project.id),date=existing?existing.passedAt:TODAY;
+ $('trainingTitle').textContent=trainingFormState.locked?'修改考核通过日期':'登记培训考核';
+ $('trainingFormBody').innerHTML=`<form id="trainingForm" class="training-form" novalidate><div class="form-grid"><label class="field"><span>疗愈师</span><select id="trainingPerson" ${trainingFormState.locked?'disabled':''}>${list.map(p=>option(p.id,p.name+' · '+c.shops.find(s=>s.id===p.shop).name,person.id)).join('')}</select></label><label class="field"><span>培训项目</span><select id="trainingProject" ${trainingFormState.locked?'disabled':''}>${c.trainingProjects.map(p=>option(p.id,trainingName(p),project.id)).join('')}</select></label><div class="full">${kv('当前项目规则',project.target+' 次 · '+cash(project.amount)+' 补贴')}${kv('疗愈师加入日期',person.entry)}</div><label class="field full"><span>通过考核日期</span><input id="trainingDate" type="date" value="${date}" max="${TODAY}" min="${person.entry}" required></label></div><div class="calc-box" id="trainingDatePreview"></div><p class="notice" style="margin:14px 0">从通过考核的次日起累计${trainingName(project)}订单。达标当月计入 ${cash(project.amount)}，之后不重复计入。修改日期会重算演示进度，正式结算需按冻结记录处理。</p><p id="trainingError" class="form-error" role="alert"></p><div class="toolbar training-form-actions"><button type="button" class="btn" id="cancelTraining">取消</button><button type="submit" class="btn primary">${existing?'保存新的考核日期':'保存考核记录'}</button></div></form>`;
+ $('trainingPerson').onchange=e=>{trainingFormState={personId:e.target.value,projectId:trainingFormState.projectId,locked:false};renderTrainingForm();};
+ $('trainingProject').onchange=e=>{trainingFormState={personId:trainingFormState.personId,projectId:e.target.value,locked:false};renderTrainingForm();};
+ $('trainingDate').oninput=updateTrainingDatePreview;
+ $('cancelTraining').onclick=()=>$('trainingDialog').close();
+ $('trainingForm').onsubmit=e=>{e.preventDefault();saveTrainingRecord();};
+ updateTrainingDatePreview();
+}
+function trainingDraftRecord(){
+ if(!trainingFormState)return null;
+ const date=$('trainingDate').value;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return null;
+ const person=authorizedPeople().find(p=>p.id===trainingFormState.personId),project=currentCfg().trainingProjects.find(p=>p.id===trainingFormState.projectId);
+ if(!person||!project||date<person.entry||date>TODAY)return null;
+ return {person,project,date};
+}
+function updateTrainingDatePreview(){
+ const record=trainingDraftRecord(),box=$('trainingDatePreview');if(!box)return;
+ if(!record){box.textContent='请选择通过考核日期；日期不能早于加入日期，也不能晚于今天。';return;}
+ const temp=trainingRecords.filter(r=>!(r.personId===record.person.id&&r.projectId===record.project.id)).concat({personId:record.person.id,projectId:record.project.id,passedAt:record.date});
+ const summary=E.trainingSummary(record.person,currentCfg(),TODAY.slice(0,7),{records:temp,orders:trainingOrders},TODAY),row=summary.rows.find(r=>r.projectId===record.project.id);
+ let note='';
+ if(row.status==='completed-this-month')note=`按当前模拟订单已于 ${row.completionDate} 达标，本月计入 ${cash(row.earnedThisMonth)}。`;
+ else if(row.status==='completed')note=`按当前模拟订单已于 ${row.completionDate} 达标，已在 ${row.completionMonth} 计入，本月不重复。`;
+ else if(row.status==='upcoming')note=`累计起点为 ${row.start}，目前尚未开始累计。`;
+ else note=`已累计 ${row.rawCount} / ${row.target} 单，还差 ${row.remaining} 单达标。`;
+ box.innerHTML=`<b>${row.start}</b> 起累计 · ${note}`;
+}
+function saveTrainingRecord(){
+ const record=trainingDraftRecord(),error=$('trainingError');
+ if(!record){error.textContent='请选择有效的考核日期；不能早于加入日期，也不能晚于今天。';return;}
+ trainingRecords=trainingRecords.filter(r=>!(r.personId===record.person.id&&r.projectId===record.project.id)).concat({personId:record.person.id,projectId:record.project.id,passedAt:record.date});
+ persist();$('trainingDialog').close();render();toast('考核日期已保存；历史计入与正式结算冻结规则仍需后端确认');
+}
+
+let draft=null,settingsTab='repurchase';
+const settingTabs=[['repurchase','复购接单奖励'],['base','基础接单系数'],['shop','店长提点'],['training','培训项目'],['windows','统计口径'],['history','版本记录']];
+function field(label,key,value,extra=''){return `<label class="field"><span>${label}</span><input type="number" step="0.01" min="0" data-key="${key}" value="${value}" ${extra}></label>`;}
+function trainingBrief(c){
+ const list=c.trainingProjects||[];
+ if(!list.length)return '未配置项目';
+ const uniform=list.every(x=>x.target===list[0].target&&x.amount===list[0].amount);
+ return uniform?`${list.length} 项统一 ${list[0].target} 次 / ${cash(list[0].amount)}`:`${list.length} 项独立次数与金额`;
+}
+function openSettings(tab){
+ draft=E.clone(cfg());draft.effective='2026-10';settingsTab=tab||(role==='manager'?'shop':'repurchase');renderSettings();$('settingsDialog').showModal();
+}
+function renderSettings(){
+ const readonly=role==='manager';
+ $('settingsNav').innerHTML=settingTabs.map(([key,label])=>`<button data-tab="${key}" class="${settingsTab===key?'on':''}" aria-current="${settingsTab===key?'page':'false'}">${label}${readonly?' · 只读':''}</button>`).join('');
+ $('saveSettings').disabled=readonly;$('effective').value=draft.effective;$('effective').disabled=readonly;$('settingsError').textContent='';let html='';
+ if(settingsTab==='repurchase')html=`<h3>先满足留存条件，再计算两类复购奖励</h3><p>不默认启用新伙伴或小样本豁免。</p><div class="form-grid">${field('老客 60 天留存率条件（%）','retention',draft.retention,'max="100"')}${field('30 天档位最小新客样本数','minNew',draft.minNew,'step="1"')}</div><hr class="divider"><h3>30 天档位 · 取最高一档，不叠加</h3><table><thead><tr><th>新客复购率 ≥（%）</th><th>档位金额（元）</th></tr></thead><tbody>${draft.tiers.map((t,i)=>`<tr><td><input aria-label="第${i+1}档复购率" type="number" min="0" max="100" step="0.1" data-key="tiers.${i}.rate" value="${t.rate}"></td><td><input aria-label="第${i+1}档金额" type="number" min="0" data-key="tiers.${i}.amount" value="${t.amount}"></td></tr>`).join('')}</tbody></table><hr class="divider"><h3>10 天复购 · 每位单价递增</h3><div class="form-grid">${field('第 1 位单价（元）','a1',draft.a1)}${field('第 2 位单价（元）','a2',draft.a2)}<div class="full">${field('每位最高单价（元）','cap',draft.cap)}</div></div><div class="notice">封顶的是每位单价，不是月度总额。封顶后每个新增复购继续按该单价计入，再乘归属权重。</div><div class="calc-box"><div id="seqPreview"></div><div class="row" style="margin-top:12px"><label>试算完整复购人数 <input class="control" id="testHeads" type="number" min="0" max="100" step="1" value="9" style="width:80px"></label><strong id="testAmount"></strong></div></div>`;
+ if(settingsTab==='base')html=`<h3>基础接单系数</h3><p>全部折算分钟使用一个区间系数，不分段累加；达到区间起点即进入该档。</p><div class="form-grid">${['0–&lt;7,200 分钟','≥7,200–&lt;8,400 分钟','≥8,400–&lt;9,600 分钟','≥9,600 分钟'].map((t,i)=>field(t+' · 元/分钟','coefficients.'+i,draft.coefficients[i])).join('')}${field('新伙伴系数 · 元/分钟','newCoefficient',draft.newCoefficient)}</div><div class="calc-box" id="basePreview"></div><div class="notice">示例：7,200 分钟整点按第二档计算，8,400 分钟整点按第三档，9,600 分钟整点按第四档。分钟数沿用既有折算工时；不能以累计成就中的原始服务分钟直接替换。</div>`;
+ if(settingsTab==='shop')html=`<h3>完成目标后，按整店实际业绩提点</h3><p>未完成时为零；完成后按全部业绩计算，不是固定金额，也不只计算超出目标的部分。</p>${draft.shops.filter(s=>!readonly||s.id==='west').map(s=>{const i=draft.shops.findIndex(x=>x.id===s.id);return `<div class="shop-rule"><h3>${s.name}</h3><div class="form-grid">${field('整店月业绩目标（元） · 示例','shops.'+i+'.target',s.target)}${field('店长提点比例（%） · 示例','shops.'+i+'.commissionRate',s.commissionRate,'max="100"')}</div><div class="calc-box" data-shop-preview="${s.id}"></div></div>`;}).join('')}<div class="notice">计算公式：实际业绩 ≥ 目标时，店长接单奖励 = 整店实际业绩 × 提点比例。比例可保留小数，金额四舍五入到分。目标业绩具体数据来源仍需正式接入核对。</div>`;
+ if(settingsTab==='training')html=`<h3>8 个培训项目，各自设置次数与补贴</h3><p>全感舒筋的 6 个部位分别独立，头部水疗 60 / 90 分钟分别独立。通过考核的次日起累计对应项目订单，达到本项目次数后，补贴计入达标当月。</p><div class="training-setting-table"><table><thead><tr><th>培训项目</th><th>完成订单次数</th><th>补贴金额（元）</th></tr></thead><tbody>${draft.trainingProjects.map((p,i)=>`<tr><td><b>${esc(p.group)} · ${esc(p.name)}</b><small>${p.duration?p.duration+' 分钟课程':'服务部位'}</small></td><td><input aria-label="${esc(p.group+' '+p.name)}次数" type="number" min="1" max="999" step="1" data-key="trainingProjects.${i}.target" value="${p.target}"></td><td><input aria-label="${esc(p.group+' '+p.name)}补贴" type="number" min="0" step="0.01" data-key="trainingProjects.${i}.amount" value="${p.amount}"></td></tr>`).join('')}</tbody></table></div><div class="calc-box" id="trainingPreview"></div><div class="notice">每个项目单独累计、单独计入，同一项目只计入一次；未登记考核的项目不累计。考核通过日期不在此页设置，请在“培训考核”页面逐人维护。修改参数会形成新的规则版本，正式系统需冻结历史结算所用版本。</div>`;
+ if(settingsTab==='windows')html=`<h3>统计窗口</h3><p>以所选月份为锚点，累计成就时间轴保持独立。</p><div class="form-grid">${field('老客窗口长度（月）','retentionLength',draft.retentionLength,'step="1" max="12"')}${field('老客窗口末月偏移（月）','retentionOffset',draft.retentionOffset,'step="1" max="12"')}${field('新客窗口长度（月）','conversionLength',draft.conversionLength,'step="1" max="12"')}${field('新客窗口末月偏移（月）','conversionOffset',draft.conversionOffset,'step="1" max="12"')}</div><div class="notice">本原型仅演示窗口标签变化；真实分子分母须由后端重新汇总，不伪造重算结果。</div>`;
+ if(settingsTab==='history')html=`<h3>规则版本与修改记录</h3><p>本机演示版本，不覆盖真实历史结算。</p>${versions.slice().sort((a,b)=>b.effective.localeCompare(a.effective)).map(c=>`<div class="history-entry"><b>${esc(c.version)}</b><p>${c.effective} 起 · 每位上限 ${cash(c.cap)} · 培训 ${trainingBrief(c)}</p><p>${c.shops.filter(s=>!readonly||s.id==='west').map(s=>s.name+'提点 '+s.commissionRate+'%').join('；')}</p></div>`).join('')}${audit.length?'<h3>本地修改留痕</h3>'+audit.slice(-5).reverse().map(a=>`<div class="history-entry">${esc(a.time)} · ${esc(a.message)}</div>`).join(''):'<p class="subnote">暂无本地修改。</p>'}`;
+ $('settingsContent').innerHTML=`<section class="settings-section">${html}</section>`;
+ if(readonly)$('settingsContent').querySelectorAll('input').forEach(n=>n.disabled=true);
+ document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{settingsTab=b.dataset.tab;renderSettings();document.querySelector(`[data-tab="${settingsTab}"]`).focus({preventScroll:true});});
+ $('settingsContent').querySelectorAll('[data-key]').forEach(n=>n.oninput=()=>{const keys=n.dataset.key.split('.');let target=draft;keys.slice(0,-1).forEach(k=>target=target[k]);target[keys.at(-1)]=n.value===''?NaN:Number(n.value);updatePreviews();});
+ if($('testHeads'))$('testHeads').oninput=updatePreviews;updatePreviews();
+}
+function updatePreviews(){
+ const error=E.validation(draft);
+ if($('seqPreview')){const n=Number($('testHeads').value);$('seqPreview').textContent=error||'实际单价：'+E.sequence(10,draft).map(num).join(' → ')+' …';$('testAmount').textContent=error?'—':Number.isInteger(n)&&n>=0&&n<=100?cash(E.fib(Array(n).fill(1),draft).amount):'请输入 0–100 的整数';}
+ if($('basePreview'))$('basePreview').innerHTML=error?'请检查参数':`7,200 分钟即进入第二档：7,200 × ${num(E.coefficient(7200,draft))} = <strong>${cash(7200*E.coefficient(7200,draft))}</strong>`;
+ if($('trainingPreview')){if(error){$('trainingPreview').textContent='请检查参数';}else{let total=0,completed=0,registered=0;const m=TODAY.slice(0,7);people.forEach(p=>{const s=E.trainingSummary(p,draft,m,trainingData(),TODAY);total+=s.total;completed+=s.completedThisMonth;registered+=s.registered;});$('trainingPreview').innerHTML=`演示数据 ${m}：已登记 ${registered} / ${people.length*draft.trainingProjects.length} 项；本月达标 ${completed} 项，补贴合计 <strong>${cash(total)}</strong>。`;}}
+ document.querySelectorAll('[data-shop-preview]').forEach(n=>{const s=draft.shops.find(s=>s.id===n.dataset.shopPreview),sales=revenues[s.id];n.textContent=error?'请检查参数':sales>=s.target?`示例业绩 ${cash(sales)}，目标已完成：${s.commissionRate}% 提点 = ${cash(E.round(sales*s.commissionRate/100))}`:`示例业绩 ${cash(sales)}，目标尚未完成：当前 ${cash(0)}。完成后按全部业绩 × ${s.commissionRate}% 计算。`;});
+}
+function saveSettings(){
+ if(role==='manager')return;draft.effective=$('effective').value;const error=E.validation(draft);
+ if(error){$('settingsError').textContent=error;return;}
+ if(draft.effective<'2026-10'){$('settingsError').textContent='历史月份只读，请选 2026-10 或之后的新版本';return;}
+ const previous=versions.find(c=>c.effective===draft.effective),v=E.clone(draft);v.version=v.effective+' · V5修订 '+(audit.length+1);
+ audit.push({time:new Date().toLocaleString('zh-CN'),message:`保存 ${v.effective}：${v.shops.map(s=>s.name+'提点'+s.commissionRate+'%').join('、')}；培训 ${trainingBrief(v)}`,previous:previous?E.clone(previous):null});
+ versions=versions.filter(c=>c.effective!==v.effective).concat(v);persist();$('settingsDialog').close();render();$('settingsOpen')?.focus({preventScroll:true});toast(v.effective>month?'未来演示版本已保存，当前月份保持原规则':'示例规则已保存，报表与手机预览链接已更新');
+}
+
+$('effective').onchange=e=>{if(draft)draft.effective=e.target.value;};
+$('saveSettings').onclick=saveSettings;
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close).close());
+window.addEventListener('storage',e=>{if(e.key===STORE){try{const s=JSON.parse(e.newValue);if(s?.versions?.length&&s.versions.every(c=>!E.validation(c))){versions=s.versions;audit=s.audit||[];trainingRecords=normalizeRecords(s.trainingRecords||trainingRecords);render();}}catch(e){}}});
+window.demo={engine:E,get state(){return {versions,people,revenues,month,personId,role,adminView,trainingRecords,trainingOrders};},render,calculate:calc,trainingSummary:trainingSummaryFor,trainingRows:trainingRowsForPeople};
+render();
+})();
+</script></body></html>

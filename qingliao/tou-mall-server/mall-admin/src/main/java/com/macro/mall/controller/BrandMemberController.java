@@ -1,9 +1,14 @@
 package com.macro.mall.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.macro.mall.common.api.CommonResult;
 import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.config.ContextMixin;
+import com.macro.mall.crm.brand.BrandMemberCatalog;
 import com.macro.mall.crm.brand.BrandMemberClient;
+import com.macro.mall.crm.brand.BrandMemberNaming;
 import com.macro.mall.service.BrandCardPaymentService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -12,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * 品牌会员（Full愈年卡）轻疗端接口。
+ * 品牌会员（Full愈大会员）轻疗端接口。
  *
  * <p>品牌卡期、积分与愈行之旅以 CRM 为唯一账本；本端只做登录身份代理，
  * 不接收前端传入的会员号或金额，也不提供绕过支付的直接开卡入口。</p>
@@ -25,23 +30,46 @@ import java.util.Map;
 @Api(tags = "品牌会员")
 public class BrandMemberController implements ContextMixin {
     private final BrandMemberClient client;
+    private final BrandMemberCatalog catalog;
     private final BrandCardPaymentService paymentService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public BrandMemberController(BrandMemberClient client, BrandCardPaymentService paymentService) {
+    public BrandMemberController(BrandMemberClient client, BrandMemberCatalog catalog,
+                                 BrandCardPaymentService paymentService) {
         this.client = client;
+        this.catalog = catalog;
         this.paymentService = paymentService;
     }
 
     @GetMapping("/me")
     @ApiOperation("品牌会员身份、积分与愈行之旅状态")
     public CommonResult me() {
-        return CommonResult.success(client.me(String.valueOf(requireCustomer())));
+        Long customerId = requireCustomer();
+        JsonNode node = client.me(String.valueOf(customerId));
+        // CRM 卡面名称仍是「年卡 / 月卡」，对外统一展示 Full愈大会员；卡期与价格区分卡型。
+        if (node instanceof ObjectNode) {
+            JsonNode card = node.path("card");
+            if (card instanceof ObjectNode && !card.path("productCode").asText("").isEmpty()) {
+                ((ObjectNode) card).put("productName", BrandMemberNaming.DISPLAY_NAME);
+            }
+            // CRM 只负责卡期与积分；称呼/性别/生日由本端订单留存，回填给开通/续费表单，
+            // 已有档案的客户不必重复填写。
+            ((ObjectNode) node).set("profile", objectMapper.valueToTree(
+                    paymentService.latestProfile(customerId)));
+        }
+        return CommonResult.success(node);
+    }
+
+    @PutMapping("/profile")
+    @ApiOperation("保存会员档案（称呼/性别/生日），同步会员中心")
+    public CommonResult saveProfile(@RequestBody(required = false) Map<String, Object> params) {
+        return CommonResult.success(paymentService.saveMemberProfile(requireCustomer(), params));
     }
 
     @GetMapping("/products")
-    @ApiOperation("品牌会员卡商品目录（CRM 定价）")
+    @ApiOperation("品牌会员卡商品目录（CRM 定价 + 提前价折扣）")
     public CommonResult products() {
-        return CommonResult.success(client.products());
+        return CommonResult.success(catalog.view());
     }
 
     @PostMapping("/game/ticket")

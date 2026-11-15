@@ -21,6 +21,7 @@ import com.macro.mall.pay.PayChannel;
 import com.macro.mall.pay.PayService;
 import com.macro.mall.service.BrandCardPaymentService;
 import com.macro.mall.service.OrderService;
+import com.macro.mall.service.PayGroupService;
 import com.macro.mall.utils.RedisUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -64,6 +65,8 @@ public class DyPayController {
     private RedisUtil redisUtil;
     @Autowired
     private RedisService redisService;
+    @Autowired
+    private PayGroupService payGroupService;
 
     // 64x64 logo
     private static final String logoStr = "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";
@@ -176,6 +179,14 @@ public class DyPayController {
 
             BigDecimal orderAmount = new BigDecimal(transAmt);
 
+            // 合并支付（预约单 + 会员卡续费，G 开头）：一笔收款按台账拆单，订单与卡单各自结算
+            if (StringUtils.hasText(orderSn) && payGroupService.isGroupPaySn(cleanOrderSn(orderSn))) {
+                payGroupService.handlePaySuccess(cleanOrderSn(orderSn), orderSn, orderAmount, hfSeqId,
+                        partyOrderId, outTransId, payChannel);
+                log.info("dougong merge pay notify handled, merOrdId={}", orderSn);
+                return;
+            }
+
             // 品牌会员卡开卡单（C 开头）单独结算：CRM issue + 本地权益期
             if (StringUtils.hasText(orderSn) && brandCardPaymentService.isCardOrder(orderSn)) {
                 brandCardPaymentService.handlePayCallback(orderSn, orderAmount, hfSeqId,
@@ -270,7 +281,7 @@ public class DyPayController {
 
     /**
      * 汇付斗拱 v2 通知（form-urlencoded）：用平台公钥验证 resp_data 的 SHA256WithRSA 签名，
-     * 再只结算品牌会员卡（C 开头）通知；商城订单继续走原 JSON 回调，避免改变既有线上行为。
+     * 再结算品牌会员卡（C 开头）与合并支付（G 开头）通知；商城订单继续走原 JSON 回调，避免改变既有线上行为。
      */
     private void handleFormNotify(String msgBody) {
         JSONObject payload = DgPayNotifyParser.verifyAndParse(msgBody,
@@ -291,6 +302,39 @@ public class DyPayController {
                     payload.getBigDecimal("ord_amt"), hfSeqId, transStat,
                     payload.getString("bank_message"));
             log.info("dougong form refund notify handled, ref={}, transStat={}", orgReqSeqId, transStat);
+            return;
+        }
+
+        // 合并支付退款：原支付流水是合并单号（G 开头），退款时 remark 带的是被退的单号（卡单号 / 订单号）
+        if (StringUtils.hasText(orgReqSeqId) && payGroupService.isGroupPaySn(cleanOrderSn(orgReqSeqId))) {
+            String remark = payload.getString("remark");
+            if (StringUtils.hasText(remark) && brandCardPaymentService.isCardOrder(remark)) {
+                brandCardPaymentService.handleRefundCallback(remark,
+                        payload.getBigDecimal("ord_amt"), hfSeqId, transStat,
+                        payload.getString("bank_message"));
+            }
+            log.info("dougong merge refund notify handled, orgRef={}, remark={}, transStat={}",
+                    orgReqSeqId, remark, transStat);
+            return;
+        }
+
+        // 合并支付成功：G 开头的合并单，按台账拆单结算（订单部分 + 会员卡部分）
+        if (StringUtils.hasText(merOrdId) && payGroupService.isGroupPaySn(cleanOrderSn(merOrdId))) {
+            if (!"S".equals(transStat) || !"00000000".equals(payload.getString("resp_code"))) {
+                log.warn("dougong merge pay notify not success, merOrdId={}, transStat={}, respCode={}",
+                        merOrdId, transStat, payload.getString("resp_code"));
+                return;
+            }
+            Integer payType = 1;
+            String payChannel = PayChannel.WX_MINI;
+            if (!"T_MINIAPP".equals(payload.getString("trade_type"))) {
+                payType = 0;
+                payChannel = PayChannel.WX_WAP_SCAN;
+            }
+            payGroupService.handlePaySuccess(cleanOrderSn(merOrdId), merOrdId,
+                    payload.getBigDecimal("trans_amt"), hfSeqId,
+                    payload.getString("party_order_id"), payload.getString("out_trans_id"), payChannel);
+            log.info("dougong merge pay notify handled, merOrdId={}, hfSeqId={}", merOrdId, hfSeqId);
             return;
         }
 

@@ -14,8 +14,10 @@ function setup(index, api={}) {
     approvalCategoryApi:{add:async p=>calls.push(p),update:async p=>calls.push(p),...api},
     approvalDetailApi:{list:async()=>({data:[]}),findApprovalCategoryDetail:async()=>({data:{}}),
       page:async()=>({data:{list:[],total:0}}),pass:async(id)=>calls.push(id),reject:async(id)=>calls.push(id),...api}});
-  const script=sources[index].match(/<script>([\s\S]*?)<\/script>/)[1]
-    .replace(/\bimport\s+[^;\n]*(?:;|\n)/g,'').replace('export default','this.options =');
+  const raw=sources[index].match(/<script>([\s\S]*?)<\/script>/)[1];
+  // 组件默认导入在脚本里被剥离，这里按导入名补占位，避免新增子组件后 setup 直接抛错
+  for (const [,name] of raw.matchAll(/import\s+(\w+)\s+from/g)) if (!(name in context)) context[name] = {};
+  const script=raw.replace(/\bimport\s+[^;\n]*(?:;|\n)/g,'').replace('export default','this.options =');
   vm.runInContext(script,context);
   const state=Object.assign(context.options.data(),context.options.methods,{
     $options:context.options,$refs:{refForm:{validate:async()=>true}},$set:(o,k,v)=>{o[k]=v;},

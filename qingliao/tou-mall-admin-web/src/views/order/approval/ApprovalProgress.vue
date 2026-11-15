@@ -1,6 +1,7 @@
 <template>
   <div class="ApprovalProgress">
-    <el-drawer :show-close="true" :visible.sync="showDrawer"  append-to-body size="min(980px, 100vw)" title="审批详情"
+    <el-drawer :show-close="true" :visible.sync="showDrawer"  append-to-body size="min(980px, 100vw)"
+               :title="drawerTitle"
                :before-close="close">
       <div v-loading="loading" class="approval-content">
         <el-card style="padding: 0 24px;">
@@ -24,7 +25,7 @@
                 <span v-show="item.state== constant.approvalStateMap.passed">{{ item.timestamp }}</span>
                 {{ item.takingTimeStr }}
                 <span
-                  v-if="item.state == constant.approvalStateMap.approving && item.targetUserId == userId && item.flowUserType==constant.flowUserTypeMap.approval"
+                  v-if="!viewOnly && item.state == constant.approvalStateMap.approving && item.targetUserId == userId && item.flowUserType==constant.flowUserTypeMap.approval"
                   class="m-left20">
                 <el-button icon="el-icon-check" plain round size="mini" type="success"
                            @click="pass(item,index)">同意</el-button>
@@ -53,18 +54,42 @@
         </el-card>
         <description-title style="margin-top: 24px">{{ categoryTitle }}</description-title>
         <approval-refund-apply v-if="categoryTitle =='退款审批'" :detail-data="detailData"></approval-refund-apply>
-        <el-descriptions style="margin-top: 10px;padding-left: 10px" v-if="categoryTitle =='请假审批'" :column="3">
-          <el-descriptions-item label="开始时间">{{ detailData.startDatetime+"("+startDateWeek+")" }}</el-descriptions-item>
-          <el-descriptions-item label="结束时间">{{ detailData.endDatetime+"("+endDateWeek+")" }}</el-descriptions-item>
-          <el-descriptions-item label="是否有订单">{{ detailData.count }}</el-descriptions-item>
-          <el-descriptions-item label="请假事由">{{ detailData.marks }}</el-descriptions-item>
-        </el-descriptions>
+        <div v-if="categoryTitle =='请假审批'" class="leave-detail">
+          <div class="leave-row">
+            <span class="leave-label">申请人</span>
+            <span class="leave-value">{{ leaveApplicant }}</span>
+          </div>
+          <div class="leave-row">
+            <span class="leave-label">请假日期</span>
+            <div class="leave-value leave-dates">
+              <span v-for="item in leaveDates" :key="item.date" class="leave-date-chip">
+                {{ item.text }}
+              </span>
+              <span v-if="leaveDates.length === 0" class="leave-empty">—</span>
+              <span v-if="detailData.sameDay" class="leave-same-day">当天请假 · 需店长及以上审批</span>
+            </div>
+          </div>
+          <div class="leave-row">
+            <span class="leave-label">每天时间段</span>
+            <span class="leave-value">{{ leaveTimeRange }}</span>
+          </div>
+          <div class="leave-row">
+            <span class="leave-label">请假事由</span>
+            <span class="leave-value">{{ detailData.marks || '—' }}</span>
+          </div>
+          <div class="leave-row">
+            <span class="leave-label">请假期间订单</span>
+            <span class="leave-value" :class="{'leave-warn': Number(detailData.count) > 0}">
+              {{ detailData.count === undefined || detailData.count === null ? '—' : detailData.count + ' 单' }}
+            </span>
+          </div>
+        </div>
         <el-descriptions style="margin-top: 10px;padding-left: 10px" v-if="categoryTitle =='送券审批'">
           <el-descriptions-item label="送券数量">{{ detailData.couponNumber }}张</el-descriptions-item>
           <el-descriptions-item label="单券价值">{{ Number(detailData.couponAmount || 0).toFixed(2) }}元</el-descriptions-item>
           <el-descriptions-item label="赠券总价值">{{ (Number(detailData.couponAmount || 0) * Number(detailData.couponNumber || 0)).toFixed(2) }}元</el-descriptions-item>
-          <el-descriptions-item label="客户昵称">{{ detailData.customerName }}</el-descriptions-item>
-          <el-descriptions-item label="客户手机号">{{ detailData.phone }}</el-descriptions-item>
+          <el-descriptions-item label="客户昵称">{{ detailData.customerName | maskNicknameFilter }}</el-descriptions-item>
+          <el-descriptions-item label="客户手机号">{{ detailData.phone | maskPhoneFilter }}</el-descriptions-item>
           <el-descriptions-item label="使用限制">{{ detailData.limitations }}</el-descriptions-item>
           <el-descriptions-item label="有效期起">{{ detailData.startTime }}</el-descriptions-item>
           <el-descriptions-item label="有效期止">{{ detailData.endTime }}</el-descriptions-item>
@@ -84,7 +109,7 @@
           </el-table>
         </div>
         <description-title v-if="approval.rejectReason">拒绝原因</description-title>
-        <div v-for="(item,index) in approval.rejectReason?JSON.parse(approval.rejectReason):[]">
+        <div v-for="(item,index) in rejectList" :key="index">
           <el-descriptions style="margin-top: 10px;padding-left: 20px">
             <el-descriptions-item label="拒绝原因" :span="2">{{ item.rejectReason }}</el-descriptions-item>
             <el-descriptions-item label="创建人">{{ item.userId | adminUsernameFilter }}</el-descriptions-item>
@@ -118,17 +143,72 @@ export default {
       categoryTitle: '',
       detailData: {},
       approvalDetail: {},
-      startDateWeek:'',
-      endDateWeek:'',
+      //看板订单详情/消费记录/排班变动日志等入口只做历史回溯，不提供审批操作
+      viewOnly: false,
     }
   },
   computed: {
-    ...mapGetters(['userId'])
+    ...mapGetters(['userId']),
+    drawerTitle() {
+      const stateTxt = this.approvalStateText
+      return stateTxt ? `审批详情 · ${stateTxt}` : '审批详情'
+    },
+    approvalStateText() {
+      const map = this.constant.approvalStateMap
+      const state = this.approval ? this.approval.state : undefined
+      const textMap = {
+        [map.rejected]: '已拒绝',
+        [map.notSubmit]: '未提交',
+        [map.approving]: '审批中',
+        [map.passed]: '审批已通过',
+        [map.withdraw]: '已撤回',
+        [map.skipped]: '已跳过',
+      }
+      return textMap[state] || ''
+    },
+    //请假审批：申请人优先取申请单上的疗愈师，取不到再退回审批发起人
+    leaveApplicant() {
+      if (this.detailData.massagistName) return this.detailData.massagistName
+      if (!this.approval.createUser) return '—'
+      return this.$options.filters['adminUsernameFilter'](this.approval.createUser)
+    },
+    //请假日期按天展示并带上星期，历史数据没有勾选日期时退回起止时间
+    leaveDates() {
+      const raw = this.detailData.dates
+      const list = Array.isArray(raw) ? raw.filter(d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) : []
+      if (list.length > 0) {
+        return list.map(date => ({date, text: `${date} ${dateUtil.getWeek(date)}`}))
+      }
+      const start = this.datePart(this.detailData.startDatetime)
+      const end = this.datePart(this.detailData.endDatetime)
+      if (!start || !end) return []
+      if (start === end) return [{date: start, text: `${start} ${dateUtil.getWeek(start)}`}]
+      return [{date: start, text: `${start} 至 ${end}（共 ${this.dateSpan(start, end)} 天）`}]
+    },
+    leaveTimeRange() {
+      const start = this.detailData.startTime || this.timePart(this.detailData.startDatetime)
+      const end = this.detailData.endTime || this.timePart(this.detailData.endDatetime)
+      if (!start && !end) return '—'
+      return `${start || '—'} - ${end || '—'}`
+    },
+    //后端把拒绝记录存成 JSON 数组；历史/异常数据若是纯文本也不能让抽屉白屏
+    rejectList() {
+      const raw = this.approval.rejectReason
+      if (!raw) return []
+      try {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) return parsed
+      } catch (e) {
+        //忽略解析失败,走下面的兜底
+      }
+      return [{rejectReason: raw, userId: null}]
+    }
   },
   created() {
   },
   methods: {
     async open(row) {
+      this.viewOnly = false
       this.approval = {...row.approval}
       this.approvalDetail = {...row}
       this.categoryTitle = row.approval.categoryTitle
@@ -138,25 +218,49 @@ export default {
       this.showDrawer = true
       await this.fetch()
     },
+    //按审批 id 只读查看完整流程：不依赖当前账号是否是节点处理人
+    async openByApprovalId(approvalId) {
+      if (!approvalId) return
+      this.viewOnly = true
+      this.approval = {}
+      this.approvalDetail = {}
+      this.categoryTitle = ''
+      this.approvalUsers = []
+      this.ccUsers = []
+      this.detailData = {}
+      this.showDrawer = true
+      const requestId = ++this.fetchRequestId
+      this.loading = true
+      try {
+        const res = await approvalDetailApi.flow(approvalId)
+        if (requestId !== this.fetchRequestId) return
+        const flow = res.data || {}
+        this.approval = {...(flow.approval || {})}
+        this.categoryTitle = flow.categoryTitle || this.approval.categoryTitle || ''
+        this.detailData = flow.businessDetail || {}
+        const rows = flow.details || []
+        this.buildApprovalUsers(rows)
+        this.ccUsers = rows.filter(d => d.flowUserType === this.constant.flowUserTypeMap.cc)
+      } catch (error) {
+        //无权查看等异常由请求拦截器统一提示，这里直接收起抽屉
+        if (requestId === this.fetchRequestId) this.showDrawer = false
+      } finally {
+        if (requestId === this.fetchRequestId) this.loading = false
+      }
+    },
     async fetch() {
       const approvalId = this.approval.id
       const requestId = ++this.fetchRequestId
       this.loading = true
       try {
         const [res, resCategoryDetail] = await Promise.all([
-          approvalDetailApi.list({approvalId}), approvalDetailApi.findApprovalCategoryDetail(approvalId)
+          approvalDetailApi.list({approvalId, order: 'id'}), approvalDetailApi.findApprovalCategoryDetail(approvalId)
         ])
         if (requestId !== this.fetchRequestId || this.approval.id !== approvalId) return
         const rows = res.data || []
         this.buildApprovalUsers(rows)
         this.ccUsers = rows.filter(d => d.flowUserType === this.constant.flowUserTypeMap.cc)
         this.detailData = resCategoryDetail.data || {}
-        if (this.categoryTitle === '请假审批' && this.detailData.startDatetime && this.detailData.endDatetime) {
-          const startDate = this.detailData.startDatetime.replace('年','-').replace('月','-').replace('日','').substr(0,10)
-          const endDate = this.detailData.endDatetime.replace('年','-').replace('月','-').replace('日','').substr(0,10)
-          this.startDateWeek = dateUtil.getWeek(startDate)
-          this.endDateWeek = dateUtil.getWeek(endDate)
-        }
       } catch (error) {
         if (requestId === this.fetchRequestId) throw error
       } finally {
@@ -259,6 +363,19 @@ export default {
         }
       })
     },
+    //后端返回“2026年11月03日 09:00”，这里只取日期/时间部分做兼容展示
+    datePart(value) {
+      const match = value ? String(value).match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/) : null
+      if (!match) return ''
+      return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
+    },
+    timePart(value) {
+      const match = value ? String(value).match(/(\d{1,2}:\d{2})/) : null
+      return match ? match[1] : ''
+    },
+    dateSpan(start, end) {
+      return dateUtil.dateDiff(start, end, 'day') + 1
+    },
     async pass(detail) {
       if (this.submitting) return
       this.submitting = true
@@ -328,5 +445,68 @@ export default {
 }
 .node-tag {
   margin-right: 6px;
+}
+.leave-detail {
+  margin-top: 10px;
+  padding: 4px 10px 0;
+  line-height: 1.8;
+
+  .leave-row {
+    display: flex;
+    align-items: flex-start;
+    padding: 6px 0;
+    border-bottom: 1px dashed #f0edef;
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  .leave-label {
+    flex: 0 0 88px;
+    font-size: 13px;
+    color: #79747e;
+    letter-spacing: 0.05em;
+  }
+
+  .leave-value {
+    flex: 1;
+    font-size: 13px;
+    color: #322f35;
+    letter-spacing: 0.05em;
+  }
+
+  .leave-warn {
+    color: #c4562f;
+  }
+
+  .leave-dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .leave-date-chip {
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #584219;
+    background: #fbf4e8;
+    border: 1px solid #e4c892;
+  }
+
+  .leave-empty {
+    color: #9a96a2;
+  }
+
+  .leave-same-day {
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 18px;
+    color: #a33a12;
+    background: #fdf0e9;
+    border: 1px solid #f0bfa6;
+  }
 }
 </style>

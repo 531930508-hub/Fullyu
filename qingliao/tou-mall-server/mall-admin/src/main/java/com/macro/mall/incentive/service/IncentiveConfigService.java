@@ -2,6 +2,7 @@ package com.macro.mall.incentive.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.macro.mall.common.exception.BusinessException;
+import com.macro.mall.incentive.calc.BaseSalaryLadder;
 import com.macro.mall.incentive.calc.IncentiveMath;
 import com.macro.mall.incentive.dto.IncentiveConfigBundle;
 import com.macro.mall.incentive.dto.IncentiveConfigSaveRequest;
@@ -132,7 +133,9 @@ public class IncentiveConfigService {
         config.setCreateUserId(operatorId);
         configMapper.insert(config);
 
-        for (IncentiveConfigSaveRequest.CoefficientItem item : request.getCoefficients()) {
+        List<IncentiveConfigSaveRequest.CoefficientItem> sortedBands = new ArrayList<>(request.getCoefficients());
+        sortedBands.sort(Comparator.comparing(IncentiveConfigSaveRequest.CoefficientItem::getMinMinutes));
+        for (IncentiveConfigSaveRequest.CoefficientItem item : sortedBands) {
             IncentiveCoefficient entity = new IncentiveCoefficient();
             entity.setConfigId(config.getId());
             entity.setMinMinutes(item.getMinMinutes());
@@ -175,7 +178,9 @@ public class IncentiveConfigService {
             throw new BusinessException("参数不能为空");
         }
         IncentiveMath.requireMonth(request.getEffectiveMonth());
-        requirePositive(request.getNewCoefficient(), "新人系数");
+        requireRange(request.getNewCoefficient(), "新人合作期单价（元/分钟）",
+                BaseSalaryLadder.MIN_NEW_PARTNER_UNIT_PRICE.toPlainString(),
+                BaseSalaryLadder.MAX_NEW_PARTNER_UNIT_PRICE.toPlainString());
         requireRange(request.getRetentionThreshold(), "老客留存门槛", "0", "100");
         requireMin(request.getMinNewSample(), 1, "新客最小样本");
         requireMin(request.getRetentionMonths(), 1, "留存统计月数");
@@ -197,7 +202,10 @@ public class IncentiveConfigService {
             if (item.getMinMinutes() == null || item.getMinMinutes() < 0) {
                 throw new BusinessException("时长档位起点不能为负");
             }
-            requirePositive(item.getCoefficient(), "基础系数");
+            // 基础薪资按 1.00–1.50 元/分钟的阶梯计价，档位单价必须落在区间内。
+            requireRange(item.getCoefficient(), "基础薪资单价（元/分钟）",
+                    BaseSalaryLadder.MIN_UNIT_PRICE.toPlainString(),
+                    BaseSalaryLadder.MAX_UNIT_PRICE.toPlainString());
             if (!minutes.add(item.getMinMinutes())) {
                 throw new BusinessException("时长档位起点重复：" + item.getMinMinutes());
             }

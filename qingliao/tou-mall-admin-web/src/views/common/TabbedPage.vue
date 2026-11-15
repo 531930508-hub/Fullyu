@@ -29,6 +29,7 @@
  * - keep-alive 保留各页签的表单/筛选状态，来回切换不重新加载
  * - 页签级权限：tab.perm 对应 ums_menu 中「页面name:页签name」的隐藏菜单行，
  *   角色分配菜单时可勾到页签；超级管理员与未迁移页签行的旧菜单表保持全量
+ * - tab.roles 可额外限定只有指定角色可见（如门店列表仅超级管理员）
  */
 const SUPER_ADMIN_ROLE = '超级管理员'
 
@@ -55,12 +56,15 @@ export default {
     visibleTabs() {
       const menus = this.$store.getters.menus || []
       const roles = this.$store.getters.roles || []
-      if (roles.indexOf(SUPER_ADMIN_ROLE) > -1) return this.tabs
+      // tab.roles 是硬性角色白名单，高于菜单权限与超级管理员兜底
+      const roleAllowed = tab => !tab.roles || tab.roles.some(role => roles.indexOf(role) > -1)
+      const tabs = this.tabs.filter(roleAllowed)
+      if (roles.indexOf(SUPER_ADMIN_ROLE) > -1) return tabs
       const pageName = (this.$route && this.$route.name) || ''
       const prefix = pageName + ':'
       // 菜单表还没有该页的页签行（旧后端/未迁移）时不做过滤，避免整页误隐藏
-      if (!menus.some(menu => (menu.name || '').indexOf(prefix) === 0)) return this.tabs
-      return this.tabs.filter(tab => !tab.perm || menus.some(menu => menu.name === tab.perm))
+      if (!menus.some(menu => (menu.name || '').indexOf(prefix) === 0)) return tabs
+      return tabs.filter(tab => !tab.perm || menus.some(menu => menu.name === tab.perm))
     },
     currentComponent() {
       const tab = this.visibleTabs.find(item => item.name === this.active) || this.visibleTabs[0] || {}

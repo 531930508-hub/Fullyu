@@ -1,7 +1,8 @@
 <template>
   <div class="app-wrapper" :class="classObj">
     <sidebar class="sidebar-container"></sidebar>
-    <div v-show="device === 'mobile' && sidebar.opened" class="sidebar-mask" @click="closeSideBar"></div>
+    <div v-show="device === 'mobile' && sidebar.opened" class="sidebar-mask"
+         @click="closeSideBar"></div>
     <div class="main-container">
       <navbar v-if="!hideNavbar"></navbar>
       <app-main></app-main>
@@ -27,6 +28,7 @@ export default {
     }
   },
   mounted() {
+    this.syncShellClass()
     this.$store.dispatch('RefreshTodoCount')
     this.todoTimer = setInterval(() => {
       this.$store.dispatch('RefreshTodoCount')
@@ -37,10 +39,22 @@ export default {
       clearInterval(this.todoTimer)
       this.todoTimer = null
     }
+    document.body.classList.remove('app-shell', 'app-shell--collapsed')
+  },
+  watch: {
+    // 弹窗（append-to-body 后挂在 body 上）需要知道侧栏状态，才能把内容区和弹窗对齐
+    classObj() {
+      this.syncShellClass()
+    }
   },
   methods: {
     closeSideBar() {
       this.$store.dispatch('CloseSideBar', { withoutAnimation: false })
+    },
+    syncShellClass() {
+      const { hideSidebar } = this.classObj
+      document.body.classList.add('app-shell')
+      document.body.classList.toggle('app-shell--collapsed', !!hideSidebar)
     }
   },
   computed: {
@@ -54,9 +68,10 @@ export default {
       return this.$route.meta && this.$route.meta.hideNavbar
     },
     classObj() {
+      const sidebar = this.sidebar
       return {
-        hideSidebar: !this.sidebar.opened,
-        withoutAnimation: this.sidebar.withoutAnimation,
+        hideSidebar: !sidebar.opened,
+        withoutAnimation: sidebar.withoutAnimation,
         mobile: this.device === 'mobile'
       }
     }

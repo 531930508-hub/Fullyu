@@ -76,7 +76,12 @@ public class OrderDetailDto {
 
     private Boolean isUseIntegration = true; // 是否使用积分
 
-    private List<OrderDetail> oldOrderDetails; // 老订单详情数据
+    private List<OrderDetail> oldOrderDetails; // 老订单详情数据（未到店/未服务的行，可参与重建）
+
+    /**
+     * 已到店/已服务的明细行：改单时既不删除也不重建，原样保留其技师、到店状态与点数归属。
+     */
+    private List<OrderDetail> servedOrderDetails;
 
     /**
      * @see com.macro.mall.enums.OrderPayType
@@ -91,4 +96,10 @@ public class OrderDetailDto {
     private String cardimage;
 
     private  Integer addType;
+
+    /**
+     * 加钟来源订单id（加钟时前端会带上原订单id），用于把加钟单和原单关联起来
+     */
+    @ApiModelProperty("加钟来源订单id")
+    private Long fromOrderId;
 }

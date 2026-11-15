@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS `c_customer_massagist_block` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_customer_massagist` (`customer_id`, `massagist_id`),
   KEY `idx_massagist_id` (`massagist_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='客户暂别的疗愈师（客户级偏好标记，对外统一称「暂别」）';
 
 -- ---------------------------------------------------------------------------

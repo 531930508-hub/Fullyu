@@ -28,8 +28,14 @@ public class Shop extends BaseEntity {
     @ApiModelProperty("门店名称")
     private String name;
 
+    @ApiModelProperty("英文门店名称，空则小程序英文模式回退中文")
+    private String nameEn;
+
     @ApiModelProperty("门店地址")
     private String address;
+
+    @ApiModelProperty("英文门店地址，空则小程序英文模式回退中文")
+    private String addressEn;
 
     @ApiModelProperty("门店封面")
     @JsonSerialize(using = QiniuUrlSerializer.class)
@@ -56,6 +62,9 @@ public class Shop extends BaseEntity {
 
     @ApiModelProperty("门店地址")
     private String shortAddress;
+
+    @ApiModelProperty("英文简要地址，空则小程序英文模式回退中文")
+    private String shortAddressEn;
 
     /***2026-01-01 luxin start*/
     @ApiModelProperty("商户号")

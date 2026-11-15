@@ -57,6 +57,8 @@ public class UmsAdminController {
     @Autowired
     private UmsRoleService roleService;
     @Autowired
+    private com.macro.mall.service.base.ShopScopeService shopScopeService;
+    @Autowired
     private MassagistService massagistService;
     @Autowired
     private MassagistIdentityService massagistIdentityService;
@@ -127,6 +129,10 @@ public class UmsAdminController {
         data.put("menus", roleService.getMenuList(umsAdmin.getId()));
         data.put("icon", umsAdmin.getIcon());
         data.put("massagistId", umsAdmin.getMassagistId());
+        // 门店作用域：前端据此决定门店下拉范围与是否显示「全部门店」
+        boolean globalShopScope = shopScopeService.isGlobal(umsAdmin);
+        data.put("isGlobal", globalShopScope);
+        data.put("authorizedShopIds", globalShopScope ? null : shopScopeService.authorizedShopIds(umsAdmin));
         putIdentity(data, umsAdmin);
         List<UmsRole> roleList = adminService.getRoleList(umsAdmin.getId());
         if (CollUtil.isNotEmpty(roleList)) {
@@ -153,6 +159,10 @@ public class UmsAdminController {
         data.put("menus", roleService.getMenuList(umsAdmin.getId()));
         data.put("icon", umsAdmin.getIcon());
         data.put("massagistId", umsAdmin.getMassagistId());
+        // 门店作用域：前端据此决定门店下拉范围与是否显示「全部门店」
+        boolean globalShopScope = shopScopeService.isGlobal(umsAdmin);
+        data.put("isGlobal", globalShopScope);
+        data.put("authorizedShopIds", globalShopScope ? null : shopScopeService.authorizedShopIds(umsAdmin));
         putIdentity(data, umsAdmin);
         List<UmsRole> roleList = adminService.getRoleList(umsAdmin.getId());
         if (CollUtil.isNotEmpty(roleList)) {

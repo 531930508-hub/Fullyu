@@ -185,4 +185,108 @@ class ApprovalFlowNodeResolutionTest {
         service.replaceNodes(3L, Collections.emptyList());
         verify(service, never()).save(any(ApprovalFlowNode.class));
     }
+
+    private ApprovalResolvedNode resolved(String name, Long... ids) {
+        ApprovalResolvedNode node = new ApprovalResolvedNode();
+        node.setNodeName(name);
+        node.setApproveMode(ApprovalNodeMode.ANY.getCode());
+        node.setAdminIds(new ArrayList<>(Arrays.asList(ids)));
+        return node;
+    }
+
+    @Test void earlyLeaveChainOnlyHasShopManager() {
+        when(service.massagistIdentityService.resolveAdminIds(
+                MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
+                .thenReturn(Arrays.asList(7L, 8L));
+        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, false);
+        assertEquals(1, chain.size());
+        assertEquals("店长审批", chain.get(0).getNodeName());
+        assertEquals(ApprovalNodeMode.ANY.getCode(), chain.get(0).getApproveMode());
+        assertEquals(Arrays.asList("7", "8"), adminIds(chain.get(0)));
+    }
+
+    @Test void sameDayLeaveChainAppendsHqCeoAsSecondLevel() {
+        when(service.massagistIdentityService.resolveAdminIds(
+                MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
+                .thenReturn(Collections.singletonList(7L));
+        when(service.umsAdminService.getById(20L)).thenReturn(admin(20L, 1));
+        service.leaveSecondApproverAdminId = 20L;
+
+        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, true);
+        assertEquals(2, chain.size());
+        assertEquals("店长审批", chain.get(0).getNodeName());
+        assertEquals(Arrays.asList("7"), adminIds(chain.get(0)));
+        assertEquals("总部CEO审批", chain.get(1).getNodeName());
+        assertEquals(Arrays.asList("20"), adminIds(chain.get(1)));
+        assertEquals(ApprovalNodeMode.ANY.getCode(), chain.get(1).getApproveMode());
+    }
+
+    @Test void managerOwnLeaveGoesStraightToHqCeo() {
+        when(service.massagistIdentityService.resolveAdminIds(
+                MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
+                .thenReturn(Collections.singletonList(5L));
+        when(service.umsAdminService.getById(20L)).thenReturn(admin(20L, 1));
+        service.leaveSecondApproverAdminId = 20L;
+
+        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, false);
+        assertEquals(1, chain.size());
+        assertEquals("总部CEO审批", chain.get(0).getNodeName());
+        assertEquals(Arrays.asList("20"), adminIds(chain.get(0)));
+    }
+
+    @Test void hqCeoOwnLeaveIsRejected() {
+        when(service.massagistIdentityService.resolveAdminIds(
+                MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
+                .thenReturn(Collections.singletonList(20L));
+        service.leaveSecondApproverAdminId = 20L;
+        assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 20L, false));
+    }
+
+    @Test void leaveChainRejectedWhenShopHasNoManagerIdentity() {
+        when(service.massagistIdentityService.resolveAdminIds(
+                MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
+                .thenReturn(Collections.emptyList());
+        BusinessException e = assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 5L, false));
+        assertTrue(e.getMessage().contains("店长"));
+    }
+
+    @Test void sameDayLeaveRejectedWhenSecondApproverNotConfigured() {
+        when(service.massagistIdentityService.resolveAdminIds(
+                MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
+                .thenReturn(Collections.singletonList(7L));
+        service.leaveSecondApproverAdminId = 0L;
+        BusinessException e = assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 5L, true));
+        assertTrue(e.getMessage().contains("二级审批人"));
+    }
+
+    @Test void sameDayLeaveRejectedWhenSecondApproverDisabled() {
+        when(service.massagistIdentityService.resolveAdminIds(
+                MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
+                .thenReturn(Collections.singletonList(7L));
+        when(service.umsAdminService.getById(20L)).thenReturn(admin(20L, 0));
+        service.leaveSecondApproverAdminId = 20L;
+        BusinessException e = assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 5L, true));
+        assertTrue(e.getMessage().contains("停用"));
+    }
+
+    @Test void sameDayLeaveSkipsSecondLevelWhenCeoIsTheShopManager() {
+        when(service.massagistIdentityService.resolveAdminIds(
+                MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
+                .thenReturn(Collections.singletonList(7L));
+        when(service.umsAdminService.getById(7L)).thenReturn(admin(7L, 1));
+        service.leaveSecondApproverAdminId = 7L;
+        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, true);
+        assertEquals(1, chain.size());
+        assertEquals("店长审批", chain.get(0).getNodeName());
+    }
+
+    @Test void hqCeoManagerIsRejectedWhenSubmittingOwnLeave() {
+        when(service.massagistIdentityService.resolveAdminIds(
+                MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
+                .thenReturn(Arrays.asList(7L, 20L));
+        when(service.umsAdminService.getById(20L)).thenReturn(admin(20L, 1));
+        service.leaveSecondApproverAdminId = 20L;
+        // CEO 自己请假：店长那一级不派给自己，二级也不能是他本人 → 拦下
+        assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 20L, false));
+    }
 }

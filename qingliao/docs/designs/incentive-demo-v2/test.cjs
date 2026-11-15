@@ -1,0 +1,25 @@
+const assert=require('node:assert/strict');
+const E=require('./engine.js');
+const c=E.clone(E.DEFAULT),p=E.clone(E.PEOPLE[0]);let tests=0;
+function test(name,fn){fn();tests++;console.log('PASS',name);}
+test('默认斐波那契单价封顶，后续仍按130计入',()=>assert.deepEqual(E.sequence(10,c),[10,10,20,30,50,80,130,130,130,130]));
+test('种子和封顶可配',()=>assert.deepEqual(E.sequence(8,{...c,a1:20,a2:20,cap:100}),[20,20,40,60,100,100,100,100]));
+test('9位合计590，而不是总额封顶130',()=>assert.equal(E.fib(Array(9).fill(1),c).amount,590));
+test('4位70，下一位50',()=>{const f=E.fib([1,1,1,1],c);assert.equal(f.amount,70);assert.equal(f.next,50);});
+test('权重应用于封顶后的单价',()=>assert.equal(E.fib([...Array(8).fill(1),.5],c).amount,525));
+test('零位下一位10',()=>assert.equal(E.fib([],c).next,10));
+test('基础全量系数及精确边界',()=>{[7200,7201,8400,8401,9600,9601].forEach((x,i)=>assert.equal(E.coefficient(x,c),[1,1.2,1.2,1.3,1.3,1.5][i]));assert.equal(E.coefficient(9900,c,true),.8);assert.equal(E.calculate(p,c).base,9720);});
+test('60%前提两类同时控制且不影响基础培训',()=>{const r=E.calculate({...p,retained:59,senior:100},c);assert.equal(r.repurchase,0);assert.equal(r.base,9720);assert.equal(r.training,200);const r2=E.calculate({...p,retained:60,senior:100},c);assert.equal(r2.repurchase,870);});
+test('30天档位就高不叠加',()=>{[10,12,15,18,20].forEach((v,i)=>assert.equal(E.calculate({...p,newCount:100,returned:v},c).tier,[200,400,800,1100,1500][i]));});
+test('不凭展示四舍五入提前解锁',()=>assert.equal(E.calculate({...p,senior:100000,retained:59999},c).eligible,false));
+test('低样本不默认豁免',()=>assert.equal(E.calculate({...p,senior:10,retained:5},c).eligible,false));
+test('新客样本小于30不参与30天档位',()=>{const r=E.calculate({...p,newCount:20,returned:4},c);assert.equal(r.tier,0);assert.equal(r.repurchase,70);});
+test('普通伙伴无店长奖励',()=>assert.equal(E.calculate(p,c).manager,0));
+test('达到整店目标才计店长奖励',()=>{const manager=E.PEOPLE[2];assert.equal(E.calculate(manager,c).manager,1500);assert.equal(E.calculate(manager,c,'2026-10',{west:199999}).manager,0);assert.equal(E.calculate(manager,c,'2026-10',{west:200000}).manager,1500);});
+test('培训补贴分部位合计',()=>assert.equal(E.calculate({...p,training:['head','eyes']},c).training,180));
+test('旧页税前整元取整及总额链',()=>{const r=E.calculate(p,c);assert.equal(r.subtotal,9720+200+800+70);assert.equal(r.gross,10890);assert.equal(r.preTax,10197);assert.equal(r.net,E.round(r.preTax-r.tax));assert.equal(r.serviceDifference,E.round(r.gross-r.preTax));});
+test('下一档分母不变的差额',()=>{const r=E.calculate(p,c);assert.equal(r.nextTier.rate,18);assert.equal(r.needed,2);assert.equal(r.nextTier.amount-r.tierPotential,300);});
+test('窗口按M偏移',()=>{assert.equal(E.windowFor('2026-10',6,2),'2026-03 ~ 2026-08');assert.equal(E.windowFor('2026-10',3,1),'2026-07 ~ 2026-09');});
+test('历史月不使用未来配置',()=>{const old={...c,effective:'2026-09',cap:80};assert.equal(E.ruleFor('2026-09',[c,old]).cap,80);assert.equal(E.ruleFor('2026-10',[c,old]).cap,130);assert.equal(E.ruleFor('2026-08',[c,old]),undefined);});
+test('表单错误拒绝',()=>{assert.ok(E.validation({...c,cap:5}));assert.ok(E.validation({...c,a1:NaN}));assert.ok(E.validation({...c,retention:101}));assert.ok(E.validation({...c,retentionLength:0}));assert.equal(E.validation(c),'');});
+console.log(`${tests} tests passed.`);

@@ -7,9 +7,7 @@
       <el-tab-pane label="抄送我的" name="fourth"></el-tab-pane>
     </el-tabs>
     <div class="" style="gap:10px;">
-      <shop-selector v-model="searchForm.shopId" style="width: 180px" @change="handleShopChange"
-                     placeholder="请选择所属门店" class="m-r-10"></shop-selector>
-      <approval-category-selector v-model="searchForm.categoryId" :shop-id="searchForm.shopId"
+      <approval-category-selector v-model="searchForm.categoryId"
                                   ref="refApprovalCategorySelector"
                                   @change="searchData"></approval-category-selector>
       <div style="gap:10px;float: right">&nbsp;
@@ -33,8 +31,19 @@
                          v-if="activeName=='second'">
           <template slot-scope="scope">{{ scope.row.approvingUserId | adminUsernameFilter }}</template>
         </el-table-column>
-        <el-table-column label="审批类别" prop="approval.categoryTitle"></el-table-column>
+        <el-table-column label="审批类别" prop="approval.categoryTitle">
+          <template slot-scope="scope">
+            {{ scope.row.approval.categoryTitle }}
+            <span v-if="scope.row.leaveSameDay" class="same-day-tag">当天请假</span>
+          </template>
+        </el-table-column>
         <!--        <el-table-column label="审批人" prop="targetUserId"></el-table-column>-->
+        <!-- 我提交的：直接看到「提交 → 各审批节点 → 完成/驳回」的流转进度 -->
+        <el-table-column label="流转进度" v-if="activeName=='first'" min-width="260">
+          <template slot-scope="scope">
+            <flow-progress :row="scope.row"></flow-progress>
+          </template>
+        </el-table-column>
         <el-table-column label="审批状态" prop="approval.state">
 
           <template slot-scope="scope">{{ scope.row.approval.state | approvalStateFilter }}</template>
@@ -100,25 +109,25 @@ import approvalDetailApi from "@/api/approvalDetail";
 import ApprovalProgress from "@/views/order/approval/ApprovalProgress";
 import RefundForm from "@/views/order/RefundForm";
 import ApprovalCategorySelector from "@/views/ums/approvalCategory/ApprovalCategorySelector";
-import ShopSelector from "@/views/shop/shopList/ShopSelector";
 import MassagistLeaveForm from "@/views/massagist/leave/MassagistLeaveForm";
+import FlowProgress from "@/views/order/approval/FlowProgress";
 import massagistLeaveApi from "@/api/massagistLeave";
 
 export default {
   name: 'index',
-  components: {ApprovalCategorySelector, RefundForm, ApprovalProgress,ShopSelector,MassagistLeaveForm},
+  components: {ApprovalCategorySelector, RefundForm, ApprovalProgress, MassagistLeaveForm, FlowProgress},
   props: {},
   watch: {
     activeName: {
       handler(newVal, oldVal) {
         if (newVal == 'first') {
-          this.searchForm = {targetUserId: this.userId, flowUserType: 1, order: '-id',shopId:this.searchForm.shopId}
+          this.searchForm = {targetUserId: this.userId, flowUserType: 1, order: '-id'}
         } else if (newVal == 'second') {
-          this.searchForm = {targetUserId: this.userId, flowUserType: 2, state: 2, order: '-id',shopId:this.searchForm.shopId}
+          this.searchForm = {targetUserId: this.userId, flowUserType: 2, state: 2, order: '-id'}
         } else if (newVal == 'third') {
-          this.searchForm = {targetUserId: this.userId, flowUserType: 2, state: '3,0', order: '-id',shopId:this.searchForm.shopId}
+          this.searchForm = {targetUserId: this.userId, flowUserType: 2, state: '3,0', order: '-id'}
         } else if (newVal == 'fourth') {
-          this.searchForm = {targetUserId: this.userId, flowUserType: 3, state: null, order: '-id',shopId:this.searchForm.shopId}
+          this.searchForm = {targetUserId: this.userId, flowUserType: 3, state: null, order: '-id'}
         }
         this.searchForm.page = 1
         this.searchForm.size = 10
@@ -141,14 +150,14 @@ export default {
     }
   },
   computed: {
-    ...mapGetters(['userId','shopId'])
+    ...mapGetters(['userId'])
   },
   created() {
-    this.searchForm.shopId=this.shopId
     this.$store.dispatch('setAdminUserList')
     this.activeName = 'second'
   },
   methods: {
+    //流转进度：由子组件「节点名·处理人」展示，悬浮显示处理人/时间/结果/驳回原因
     searchData() {
       this.searchForm.page = 1
       this.fetchData()
@@ -257,13 +266,6 @@ export default {
       this.$notify.success("操作成功")
       this.searchData()
     },
-    handleShopChange() {
-      console.log("this.searchForm");
-      this.$nextTick(() => {
-        this.$refs.refApprovalCategorySelector.changeShopId(this.searchForm.shopId)
-      })
-       this.searchData()
-    },
   }
 }
 </script>
@@ -271,5 +273,16 @@ export default {
 <style rel="stylesheet/less" lang="less" scoped>
 .index {
   padding: 0 20px;
+}
+.same-day-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #a33a12;
+  background: #fdf0e9;
+  border: 1px solid #f0bfa6;
 }
 </style>

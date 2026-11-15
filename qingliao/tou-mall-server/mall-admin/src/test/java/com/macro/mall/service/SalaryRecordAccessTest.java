@@ -9,6 +9,7 @@ import com.macro.mall.entity.Customer;
 import com.macro.mall.entity.Massagist;
 import com.macro.mall.model.UmsAdmin;
 import com.macro.mall.model.UmsRole;
+import com.macro.mall.service.base.ShopScopeService;
 import org.junit.jupiter.api.*;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -31,6 +32,10 @@ class SalaryRecordAccessTest {
     @BeforeEach void setup() {
         controller = new SalaryRecordController(); records = mock(SalaryRecordService.class);
         admins = mock(UmsAdminService.class); people = mock(MassagistService.class);
+        // 门店作用域：默认返回 null = 全局（不限门店），保持这些用例原有的断言口径
+        ShopScopeService shopScopeService = mock(ShopScopeService.class);
+        when(shopScopeService.authorizedShopIds()).thenReturn(null);
+        ReflectionTestUtils.setField(controller, "shopScopeService", shopScopeService);
         ReflectionTestUtils.setField(controller, "salaryRecordService", records);
         for (Field field : controller.getClass().getDeclaredFields()) {
             if (field.getName().equals("adminService")) ReflectionTestUtils.setField(controller, "adminService", admins);
@@ -137,7 +142,8 @@ class SalaryRecordAccessTest {
         for (int size : Arrays.asList(0, -1, 101)) assertThrows(BusinessException.class, () -> people(1, 1, size, null));
         assertThrows(BusinessException.class, () -> people(3, 1, 20, null));
         assertThrows(BusinessException.class, () -> people(1, 1, 20, String.join("", Collections.nCopies(101, "a"))));
-        verifyNoInteractions(people);
+        // 判定店长/内训师要先读调用者本人的档案（权限判定），但分页查询绝不能发出
+        verify(people, never()).pageInfo(anyMap());
     }
     @Test void peopleReturnsOnlyThreeFieldsAndServerTotalWithFixedSort() throws Throwable {
         role("财务", 1); person.setPhone("合成敏感字段不得回传"); person.setUmsAdminUsername("合成账号不得回传");

@@ -2,7 +2,13 @@ package com.macro.mall.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.macro.mall.common.exception.BusinessException;
+import com.macro.mall.crm.brand.BrandMemberCatalog;
+import com.macro.mall.crm.brand.BrandMemberClient;
+import com.macro.mall.crm.brand.BrandMemberNaming;
+import com.macro.mall.crm.brand.CrmCardDiscountSource;
+import com.macro.mall.crm.brand.DiscountText;
 import com.macro.mall.entity.Customer;
 import com.macro.mall.entity.CustomerMemberCard;
 import com.macro.mall.entity.MemberCardConfig;
@@ -11,6 +17,7 @@ import com.macro.mall.mapper.CustomerMemberCardMapper;
 import com.macro.mall.mapper.MemberCardConfigMapper;
 import com.macro.mall.mapper.MemberCardOrderMapper;
 import com.macro.mall.service.base.BaseService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +49,7 @@ import java.util.stream.Collectors;
  *
  * @date 2026/11/07
  */
+@Slf4j
 @Service
 public class MemberCardService extends BaseService<CustomerMemberCardMapper, CustomerMemberCard> {
 
@@ -54,6 +62,18 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
 
     @Autowired
     private MemberCardConfigMapper configMapper;
+
+    /** CRM 卡版本折扣来源；未接入 CRM 时为空，全部沿用本地配置表。 */
+    @Autowired(required = false)
+    private CrmCardDiscountSource crmCardDiscountSource;
+
+    /** 品牌会员卡目录（CRM 定价）；结算页续费价与 CRM 报价同源，未接入时回落本地配置。 */
+    @Autowired(required = false)
+    private BrandMemberCatalog brandMemberCatalog;
+
+    /** CRM 报价客户端：展示价必须等于真正扣款价，所以优先用报价单价格。 */
+    @Autowired(required = false)
+    private BrandMemberClient brandMemberClient;
 
     @Autowired
     private CustomerService customerService;
@@ -85,7 +105,43 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         lqw.orderByDesc(MemberCardConfig::getRecommend);
         lqw.orderByAsc(MemberCardConfig::getId);
         List<MemberCardConfig> list = configMapper.selectList(lqw);
-        return CollectionUtils.isEmpty(list) ? defaultConfigs() : list;
+        if (CollectionUtils.isEmpty(list)) {
+            list = defaultConfigs();
+        }
+        applyCrmAdvanceRates(list);
+        list.forEach(MemberCardService::applyDisplayName);
+        return list;
+    }
+
+    /**
+     * 会员价（提前价）以 CRM 卡版本为准：CRM 有下发值时覆盖本地配置，
+     * 未接入 CRM 或该卡类型不受 CRM 约束时保持本地配置。
+     */
+    private void applyCrmAdvanceRates(List<MemberCardConfig> list) {
+        if (crmCardDiscountSource == null || CollectionUtils.isEmpty(list)) {
+            return;
+        }
+        for (MemberCardConfig config : list) {
+            crmCardDiscountSource.advanceRate(config.getCardType())
+                    .ifPresent(config::setAdvanceRate);
+        }
+    }
+
+    private MemberCardConfig applyCrmAdvanceRates(MemberCardConfig config) {
+        if (config != null && crmCardDiscountSource != null) {
+            crmCardDiscountSource.advanceRate(config.getCardType())
+                    .ifPresent(config::setAdvanceRate);
+        }
+        return applyDisplayName(config);
+    }
+
+    /** 年卡 / 月卡对外统一叫 Full愈大会员；后台自定义发卡（custom）保留原名称。 */
+    static MemberCardConfig applyDisplayName(MemberCardConfig config) {
+        if (config != null
+                && (TYPE_YEAR.equals(config.getCardType()) || TYPE_MONTH.equals(config.getCardType()))) {
+            config.setCardName(BrandMemberNaming.DISPLAY_NAME);
+        }
+        return config;
     }
 
     /**
@@ -99,23 +155,23 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
     }
 
     private MemberCardConfig buildDefaultYear() {
-        MemberCardConfig config = baseDefault(TYPE_YEAR, "Full愈年卡", new BigDecimal("299.00"),
-                new BigDecimal("0.7550"), new BigDecimal("0.8500"), 365, 30);
+        MemberCardConfig config = baseDefault(TYPE_YEAR, BrandMemberNaming.DISPLAY_NAME, new BigDecimal("299.00"),
+                new BigDecimal("0.7550"), 365, 30);
         config.setRecommend(1);
         config.setSort(2);
         return config;
     }
 
     private MemberCardConfig buildDefaultMonth() {
-        MemberCardConfig config = baseDefault(TYPE_MONTH, "Full愈月卡", new BigDecimal("45.00"),
-                new BigDecimal("0.9400"), new BigDecimal("0.9700"), 30, 7);
+        MemberCardConfig config = baseDefault(TYPE_MONTH, BrandMemberNaming.DISPLAY_NAME, new BigDecimal("45.00"),
+                new BigDecimal("0.9400"), 30, 7);
         config.setRecommend(0);
         config.setSort(1);
         return config;
     }
 
     private MemberCardConfig baseDefault(String cardType, String cardName, BigDecimal price,
-                                         BigDecimal advanceRate, BigDecimal sameDayRate,
+                                         BigDecimal advanceRate,
                                          int validDays, int remindDays) {
         MemberCardConfig config = new MemberCardConfig();
         config.setId(0L);
@@ -123,13 +179,14 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         config.setCardName(cardName);
         config.setPrice(price);
         config.setAdvanceRate(advanceRate);
-        config.setSameDayRate(sameDayRate);
+        // 当日价已取消，历史字段固定写入 1.0000 占位
+        config.setSameDayRate(BigDecimal.ONE);
         config.setValidDays(validDays);
         config.setRenewalRemindDays(remindDays);
         config.setBasePrice(new BigDecimal("396.00"));
         config.setSampleMinutes(60);
         config.setStatus(1);
-        config.setPurchaseNotice("有效期内，Full愈轻疗全部项目可用会员价：提前一天及以上预约享会员价，当日预约享当日会员价。会员卡开通后不可退，权益不折现、不转让。");
+        config.setPurchaseNotice("有效期内，Full愈轻疗全部项目可用会员价：提前一天及以上预约享会员价，当日预约按原价结算。会员卡开通后不可退，权益不折现、不转让。");
         config.setBenefitDesc("全业务线会员权益：轻疗项目会员价、在场课程优惠报课与好友免单、时叙每杯茶饮立减。");
         config.setTerms("1. 会员卡为虚拟权益产品，开通即生效，不支持退款、转让或折现。\n"
                 + "2. 会员权益仅在有效期内有效，到期未续费自动失效。\n"
@@ -162,7 +219,8 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
                 return config;
             }
         }
-        return TYPE_MONTH.equals(type) ? buildDefaultMonth() : buildDefaultYear();
+        MemberCardConfig fallback = TYPE_MONTH.equals(type) ? buildDefaultMonth() : buildDefaultYear();
+        return applyCrmAdvanceRates(fallback);
     }
 
     private String normalizeType(String cardType) {
@@ -197,13 +255,11 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         view.put("cardName", recommended.getCardName());
         view.put("price", recommended.getPrice());
         view.put("advanceRate", recommended.getAdvanceRate());
-        view.put("sameDayRate", recommended.getSameDayRate());
         view.put("validDays", recommended.getValidDays());
         view.put("renewalRemindDays", recommended.getRenewalRemindDays());
         view.put("purchaseNotice", recommended.getPurchaseNotice());
         view.put("benefitDesc", recommended.getBenefitDesc());
         view.put("advanceDiscountText", discountText(recommended.getAdvanceRate()));
-        view.put("sameDayDiscountText", discountText(recommended.getSameDayRate()));
         return view;
     }
 
@@ -214,9 +270,8 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         view.put("cardName", config.getCardName());
         view.put("price", config.getPrice());
         view.put("advanceRate", config.getAdvanceRate());
-        view.put("sameDayRate", config.getSameDayRate());
         view.put("advanceDiscountText", discountText(config.getAdvanceRate()));
-        view.put("sameDayDiscountText", discountText(config.getSameDayRate()));
+        view.put("advanceRateSource", advanceRateSource(config));
         view.put("validDays", config.getValidDays());
         view.put("renewalRemindDays", config.getRenewalRemindDays());
         view.put("recommend", config.getRecommend() == null ? 0 : config.getRecommend());
@@ -227,6 +282,14 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         view.put("benefitDesc", config.getBenefitDesc());
         view.put("payback", paybackView(config));
         return view;
+    }
+
+    /** 提前价口径来源：crm 表示由 CRM 卡版本下发，local 表示本地配置表。 */
+    private String advanceRateSource(MemberCardConfig config) {
+        if (crmCardDiscountSource == null) {
+            return "local";
+        }
+        return crmCardDiscountSource.advanceRate(config.getCardType()).isPresent() ? "crm" : "local";
     }
 
     /**
@@ -258,7 +321,7 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
 
     private List<Map<String, Object>> benefitViews() {
         List<Map<String, Object>> list = new ArrayList<>();
-        list.add(benefit("轻疗 · 所有项目会员价", "有效期内轻疗全部项目按会员价结算，提前预约与当日预约分别享对应折扣。", "spa"));
+        list.add(benefit("轻疗 · 所有项目会员价", "有效期内轻疗全部项目按会员价结算，提前一天及以上预约享会员价，当日预约按原价结算。", "spa"));
         list.add(benefit("时叙 · 每杯茶饮立减", "到店购买时叙茶饮，每杯按会员价立减，不限杯数。", "tea"));
         list.add(benefit("在场 · 课程优惠报课", "在场课程按会员优惠价报名，并享好友免单权益。", "course"));
         list.add(benefit("全场通用 · 不与其它优惠叠加", "同一笔消费只按最优会员价结算，不与券包、积分、活动价叠加。", "rule"));
@@ -548,8 +611,8 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         view.put("periodNo", card.getPeriodNo());
         view.put("startTime", card.getStartTime() == null ? null : card.getStartTime().toString().replace('T', ' '));
         view.put("endTime", card.getEndTime() == null ? null : card.getEndTime().toString().replace('T', ' '));
-        view.put("advanceRate", card.getAdvanceRate());
-        view.put("sameDayRate", card.getSameDayRate());
+        // 生效中的卡按实时口径展示，与结算一致；已过期/待生效的卡展示开卡快照
+        view.put("advanceRate", isCurrent ? currentAdvanceRate(card) : card.getAdvanceRate());
         view.put("amount", card.getAmount());
         view.put("status", card.getStatus());
         view.put("statusText", statusText(card.getStatus()));
@@ -589,11 +652,7 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
     }
 
     private String discountText(BigDecimal rate) {
-        if (rate == null) {
-            return "";
-        }
-        BigDecimal discount = rate.multiply(BigDecimal.TEN);
-        return discount.stripTrailingZeros().toPlainString() + " 折";
+        return DiscountText.of(rate);
     }
 
     private String plain(BigDecimal value) {
@@ -601,6 +660,26 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
             return "0";
         }
         return value.stripTrailingZeros().toPlainString();
+    }
+
+    /**
+     * 权益期的提前价折扣率（实时口径）：优先取当前配置，CRM 在线时以 CRM 下发为准，
+     * 只有该卡类型没有配置时才回落到开卡快照。
+     *
+     * <p>结算与会员中心都用这个口径，保证运营在 CRM/配置里改完折扣后，
+     * 已发卡的会员下一次结算立即生效，不会出现「页面显示 7.5 折、结算按 7.55 折」。</p>
+     */
+    public BigDecimal currentAdvanceRate(CustomerMemberCard card) {
+        if (card == null) {
+            return null;
+        }
+        String type = normalizeType(card.getCardType());
+        for (MemberCardConfig config : listActiveConfigs()) {
+            if (type.equals(normalizeType(config.getCardType())) && config.getAdvanceRate() != null) {
+                return config.getAdvanceRate();
+            }
+        }
+        return card.getAdvanceRate();
     }
 
     /**
@@ -620,6 +699,89 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         lqw.last("limit 1");
         List<CustomerMemberCard> list = list(lqw);
         return CollectionUtils.isEmpty(list) ? null : list.get(0);
+    }
+
+    /**
+     * 结算页的会员卡续费卡片：当前是否会员、到期时间、续年卡价格。
+     *
+     * <p>只读、轻量，供预约结算页「顺手续个年卡」展示；真正下单走合并支付
+     * {@code /payGroup/create} 携带 {@code renewYear=true}。展示价先取 CRM 报价单（与实际扣款同源），
+     * 报价不可用时回落 CRM 目录价、再回落本地配置，保证「页面价 = 结算价」。</p>
+     */
+    public Map<String, Object> renewalView(Long customerId) {
+        Map<String, Object> view = new HashMap<>();
+        LocalDateTime now = LocalDateTime.now();
+        CustomerMemberCard current = getActiveCard(customerId);
+        MemberCardConfig annual = getConfigByType(TYPE_YEAR);
+        view.put("hasCard", current != null);
+        view.put("cardType", current == null ? null : current.getCardType());
+        view.put("cardName", current == null ? null : current.getCardName());
+        view.put("endTime", current == null || current.getEndTime() == null ? null
+                : current.getEndTime().toString().replace('T', ' '));
+        view.put("remainingDays", current == null ? 0 : remainingDays(current.getEndTime(), now));
+
+        // 价格与折扣优先取 CRM 目录（真实扣款同源），CRM 未启用/不可达时回落本地配置
+        Map<String, Object> crmAnnual = null;
+        try {
+            crmAnnual = brandMemberCatalog == null ? null : brandMemberCatalog.annualProduct();
+        } catch (Exception e) {
+            log.warn("读取 CRM 年卡目录失败，续费价回落本地配置: {}", e.getMessage());
+        }
+        // 真正扣款走 CRM 报价单（可能带提前价/会员价），页面展示也用同一口径
+        BigDecimal annualPrice = quoteAnnualPrice(customerId);
+        if (annualPrice == null) {
+            annualPrice = crmAnnual == null ? null : centsToYuan(crmAnnual.get("priceCents"));
+        }
+        if (annualPrice == null && annual != null) {
+            annualPrice = annual.getPrice();
+        }
+        Object rate = crmAnnual == null ? null : crmAnnual.get("advanceRate");
+        BigDecimal advanceRate = rate instanceof Number ? new BigDecimal(String.valueOf(rate))
+                : (annual == null ? null : annual.getAdvanceRate());
+        view.put("annualPrice", annualPrice);
+        String annualName = crmAnnual == null ? null : stringValue(crmAnnual.get("name"));
+        if (annualName == null) {
+            annualName = annual == null || annual.getCardName() == null ? "Full愈年卡" : annual.getCardName();
+        }
+        view.put("annualName", annualName);
+        view.put("advanceRate", advanceRate);
+        Object discountTextValue = crmAnnual == null ? null : crmAnnual.get("advanceDiscountText");
+        if (discountTextValue == null || String.valueOf(discountTextValue).isEmpty()) {
+            discountTextValue = discountText(advanceRate);
+        }
+        view.put("advanceText", discountTextValue);
+        view.put("renewalRemindDays", annual == null || annual.getRenewalRemindDays() == null
+                ? 30 : annual.getRenewalRemindDays());
+        return view;
+    }
+
+    /** CRM 目录价单位为分，结算展示按元；非数字返回 null。 */
+    private BigDecimal centsToYuan(Object cents) {
+        if (!(cents instanceof Number)) {
+            return null;
+        }
+        return BigDecimal.valueOf(((Number) cents).longValue()).movePointLeft(2).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 取年卡 CRM 报价（分→元）；CRM 未接入、超时或报价异常都返回 null，由调用方回落目录价。
+     *
+     * <p>展示价必须与 {@code BrandCardPaymentService.createPendingOrder} 下单时的报价一致，
+     * 否则用户勾选续卡后看到的合计金额会和实际扣款对不上。</p>
+     */
+    private BigDecimal quoteAnnualPrice(Long customerId) {
+        if (brandMemberClient == null || customerId == null) {
+            return null;
+        }
+        try {
+            JsonNode quote = brandMemberClient.quote(String.valueOf(customerId),
+                    BrandCardPaymentService.PRODUCT_ANNUAL);
+            BigDecimal price = centsToYuan(quote.path("priceCents"));
+            return price == null || price.compareTo(BigDecimal.ZERO) <= 0 ? null : price;
+        } catch (Exception e) {
+            log.warn("CRM 年卡报价失败，续费价回落目录/配置: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -824,7 +986,8 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         card.setStartTime(startTime);
         card.setEndTime(startTime.plusDays(validDays));
         card.setAdvanceRate(config.getAdvanceRate());
-        card.setSameDayRate(config.getSameDayRate());
+        // 当日价已取消，历史字段固定 1.0000；结算只读 advanceRate
+        card.setSameDayRate(BigDecimal.ONE);
         card.setAmount(amount);
         card.setPayOrderId(payOrderId);
         card.setChannel(channel);
@@ -889,14 +1052,6 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         if (form.getPrice() == null || form.getPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new BusinessException("会员卡价格不能为空或负数");
         }
-        if (form.getAdvanceRate() == null || form.getAdvanceRate().compareTo(BigDecimal.ZERO) <= 0
-                || form.getAdvanceRate().compareTo(BigDecimal.ONE) >= 0) {
-            throw new BusinessException("提前预约折扣率需在 0 到 1 之间");
-        }
-        if (form.getSameDayRate() == null || form.getSameDayRate().compareTo(BigDecimal.ZERO) <= 0
-                || form.getSameDayRate().compareTo(BigDecimal.ONE) >= 0) {
-            throw new BusinessException("当日预约折扣率需在 0 到 1 之间");
-        }
         if (form.getValidDays() == null || form.getValidDays() <= 0) {
             throw new BusinessException("有效期天数必须大于 0");
         }
@@ -914,10 +1069,19 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         if (form.getCardName() != null && !form.getCardName().trim().isEmpty()) {
             config.setCardName(form.getCardName().trim());
         }
-        config.setCardType(normalizeType(form.getCardType() == null ? config.getCardType() : form.getCardType()));
+        String cardType = normalizeType(form.getCardType() == null ? config.getCardType() : form.getCardType());
+        // 提前价由 CRM 卡版本下发；CRM 接入时不接受后台改价，避免两处口径打架。
+        if (crmCardDiscountSource != null) {
+            crmCardDiscountSource.advanceRate(cardType).ifPresent(form::setAdvanceRate);
+        }
+        if (form.getAdvanceRate() == null || form.getAdvanceRate().compareTo(BigDecimal.ZERO) <= 0
+                || form.getAdvanceRate().compareTo(BigDecimal.ONE) >= 0) {
+            throw new BusinessException("提前预约折扣率需在 0 到 1 之间");
+        }
+        config.setCardType(cardType);
         config.setPrice(form.getPrice());
         config.setAdvanceRate(form.getAdvanceRate());
-        config.setSameDayRate(form.getSameDayRate());
+        config.setSameDayRate(BigDecimal.ONE);
         config.setValidDays(form.getValidDays());
         config.setRenewalRemindDays(form.getRenewalRemindDays() == null ? 30 : form.getRenewalRemindDays());
         config.setRecommend(form.getRecommend() == null ? 0 : form.getRecommend());
@@ -1030,8 +1194,10 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         if (card.getCardType() == null) {
             card.setCardType(TYPE_YEAR);
         }
-        if (card.getCardName() == null) {
-            card.setCardName(TYPE_MONTH.equals(card.getCardType()) ? "Full愈月卡" : "Full愈年卡");
+        // 年卡 / 月卡对外统一叫 Full愈大会员；历史上已发卡的旧名也一并纠正。
+        // 后台自定义发卡（custom）保留发卡时填写的名称。
+        if (TYPE_YEAR.equals(card.getCardType()) || TYPE_MONTH.equals(card.getCardType())) {
+            card.setCardName(BrandMemberNaming.DISPLAY_NAME);
         }
     }
 

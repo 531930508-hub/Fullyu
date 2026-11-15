@@ -9,7 +9,7 @@
         </p>
         <div class="create-hero__actions">
           <el-button type="primary" icon="el-icon-plus" @click="openDrawer">开始登记</el-button>
-          <el-button @click="$router.push('/appointment/list')">查看预约列表</el-button>
+          <el-button @click="$router.push('/appointment/board')">回排班看板</el-button>
         </div>
       </div>
       <div class="create-hero__mark" aria-hidden="true">
@@ -71,7 +71,7 @@
           <p>预约已提交</p>
           <span>可在预约列表查看状态，或继续登记下一单。</span>
         </div>
-        <el-button size="small" @click="$router.push('/appointment/list')">查看列表</el-button>
+        <el-button size="small" @click="$router.push('/appointment/board')">回排班看板</el-button>
         <el-button size="small" type="primary" @click="openDrawer">再登记一单</el-button>
       </div>
     </transition>
