@@ -338,13 +338,23 @@ information_schema 判存量，天然幂等）。扩到 **37 个**脚本重跑�
 
 ### 一键回滚（已实测，不是纸面方案）
 
-`ssh mall-test /root/bin/night2-rollback.sh [db|all|check]`
+分两段跑（121.40 到生产没有免密，实测 `Permission denied`，所以代码侧必须在 Mac 上跑）：
 
-| 模式 | 做什么 |
+```
+# 1) 库（在 121.40 上，有 RDS 凭据）
+ssh mall-test /root/bin/night2-rollback.sh db
+
+# 2) 代码（在 Mac 的仓库里）
+./scripts/rollback-prod-code.sh --jar-dir 20261115-230731 \
+        --restore-dist dist.bak-night2-20261115-230341
+```
+
+| 入口 | 做什么 |
 |---|---|
-| `db` | 按 bak 还原昵称 → 还原 `visit_no` → 整表还原 `ums_menu`/`ums_role_menu_relation` → 删掉今晚新增的 41 张表、54 处列与索引 |
-| `all` | `db` + 换回上一版 jar 重启 + 还原前端 dist |
-| `check` | 只体检不改（对比参考库 `base2215` 的表/列/索引清单与关键行数） |
+| `night2-rollback.sh db` | 按 bak 还原昵称 → 还原 `visit_no` → 整表还原 `ums_menu`/`ums_role_menu_relation` → 删掉今晚新增的 41 张表、54 处列与索引 |
+| `night2-rollback.sh check` | 只体检不改（对比参考库 `base2215` 的表/列/索引清单与关键行数）；刚发完版跑它必然是 FAIL，回滚后应为 PASS |
+| `night2-rollback.sh all` | 库 + 尝试换 jar；联不通生产会明确 `exit 3` 并给出上面两条命令，不会假装成功 |
+| `scripts/rollback-prod-code.sh` | 换回上一版 jar 重启（180s 健康检查，起不来自动再换回当前线上）+ 可选还原 dist + 冒烟 |
 
 **实测证据**：在 `n1rehearse_20261115` 上（从 22:33 快照还原 → 跑完 40 个脚本 = 生产发布后状态）执行 `db` 模式，
 体检结果 **表 123 表一致 / 列 1209 一致 / 索引 131 一致 / ums_menu=44 / rel=136 / 默认昵称数 10027 / visit_no 非空=0 → DB_ROLLBACK=PASS**。
