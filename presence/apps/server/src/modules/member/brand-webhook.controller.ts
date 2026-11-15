@@ -11,12 +11,14 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { SkipThrottle } from '@nestjs/throttler'
 import type { Request } from 'express'
 import { readBrandMemberConfig } from '../../common/crm/brand-member.config'
+import { BrandMemberLinkService } from '../../common/crm/brand-member-link.service'
+import { BrandPerksService } from '../../common/crm/brand-perks.service'
 
 /**
  * CRM 品牌卡事件接收（X-Fy 推送契约）。
  *
- * 只验签并确认收到，不写本地卡状态：会员页仍实时向 CRM 取数，
- * 重复/乱序投递不会改变业务结果，重试由 CRM 侧负责。
+ * 只验签、刷新权益缓存并确认收到，不写本地卡状态：会员页仍实时向 CRM 取数，
+ * 重复/乱序投递只会多清一次缓存，不会改变业务结果，重试由 CRM 侧负责。
  */
 
 const MAX_SKEW_SECONDS = 300
@@ -53,9 +55,14 @@ const safeEqual = (given: string, expected: string): boolean => {
 export class BrandWebhookController {
   private readonly logger = new Logger('BrandWebhook')
 
+  constructor(
+    private readonly links: BrandMemberLinkService,
+    private readonly perks: BrandPerksService,
+  ) {}
+
   @Post('brand-card')
   @HttpCode(200)
-  receive(@Req() req: RawRequest) {
+  async receive(@Req() req: RawRequest) {
     const config = readBrandMemberConfig({
       NODE_ENV: process.env.NODE_ENV,
       BRAND_CRM_ENABLED: process.env.BRAND_CRM_ENABLED,
@@ -101,6 +108,18 @@ export class BrandWebhookController {
       // 签名通过但内容不是合法 JSON：仍然确认收到，payload 结构由 CRM 侧保证。
     }
     this.logger.log(`收到 CRM 品牌卡事件 ${topic || '(无主题)'} ${cardId} ${memberNo}`.trim())
+
+    // 卡期/退款一变，60 秒权益缓存可能还是旧状态；按会员号清掉对应账号的缓存，
+    // 下一次定价会重新问 CRM。清不掉（未绑定）也不影响推送确认。
+    if (memberNo) {
+      try {
+        const userId = await this.links.findUserId(memberNo)
+        if (userId) this.perks.forget(userId)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        this.logger.warn(`刷新会员权益缓存失败 ${memberNo}：${message}`)
+      }
+    }
     return { ok: true }
   }
 }

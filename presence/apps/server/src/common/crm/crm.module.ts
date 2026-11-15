@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common'
 import { CrmClient } from './crm.client'
 import { BrandMemberClient } from './brand-member.client'
+import { BrandMemberLinkService } from './brand-member-link.service'
 import { BrandPerksService } from './brand-perks.service'
 
 /**
@@ -9,7 +10,7 @@ import { BrandPerksService } from './brand-perks.service'
  */
 @Global()
 @Module({
-  providers: [CrmClient, BrandMemberClient, BrandPerksService],
-  exports: [CrmClient, BrandMemberClient, BrandPerksService],
+  providers: [CrmClient, BrandMemberClient, BrandMemberLinkService, BrandPerksService],
+  exports: [CrmClient, BrandMemberClient, BrandMemberLinkService, BrandPerksService],
 })
 export class CrmModule {}

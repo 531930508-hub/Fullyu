@@ -26,6 +26,8 @@ model User {
   gender             Int?
   /// 生日（只到日期，不含时间）；YYYY-MM-DD 与 CRM member.birthday 同口径
   birthday           DateTime?          @db.Date
+  /// CRM 会员号（memberNo）：CRM 推送只带会员号，靠这条映射精确清对应账号的权益缓存
+  crmMemberNo        String?            @unique @map("crm_member_no")
   isTrainer          Boolean            @default(false) @map("is_trainer")
   /// 导师门户登录密码（bcrypt）；学员账号为空，不能登录导师门户
   passwordHash       String?            @map("password_hash")

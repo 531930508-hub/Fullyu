@@ -286,7 +286,7 @@ const PRIVACY_EN: LegalDoc = {
       h: '4. Sharing and processors',
       p: [
         'We do not sell your personal information. We share only what is necessary with WeChat (sign-in, phone authorisation, subscribe messages and payment), WeChat Pay (payments and refunds) and our cloud provider (servers and data storage). Partners are required to protect your information under our agreements.',
-        'To provide Full Yu annual card benefits across Teahour, Presence and Retreat, your phone number, member number, card term and points are shared within the Full Yu membership programme. This is used only to recognise your membership across stores, redeem benefits and settle internally, not for unrelated purposes.'
+        'To provide Full Yu Membership benefits across Teahour, Presence and Retreat, your phone number, member number, card term and points are shared within the Full Yu membership programme. This is used only to recognise your membership across stores, redeem benefits and settle internally, not for unrelated purposes.'
       ]
     },
     {
@@ -440,8 +440,8 @@ const MEMBER_EN: LegalDoc = {
     {
       h: '5. Refunds',
       p: [
-        'Within 7 days of joining you may request a refund without giving a reason; the amount paid is refunded less the marked value of any annual gifts (physical gifts) already collected.',
-        'After 7 days, the refund is the amount paid less member savings already enjoyed and the value of annual gifts collected. Savings include member-price savings, point offsets, gifts and promotional discounts. If the result is 0 or less, no refund is due.',
+        'Within 7 days of joining you may request a refund without giving a reason; the amount paid is refunded less the marked value of any member gifts (physical gifts) already collected.',
+        'After 7 days, the refund is the amount paid less member savings already enjoyed and the value of member gifts collected. Savings include member-price savings, point offsets, gifts and promotional discounts. If the result is 0 or less, no refund is due.',
         'Membership redeemed with a member code or included with another card was not paid for separately and is not refundable; included membership ends with the original card.',
         'Refunds are returned to the original payment method; timing depends on the payment channel. If an invoice has been issued, it must be returned or reversed under tax rules. For special circumstances, talk to our store team, who will verify and work it out with you.'
       ]

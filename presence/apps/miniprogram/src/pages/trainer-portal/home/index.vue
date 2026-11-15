@@ -1,6 +1,11 @@
 <template>
   <view class="page">
-    <PortalNav :title="tr('导师门户', 'Trainer Portal')" :sub="me?.phone ? masked(me.phone) : ''" :show-back="false">
+    <!-- 门户根页也保留返回键：有上一页就回上一页，没有（登录后）就回小程序首页，避免出不去 -->
+    <PortalNav
+      :title="tr('导师门户', 'Trainer Portal')"
+      :sub="me?.phone ? masked(me.phone) : ''"
+      fallback="/pages/index/index"
+    >
       <button class="ghost-btn" @tap="logout">{{ tr('退出', 'Sign out') }}</button>
     </PortalNav>
 

@@ -34,48 +34,67 @@ const request = (
 
 describe('CRM 品牌卡推送接收（在场）', () => {
   const original = { ...process.env }
+  let links: { findUserId: jest.Mock }
+  let perks: { forget: jest.Mock }
   let controller: BrandWebhookController
 
   beforeEach(() => {
     configure()
-    controller = new BrandWebhookController()
+    links = { findUserId: jest.fn().mockResolvedValue(null) }
+    perks = { forget: jest.fn() }
+    controller = new BrandWebhookController(links as never, perks as never)
   })
 
   afterAll(() => {
     process.env = original
   })
 
-  it('签名正确时确认收到', () => {
-    expect(controller.receive(request())).toEqual({ ok: true })
+  it('签名正确时确认收到，并按会员号刷新权益缓存', async () => {
+    await expect(controller.receive(request())).resolves.toEqual({ ok: true })
+    expect(links.findUserId).toHaveBeenCalledWith('FY-1')
+    // 未绑定会员号：没有可清的账号，也不该整表清缓存
+    expect(perks.forget).not.toHaveBeenCalled()
+
+    links.findUserId.mockResolvedValue('u-1')
+    await controller.receive(request())
+    expect(perks.forget).toHaveBeenCalledWith('u-1')
   })
 
-  it('签名错误、密钥不匹配、时间戳超窗都拒绝', () => {
-    expect(() => controller.receive(request({ signature: 'deadbeef' }))).toThrow(
+  it('反查账号失败不影响确认收到', async () => {
+    links.findUserId.mockRejectedValue(new Error('db down'))
+    await expect(controller.receive(request())).resolves.toEqual({ ok: true })
+    expect(perks.forget).not.toHaveBeenCalled()
+  })
+
+  it('签名错误、密钥不匹配、时间戳超窗都拒绝', async () => {
+    await expect(controller.receive(request({ signature: 'deadbeef' }))).rejects.toBeInstanceOf(
       UnauthorizedException,
     )
     const stale = String(Math.floor(Date.now() / 1000) - 600)
     const body = JSON.stringify({ topic: 'x' })
-    expect(() =>
+    await expect(
       controller.receive(
         request({ body, timestamp: stale, signature: signWebhook(SECRET, stale, 'nonce-1', PATH, body) }),
       ),
-    ).toThrow(UnauthorizedException)
+    ).rejects.toBeInstanceOf(UnauthorizedException)
     const mismatched = request()
     ;(mismatched as { headers: Record<string, string> }).headers['x-fy-key'] = 'sx-test'
-    expect(() => controller.receive(mismatched)).toThrow(UnauthorizedException)
+    await expect(controller.receive(mismatched)).rejects.toBeInstanceOf(UnauthorizedException)
   })
 
-  it('签名按实际请求路径计算，路径不符时拒绝', () => {
+  it('签名按实际请求路径计算，路径不符时拒绝', async () => {
     const body = JSON.stringify({ topic: 'x' })
     const timestamp = String(Math.floor(Date.now() / 1000))
     const signature = signWebhook(SECRET, timestamp, 'nonce-1', '/api/v1/other', body)
-    expect(() => controller.receive(request({ body, timestamp, signature }))).toThrow(
-      UnauthorizedException,
-    )
+    await expect(
+      controller.receive(request({ body, timestamp, signature })),
+    ).rejects.toBeInstanceOf(UnauthorizedException)
   })
 
-  it('未配置品牌会员时不接收推送', () => {
+  it('未配置品牌会员时不接收推送', async () => {
     process.env.BRAND_CRM_ENABLED = '0'
-    expect(() => controller.receive(request())).toThrow(ServiceUnavailableException)
+    await expect(controller.receive(request())).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    )
   })
 })

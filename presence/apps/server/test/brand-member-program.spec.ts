@@ -63,6 +63,7 @@ describe('在场品牌会员新增接口', () => {
     controller = new BrandMemberController(
       client,
       { forget } as any,
+      { remember: jest.fn(), findUserId: jest.fn() } as any,
       store as any,
       { withLock: (_key: string, fn: () => Promise<unknown>) => fn() } as any,
     )
@@ -176,7 +177,7 @@ describe('BrandPerksService：品牌会员权益缓存', () => {
       .mockResolvedValueOnce(payload('ACTIVE', { tierPrice: true, prioritySeat: true, invitesPerMonth: 3 }))
       .mockResolvedValueOnce(payload('EXPIRED', { tierPrice: true }))
       .mockRejectedValueOnce(new BusinessException('同步中', 4041, HttpStatus.NOT_FOUND))
-    const svc = new BrandPerksService({ enabled: true, me } as any)
+    const svc = new BrandPerksService({ enabled: true, me } as any, { remember: jest.fn() } as any)
 
     expect(await svc.resolve('a', 0)).toEqual({
       perks: { tierPrice: true, prioritySeat: true, invitesPerMonth: 3 },
@@ -195,7 +196,7 @@ describe('BrandPerksService：品牌会员权益缓存', () => {
       .fn()
       .mockResolvedValueOnce(payload('ACTIVE', perks))
       .mockRejectedValue(new BusinessException('不可用', 5030, HttpStatus.SERVICE_UNAVAILABLE))
-    const svc = new BrandPerksService({ enabled: true, me } as any)
+    const svc = new BrandPerksService({ enabled: true, me } as any, { remember: jest.fn() } as any)
 
     await svc.resolve('a', 0)
     expect(await svc.resolve('a', 2 * 60_000)).toEqual({ perks, unknown: false })
@@ -209,7 +210,7 @@ describe('BrandPerksService：品牌会员权益缓存', () => {
 
   it('CRM 未开启：一律非会员，不发请求', async () => {
     const me = jest.fn()
-    const svc = new BrandPerksService({ enabled: false, me } as any)
+    const svc = new BrandPerksService({ enabled: false, me } as any, { remember: jest.fn() } as any)
     expect(await svc.resolve('a')).toEqual({ perks: null, unknown: false })
     expect(me).not.toHaveBeenCalled()
   })

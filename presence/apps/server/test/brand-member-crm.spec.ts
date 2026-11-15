@@ -161,6 +161,7 @@ describe('在场会员页接口：品牌身份', () => {
     new BrandMemberController(
       client,
       { forget: jest.fn() } as any,
+      { remember: jest.fn(), findUserId: jest.fn() } as any,
       {} as any,
       { withLock: (_key: string, fn: () => Promise<unknown>) => fn() } as any,
     )
