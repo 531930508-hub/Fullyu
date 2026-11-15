@@ -167,7 +167,8 @@ jobs:
           script: |
             set -e
             ts=$(date +%Y%m%d-%H%M%S)
-            # 备份名带 label：admin 与 h5 的 dest 都以 dist 结尾，之前用 basename 会互相覆盖备份
+            # 备份名用显式 label：以前靠 $(basename dest)，admin 恰好得到 dist、h5 恰好得到 h5，
+            # 靠路径巧合才没撞名；任一路径改成以同名目录结尾就会互相覆盖，名字也不自解释。
             for pair in "admin:/tmp/fullyu-ci/admin-dist.tar.gz:$ADMIN_DIST_PATH" "h5:/tmp/fullyu-ci/h5-dist.tar.gz:$H5_DIST_PATH"; do
               label="${pair%%:*}"; rest="${pair#*:}"
               tarball="${rest%%:*}"; dest="${rest##*:}"
@@ -176,7 +177,7 @@ jobs:
               [ -d "$dest" ] && tar -czf "/tmp/fullyu-dist-$label.bak-$ts.tar.gz" -C "$dest" . 2>/dev/null || true
               rm -rf "$dest"/*
               tar -xzf "$tarball" -C "$dest"
-              # 只留最近 5 份：/tmp 曾堆积上千个 bak 把磁盘吃满
+              # 每次发布 +3 份，2026-11-15 实测 /tmp 累积 57 份/76M；按时间只留最近 5 份
               ls -1t /tmp/fullyu-dist-$label.bak-*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm -f
             done
             rm -f /tmp/fullyu-ci/admin-dist.tar.gz /tmp/fullyu-ci/h5-dist.tar.gz
