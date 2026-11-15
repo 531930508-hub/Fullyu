@@ -23,7 +23,7 @@
     <view class="bmc-foot" :class="{ 'is-warn': expiring }">
       <view class="bmc-cell bmc-saved">
         <text class="bmc-lab">{{ active ? tr('本年已省', 'Saved this year') : tr('开卡', 'Join') }}</text>
-        <text class="bmc-amt serif">{{ active || annualPrice !== null ? '¥' + formatYuan(active ? savedCents : annualPrice) : '—' }}</text>
+        <text class="bmc-amt serif">{{ active || annualPrice !== null ? '¥' + formatYuan(active ? savedCents : annualPrice ?? 0) : '—' }}</text>
         <text v-if="!active && annualPrice !== null" class="bmc-more">{{ tr('起', 'from') }}</text>
       </view>
       <view class="bmc-cell bmc-toggle" role="button" @tap="open = !open">
