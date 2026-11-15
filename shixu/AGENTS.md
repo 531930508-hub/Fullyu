@@ -25,7 +25,7 @@
 - 当前正式工程是 `apps/server`、`apps/admin`、`apps/miniprogram` 和 `packages`；旧 `teahour-app`、demo 只作历史参考，不当成当前交付。
 - 保留已确认 V7 视觉与交互，必要时微调/补全，不自作主张重设计。
 - 小程序样式源为 `apps/miniprogram/src/styles/teahour.source.css`，生成文件不可作为手工修改唯一来源；用 `pnpm --filter @teahour/miniprogram styles` 生成。
-- 在场当前对照为 `/Users/th/Desktop/Full愈-轻疗/` 下 `full-yu-mini2`、`tou-mall-admin-web`、`tou-mall-server`。不因参考而擅自修改在场；旧 `PUT /customer` 风险仅记录，未经明确授权不动。
+- 在场当前对照为 `~/Desktop/fullyu-platform/qingliao/` 下 `full-yu-mini2`、`tou-mall-admin-web`、`tou-mall-server`。不因参考而擅自修改在场；旧 `PUT /customer` 风险仅记录，未经明确授权不动。
 - 未经明确授权，不接真实支付/打印/会员/外卖/在场接口，不写生产数据、不改 schema/实际权限/部署，不提交、push、发布或外发内部资料。Demo 或交付包授权不是上线批准。
 - 密钥和凭证不进源码、日志、报告、截图或记忆；测试使用隔离合成数据，不隐式使用已有业务库。
 

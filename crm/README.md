@@ -232,7 +232,7 @@ E2 证据（测试环境，2026-11-08）：
 
 ### 第三批收尾（2026-11-08）
 
-- **轻疗积分写入切到 CRM**：下单抵扣、退单返还、评价抽奖、推荐人积分、后台手动调整全部以 CRM 余额为准，本地 `s_integration` 只作影子审计与幂等锚点；冒烟实测 116 → 96（扣 20）→ 76（扣 20）→ 余额不足明确拒绝 → 56（再扣 20）→ 退款返还 76，重复取消不再重复返还。细节与回滚见 [`轻疗/docs/crm-integration.md`](../Full愈-轻疗/docs/crm-integration.md) 第 10 节。
+- **轻疗积分写入切到 CRM**：下单抵扣、退单返还、评价抽奖、推荐人积分、后台手动调整全部以 CRM 余额为准，本地 `s_integration` 只作影子审计与幂等锚点；冒烟实测 116 → 96（扣 20）→ 76（扣 20）→ 余额不足明确拒绝 → 56（再扣 20）→ 退款返还 76，重复取消不再重复返还。细节与回滚见 [`qingliao/docs/crm-integration.md`](../qingliao/docs/crm-integration.md) 第 10 节。
 - **时叙指向 CRM**：`/etc/teahour/api.env` 增加 `CRM_ENABLED=1` / `CRM_BASE_URL=https://mall-test.fullyu.cn/crm-api` / `CRM_KEY_ID=sx-teahour` / `CRM_SECRET`（600，SSH 管道写入）；部署本机当前 `apps/server` 的 `dist/auth/{auth.controller,auth.module,auth.service}.js`（其余文件与服务器一致），重启 `teahour-api`。实测顾客 `GET /api/customer/me` 从 CRM 读余额：先 0，CRM 入账 5 分后返回 5，回收后返回 0；CRM `member_identities` 新增 `sx` 身份。登录/顾客视图在 CRM 不可用时明确报错，不回退本地积分。
 - **在场指向 CRM**：`/root/fullyu/apps/server/.env.local` 增加同结构 `CRM_*`（`zc-presence`）；服务器源码树按本机 `modules/auth/auth.service.ts`、`modules/user/user.service.ts` 的 CRM 段落打补丁后 `npm run build`，备份为 `/tmp/auth.service.ts.bak`、`/tmp/user.service.ts.bak`、`/tmp/zc-dist-bak`。构建有 14 个既有的 `scm` 类型错误（与本批无关），tsc 仍产出；核对只有上述两个 `.js` 变化，`main.js` 未变。重启 PM2 `fullyu-api` 后 `GET /api/v1/user/points` 实测 0 → 5（CRM 入账）→ 0（回收），CRM `member_identities` 新增 `zc` 身份。
 - **轻疗品牌会员代理复核**：运行 jar `mall-admin-1.0-SNAPSHOT.jar` 含 `BrandMemberController` 与 `crm/brand/*`；`/api/brandMember/products` 返回 CRM 定价（`FY_MONTH` / `FY_ANNUAL`），未登录 `/me` 与 `/purchase` 均返回“请先登录”（HTTP 200、body `code:500`，轻疗全局异常统一包装，见品牌会员一节）。本机 `BrandMemberClientTest` 5 + `BrandMemberControllerTest` 3，**8/8 通过**（控制器测试断言异常状态 401/501，线上回包被包装为 `code:500`）。

@@ -17,7 +17,7 @@
 - 不改 `TrainingCalculator` 的 `passedAt + 1` 起算、目标单数、金额逻辑。认证来源只影响展示和审计。
 - 不新增 UMS 角色。内训师身份落在 `s_massagist.is_trainer`，店长身份继续从 `f_approval_shop_manager` 推导。
 - 不实现扫码、动态码、顾客端入口、内训师自评。
-- 工作区 `/Users/th/Desktop/Full愈-轻疗` 不是 git 仓库；父目录 `/Users/th/Desktop/Full愈` 才是。未获得用户明确授权前不执行 `git commit`。每个阶段以“编译 + 定向测试 + 可回滚”作为检查点。
+- 工作区 `~/Desktop/fullyu-platform/qingliao` 不是 git 仓库；父目录 `~/Desktop/fullyu-platform` 才是。未获得用户明确授权前不执行 `git commit`。每个阶段以“编译 + 定向测试 + 可回滚”作为检查点。
 - 绝不运行 `OssServiceImplTest`（项目已知约束）。
 - `GlobalExceptionHandler` 目前把 `BusinessException` 统一包成 HTTP 200 + `code=500`，不会返回真实 403。接口测试断言业务文案，不臆造 HTTP 403；真正的 403 语义不在本计划范围。
 
@@ -241,7 +241,7 @@ class TrainingSchemaContractTest {
 - [ ] **Step 4: 编译并跑契约测试**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-server
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-server
 mvn -pl mall-admin -am -DskipTests compile
 mvn -pl mall-admin -am -Dtest=TrainingSchemaContractTest -DfailIfNoTests=false test
 ```
@@ -366,7 +366,7 @@ public interface MassagistTrainingAssessmentMapper extends BaseMapper<MassagistT
 - [ ] **Step 4: 跑测试**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-server
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-server
 mvn -pl mall-admin -am -Dtest=TrainingAssessmentMapperTest -DfailIfNoTests=false test
 ```
 
@@ -533,7 +533,7 @@ public java.util.Set<Long> managerMassagistIds(java.util.Collection<Long> massag
 - [ ] **Step 5: 跑测试**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-server
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-server
 mvn -pl mall-admin -am -Dtest=TrainingAccessTest -DfailIfNoTests=false test
 ```
 
@@ -622,7 +622,7 @@ class TrainingCertificationPolicyTest {
 - [ ] **Step 2: 跑测试确认失败**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-server
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-server
 mvn -pl mall-admin -am -Dtest=TrainingCertificationPolicyTest -DfailIfNoTests=false test
 ```
 
@@ -1057,7 +1057,7 @@ Expected: 8 个测试通过。
 - [ ] **Step 5: 阶段检查点**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-server
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-server
 mvn -pl mall-admin -am -Dtest='TrainingSchemaContractTest,TrainingAssessmentMapperTest,TrainingAccessTest,TrainingCertificationPolicyTest,TrainingCertificationServiceTest,TrainingAssessmentServiceTest,TrainingCalculatorTest' -DfailIfNoTests=false test
 ```
 
@@ -2157,7 +2157,7 @@ Expected: 6 个测试通过。
 - [ ] **Step 6: 后端阶段检查点**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-server
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-server
 mvn -pl mall-admin -am -DskipTests compile
 mvn -pl mall-admin -am -Dtest='Training*,Trainer*,MassagistIdentityTest,AdminInfoTrainerTest,TrainingRecordPageTest,TrainingCalculatorTest,AdminShopContextTest,SchedulePermissionTest' -DfailIfNoTests=false test
 ```
@@ -2288,7 +2288,7 @@ test('store clears trainer flag on logout', () => {
 - [ ] **Step 6: 跑测试**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-admin-web
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-admin-web
 node --test tests/trainerAssessRoute.test.mjs
 ```
 
@@ -2605,7 +2605,7 @@ test('failure message shows server business copy', async () => { /* throw {respo
 - [ ] **Step 3: 跑测试**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-admin-web
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-admin-web
 node --test tests/trainerAssessRoute.test.mjs tests/trainerAssessPage.test.mjs
 ```
 
@@ -2822,7 +2822,7 @@ test('cell shows attempt count without leaking verdict copy', () => {
 - [ ] **Step 6: 跑测试**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-admin-web
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-admin-web
 node --test tests/incentiveTraining.test.mjs
 ```
 
@@ -2977,9 +2977,9 @@ test('export uses summary filters')
 - [ ] **Step 4: 跑测试**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-server
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-server
 mvn -pl mall-admin -am -Dtest=TrainingAnalyticsCalculatorTest -DfailIfNoTests=false test
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-admin-web
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-admin-web
 node --test tests/assessmentAnalytics.test.mjs
 ```
 
@@ -3050,7 +3050,7 @@ test('missing account warning only shows for trainer without umsAdminId')
 - [ ] **Step 4: 跑测试**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-admin-web
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-admin-web
 node --test tests/massagistIdentity.test.mjs
 ```
 
@@ -3071,7 +3071,7 @@ Expected: 4 个测试通过。
 - [x] **Step 1: 后端全量测试（排除 OSS）**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-server
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-server
 mvn -pl mall-admin -am test -Dtest='!OssServiceImplTest' -DfailIfNoTests=false
 ```
 
@@ -3080,7 +3080,7 @@ Expected: `BUILD SUCCESS`，无失败。若该排除语法在当前 Surefire 版
 - [x] **Step 2: 前端构建与全部 Node 测试**
 
 ```bash
-cd /Users/th/Desktop/Full愈-轻疗/tou-mall-admin-web
+cd ~/Desktop/fullyu-platform/qingliao/tou-mall-admin-web
 node --test tests/*.test.mjs
 npm run build:test
 ```
