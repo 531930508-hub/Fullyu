@@ -316,3 +316,55 @@ information_schema 判存量，天然幂等）。扩到 **37 个**脚本重跑�
 
 库层面：加列/加表/加行对 09-12 的旧 jar 全透明，**不回滚也安全**。真要回到执行前：
 还原上面那份快照（123 表），或只删 `s_pay_group` 与本次新增列（清单见 `run.log`）。
+
+## 十四、2026-11-15 Night 2 已执行：剩余 7 个脚本 + 换 jar + 换前端（发布完成）
+
+### 发了什么
+
+| 项 | 值 |
+|---|---|
+| 新 jar | `sha256=5252c3f165939ec9ffc7f0c6513cd3af8d01b659e02a488f59dedd5d462e970b`，311,611,592 B，构建于 `121.40:/opt/fullyu-mall-test/src/tou-mall-server`（与仓库 2b419cf 源码逐文件校验一致，仅仓库多 `Env.java`、`OssServiceImplTest.java` 两个未参与编译的差异） |
+| 生产配置 | jar 内 `application-prod.yml` 与旧 jar 逐行 diff：**只多不少**，新增项全部默认关闭（`crm.enabled`/`brand-crm.enabled` 空、`shop.scope.enforce=false`、`incentive.team-cert-enabled=false`），DB 仍指 `tou_mall_current` |
+| SQL | 剩余 7 个（菜单 IA、标签/页签菜单、昵称清洗、`visit_no` 回填、卡条款文案），跑完 164 表 / 1665 列 |
+| 前端 | `121.40:/opt/fullyu-mall-test/admin-dist`（171 文件 / 23 MB / 11-15 06:17 构建）→ `/server/www/fully/dist`，旧版备份在 `dist.bak-night2-20261115-230341`（380 文件 / 69 MB） |
+| 回滚包 | `/server/java/fully/backup/20261115-231500-release-night2/`（含 jar + MANIFEST + ROLLBACK.md），`preflight.sh` 的 `RB_PKG`/`RB_SHA_EXPECT` 已改指这里，脚本数基线 37 → 40 |
+
+### 发布后实测
+
+- `ums_menu` 51 → **22**、`ums_role_menu_relation` 166 → **101**（新 IA）
+- `visit_no` 空值行 = **0**；昵称仍是「用户+手机号」样式的行 = **0**（昵称脚本重复跑两次，幂等）
+- `sql-audit` → ✅ 表/列一致（164 表 / 1665 列）
+- 冒烟：`/health` 200、`cityretreat` 200、`/api/product/list` 200、`manage.fullytherapy.com` 200；新接口 `/api/memberCard/config`、`/api/ums/menu/list`、`/api/brandMember/products` 全部 200；新 jar 当日日志 `ERROR=0 WARN=0`；前端 `static/js/*.js` 资源 200
+
+### 一键回滚（已实测，不是纸面方案）
+
+`ssh mall-test /root/bin/night2-rollback.sh [db|all|check]`
+
+| 模式 | 做什么 |
+|---|---|
+| `db` | 按 bak 还原昵称 → 还原 `visit_no` → 整表还原 `ums_menu`/`ums_role_menu_relation` → 删掉今晚新增的 41 张表、54 处列与索引 |
+| `all` | `db` + 换回上一版 jar 重启 + 还原前端 dist |
+| `check` | 只体检不改（对比参考库 `base2215` 的表/列/索引清单与关键行数） |
+
+**实测证据**：在 `n1rehearse_20261115` 上（从 22:33 快照还原 → 跑完 40 个脚本 = 生产发布后状态）执行 `db` 模式，
+体检结果 **表 123 表一致 / 列 1209 一致 / 索引 131 一致 / ums_menu=44 / rel=136 / 默认昵称数 10027 / visit_no 非空=0 → DB_ROLLBACK=PASS**。
+即：能真的回到「今晚执行前」，而不只是「加列无害、将就用」。
+
+参考库 `base2215`（22:33 快照还原，只读）**不要删**，回滚脚本依赖它。
+
+### 踩到的三个坑
+
+1. **`deploy-prod.sh` 有 bug**：`JAVA_CMD='java -Xms2048m …'` 通过 `VAR=… bash -s` 传给远端时没加引号，
+   远端把 `-Xms2048m` 当命令执行 → `exit 127`。**好在那一步在 `stop_app` 之前就失败了，生产没被动过**
+   （已确认进程仍是旧 jar、health 200）。本次改用 `/tmp/swap_jar.sh` 手工换（同样带 180s 健康检查 + 自动回滚）。
+   **下次发版前先修这个脚本**，否则每个窗口都会撞。
+2. **前端 dist 体积 69 MB → 23 MB**：生产旧 dist 是 380 文件（跨多次发布累积），新 dist 171 文件，`rsync --delete` 后旧 chunk 被清掉。
+   已整目录备份，若要回滚用 `mv dist.bak-night2-20261115-230341 dist`。
+3. **排序规则漂移多了一处**：`c_customer_nickname_bak_20261112.nickname`（utf8mb4_0900_ai_ci）。
+   这个表是清洗脚本的备份表，回滚时会删掉，不影响业务；`phone` 那处仍待 DBA 决定。
+
+### 明早要看的三件事
+
+1. 后台各角色（店长/前台/理疗师/财务）登录后菜单是否与预期一致 —— 菜单 IA 是这次唯一"减法"，出问题最可能在这里
+2. 小程序下单、会员卡、`visit_no` 编号是否正常（`s_order.visit_no` 已全量回填，新单由新 jar 生成）
+3. 新 jar 日志 `ERROR` 计数；CRM/品牌卡相关功能默认关闭，未配环境变量前不应有相关报错

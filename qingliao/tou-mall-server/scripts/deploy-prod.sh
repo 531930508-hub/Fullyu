@@ -116,7 +116,9 @@ EOF
   exit 0
 fi
 
-"${SSH_PROD[@]}" 'NEW_SHA='"$NEW_SHA"' APP_DIR='"$APP_DIR"' JAR_NAME='"$JAR_NAME"' JAVA_CMD='"$JAVA_CMD"' bash -s' <<'REMOTE'
+# JAVA_CMD 含空格，必须单引号包住再传给远端，否则远端把 -Xms2048m 当命令（2026-11-15 实测 exit 127）
+REMOTE_ENV="NEW_SHA=$NEW_SHA APP_DIR=$APP_DIR JAR_NAME=$JAR_NAME JAVA_CMD='$JAVA_CMD'"
+"${SSH_PROD[@]}" "$REMOTE_ENV bash -s" <<'REMOTE'
 set -uo pipefail
 TS=$(date +%Y%m%d-%H%M%S)
 BK="$APP_DIR/backup/$TS"; mkdir -p "$BK"

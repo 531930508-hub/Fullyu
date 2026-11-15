@@ -10,8 +10,8 @@ TEST=mall-test
 SSH_PROD="ssh -o ConnectTimeout=15 -o BatchMode=yes -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes $PROD"
 SSH_TEST="ssh -o ConnectTimeout=15 -o BatchMode=yes $TEST"
 APP_DIR=/server/java/fully
-RB_PKG=$APP_DIR/backup/20261113-225339
-RB_SHA_EXPECT=a1fc446eaa00d75d8065923f6248d5a504547278a29288308165bb8d7d320436
+RB_PKG=$APP_DIR/backup/20261115-231500-release-night2
+RB_SHA_EXPECT=5252c3f165939ec9ffc7f0c6513cd3af8d01b659e02a488f59dedd5d462e970b
 SNAP_DIR=/opt/fullyu-mall-backups/db
 SQL_DIR="$(cd "$(dirname "$0")/.." && pwd)/sql"
 JAR=""
@@ -123,8 +123,8 @@ if [ -d "$SQL_DIR" ]; then
     bad "sql/prod 与 sql/ 不同步（跑 make-prod-sql.py）"
   fi
   N=$(ls "$SQL_DIR"/prod/2026-*.sql 2>/dev/null | wc -l | tr -d ' ')
-  [ "$N" = "37" ] && ok "生产脚本 $N 个（与 2026-11-13 幂等验证基线一致）" \
-    || warn "生产脚本 $N 个（基线 37，多了就要重新验证幂等再发版）"
+  [ "$N" = "40" ] && ok "生产脚本 $N 个（与 2026-11-15 三遍幂等验证基线一致）" \
+    || warn "生产脚本 $N 个（基线 40，多了就要重新验证幂等再发版）"
 else
   bad "找不到 $SQL_DIR"
 fi
