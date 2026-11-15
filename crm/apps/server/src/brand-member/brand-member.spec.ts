@@ -395,7 +395,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     const over = await signed('post', '/v1/brand-member/refund', {
       key: 'ql-test',
       headers: { 'Idempotency-Key': 'idem-refund-over' },
-      body: { orderRef, refundCents: 4600, refundType: 'WITHIN_7D', refundedAt: paidAt }
+      body: { orderRef, refundCents: 12000, refundType: 'WITHIN_7D', refundedAt: paidAt }
     });
     expect(over.status).toBe(400);
 
@@ -486,7 +486,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
       refundType: 'AFTER_7D',
       paidCents: 9900,
       savedCents: 1000,
-      refundableCents: 3500,
+      refundableCents: 8900,
       allowed: true
     });
 
@@ -501,11 +501,11 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     const refund = await signed('post', '/v1/brand-member/refund', {
       key: 'zc-test',
       headers: { 'Idempotency-Key': 'idem-refund-prorated' },
-      body: { orderRef, refundCents: 3500, refundType: 'PRORATED', refundedAt: now }
+      body: { orderRef, refundCents: 8900, refundType: 'PRORATED', refundedAt: now }
     });
     expect(refund.status).toBe(201);
     expect(refund.body.card.state).toBe('REFUNDED');
-    expect(refund.body.refund.refundCents).toBe(3500);
+    expect(refund.body.refund.refundCents).toBe(8900);
     expect(refund.body.refund.refundType).toBe('AFTER_7D');
 
     const differentAmount = await signed('post', '/v1/brand-member/refund', {
@@ -539,7 +539,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
         business: 'ql',
         orderRef: 'QL-SAVED-1',
         paidCents: 39800,
-        savedCents: 6000,
+        savedCents: 12000,
         cardId,
         occurredAt: new Date()
       }
@@ -551,7 +551,7 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     expect(preview.body.allowed).toBe(false);
     expect(preview.body.reasonCode).toBe('REFUND_NOT_ALLOWED');
     expect(preview.body.message).toContain('享受的优惠已超出，不能退款');
-    expect(preview.body.message).toContain('¥60');
+    expect(preview.body.message).toContain('¥120');
 
     const blocked = await signed('post', '/v1/brand-member/refund', {
       key: 'ql-test',

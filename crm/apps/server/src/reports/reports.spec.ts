@@ -7,6 +7,8 @@ describe('CRM 1D：月度对账只出事实数据', () => {
 
   beforeAll(async () => {
     h = await createHarness();
+    // 模板库自带一张联调用的演示卡（9 天前售出），对账只认本用例造的数，先清掉。
+    await h.prisma.memberBrandCard.deleteMany({ where: { id: { startsWith: 'mbc-seed-' } } });
     finance = await h.login(ACCOUNTS.finance);
     cs = await h.login(ACCOUNTS.cs);
   });

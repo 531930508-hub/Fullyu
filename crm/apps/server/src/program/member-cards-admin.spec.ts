@@ -236,7 +236,7 @@ describe('CRM 会员卡台账：发卡、退款、轻疗同步与解锁', () => 
     const cardId = await seedPaidCard({ memberId: 'm-cd-neg', orderRef: 'QL-CARD-NEG-1', paidCents: 9900 });
     const tooMuch = await h.api('post', `/issued-cards/${cardId}/refund`, finance, {
       kind: 'NEGOTIATED',
-      refundCents: 5000,
+      refundCents: 12000,
       reason: '客户协商退款'
     });
     expect(tooMuch.status).toBe(400);
