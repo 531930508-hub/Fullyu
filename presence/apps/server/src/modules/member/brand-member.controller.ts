@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { BusinessException } from '../../common/exceptions/business.exception'
 import { BrandMemberClient } from '../../common/crm/brand-member.client'
+import { BrandMemberLinkService } from '../../common/crm/brand-member-link.service'
 import { BrandPerksService } from '../../common/crm/brand-perks.service'
 import { PrismaService } from '../../common/prisma.service'
 import { RedisService } from '../../common/redis.service'
@@ -74,6 +75,7 @@ export class BrandMemberController {
   constructor(
     private readonly client: BrandMemberClient,
     private readonly perks: BrandPerksService,
+    private readonly links: BrandMemberLinkService,
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {}
@@ -82,7 +84,10 @@ export class BrandMemberController {
   @ApiOperation({ summary: '品牌会员身份与积分' })
   async me(@Request() req: any) {
     const userId = req.user.userId
-    return this.client.me(userId)
+    const payload = await this.client.me(userId)
+    // 顺手记住 memberNo：CRM 推送只带会员号，靠这条映射才能精确清缓存。
+    void this.links.remember(userId, payload?.member?.memberNo)
+    return payload
   }
 
   @Get('products')

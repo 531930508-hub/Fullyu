@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common'
 import { BusinessException } from '../exceptions/business.exception'
 import { BrandMemberClient, type BrandPresencePerks } from './brand-member.client'
+import { BrandMemberLinkService } from './brand-member-link.service'
 
 /**
  * 品牌会员在在场的权益（会员价 / 候补优先 / 邀请名额）查询。
@@ -50,7 +51,10 @@ export class BrandPerksService {
   private readonly logger = new Logger('BrandPerksService')
   private readonly cache = new Map<string, { at: number; perks: BrandPresencePerks | null }>()
 
-  constructor(private readonly client: BrandMemberClient) {}
+  constructor(
+    private readonly client: BrandMemberClient,
+    private readonly links: BrandMemberLinkService,
+  ) {}
 
   async resolve(userId: string, now = Date.now()): Promise<BrandPerkStatus> {
     if (!this.client.enabled || !userId) return { perks: null, unknown: false }
@@ -58,6 +62,8 @@ export class BrandPerksService {
     if (hit && now - hit.at < FRESH_MS) return { perks: hit.perks, unknown: false }
     try {
       const payload = await this.client.me(userId)
+      // 顺手记住 memberNo：CRM 推送只带会员号，靠这条映射才能精确清缓存。
+      void this.links.remember(userId, payload.member?.memberNo)
       const state = String(payload.card?.state || '')
       const active = state === 'ACTIVE' || state === 'EXPIRING'
       const perks = active ? readPerks(payload.perks) : null
