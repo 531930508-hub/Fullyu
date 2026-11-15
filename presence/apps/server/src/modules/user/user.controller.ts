@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Body, UseGuards, Request } from '@nestjs/common'
+import { Controller, Get, Put, Body, UseGuards, Request, UnauthorizedException } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { UserService } from './user.service'
@@ -13,7 +13,10 @@ export class UserController {
   @Get('profile')
   @ApiOperation({ summary: '获取用户个人信息' })
   async getProfile(@Request() req: any) {
-    return this.userService.findById(req.user.userId)
+    const profile = await this.userService.findById(req.user.userId)
+    // 这个接口绝不下发 data:null：客户端只会把它当成「资料加载失败」，重试也永远拿不到。
+    if (!profile) throw new UnauthorizedException('登录状态已失效，请重新登录')
+    return profile
   }
 
   @Put('profile')

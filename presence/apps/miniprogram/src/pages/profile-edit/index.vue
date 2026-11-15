@@ -72,7 +72,9 @@ async function loadProfile() {
   try {
     const profile = await getProfile()
     if (!uni.getStorageSync('token')) { userStore.logout(); return }
-    if (!profile) throw new Error(tr('资料不存在', 'Profile not found'))
+    // 账号已不在库里（换库 / 重建账号后的旧 token）时后端只可能回空资料，重试一定还是空：
+    // 直接清登录态回到「去登录」，别把用户钉在永远失败的报错页上。
+    if (!profile) { userStore.logout(); return }
     form.value = {
       nickname: profile.nickname || '',
       avatar: profile.avatar || '',
