@@ -10,6 +10,11 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "schema:mysql": "node scripts/gen-mysql-schema.mjs",
+    "schema:mysql:check": "node scripts/gen-mysql-schema.mjs --check",
+    "db:mysql:push": "node scripts/gen-mysql-schema.mjs && prisma db push --schema prisma/schema.mysql.prisma",
+    "db:mysql:generate": "node scripts/gen-mysql-schema.mjs && prisma generate --schema prisma/schema.mysql.prisma",
+    "build:mysql": "node scripts/gen-mysql-schema.mjs && prisma generate --schema prisma/schema.mysql.prisma && tsc -p tsconfig.build.json",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
