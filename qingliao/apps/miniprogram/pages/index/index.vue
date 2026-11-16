@@ -822,67 +822,77 @@
 		})
 		console.log("serviceData")
 		console.log(serviceData)
-		let parmsProject = serviceData.yinxiangone
-		let project = 0
-		if (parmsProject == 0) {
-			project = 2
-		}
-		if (parmsProject == 1) {
-			project = 1
-		}
-		if (parmsProject == 2) {
-			project = 4
-		}
-		////根据选择的项目获取产品Id
-		let productList = await productApi.productlist()
-		let product = productList.filter(t => {
-			return t.content[0].projectId == project
-		});
-		let productId = 0
-		if (product.length > 0) {
-			productId = product[0].id
-		} else {
-			uni.showToast({
-				title: tt('未找到对应的产品！', 'Service not found'),
-				icon: 'none'
-			})
+		let orderId = ''
+		try {
+			let parmsProject = serviceData.yinxiangone
+			let project = 0
+			if (parmsProject == 0) {
+				project = 2
+			}
+			if (parmsProject == 1) {
+				project = 1
+			}
+			if (parmsProject == 2) {
+				project = 4
+			}
+			////根据选择的项目获取产品Id
+			let productList = await productApi.productlist()
+			let product = productList.filter(t => {
+				return t.content[0].projectId == project
+			});
+			let productId = 0
+			if (product.length > 0) {
+				productId = product[0].id
+			} else {
+				uni.showToast({
+					title: tt('未找到对应的产品！', 'Service not found'),
+					icon: 'none'
+				})
+				return
+			}
+			let isUpdateSort = true
+			if (serviceData.order.orderDetailList[0].massagist) {
+				isUpdateSort = false
+			}
+			const comment = cookie.getComment()
+			const gender = cookie.getGender()
+			const phone = cookie.getPhone()
+			const formData = {
+				personCount: 1, // 更新：在表单数据中添加人数
+				productId: productId,
+				durationMinutes: serviceData.duration,
+				startTime: serviceData.order.endTime,
+				shopId: serviceData.order.shopId,
+				isUpdateSort: isUpdateSort, //分配技师后，标志技师进入排序   false 为不进如排序
+				addType: 1, //1标识加钟：加钟单不再是新的一轮轮牌，优先安排原单疗愈师
+				fromOrderId: serviceData.order.id, //加钟来源订单id
+				bedIdList: [serviceData.order.orderDetailList[0].bedId],
+				gender: gender,
+				comment: comment,
+				phone: phone,
+				date: serviceData.order.endTime,
+				massagistIdList: serviceData.order.orderDetailList[0].massagist ? [serviceData.order
+					.orderDetailList[0].massagistId
+				] : []
+			};
+			console.log('加钟信息:', formData);
+			orderId = await orderApi.createOrder({
+				...formData,
+				appointmentType: 2
+			}) || ''
+		} catch (e) {
+			// 建单失败（原单状态异常 / 时段被占 / 网络）由 fetch 拦截器提示，这里只保证遮罩一定收起
 			return
+		} finally {
+			uni.hideLoading()
 		}
-		let isUpdateSort = true
-		if (serviceData.order.orderDetailList[0].massagist) {
-			isUpdateSort = false
-		}
-		const comment = cookie.getComment()
-		const gender = cookie.getGender()
-		const phone = cookie.getPhone()
-		const formData = {
-			personCount: 1, // 更新：在表单数据中添加人数
-			productId: productId,
-			durationMinutes: serviceData.duration,
-			startTime: serviceData.order.endTime,
-			shopId: serviceData.order.shopId,
-			isUpdateSort: isUpdateSort, //分配技师后，标志技师进入排序   false 为不进如排序
-			addType: 1, //1标识加钟：加钟单不再是新的一轮轮牌，优先安排原单疗愈师
-			fromOrderId: serviceData.order.id, //加钟来源订单id
-			bedIdList: [serviceData.order.orderDetailList[0].bedId],
-			gender: gender,
-			comment: comment,
-			phone: phone,
-			date: serviceData.order.endTime,
-			massagistIdList: serviceData.order.orderDetailList[0].massagist ? [serviceData.order
-				.orderDetailList[0].massagistId
-			] : []
-		};
-		console.log('加钟信息:', formData);
-		const orderId = await orderApi.createOrder({
-			...formData,
-			appointmentType: 2
-		}) || ''
 
 		console.log(orderId)
 		hideAddServiceModal() //隐藏加钟框
 		orderInfo.value = await orderApi.infoWithDetail(orderId)
-		uni.hideLoading();
+		// 加钟单一旦落单，首页订单卡立刻以服务端为准重拉：原来只有「走支付弹框并付成功」这一条路会刷新，
+		// 已结清 / 已取消 / 超时 / 用户关掉支付弹框这几种情况卡片都会停在加钟前的那一单，只能手动刷新首页才对
+		getLastOrderInfo()
 		if (!orderInfo.value) {
 			uni.showToast({
 				title: tt('订单不存在', 'Order not found'),
@@ -912,10 +922,17 @@
 			console.log(countdown.value)
 			console.log(constant.payCutDownSeconds)
 			if (countdown.value > 0) {
-				showPaymentModal.value = true; //支付弹出框弹出
-				if (payModelPageRef) {
-					payModelPageRef.value.fetchData(orderId)
+				// 和「立即支付」同一条规矩：先把这张加钟单的结算数据取回来再弹窗，
+				// 否则弹框会先拿上一单的金额/券数渲染，用户对着旧金额就能点确认
+				await nextTick()
+				if (payModelPageRef.value && payModelPageRef.value.fetchData) {
+					try {
+						await payModelPageRef.value.fetchData(orderId)
+					} catch (e) {
+						return
+					}
 				}
+				showPaymentModal.value = true; //支付弹出框弹出
 			} else {
 				countdown.value = 0
 				uni.showToast({
