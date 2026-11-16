@@ -1,5 +1,5 @@
 import { CouponMonthlyService, parseDayConfig, shanghaiDayOfMonth, shanghaiMonth } from './coupon-monthly.service';
-import { CouponRuleScheduler } from './coupon-rule.scheduler';
+import { autoRunGloballyAllowed, CouponRuleScheduler } from './coupon-rule.scheduler';
 
 /**
  * 月度发券里跟数据库无关的那部分：时区换算、执行日解析、调度节奏。
@@ -24,6 +24,20 @@ describe('月度发券：时区与配置解析', () => {
     expect(parseDayConfig('{"dayOfMonth":0}')).toEqual({ dayOfMonth: 1 });
     expect(parseDayConfig('not-json')).toEqual({ dayOfMonth: 1 });
     expect(parseDayConfig('{"dayOfMonth":"abc"}')).toEqual({ dayOfMonth: 1 });
+  });
+});
+
+describe('全局紧急停止开关', () => {
+  it('未配置时调度器照常运行，由每条规则自己的「自动执行」开关决定', () => {
+    expect(autoRunGloballyAllowed(undefined)).toBe(true);
+    expect(autoRunGloballyAllowed('')).toBe(true);
+    expect(autoRunGloballyAllowed('1')).toBe(true);
+  });
+
+  it('显式设为 0 / false / off 时全部规则停止自动执行', () => {
+    expect(autoRunGloballyAllowed('0')).toBe(false);
+    expect(autoRunGloballyAllowed('false')).toBe(false);
+    expect(autoRunGloballyAllowed('OFF')).toBe(false);
   });
 });
 

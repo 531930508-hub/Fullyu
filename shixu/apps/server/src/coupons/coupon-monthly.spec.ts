@@ -301,4 +301,51 @@ describe('月度定向发放', () => {
     expect(run.status).toBe('succeeded');
     expect(await h.prisma.customerCoupon.count({ where: { ruleId, customerId: member.id } })).toBe(1);
   });
+
+  it('自动执行关闭：调度器不发起，手动「立即执行」照常可用', async () => {
+    const coupon = await createCoupon('月度手动专用券');
+    const member = await h.customer('月度手动专用会员');
+    const rule = await h.api('post', '/admin/coupons/rules', admin, {
+      couponId: coupon.id,
+      kind: 'monthly',
+      enabled: false,
+      config: { dayOfMonth: 1 }
+    });
+    expect(rule.status).toBe(201);
+    const ruleId = rule.body.rule.id as string;
+
+    const monthly = h.app.get(CouponMonthlyService);
+    await monthly.tick(SYSTEM_ACTOR);
+    const none = await h.api('get', `/admin/coupons/runs?ruleId=${ruleId}`, admin);
+    expect(none.body.runs).toHaveLength(0);
+
+    const started = await h.api('post', `/admin/coupons/rules/${ruleId}/run`, admin);
+    expect(started.status).toBe(201);
+    const run = await waitRun(h, admin, started.body.run.id);
+    expect(run.status).toBe('succeeded');
+    expect(run.trigger).toBe('manual');
+    expect(await h.prisma.customerCoupon.count({ where: { ruleId, customerId: member.id } })).toBe(1);
+  });
+
+  it('关闭自动执行的规则手动执行时，同券已有自动执行规则就拦住，避免同月叠发', async () => {
+    const coupon = await createCoupon('月度叠发防护券');
+    const auto = await h.api('post', '/admin/coupons/rules', admin, {
+      couponId: coupon.id,
+      kind: 'monthly',
+      config: { dayOfMonth: 28 }
+    });
+    expect(auto.status).toBe(201);
+    const manualOnly = await h.api('post', '/admin/coupons/rules', admin, {
+      couponId: coupon.id,
+      kind: 'monthly',
+      enabled: false,
+      config: { dayOfMonth: 28 }
+    });
+    expect(manualOnly.status).toBe(201);
+
+    const blocked = await h.api('post', `/admin/coupons/rules/${manualOnly.body.rule.id}/run`, admin);
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error).toBe('RULE_CONFLICT');
+    await h.api('patch', `/admin/coupons/rules/${auto.body.rule.id}`, admin, { enabled: false });
+  });
 });

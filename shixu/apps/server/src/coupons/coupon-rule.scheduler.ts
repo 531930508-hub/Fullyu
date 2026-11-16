@@ -20,13 +20,17 @@ const SYSTEM_ACTOR: StaffContext = {
   tokenVersion: 0
 };
 
+/** COUPON_RULES_ENABLED 只做全局紧急停止：未配置即运行，是否自动发由每条规则的 enabled 决定。 */
+export function autoRunGloballyAllowed(raw: string | undefined) {
+  return !['0', 'false', 'off'].includes(String(raw ?? '').trim().toLowerCase());
+}
+
 /**
- * 自动发券调度：每天北京时间 10:00 执行一次全部启用规则。
+ * 自动发券调度：月度规则每轮检查执行日，其余规则每天北京时间 10:00 执行一次。
  *
- * - 幂等由券侧保证：同一规则同一天只产生一个批次（requestKey 含日期），
- *   进程重启或同一小时多轮触发都不会重复发；
- * - 用 lastRunAt 做当日标记，跨天自然失效，不依赖额外的任务表；
- * - 默认关闭，需显式 COUPON_RULES_ENABLED=1；测试环境不启动定时器。
+ * - 只处理「自动执行」开着（enabled=true）的规则，手动立即执行不受影响；
+ * - 幂等由券侧保证：同一规则同一周期只发一次，进程重启或多轮触发都不会重复发；
+ * - COUPON_RULES_ENABLED=0 时整体停止；测试环境不启动定时器。
  */
 @Injectable()
 export class CouponRuleScheduler implements OnModuleInit, OnModuleDestroy {
@@ -41,7 +45,10 @@ export class CouponRuleScheduler implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) return;
-    if (!['1', 'true', 'on'].includes(String(process.env.COUPON_RULES_ENABLED || '').toLowerCase())) return;
+    if (!autoRunGloballyAllowed(process.env.COUPON_RULES_ENABLED)) {
+      this.logger.warn('COUPON_RULES_ENABLED 已关闭，全部发券规则停止自动执行');
+      return;
+    }
     this.timer = setInterval(() => void this.tick(), TICK_MS);
     this.timer.unref?.();
     void this.tick();

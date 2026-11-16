@@ -386,6 +386,7 @@ export const api = {
     tier?: 'all' | 'standard' | 'annual';
     config: import('./types').CouponRule['config'];
     note?: string;
+    enabled?: boolean;
   }) => request<{ rule: { id: string } }>('/admin/coupons/rules', { method: 'POST', body }),
   adminUpdateCouponRule: (
     id: string,

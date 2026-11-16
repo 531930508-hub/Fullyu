@@ -204,6 +204,8 @@ export class CouponMonthlyService {
   async startRun(ruleId: string, actor: StaffContext, trigger: 'manual' | 'auto') {
     const rule = await this.requireRule(ruleId);
     this.assertTemplateUsable(rule.coupon);
+    // 自动执行关着的规则仍可手动发；同券若另有开着自动执行的规则，这里拦住同月叠发。
+    if (!rule.enabled) await this.assertNoDuplicateRule(rule.couponId, rule.id);
     const now = new Date();
     const period = shanghaiMonth(now);
     const existing = await this.prisma.couponRuleRun.findUnique({

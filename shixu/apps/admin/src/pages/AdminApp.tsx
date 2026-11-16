@@ -4655,10 +4655,21 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
   };
 
   const toggleEnabled = async (rule: CouponRule, enabled: boolean) => {
+    if (enabled) {
+      const ok = await confirm({
+        title: '打开自动执行？',
+        message:
+          rule.kind === 'monthly'
+            ? `「${rule.couponTitle}」将在每月 ${rule.config.dayOfMonth ?? 1} 号自动发给${rule.tierLabel}。如果本月执行日已过且本月还没发，10 分钟内就会开始发放。`
+            : `「${rule.kindLabel} · ${rule.couponTitle}」将在每天上午 10 点自动扫描并发放。`,
+        confirmText: '打开自动执行'
+      });
+      if (!ok) return;
+    }
     setBusy(`toggle:${rule.id}`);
     try {
       await api.adminUpdateCouponRule(rule.id, { enabled });
-      notify(enabled ? '规则已启用' : '规则已暂停', 'ok');
+      notify(enabled ? '已打开自动执行' : '已停止自动执行，仍可手动执行', 'ok');
       query.reload({ silent: true });
     } catch (err) {
       notify(err instanceof ApiError ? err.message : '操作失败', 'danger');
@@ -4692,7 +4703,7 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
       <Panel
         eyebrow="自动化"
         title="自动发券规则"
-        description="生日关怀、新客欢迎、沉睡唤回每天自动扫描；月度定向发放按执行日给全量会员（或仅 Full愈 会员）各发一张。同一会员同一个规则周期内只会发一张，手动执行也只补发缺的那部分。"
+        description="每条规则单独控制「自动执行」：打开后生日关怀、新客欢迎、沉睡唤回每天上午 10 点自动扫描，月度定向发放按执行日给全量会员（或仅 Full愈 会员）各发一张；关闭后只在手动「立即执行」时发。同一会员同一个规则周期内只会发一张。"
         flush
         actions={
           managed ? (
@@ -4760,28 +4771,28 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
                 </span>
                 <Badge
                   tone={
-                    !rule.enabled
-                      ? 'neutral'
-                      : running
-                        ? 'warn'
-                        : doneThisMonth
-                          ? 'ok'
-                          : failed
-                            ? 'danger'
+                    running
+                      ? 'warn'
+                      : isMonthly && doneThisMonth
+                        ? 'ok'
+                        : isMonthly && failed
+                          ? 'danger'
+                          : rule.enabled
+                            ? 'ok'
                             : 'neutral'
                   }
                 >
-                  {!rule.enabled
-                    ? '已暂停'
-                    : isMonthly
-                      ? running
-                        ? RUN_STATUS_LABEL[current!.status]
-                        : doneThisMonth
-                          ? '本月已发'
-                          : failed
-                            ? '发放失败'
-                            : '待执行'
-                      : '每日执行'}
+                  {isMonthly && running
+                    ? RUN_STATUS_LABEL[current!.status]
+                    : isMonthly && doneThisMonth
+                      ? '本月已发'
+                      : isMonthly && failed
+                        ? '发放失败'
+                        : !rule.enabled
+                          ? '仅手动执行'
+                          : isMonthly
+                            ? '待自动执行'
+                            : '每天自动执行'}
                 </Badge>
                 {managed ? (
                   <div className="row-gap">
@@ -4806,7 +4817,7 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
                       <button
                         type="button"
                         className="btn btn-sm btn-ghost"
-                        disabled={busy === `run:${rule.id}` || !rule.enabled || running || doneThisMonth}
+                        disabled={busy === `run:${rule.id}` || running || doneThisMonth}
                         onClick={() => run(rule)}
                       >
                         立即执行
@@ -4817,11 +4828,14 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
                         记录
                       </button>
                     ) : null}
-                    <Switch
-                      checked={rule.enabled}
-                      label={`${rule.kindLabel}规则启用状态`}
-                      onChange={(next) => toggleEnabled(rule, next)}
-                    />
+                    <span className="row-gap small muted">
+                      自动执行
+                      <Switch
+                        checked={rule.enabled}
+                        label={`${rule.kindLabel}规则自动执行`}
+                        onChange={(next) => toggleEnabled(rule, next)}
+                      />
+                    </span>
                     <button
                       type="button"
                       className="btn btn-sm btn-ghost"
@@ -4852,7 +4866,7 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
         onClose={() => setCreating(false)}
         onSaved={() => {
           setCreating(false);
-          notify('自动发券规则已创建', 'ok');
+          notify('规则已创建，自动执行默认关闭，预览无误后再打开', 'ok');
           query.reload({ silent: true });
         }}
       />
@@ -4986,7 +5000,8 @@ function CouponRuleModal({
     setBusy(true);
     setError(null);
     try {
-      await api.adminCreateCouponRule({ couponId, kind, tier, config, note: note.trim() || undefined });
+      // 新规则默认不自动执行：先预览、可手动发一次，确认后再在列表里打开。
+      await api.adminCreateCouponRule({ couponId, kind, tier, config, note: note.trim() || undefined, enabled: false });
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '创建失败');
@@ -4999,7 +5014,7 @@ function CouponRuleModal({
     <Modal
       open={open}
       title="新建自动发券规则"
-      description="规则创建后立即生效：日常规则每天自动扫描，月度规则在每月执行日自动发放；也可以随时手动执行一次。"
+      description="创建后「自动执行」默认关闭：可以先预览、手动执行一次，确认无误后在规则列表里打开「自动执行」。"
       onClose={busy ? () => undefined : onClose}
       footer={
         <>
