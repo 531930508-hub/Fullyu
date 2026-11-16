@@ -83,12 +83,14 @@
 							v-for="date in dates"
 							:key="date.value"
 							class="date-option"
-							:class="{ active: selectedDate === date.value }"
-							@click="selectDate(date.value)">
+							:class="{ active: selectedDate === date.value, disabled: isDateDisabled(date.value) }"
+							@click="onDateClick(date.value)">
               <text class="date-name">{{ date.label }}</text>
               <text v-if="date.englishLabel" class="date-name-en">{{ date.englishLabel }}</text>
 						</view>
 					</view>
+					<!-- 早鸟价单的原预约日期是下限：改早等于缩短提前期白拿提前价，后端会拦，这里先讲清楚 -->
+					<text v-if="earlyBirdFloor" class="date-lock-note">{{ t('本单已享大会员早鸟价，只能改到 ') }}{{ earlyBirdFloor }}{{ t(' 及之后') }}</text>
 				</view>
 
 				<!-- 到店时间 -->
@@ -256,6 +258,22 @@ const durationDescription = computed(() => {
 
   return '';
 });
+
+// 早鸟价单的原预约日期是改约下限：落单时锁在 advance_date，老单退回当前预约日期。
+// 前端只是先灰掉更早的日期，真正的拦截在后端改约接口。
+const earlyBirdFloor = computed(() => {
+	const order = props.order
+	if (!order || order.priceSource != 1) return ''
+	if (order.advanceDate) return String(order.advanceDate).slice(0, 10)
+	return order.startTime ? moment(order.startTime).format('YYYY-MM-DD') : ''
+})
+
+const isDateDisabled = (value) => !!earlyBirdFloor.value && String(value) < earlyBirdFloor.value
+
+const onDateClick = (value) => {
+	if (isDateDisabled(value)) return
+	selectDate(value)
+}
 
 function getTimeList() {
 	if (!selectedDate.value || !selectedDuration.value || !productId.value) {
@@ -737,6 +755,10 @@ watch(() => personCount.value, (newVal) => {
     //min-height: 80upx;
     position: relative;
 
+    &.disabled {
+      opacity: 0.35;
+    }
+
     &.active {
       background-color: #5842191A;
       border-color: #584219;
@@ -773,6 +795,16 @@ watch(() => personCount.value, (newVal) => {
       //display: block;
     }
   }
+}
+
+// 早鸟价改约下限提示
+.date-lock-note {
+  display: block;
+  margin-top: -6upx;
+  margin-bottom: 16upx;
+  font-size: 22upx;
+  color: #B5641E;
+  line-height: 1.4;
 }
 
 // 时间网格样式

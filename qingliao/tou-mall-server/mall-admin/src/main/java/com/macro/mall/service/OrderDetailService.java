@@ -19,6 +19,7 @@ import com.macro.mall.service.shop.BedService;
 import com.macro.mall.service.shop.ShopService;
 import com.macro.mall.utils.DateUtil;
 import com.macro.mall.utils.BookingAvailability;
+import com.macro.mall.utils.EarlyBirdPrice;
 import com.macro.mall.utils.RedisUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -1721,6 +1722,16 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         synchronized (key.intern()) {
             //更新前数据，用于替换
             LocalDateTime oldStartDateTime = orderDetail.getStartTime();
+            // 早鸟价单把服务日期拖早会缩短提前期，等于白拿提前价，直接拦截；
+            // 已完成明细只是事后补录，不参与这条限制
+            if (!isFinishedState(orderDetail.getState())) {
+                Order order = orderService.getById(orderDetail.getOrderId());
+                if (order != null && EarlyBirdPrice.isEarlyBird(order.getPriceSource())) {
+                    LocalDate bookedDate = order.getAdvanceDate() != null ? order.getAdvanceDate()
+                            : (oldStartDateTime == null ? null : oldStartDateTime.toLocalDate());
+                    EarlyBirdPrice.assertNotEarlier(order.getPriceSource(), bookedDate, startDateTime.toLocalDate());
+                }
+            }
             Long oldBedId = orderDetail.getBedId();
             Long oldMassagistId = orderDetail.getMassagistId();
             Integer duration = orderDetail.getDuration();

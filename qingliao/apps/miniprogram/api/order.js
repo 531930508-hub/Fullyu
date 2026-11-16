@@ -13,10 +13,11 @@ export default {
             params: {id}
         })
     },
-    updateOrder(data) {
+    updateOrder(data, config = {}) {
         return http.post({
             url: '/order/update/order',
-            data: data
+            data: data,
+            ...config
         })
     },
     infoWithDetail(id) {

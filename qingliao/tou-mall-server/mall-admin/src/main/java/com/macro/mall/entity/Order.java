@@ -228,6 +228,11 @@ public class Order extends BaseEntity {
     @ApiModelProperty("优惠来源 1年卡提前价 2年卡当日价 3通用折扣 4积分 5Full愈券")
     private Integer priceSource;
 
+    /** 早鸟价（年卡提前价）落单时的原预约日期：之后改约只能 ≥ 这一天，改更早等于缩短提前期白拿提前价 */
+    @ApiModelProperty("早鸟价原预约日期，仅 priceSource=1 时有值")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate advanceDate;
+
     @ApiModelProperty("本单使用的年卡权益期")
     private Long memberCardId;
 

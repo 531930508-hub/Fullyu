@@ -470,10 +470,25 @@
 	// 处理修改确认
 	const handleModifyConfirm = async (appointmentData) => {
 		if (modalTitle.value == '修改预约') {
-			await orderApi.updateOrder({
-				...appointmentData,
-				orderId: orderId.value
-			})
+			try {
+				// 失败要弹框讲清楚（早鸟价单不能改到更早日期，后端会拦），这里关掉拦截器的 toast 避免重复提示
+				await orderApi.updateOrder({
+					...appointmentData,
+					orderId: orderId.value
+				}, {
+					showErrorMessage: false
+				})
+			} catch (err) {
+				const message = typeof err === 'string' && err ? err : t('修改预约失败，请稍后重试')
+				const earlyBird = (order.value && order.value.priceSource == 1) || message.indexOf('早鸟价') > -1
+				uni.showModal({
+					title: earlyBird ? t('无法修改到更早的日期') : t('修改预约失败'),
+					content: earlyBird ? message + '\n\n' + t('如需改到更早的日期，请取消本单后重新下单预约') : message,
+					showCancel: false,
+					confirmText: t('我知道了')
+				})
+				return
+			}
 			uni.showToast({
 				title: t('修改成功'),
 				icon: 'success'

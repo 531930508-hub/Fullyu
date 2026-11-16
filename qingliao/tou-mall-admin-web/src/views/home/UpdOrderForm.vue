@@ -15,11 +15,17 @@
             align="right" style="width: 100%"
             type="date" :clearable="false"
             placeholder="到店日期" @change="clearTime"
+            :picker-options="pickerOptions"
             value-format="yyyy-MM-dd">
           </el-date-picker>
+          <!-- 早鸟价单只能改到原预约日期及之后，改早就得取消后重新下单 -->
+          <div v-if="earlyBirdDate" class="early-bird-hint">
+            此单已享大会员早鸟价（原预约日期 {{ earlyBirdDate }}），只能改到该日期及之后
+          </div>
           <el-radio-group v-model="form.date" size="mini" @change="clearTime" class="time">
             <el-radio-button v-for="(item,index) in dateToBeSelected || []"
-                             :key="index" :label="item.value">
+                             :key="index" :label="item.value"
+                             :disabled="isEarlyBirdDateDisabled(item.value)">
               {{ item.label }}
             </el-radio-button>
           </el-radio-group>
@@ -100,16 +106,28 @@ export default {
       bedList: [],
       clockInTime: '',
       clockOutTime: '',
-      pickerOptions: {
-        disabledDate(time) {
-          return time.getTime() < Date.now() - 24 * 60 * 60 * 1000;
-        },
-      },
+      //早鸟价（年卡提前价）单的原预约日期：非空表示这张单不能改到比它更早的日期
+      earlyBirdDate: '',
       loading: false,
     }
   },
   computed: {
-    ...mapGetters(['productList', 'shopList', 'shopId'])
+    ...mapGetters(['productList', 'shopList', 'shopId']),
+    pickerOptions() {
+      const earlyBirdDate = this.earlyBirdDate
+      return {
+        disabledDate(time) {
+          if (time.getTime() < Date.now() - 24 * 60 * 60 * 1000) {
+            return true;
+          }
+          //早鸟价单：原预约日期之前的日期一律置灰，避免提交后被后端拦下
+          if (earlyBirdDate) {
+            return time < new Date(earlyBirdDate + ' 00:00:00');
+          }
+          return false;
+        },
+      }
+    }
   },
   created() {
     this.$store.dispatch("setProductList")
@@ -134,6 +152,8 @@ export default {
           let durationMinutes = res.data.duration
           let payType = res.data.payType
           let state = res.data.state
+          //priceSource=1 表示落单时用的年卡提前价（大会员早鸟价）；优先用落单时锁下的原预约日期，老单退回当前日期
+          this.earlyBirdDate = res.data.priceSource == 1 ? (res.data.advanceDate || date) : ''
           this.form = {
             orderId,
             productId,
@@ -183,6 +203,7 @@ export default {
       this.bedList = []
       this.timeList = []
       this.dateToBeSelected = []
+      this.earlyBirdDate = ''
       this.form = {}
     },
     async initDateToBeSelected() {
@@ -200,6 +221,16 @@ export default {
       }
       if (this.form.bedIdList && this.form.bedIdList.length > this.form.personCount) {
         this.notifyWarning(this.form.personCount + "人订单，最多选择" + this.form.personCount + "个座位")
+        return
+      }
+      //早鸟价单禁止改早：前端先弹框讲清楚原因和替代做法，后端同样会拦
+      if (this.earlyBirdDate && this.form.date && this.form.date < this.earlyBirdDate) {
+        await this.$alert(
+          '本单已享大会员早鸟价（原预约日期 ' + this.earlyBirdDate + '），不允许改到更早的日期。如需改到更早的日期，请先取消本单，再重新下单预约。',
+          '早鸟价不允许改早',
+          {confirmButtonText: '我知道了', type: 'warning'}
+        ).catch(() => {
+        })
         return
       }
       let startTime = this.form.date + " " + this.form.time + ":00"
@@ -222,6 +253,10 @@ export default {
       } finally {
         this.loading = false
       }
+    },
+    //早鸟价单的快捷日期里，早于原预约日期的按钮直接置灰
+    isEarlyBirdDateDisabled(value) {
+      return !!this.earlyBirdDate && !!value && value < this.earlyBirdDate
     },
     async clearTime() {
       if (this.form.time) {
@@ -295,6 +330,13 @@ export default {
 <style rel="stylesheet/less" lang="less" scoped>
 .UpdOrderForm {
   padding-bottom: 20px;
+
+  .early-bird-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #b5641e;
+  }
 
   .time /deep/ .el-radio-button:not(:first-child) .el-radio-button__inner {
     border-left: 1px solid #DCDFE6 !important;

@@ -15,6 +15,15 @@
 					<text class="auto-discount-sub">{{autoDiscountSummary}}</text>
 				</view>
 
+				<!-- 命中大会员早鸟价时必须显式告知：客户才知道这条价格规则的边界（改约不能改早） -->
+				<view v-if="earlyBirdSelected" class="early-bird-tip">
+					<view class="early-bird-head">
+						<text class="early-bird-tag">{{ t('大会员早鸟价') }}</text>
+						<text v-if="earlyBirdDateText" class="early-bird-date">{{ t('预约日期 ') }}{{ earlyBirdDateText }}</text>
+					</view>
+					<text class="early-bird-desc">{{ t('提前预约专享折扣，本单只能改约到该日期及之后；如需更早的日期，请取消本单重新预约') }}</text>
+				</view>
+
 				<!-- 积分单独提示：默认在积分最划算时使用，可随时不使用 -->
 				<view v-if="pointsNoticeVisible" class="points-notice">
 					<view class="points-notice-main">
@@ -337,6 +346,9 @@
 	const sourceOption = (source) => {
 		return priceOptions.value.filter(t => t.source == source)[0]
 	}
+	// 本单命中的是不是大会员早鸟价（提前预约价）：支付页要明确告知，客户才不会把它当成普通会员价
+	const earlyBirdSelected = computed(() => selectedSource.value == 1 && !!sourceOption(1))
+	const earlyBirdDateText = computed(() => checkoutData.value.appointmentDate || '')
 	const couponOption = computed(() => sourceOption(5))
 	const couponEnough = computed(() => {
 		const canUse = Number(checkoutData.value.canUseCouponCount || 0)
@@ -1272,6 +1284,41 @@
 		font-size: 21rpx;
 		color: #8A6A40;
 		letter-spacing: 0.05em;
+	}
+
+	.early-bird-tip {
+		display: flex;
+		flex-direction: column;
+		padding: 18rpx 20rpx;
+		margin-bottom: 16rpx;
+		border-radius: 14rpx;
+		background-color: #FFF3E6;
+		border: 2rpx solid #E8C79B;
+	}
+
+	.early-bird-head {
+		display: flex;
+		align-items: center;
+	}
+
+	.early-bird-tag {
+		font-size: 22rpx;
+		font-weight: 600;
+		color: #B5641E;
+		letter-spacing: 0.05em;
+	}
+
+	.early-bird-date {
+		margin-left: 12rpx;
+		font-size: 21rpx;
+		color: #8A6A40;
+	}
+
+	.early-bird-desc {
+		margin-top: 6rpx;
+		font-size: 21rpx;
+		color: #8A6A40;
+		line-height: 1.5;
 	}
 
 	.points-notice {

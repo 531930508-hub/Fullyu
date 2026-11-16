@@ -1025,6 +1025,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 throw new BusinessException("订单已取消，不允许修改");
             }
             List<OrderDetail> orderDetails = orderDetailService.listByOrderId(orderId);
+            assertEarlyBirdDateNotEarlier(order, orderDetails, dto.getStartTime());
             oldOrderDetailMap.put(orderId, orderDetails);
             //已到店/已服务的明细必须原样保留：只删行重建未服务的部分，否则技师和到店状态会被覆盖
             List<OrderDetail> servedDetails = orderDetails.stream()
@@ -1076,6 +1077,30 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         return oldOrderDetailMap;
     }
 
+    /**
+     * 早鸟价单改约只能挪到原预约日期及之后。
+     *
+     * <p>原预约日期优先取 s_order.advance_date（落单时锁下的日期，之后改约不会跟着变）；
+     * 历史单没有这个字段时退回「未被服务明细里最早的服务日期」。已服务明细本来就不参与改期，
+     * 全部已服务时无需校验。</p>
+     */
+    private void assertEarlyBirdDateNotEarlier(Order order, List<OrderDetail> orderDetails, LocalDateTime newStartTime) {
+        if (order == null || newStartTime == null || !EarlyBirdPrice.isEarlyBird(order.getPriceSource())) {
+            return;
+        }
+        LocalDate bookedDate = order.getAdvanceDate();
+        if (bookedDate == null && !CollectionUtils.isEmpty(orderDetails)) {
+            bookedDate = orderDetails.stream()
+                    .filter(d -> !OrderDetailService.isServedDetail(d))
+                    .map(OrderDetail::getStartTime)
+                    .filter(Objects::nonNull)
+                    .map(LocalDateTime::toLocalDate)
+                    .min(LocalDate::compareTo)
+                    .orElse(null);
+        }
+        EarlyBirdPrice.assertNotEarlier(order.getPriceSource(), bookedDate, newStartTime.toLocalDate());
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public Map<Long, List<OrderDetail>> pcUpdateOrder(@RequestBody OrderDetailDto dto) {
         Long orderId = dto.getOrderId();
@@ -1090,6 +1115,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 throw new BusinessException("订单已取消，不允许修改");
             }
             List<OrderDetail> orderDetails = orderDetailService.listByOrderId(orderId);
+            assertEarlyBirdDateNotEarlier(order, orderDetails, dto.getStartTime());
             boolean reception = OrderType.RECEPTION.getValue().equals(order.getType());
             List<Long> bedIdList = dto.getBedIdList() == null ? Collections.emptyList() : dto.getBedIdList();
             List<Long> massagistIdList = dto.getMassagistIdList();
@@ -2556,6 +2582,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         LambdaUpdateWrapper<Order> uw = new LambdaUpdateWrapper<>();
         uw.eq(Order::getId, order.getId())
                 .set(Order::getPriceSource, order.getPriceSource())
+                .set(Order::getAdvanceDate, order.getAdvanceDate())
                 .set(Order::getPayAmount, order.getPayAmount())
                 .set(Order::getBenefitAmount, order.getBenefitAmount())
                 .set(Order::getUseIntegrationState, order.getUseIntegrationState())
@@ -2583,6 +2610,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         }
         order.setBenefitAmount(option.getBenefitAmount());
         if (source == MemberCardPriceEngine.SOURCE_CARD_ADVANCE) {
+            //早鸟价落单时锁下当次预约日期：以后改约只能往后，改早等于缩短提前期白拿提前价
+            order.setAdvanceDate(context.result.getAppointmentDate());
             order.setMemberCardId(context.card == null ? null : context.card.getId());
             //落单时记录本单实际使用的费率，退款试算据此还原已享优惠
             order.setMemberRate(context.cardRate);
