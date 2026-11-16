@@ -207,9 +207,10 @@ export class BrandMemberController {
           data: {
             userId,
             hostUserId,
-            mode: 'REDUCE_TO',
+            // 买一赠一：好友席免单，hostUserId 绑定邀请人（老流程的「减至 0」保留兼容读）
+            mode: hostUserId ? 'BOGO' : 'REDUCE_TO',
             amount: 0,
-            targetPrice: 0,
+            targetPrice: hostUserId ? null : 0,
             applicableCourseIds: [],
             applicableAll: true,
             expiresAt: hostUserId

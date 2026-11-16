@@ -176,7 +176,10 @@ export class EnrollmentService {
           const voucher = checked.voucher
           voucherId = voucher.id
           sponsorOrderId = checked.sponsorOrderId
-          if (voucher.mode === 'REDUCE_TO') {
+          if (voucher.mode === 'BOGO') {
+            // 买一赠一：好友席免单，抵扣掉扣积分后的全部应付
+            voucherDeduction = priceAfterDiscount - pointsDeduction
+          } else if (voucher.mode === 'REDUCE_TO') {
             // 减至模式：将实付（扣积分后）降至目标价，差额即抵扣金额
             voucherDeduction = priceAfterDiscount - pointsDeduction - voucherYuanToFen(Number(voucher.targetPrice))
           } else {
@@ -268,7 +271,10 @@ export class EnrollmentService {
       orderBy: { amount: 'desc' },
     })
     const scoped = vouchers.filter(
-      (v) => v.applicableAll || (v.applicableCourseIds as string[]).includes(courseId),
+      (v) =>
+        (v.applicableAll || (v.applicableCourseIds as string[]).includes(courseId)) &&
+        // 买一赠一券必须有邀请人才能用（历史数据可能存在缺 hostUserId 的脏券）
+        (v.mode !== 'BOGO' || Boolean(v.hostUserId)),
     )
     // 买一赠一券只在「邀请人也在这节课」时可展示：邀请人退课后券仍在，但不能用
     const hostIds = [
@@ -300,7 +306,13 @@ export class EnrollmentService {
     if (voucher.expiresAt < new Date()) throw new BusinessException('代金券已过期', 4016)
     const applicable = voucher.applicableAll || (voucher.applicableCourseIds as string[]).includes(courseId)
     if (!applicable) throw new BusinessException('代金券不适用于该课程', 4017)
-    if (!voucher.hostUserId) return { voucher, sponsorOrderId: undefined as string | undefined }
+    // 买一赠一校验：BOGO 模式或历史「减至 0 + hostUserId」的券都走同席校验
+    if (!voucher.hostUserId) {
+      if (voucher.mode === 'BOGO') {
+        throw new BusinessException('这张买一赠一券缺少邀请人信息，请联系客服', 4023)
+      }
+      return { voucher, sponsorOrderId: undefined as string | undefined }
+    }
     if (voucher.hostUserId === userId) {
       throw new BusinessException('这是你发出的买一赠一券，请好友使用', 4020)
     }

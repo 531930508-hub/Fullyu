@@ -699,6 +699,8 @@ enum VoucherStatus {
 enum VoucherMode {
   REDUCE_BY
   REDUCE_TO
+  /// 买一赠一：好友持券、与邀请人（hostUserId）同上一节课时好友席免单
+  BOGO
 }
 
 // ========== 任务系统 ==========

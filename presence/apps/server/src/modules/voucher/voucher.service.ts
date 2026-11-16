@@ -55,15 +55,18 @@ export class VoucherService {
 
   /**
    * 发放代金券：可向多个用户批量发放。
-   * 支持两种模式：REDUCE_BY 减额（amount）/ REDUCE_TO 减至（targetPrice）。
+   * 三种模式：REDUCE_BY 减额（amount）/ REDUCE_TO 减至（targetPrice）/
+   * BOGO 买一赠一（好友席免单，必须绑定邀请人 hostUserId，邀请人须已报名同课）。
    * 若已配置审批人，则创建二次审批单（不立即发放）；否则直接发放。
    */
   async grant(
     data: {
       userIds: string[]
-      mode?: 'REDUCE_BY' | 'REDUCE_TO'
+      mode?: 'REDUCE_BY' | 'REDUCE_TO' | 'BOGO'
       amount?: number
       targetPrice?: number
+      /** 买一赠一券的邀请人；券发给 data.userIds（好友） */
+      hostUserId?: string
       expiresAt: string
       source: string
       applicableAll?: boolean
@@ -74,14 +77,23 @@ export class VoucherService {
     if (!data.userIds?.length) throw new BusinessException('请选择发放用户', 4060)
     if (!data.expiresAt) throw new BusinessException('请选择有效期', 4063)
 
-    const mode = data.mode === 'REDUCE_TO' ? 'REDUCE_TO' : 'REDUCE_BY'
+    const mode =
+      data.mode === 'BOGO' ? 'BOGO' : data.mode === 'REDUCE_TO' ? 'REDUCE_TO' : 'REDUCE_BY'
     if (mode === 'REDUCE_BY') {
       if (!data.amount || Number(data.amount) <= 0) {
         throw new BusinessException('请填写正确的抵扣面额', 4064)
       }
-    } else {
+    } else if (mode === 'REDUCE_TO') {
       if (data.targetPrice === undefined || data.targetPrice === null || Number(data.targetPrice) < 0) {
         throw new BusinessException('请填写正确的减至目标价', 4065)
+      }
+    } else {
+      // 买一赠一必须指定邀请人，否则好友席无法校验「与邀请人同课」
+      if (!data.hostUserId) {
+        throw new BusinessException('买一赠一券必须指定邀请人', 4069)
+      }
+      if (data.userIds.includes(data.hostUserId)) {
+        throw new BusinessException('邀请人不能领取自己的买一赠一券', 4070)
       }
     }
 
@@ -91,6 +103,7 @@ export class VoucherService {
       mode,
       amount: mode === 'REDUCE_BY' ? Number(data.amount) : 0,
       targetPrice: mode === 'REDUCE_TO' ? Number(data.targetPrice) : null,
+      hostUserId: mode === 'BOGO' ? data.hostUserId! : null,
       expiresAt: new Date(data.expiresAt),
       source: data.source,
       applicableAll: data.applicableAll ?? false,
@@ -102,7 +115,9 @@ export class VoucherService {
     const summary =
       mode === 'REDUCE_BY'
         ? `发放代金券：减 ${Number(data.amount)} 元 × ${rows.length} 人`
-        : `发放代金券：减至 ${Number(data.targetPrice)} 元 × ${rows.length} 人`
+        : mode === 'REDUCE_TO'
+          ? `发放代金券：减至 ${Number(data.targetPrice)} 元 × ${rows.length} 人`
+          : `发放买一赠一券：邀请人 ${data.hostUserId} × ${rows.length} 位好友`
     const faceValue = mode === 'REDUCE_BY' ? Number(data.amount) * rows.length : 0
     const approval = await this.approvalService.submit({
       bizType: 'VOUCHER_GRANT',
@@ -126,7 +141,7 @@ export class VoucherService {
   async grantBatch(
     data: {
       quantity: number
-      mode?: 'REDUCE_BY' | 'REDUCE_TO'
+      mode?: 'REDUCE_BY' | 'REDUCE_TO' | 'BOGO'
       amount?: number
       targetPrice?: number
       expiresAt: string
@@ -149,6 +164,9 @@ export class VoucherService {
       throw new BusinessException('有效期须晚于当前时间', 4068)
     }
 
+    if (data.mode === 'BOGO') {
+      throw new BusinessException('兑换码批量发券不支持买一赠一：该券必须绑定邀请人', 4071)
+    }
     const mode = data.mode === 'REDUCE_TO' ? 'REDUCE_TO' : 'REDUCE_BY'
     if (mode === 'REDUCE_BY') {
       if (!data.amount || Number(data.amount) <= 0) {

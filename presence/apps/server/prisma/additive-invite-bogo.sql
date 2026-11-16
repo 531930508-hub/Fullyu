@@ -18,3 +18,5 @@ ALTER TABLE `orders` ADD COLUMN `sponsor_order_id` VARCHAR(191) NULL;
 ALTER TABLE `orders` ADD INDEX `orders_sponsor_order_id_idx` (`sponsor_order_id`);
 ALTER TABLE `orders` ADD CONSTRAINT `orders_sponsor_order_id_fkey`
   FOREIGN KEY (`sponsor_order_id`) REFERENCES `orders`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+-- 3) 代金券新增「买一赠一」模式：ENUM 追加 BOGO 取值（只扩不缩，不影响历史行）
+ALTER TABLE `vouchers` MODIFY COLUMN `mode` ENUM('REDUCE_BY', 'REDUCE_TO', 'BOGO') NOT NULL DEFAULT 'REDUCE_BY';

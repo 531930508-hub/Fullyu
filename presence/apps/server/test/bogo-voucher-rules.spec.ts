@@ -1,5 +1,6 @@
 import { EnrollmentService } from '../src/modules/order/enrollment.service'
 import { PaymentService } from '../src/modules/payment/payment.service'
+import { VoucherService } from '../src/modules/voucher/voucher.service'
 
 /**
  * 买一赠一券（PRESENCE_BOGO_CLASS）：同席报名校验与邀请人退课级联。
@@ -26,6 +27,7 @@ function serviceWithVoucher(voucher: any, sponsor: any) {
 const bogo = () => ({
   id: 'v-bogo',
   userId: 'friend',
+  mode: 'BOGO',
   status: 'UNUSED',
   expiresAt: new Date(Date.now() + 86_400_000),
   applicableAll: true,
@@ -71,8 +73,14 @@ describe('买一赠一券：报名校验', () => {
   })
 
   it('普通券不受同席限制', async () => {
-    const result = await validate({ ...bogo(), hostUserId: null }, null)
+    const plain = { ...bogo(), mode: 'REDUCE_BY', amount: 50, hostUserId: null }
+    const result = await validate(plain, null)
     expect(result.sponsorOrderId).toBeUndefined()
+  })
+
+  it('BOGO 模式缺邀请人（脏数据）直接拒绝，不当作普通券放行', async () => {
+    const dirty = { ...bogo(), hostUserId: null }
+    await expect(validate(dirty, null)).rejects.toMatchObject({ bizCode: 4023 })
   })
 
   it('邀请人未报名时，券列表里不展示这张券；报名后恢复展示', async () => {
@@ -191,5 +199,51 @@ describe('买一赠一券：邀请人退课级联', () => {
     const { svc, calls } = paymentService(paidCompanion, { closed: false })
     await svc.cancelInviteCompanions('o-host', { releaseSeat: true })
     expect(calls).toEqual(['order:REFUNDED'])
+  })
+})
+describe('买一赠一券：后台发放规则', () => {
+  const svcWith = () => {
+    const created: any[] = []
+    const prisma: any = {
+      voucher: { createMany: async ({ data }: any) => { created.push(...data); return { count: data.length } } },
+    }
+    const approval: any = { submit: async () => null }
+    const svc: any = new VoucherService(prisma, approval, {} as any)
+    return { svc, created }
+  }
+
+  it('BOGO 未指定邀请人 → 4069', async () => {
+    const { svc } = svcWith()
+    await expect(
+      svc.grant({ userIds: ['friend'], mode: 'BOGO', expiresAt: '2099-01-01', source: 't' }),
+    ).rejects.toMatchObject({ bizCode: 4069 })
+  })
+
+  it('邀请人自己领券 → 4070', async () => {
+    const { svc } = svcWith()
+    await expect(
+      svc.grant({ userIds: ['host'], mode: 'BOGO', hostUserId: 'host', expiresAt: '2099-01-01', source: 't' }),
+    ).rejects.toMatchObject({ bizCode: 4070 })
+  })
+
+  it('BOGO 落库为免单券：hostUserId 写入、无面额', async () => {
+    const { svc, created } = svcWith()
+    const res = await svc.grant({
+      userIds: ['friend'],
+      mode: 'BOGO',
+      hostUserId: 'host',
+      expiresAt: '2099-01-01',
+      source: 't',
+      applicableAll: true,
+    })
+    expect(res.granted).toBe(1)
+    expect(created[0]).toMatchObject({ mode: 'BOGO', hostUserId: 'host', amount: 0, targetPrice: null })
+  })
+
+  it('兑换码批量发券拒绝 BOGO → 4071', async () => {
+    const { svc } = svcWith()
+    await expect(
+      svc.grantBatch({ quantity: 1, mode: 'BOGO', expiresAt: '2099-01-01', source: 't' }),
+    ).rejects.toMatchObject({ bizCode: 4071 })
   })
 })

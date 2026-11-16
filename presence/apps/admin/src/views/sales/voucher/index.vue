@@ -47,7 +47,8 @@
                 <a-tag v-else color="gold">待兑换</a-tag>
               </template>
               <template v-else-if="column.dataIndex === 'amount'">
-                <span v-if="record.mode === 'REDUCE_TO'" style="color: #6B463C; font-weight: 600;">减至 ¥{{ Number(record.targetPrice || 0) }}</span>
+                <span v-if="record.mode === 'BOGO'" style="color: #6B463C; font-weight: 600;">买一赠一（免单）</span>
+                <span v-else-if="record.mode === 'REDUCE_TO'" style="color: #6B463C; font-weight: 600;">减至 ¥{{ Number(record.targetPrice || 0) }}</span>
                 <span v-else style="color: #6B463C; font-weight: 600;">减 ¥{{ Number(record.amount || 0) }}</span>
               </template>
               <template v-else-if="column.dataIndex === 'redeemCode'">
@@ -153,15 +154,32 @@
           <a-radio-group v-model:value="grantForm.mode">
             <a-radio value="REDUCE_BY">减额（减多少元）</a-radio>
             <a-radio value="REDUCE_TO">减至（减到多少元）</a-radio>
+            <a-radio value="BOGO">买一赠一（好友席免单）</a-radio>
           </a-radio-group>
+        </a-form-item>
+        <a-form-item v-if="grantForm.mode === 'BOGO'" label="邀请人" required>
+          <a-select
+            v-model:value="grantForm.hostUserId"
+            placeholder="搜索并选择邀请人（须已报名该课程）"
+            :options="userOptions"
+            :filter-option="filterUserOption"
+            show-search
+            allow-clear
+          />
+          <div style="font-size: 12px; color: #999; margin-top: 4px;">
+            券发给上面的「发放用户」（好友）；好友报名邀请人已支付的同一节课时，好友席免单，一份邀请只带一位好友。
+          </div>
         </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item v-if="grantForm.mode === 'REDUCE_BY'" label="抵扣面额（元）" required>
               <a-input-number v-model:value="grantForm.amount" prefix="¥" style="width: 100%" :min="1" placeholder="如：50" />
             </a-form-item>
-            <a-form-item v-else label="减至目标价（元）" required>
+            <a-form-item v-else-if="grantForm.mode === 'REDUCE_TO'" label="减至目标价（元）" required>
               <a-input-number v-model:value="grantForm.targetPrice" prefix="¥" style="width: 100%" :min="0" placeholder="如：9.9，将实付降至此价" />
+            </a-form-item>
+            <a-form-item v-else label="抵扣方式">
+              <a-input value="好友席 0 元（随课程价自动免单）" disabled />
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -173,15 +191,17 @@
         <a-form-item label="来源说明">
           <a-input v-model:value="grantForm.source" placeholder="如：新人体验、活动发放" />
         </a-form-item>
-        <a-form-item label="适用范围">
-          <a-radio-group v-model:value="grantForm.applicableAll">
-            <a-radio :value="true">全部课程</a-radio>
-            <a-radio :value="false">指定课程</a-radio>
-          </a-radio-group>
-        </a-form-item>
-        <a-form-item v-if="!grantForm.applicableAll" label="适用课程">
-          <a-select v-model:value="grantForm.applicableCourseIds" mode="multiple" placeholder="选择适用课程" :options="courseOptions" />
-        </a-form-item>
+        <template v-if="grantForm.mode !== 'BOGO'">
+          <a-form-item label="适用范围">
+            <a-radio-group v-model:value="grantForm.applicableAll">
+              <a-radio :value="true">全部课程</a-radio>
+              <a-radio :value="false">指定课程</a-radio>
+            </a-radio-group>
+          </a-form-item>
+          <a-form-item v-if="!grantForm.applicableAll" label="适用课程">
+            <a-select v-model:value="grantForm.applicableCourseIds" mode="multiple" placeholder="选择适用课程" :options="courseOptions" />
+          </a-form-item>
+        </template>
       </a-form>
     </a-modal>
 
@@ -211,6 +231,9 @@
             <a-radio value="REDUCE_BY">减额（减多少元）</a-radio>
             <a-radio value="REDUCE_TO">减至（减到多少元）</a-radio>
           </a-radio-group>
+          <div style="font-size: 12px; color: #999; margin-top: 4px;">
+            买一赠一券必须绑定邀请人，不能走兑换码批量发；请在「发放代金券」里选买一赠一。
+          </div>
         </a-form-item>
         <a-form-item v-if="batchForm.mode === 'REDUCE_BY'" label="抵扣面额（元）" required>
           <a-input-number v-model:value="batchForm.amount" prefix="¥" style="width: 100%" :min="1" placeholder="如：299。课程价低于面额时减到 0 元，不会出现负数" />
@@ -388,9 +411,10 @@ const detailColumns = [
 
 const grantForm = ref({
   userIds: [] as string[],
-  mode: 'REDUCE_BY' as 'REDUCE_BY' | 'REDUCE_TO',
+  mode: 'REDUCE_BY' as 'REDUCE_BY' | 'REDUCE_TO' | 'BOGO',
   amount: null as number | null,
   targetPrice: null as number | null,
+  hostUserId: undefined as string | undefined,
   expiresAt: null as Dayjs | null,
   source: '',
   applicableAll: true,
@@ -474,7 +498,7 @@ async function loadOptions() {
 }
 
 function openGrant() {
-  grantForm.value = { userIds: [], mode: 'REDUCE_BY', amount: null, targetPrice: null, expiresAt: null, source: '', applicableAll: true, applicableCourseIds: [] }
+  grantForm.value = { userIds: [], mode: 'REDUCE_BY', amount: null, targetPrice: null, hostUserId: undefined, expiresAt: null, source: '', applicableAll: true, applicableCourseIds: [] }
   showGrantModal.value = true
 }
 
@@ -485,6 +509,10 @@ function validateFace(form: { mode: string; amount: number | null; targetPrice: 
   }
   if (form.mode === 'REDUCE_TO' && (form.targetPrice === null || form.targetPrice < 0)) {
     message.warning('请填写减至目标价')
+    return false
+  }
+  if (form.mode === 'BOGO' && !(form as any).hostUserId) {
+    message.warning('买一赠一券必须选择邀请人')
     return false
   }
   if (!form.expiresAt) {
@@ -507,10 +535,12 @@ async function confirmGrant() {
       mode: grantForm.value.mode,
       amount: grantForm.value.mode === 'REDUCE_BY' ? grantForm.value.amount : undefined,
       targetPrice: grantForm.value.mode === 'REDUCE_TO' ? grantForm.value.targetPrice : undefined,
+      hostUserId: grantForm.value.mode === 'BOGO' ? grantForm.value.hostUserId : undefined,
       expiresAt: grantForm.value.expiresAt!.toISOString(),
       source: grantForm.value.source || 'ADMIN_GRANT',
-      applicableAll: grantForm.value.applicableAll,
-      applicableCourseIds: grantForm.value.applicableAll ? [] : grantForm.value.applicableCourseIds,
+      applicableAll: grantForm.value.mode === 'BOGO' ? true : grantForm.value.applicableAll,
+      applicableCourseIds:
+        grantForm.value.mode === 'BOGO' || grantForm.value.applicableAll ? [] : grantForm.value.applicableCourseIds,
     })
     if (res?.pendingApproval) {
       message.success('发放申请已提交，需审批通过后生效')

@@ -226,10 +226,12 @@ const voucherOptions = computed<VoucherOption[]>(() => {
   if (!quote) return []
   const price = Number(quote.priceAfterDiscount) || 0
   return (quote.vouchers || []).map((v) => {
-    const isBogo = Boolean(v.hostUserId) || (v.mode === 'REDUCE_TO' && Number(v.targetPrice) === 0)
-    const deductionFen = v.mode === 'REDUCE_TO' && v.targetPrice != null
-      ? Math.max(0, price - Number(v.targetPrice) * 100)
-      : Math.min(Number(v.amount) * 100, price)
+    const isBogo = v.mode === 'BOGO' || Boolean(v.hostUserId) || (v.mode === 'REDUCE_TO' && Number(v.targetPrice) === 0)
+    const deductionFen = isBogo
+      ? price // 好友席免单：抵掉全部应付
+      : v.mode === 'REDUCE_TO' && v.targetPrice != null
+        ? Math.max(0, price - Number(v.targetPrice) * 100)
+        : Math.min(Number(v.amount) * 100, price)
     const label = isBogo
       ? tr('买一赠一 · 免单', 'BOGO · free seat')
       : v.mode === 'REDUCE_TO' && v.targetPrice != null

@@ -109,14 +109,15 @@ function remainingLabel(msLeft: number) {
 }
 function toVoucher(v: ServerVoucher): VoucherView {
   const date = new Date(v.expiresAt).getTime()
-  // BOGO 券是 targetPrice=0 的减至券；老接口不回 kind 时用 hostUserId 识别
-  const isBogo = v.kind === 'PRESENCE_BOGO_CLASS' || Boolean(v.hostUserId)
+  // 买一赠一：新数据 mode=BOGO；老数据是「减至 0 + hostUserId」，两者都识别
+  const isBogo = v.mode === 'BOGO' || v.kind === 'PRESENCE_BOGO_CLASS' || Boolean(v.hostUserId)
   const expired = v.status === 'EXPIRED' || (Number.isFinite(date) && date <= Date.now())
   const amount = Number(v.amount)
   const reduceTo = v.mode === 'REDUCE_TO'
   const rawAmount = reduceTo ? v.targetPrice : v.amount
   const displayAmount = rawAmount != null && Number.isFinite(Number(rawAmount)) ? Number(rawAmount) : null
-  const usable = v.status === 'UNUSED' && Number.isFinite(date) && !expired && displayAmount !== null
+  // 买一赠一券没有面额（targetPrice 为空），不能用面额判可用
+  const usable = v.status === 'UNUSED' && Number.isFinite(date) && !expired && (isBogo || displayAmount !== null)
   const statusLabel = v.status === 'USED' ? tr('已使用', 'Used') : v.status === 'REVOKED' ? tr('已撤销', 'Revoked') : expired ? tr('已过期', 'Expired') : usable ? tr('可使用', 'Available') : tr('暂不可用', 'Unavailable')
   const courseIds = Array.isArray(v.applicableCourseIds) ? v.applicableCourseIds : []
   return {

@@ -114,13 +114,14 @@ function formatTime(value?: string) {
 const voucherView = computed(() => {
   const v = redeemed.value
   if (!v) return { modeLabel: '', amountText: '', name: '', condition: '', expire: '' }
+  const isBogo = v.mode === 'BOGO' || Boolean((v as any).hostUserId)
   const reduceTo = v.mode === 'REDUCE_TO'
   const rawAmount = reduceTo ? v.targetPrice : v.amount
   const amount = rawAmount != null && Number.isFinite(Number(rawAmount)) ? Number(rawAmount) : null
   const courseIds = Array.isArray(v.applicableCourseIds) ? v.applicableCourseIds : []
   return {
-    modeLabel: reduceTo ? tr('减至券', 'Reduce-to voucher') : tr('减额券', 'Discount voucher'),
-    amountText: amount === null ? tr('金额待确认', 'Pending') : `¥${amount.toFixed(2)}`,
+    modeLabel: isBogo ? tr('买一赠一', 'BOGO') : reduceTo ? tr('减至券', 'Reduce-to voucher') : tr('减额券', 'Discount voucher'),
+    amountText: isBogo ? tr('免单', 'Free') : amount === null ? tr('金额待确认', 'Pending') : `¥${amount.toFixed(2)}`,
     name: v.source || tr('代金券', 'Voucher'),
     condition: v.applicableAll ? tr('全部课程可用', 'Valid for all courses') : tr(`指定 ${courseIds.length} 门课程可用`, `Valid for ${courseIds.length} selected courses`),
     expire: formatTime(v.expiresAt) ? tr(`有效期至 ${formatTime(v.expiresAt)}`, `Valid until ${formatTime(v.expiresAt)}`) : tr('有效期信息暂缺', 'Expiry information unavailable'),
