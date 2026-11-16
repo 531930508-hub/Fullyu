@@ -18,10 +18,13 @@ export function listMyVouchers(usable?: boolean) {
   return get<VoucherItem[]>('/vouchers/mine', usable ? { usable: 'true' } : undefined)
 }
 
-/** 兑换后的券：服务端额外返回 mode/targetPrice/redeemedAt */
+/** 兑换后的券：服务端额外返回 mode/targetPrice/redeemedAt/hostUserId */
 export interface RedeemedVoucher extends VoucherItem {
-  mode?: 'REDUCE_BY' | 'REDUCE_TO'
+  /** BOGO = 买一赠一（好友席免单，须与 hostUserId 邀请人同课） */
+  mode?: 'REDUCE_BY' | 'REDUCE_TO' | 'BOGO'
   targetPrice?: number | null
+  hostUserId?: string | null
+  kind?: string
   redeemedAt?: string | null
 }
 
