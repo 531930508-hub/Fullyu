@@ -5,6 +5,7 @@
 --   1) 邀请券由「免费体验课」改为「买一赠一券」：券归好友，host_user_id 记录邀请人；
 --      好友只能在与邀请人同报名的已支付课程上使用，退款/退课时好友席一并取消。
 --   2) 好友订单 sponsor_order_id 指回邀请人订单，用于退款级联与对账。
+-- 状态：2026-11-17 已在生产 RDS 执行（列+索引+外键），migrate diff 无剩余 ADD COLUMN。
 
 -- 1) 券上的邀请人（普通索引，支持按人查券/级联回收；可为空，存量券不受影响）
 ALTER TABLE `vouchers` ADD COLUMN `host_user_id` VARCHAR(191) NULL;
