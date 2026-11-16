@@ -395,8 +395,19 @@ export const api = {
     request<{ ok: boolean }>(`/admin/coupons/rules/${id}`, { method: 'DELETE' }),
   adminPreviewCouponRule: (id: string) =>
     request<import('./types').CouponRulePreview>(`/admin/coupons/rules/${id}/preview`, { method: 'POST' }),
+  // 生日/新客/沉睡当场跑完返回 result；月度只排队，返回 run，进度靠轮询查询。
   adminRunCouponRule: (id: string) =>
-    request<{ result: import('./types').CouponRuleRunResult }>(`/admin/coupons/rules/${id}/run`, { method: 'POST' }),
+    request<
+      { result: import('./types').CouponRuleRunResult } | { run: import('./types').CouponRuleRun }
+    >(`/admin/coupons/rules/${id}/run`, { method: 'POST' }),
+  adminCouponRuns: (query: { ruleId?: string; limit?: number } = {}) =>
+    request<{ runs: import('./types').CouponRuleRun[] }>('/admin/coupons/runs', { query }),
+  adminCouponRun: (id: string) =>
+    request<{ run: import('./types').CouponRuleRun }>(`/admin/coupons/runs/${id}`),
+  adminContinueCouponRun: (id: string) =>
+    request<{ run: import('./types').CouponRuleRun }>(`/admin/coupons/runs/${id}/continue`, {
+      method: 'POST'
+    }),
 
   adminMe: () => request<{ permissions: string[]; hasProfit: boolean }>('/admin/me'),
 

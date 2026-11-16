@@ -1,5 +1,6 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import type { StaffContext } from '../common/auth.types';
+import { CouponMonthlyService } from './coupon-monthly.service';
 import { CouponRulesService } from './coupon-rules.service';
 
 /** 每天扫一遍的检查间隔：比一天短，避免进程在 10 点前后重启而漏跑。 */
@@ -33,7 +34,10 @@ export class CouponRuleScheduler implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private running = false;
 
-  constructor(private readonly rules: CouponRulesService) {}
+  constructor(
+    private readonly rules: CouponRulesService,
+    private readonly monthly: CouponMonthlyService
+  ) {}
 
   onModuleInit() {
     if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) return;
@@ -54,9 +58,17 @@ export class CouponRuleScheduler implements OnModuleInit, OnModuleDestroy {
       new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', hour12: false }).format(now)
     );
     const targetHour = Number(process.env.COUPON_RULE_HOUR || DEFAULT_HOUR);
-    if (hour !== targetHour) return;
     this.running = true;
     try {
+      // 月度规则每轮都检查：既接管上次中断的 run，也在到了执行日时启动当月发放。
+      // 它不依赖 10 点这个整点，进程在当天任意时刻重启都能补上。
+      await this.monthly.tick(SYSTEM_ACTOR);
+    } catch (error) {
+      this.logger.error(`月度发券检查失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+    try {
+      // 生日/新客/沉睡仍是每天目标整点后的第一轮执行，错过整点会顺延到下一轮。
+      if (hour !== targetHour) return;
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(now);
       const executed = await this.rules.runAll(SYSTEM_ACTOR);
       const issued = executed.results.reduce((sum, row) => sum + row.issued, 0);

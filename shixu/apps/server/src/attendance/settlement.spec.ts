@@ -279,4 +279,37 @@ describe('劳务单价与月结', () => {
     expect(ok.status).toBe(201);
     expect(ok.body.settlement.amountCents).toBe(2 * 60 * 100 - 1_000);
   });
+
+  it('明细快照超过 MySQL TEXT 上限也能落库（lines_json 是 LONGTEXT）', async () => {
+    // 700 段 × 约 115 字节 ≈ 80KB，超过 TEXT 的 65535 字节上限。SQLite 的 TEXT 无上限所以以前测不出来，
+    // MySQL 上会直接 500（Data too long for column 'lines_json'），结算单永远生成不了。
+    const sessions = Array.from({ length: 700 }, (_, i) => {
+      const date = `${month}-${String((i % 28) + 1).padStart(2, '0')}`;
+      const hh = String(i % 24).padStart(2, '0');
+      const mm = String(i % 60).padStart(2, '0');
+      const inAt = new Date(Date.parse(`${date}T${hh}:${mm}:00+08:00`));
+      return {
+        id: `ws-big-${i}`,
+        storeId: STORE,
+        userId: 'u-big',
+        businessDate: date,
+        clockInAt: inAt,
+        clockOutAt: new Date(inAt.getTime() + 5 * 60_000),
+        inLat: 31.176,
+        inLng: 121.459,
+        status: 'closed'
+      };
+    });
+    await h.prisma.workSession.createMany({ data: sessions });
+
+    const res = await generate(financeToken);
+    expect(res.status).toBe(201);
+    const row = rowOf(res.body.rows as SettlementRow[], 'u-big')!;
+    expect(row.minutes).toBe(700 * 5);
+
+    const stored = await h.prisma.workSettlement.findFirstOrThrow({
+      where: { storeId: STORE, userId: 'u-big', periodStart: `${month}-01` }
+    });
+    expect(Buffer.byteLength(stored.linesJson, 'utf8')).toBeGreaterThan(65_535);
+  });
 });

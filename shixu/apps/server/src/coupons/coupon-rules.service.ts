@@ -1,12 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { logAction } from '../common/logs';
 import { PrismaService } from '../common/prisma.service';
-import { badRequest, notFound } from '../common/errors';
+import { ApiError, badRequest, notFound } from '../common/errors';
 import { newId } from '../common/ids';
 import type { StaffContext } from '../common/auth.types';
 import { CouponsService } from './coupons.service';
+import { CouponMonthlyService, MONTHLY_KIND_LABEL } from './coupon-monthly.service';
 
-export type CouponRuleKind = 'birthday' | 'welcome' | 'winback';
+export type CouponRuleKind = 'birthday' | 'welcome' | 'winback' | 'monthly';
 
 export type CouponRuleConfig = {
   /** 生日：提前 N 天发（0=当天）。 */
@@ -17,6 +18,8 @@ export type CouponRuleConfig = {
   inactiveDays?: number;
   /** 沉睡：历史至少 N 笔已支付订单，避免给一次性薅券的人发。 */
   minOrders?: number;
+  /** 月度：每月几号执行（1~28，保证每个月都有这一天）。 */
+  dayOfMonth?: number;
 };
 
 export type CouponRuleInput = {
@@ -44,9 +47,17 @@ export type CouponRuleRunResult = {
 const KIND_LABEL: Record<CouponRuleKind, string> = {
   birthday: '生日关怀',
   welcome: '新客欢迎',
-  winback: '沉睡唤醒'
+  winback: '沉睡唤醒',
+  monthly: MONTHLY_KIND_LABEL
 };
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** 人群口径：与前端展示一致，避免三处各写一遍中文字符串。 */
+const TIER_LABEL: Record<string, string> = {
+  all: '全部会员',
+  standard: '普通会员',
+  annual: 'Full愈大会员'
+};
 
 /**
  * 自动化发券规则：生日 / 新客 / 沉睡三类。
@@ -62,7 +73,8 @@ export class CouponRulesService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly coupons: CouponsService
+    private readonly coupons: CouponsService,
+    private readonly monthly: CouponMonthlyService
   ) {}
 
   async listRules() {
@@ -79,6 +91,11 @@ export class CouponRulesService {
         })
       : [];
     const issuedOf = new Map(counts.map((row) => [row.ruleId, row._count._all]));
+    // 月度规则要带「本月状态」：前端进度条、按钮置灰、失败续跑都靠它。
+    const monthlyIds = rows.filter((row) => row.kind === 'monthly').map((row) => row.id);
+    const [currentRuns, runCounts] = monthlyIds.length
+      ? await Promise.all([this.monthly.currentRunOf(monthlyIds), this.monthly.runCountOf(monthlyIds)])
+      : [new Map(), new Map()];
     return {
       rules: rows.map((row) => ({
         id: row.id,
@@ -97,6 +114,10 @@ export class CouponRulesService {
         lastRunIssued: row.lastRunIssued,
         lastRunSkipped: row.lastRunSkipped,
         totalIssued: issuedOf.get(row.id) || 0,
+        tierLabel: TIER_LABEL[row.tier] || row.tier,
+        // 月度规则：本月执行记录（含进度）与历史记录数；其他规则恒为 null / 0。
+        currentRun: currentRuns.get(row.id) || null,
+        runCount: runCounts.get(row.id) || 0,
         createdAt: row.createdAt.getTime()
       }))
     };
@@ -107,13 +128,20 @@ export class CouponRulesService {
     if (!coupon) throw badRequest('优惠券不存在');
     const kind = assertKind(input.kind);
     const config = normalizeConfig(kind, input.config || {});
+    const enabled = input.enabled ?? true;
+    // 月度规则多发一张就是真金白银：券必须可用、同券只能一条启用规则、人群与执行日先校验。
+    const tier = kind === 'monthly' ? this.monthly.normalizeTier(input.tier) : input.tier || 'all';
+    if (kind === 'monthly' && enabled) {
+      this.monthly.assertTemplateUsable(coupon);
+      await this.monthly.assertNoDuplicateRule(coupon.id);
+    }
     const row = await this.prisma.couponRule.create({
       data: {
         id: newId('CR'),
         couponId: coupon.id,
         kind,
-        enabled: input.enabled ?? true,
-        tier: input.tier || 'all',
+        enabled,
+        tier,
         config: JSON.stringify(config),
         note: String(input.note || '').slice(0, 200),
         createdBy: actor.id,
@@ -143,11 +171,22 @@ export class CouponRulesService {
     const kind = row.kind as CouponRuleKind;
     const config =
       input.config === undefined ? undefined : normalizeConfig(kind, { ...parseConfig(row.config), ...input.config });
+    let tier = input.tier;
+    if (kind === 'monthly') {
+      if (tier !== undefined) tier = this.monthly.normalizeTier(tier);
+      const willEnable = input.enabled === true || (input.enabled === undefined && row.enabled);
+      if (willEnable && input.enabled === true && !row.enabled) {
+        // 重新启用的规则若券已停用/过期，会静默跑空，这里提前拦住。
+        const coupon = await this.prisma.coupon.findUniqueOrThrow({ where: { id: row.couponId } });
+        this.monthly.assertTemplateUsable(coupon);
+        await this.monthly.assertNoDuplicateRule(row.couponId, row.id);
+      }
+    }
     const updated = await this.prisma.couponRule.update({
       where: { id },
       data: {
         ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-        ...(input.tier !== undefined ? { tier: input.tier } : {}),
+        ...(tier !== undefined ? { tier } : {}),
         ...(config ? { config: JSON.stringify(config) } : {}),
         ...(input.note !== undefined ? { note: String(input.note).slice(0, 200) } : {})
       }
@@ -168,6 +207,13 @@ export class CouponRulesService {
       include: { coupon: { select: { title: true } }, _count: { select: { issued: true } } }
     });
     if (!row) throw notFound('规则不存在');
+    if (row.kind === 'monthly') {
+      // 月度规则留着本月的执行记录与断点，删了就无法判断「本月是否已发」，只能停用。
+      const runs = await this.prisma.couponRuleRun.count({ where: { ruleId: id } });
+      if (runs > 0) {
+        throw badRequest('这条月度规则已有执行记录，只能停用，不能删除');
+      }
+    }
     // 已发出去的券保留归因，规则本身直接删除（rule_id 置空由外键 SetNull 处理）。
     await this.prisma.couponRule.delete({ where: { id } });
     await logAction(this.prisma, {
@@ -188,6 +234,8 @@ export class CouponRulesService {
     });
     if (!rule) throw notFound('规则不存在');
     const kind = rule.kind as CouponRuleKind;
+    // 月度是全量会员，不能像其他规则那样一次性捞进内存，走独立的 count 预览。
+    if (kind === 'monthly') return this.monthly.preview(rule);
     const computed = await this.computeTargets(rule, new Date());
     const ids = computed.targets.map((row) => row.customerId);
     if (!ids.length) {
@@ -220,12 +268,16 @@ export class CouponRulesService {
     };
   }
 
-  async runRule(id: string, actor: StaffContext): Promise<CouponRuleRunResult> {
+  async runRule(id: string, actor: StaffContext): Promise<CouponRuleRunResult | { run: unknown }> {
     const rule = await this.prisma.couponRule.findUnique({
       where: { id },
       include: { coupon: { select: { id: true, title: true } } }
     });
     if (!rule) throw notFound('规则不存在');
+    if (rule.kind === 'monthly') {
+      // 月度返回的是「已排队的执行记录」，前端轮询进度；同月已发过会被 ALREADY_DONE 拦住。
+      return this.monthly.startRun(rule.id, actor, 'manual');
+    }
     // 后台手动执行是「强制重跑」，不受当日已执行过的影响（券侧仍按天幂等）。
     return this.execute(rule, actor, true);
   }
@@ -233,7 +285,8 @@ export class CouponRulesService {
   /** 每日扫描：逐个执行启用规则，单条失败不影响其他规则。 */
   async runAll(actor: StaffContext): Promise<{ results: CouponRuleRunResult[] }> {
     const rules = await this.prisma.couponRule.findMany({
-      where: { enabled: true },
+      // 月度规则不走每日扫描：它按自己的执行日、全量会员分批跑，混进来会变成给全量发券。
+      where: { enabled: true, kind: { not: 'monthly' } },
       include: { coupon: { select: { id: true, title: true } } },
       orderBy: { kind: 'asc' }
     });
@@ -337,6 +390,7 @@ export class CouponRulesService {
     dayKey: string;
   }> {
     const kind = rule.kind as CouponRuleKind;
+    if (kind === 'monthly') throw badRequest('月度规则请走分批发放，不支持整表计算人群');
     const config = normalizeConfig(kind, parseConfig(rule.config));
     const tierWhere =
       rule.tier === 'standard' || rule.tier === 'annual' ? { memberTier: rule.tier } : {};
@@ -412,7 +466,7 @@ export class CouponRulesService {
 }
 
 function assertKind(kind: string): CouponRuleKind {
-  if (kind === 'birthday' || kind === 'welcome' || kind === 'winback') return kind;
+  if (kind === 'birthday' || kind === 'welcome' || kind === 'winback' || kind === 'monthly') return kind;
   throw badRequest('规则类型不支持');
 }
 
@@ -429,6 +483,14 @@ function normalizeConfig(kind: CouponRuleKind, raw: CouponRuleConfig): CouponRul
     const withinDays = int(raw.withinDays, 7);
     if (withinDays < 1 || withinDays > 30) throw badRequest('新客欢迎窗口需在 1~30 天之间');
     return { withinDays };
+  }
+  if (kind === 'monthly') {
+    // 只允许 1~28：29~31 号有些月份没有，会让「每月一次」的承诺落空。
+    const dayOfMonth = int(raw.dayOfMonth, 1);
+    if (dayOfMonth < 1 || dayOfMonth > 28) {
+      throw new ApiError(400, '执行日需在 1~28 之间（避开 29~31 号）', { code: 'INVALID_DAY' });
+    }
+    return { dayOfMonth };
   }
   const inactiveDays = int(raw.inactiveDays, 60);
   const minOrders = int(raw.minOrders, 1);
@@ -448,6 +510,7 @@ function parseConfig(raw: string): CouponRuleConfig {
 }
 
 function describeConfig(kind: CouponRuleKind, config: CouponRuleConfig): string {
+  if (kind === 'monthly') return `每月 ${config.dayOfMonth ?? 1} 号`;
   if (kind === 'birthday') {
     return config.daysBefore ? `生日前 ${config.daysBefore} 天` : '生日当天';
   }

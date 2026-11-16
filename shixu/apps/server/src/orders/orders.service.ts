@@ -496,119 +496,119 @@ export class OrdersService {
    */
   async markPaid(orderId: string, paymentRef: string): Promise<'applied' | 'duplicate' | 'blocked-cancelled'> {
     const now = new Date();
-    let outcome: 'applied' | 'duplicate' | 'blocked-cancelled' = 'applied';
-    await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id: orderId } });
-      if (!order) throw notFound('订单不存在');
-      if (order.paymentStatus === 'paid') {
-        outcome = 'duplicate';
-        return;
-      }
-      if (order.status === 'cancelled') {
-        outcome = 'blocked-cancelled';
-        await logAction(tx, {
-          actorName: '支付网关',
-          action: '迟到支付成功拦截',
-          detail: `${order.number} · 已取消订单收到支付成功通知 ¥${(order.totalCents / 100).toFixed(2)}，资金待人工退款/对账，未复活订单`,
-          type: 'payment',
-          storeId: order.storeId,
-          orderId,
-          at: now.getTime()
-        });
-        return;
-      }
-      const items = await tx.orderItem.findMany({ where: { orderId }, orderBy: { sortOrder: 'asc' } });
-      const method = saleMethod({
-        channel: order.channel,
-        paymentMethod: order.paymentMethod ? this.methodLabel(order.paymentMethod) : null
-      });
-      const pickupCode = order.business === 'retail' ? await this.assignPickupCode(tx) : null;
-      // 并发落账（汇付回调 + 顾客查单 + 0 元单兜底可能同时到达）只允许一个写入者：
-      // 用条件更新把「未支付且未取消」的订单原子抢到手，后到者 count=0 直接收口，
-      // 否则两边都会插同一批杯标，撞 order_units.label 唯一键让回调 500、钱已到而单未落。
-      const claimed = await tx.order.updateMany({
-        where: { id: orderId, paymentStatus: { not: 'paid' }, status: { not: 'cancelled' } },
-        data: {
-          status: order.business === 'retail' ? 'awaiting' : 'pending',
-          paymentStatus: 'paid',
-          paidAt: now,
-          paymentRef,
-          pickupCode,
-          printStatus: order.business === 'retail' ? 'none' : 'queued'
+    // null = 并发没抢到写入权。MySQL 默认 REPEATABLE READ：事务内的快照读看不到并发赢家
+    // 已提交的状态，所以「到底算重复还是迟到」必须等事务结束、用新连接实时回读后再定性，
+    // 否则并发重复回调会被误判成「迟到支付拦截」返回 blocked-cancelled。
+    const result = await this.prisma.$transaction(
+      async (tx): Promise<'applied' | 'duplicate' | 'blocked-cancelled' | null> => {
+        const order = await tx.order.findUnique({ where: { id: orderId } });
+        if (!order) throw notFound('订单不存在');
+        if (order.paymentStatus === 'paid') return 'duplicate';
+        if (order.status === 'cancelled') {
+          await this.logLatePayment(tx, order, now);
+          return 'blocked-cancelled';
         }
-      });
-      if (claimed.count === 0) {
-        const fresh = await tx.order.findUnique({ where: { id: orderId }, select: { paymentStatus: true } });
-        if (fresh?.paymentStatus === 'paid') {
-          outcome = 'duplicate';
-          return;
+        const items = await tx.orderItem.findMany({ where: { orderId }, orderBy: { sortOrder: 'asc' } });
+        const method = saleMethod({
+          channel: order.channel,
+          paymentMethod: order.paymentMethod ? this.methodLabel(order.paymentMethod) : null
+        });
+        const pickupCode = order.business === 'retail' ? await this.assignPickupCode(tx) : null;
+        // 并发落账（汇付回调 + 顾客查单 + 0 元单兜底可能同时到达）只允许一个写入者：
+        // 用条件更新把「未支付且未取消」的订单原子抢到手，后到者 count=0 直接收口，
+        // 否则两边都会插同一批杯标，撞 order_units.label 唯一键让回调 500、钱已到而单未落。
+        const claimed = await tx.order.updateMany({
+          where: { id: orderId, paymentStatus: { not: 'paid' }, status: { not: 'cancelled' } },
+          data: {
+            status: order.business === 'retail' ? 'awaiting' : 'pending',
+            paymentStatus: 'paid',
+            paidAt: now,
+            paymentRef,
+            pickupCode,
+            printStatus: order.business === 'retail' ? 'none' : 'queued'
+          }
+        });
+        // 后到者：此时事务内的快照读仍是旧值（MySQL REPEATABLE READ），不做判定。
+        if (claimed.count === 0) return null;
+        // 支付成功：锁定中的券转为已使用，之后不能再被任何订单占用。
+        if (order.couponId) {
+          await tx.customerCoupon.updateMany({
+            where: { id: order.couponId, orderId, status: 'reserved' },
+            data: { status: 'used', usedAt: now }
+          });
         }
-        outcome = 'blocked-cancelled';
-        await logAction(tx, {
-          actorName: '支付网关',
-          action: '迟到支付成功拦截',
-          detail: `${order.number} · 已取消订单收到支付成功通知 ¥${(order.totalCents / 100).toFixed(2)}，资金待人工退款/对账，未复活订单`,
-          type: 'payment',
-          storeId: order.storeId,
-          orderId,
-          at: now.getTime()
-        });
-        return;
-      }
-      // 支付成功：锁定中的券转为已使用，之后不能再被任何订单占用。
-      if (order.couponId) {
-        await tx.customerCoupon.updateMany({
-          where: { id: order.couponId, orderId, status: 'reserved' },
-          data: { status: 'used', usedAt: now }
-        });
-      }
-      if (order.business === 'fresh') {
-        let cup = 0;
-        for (const item of items) {
-          for (let i = 0; i < item.qty; i += 1) {
-            cup += 1;
-            await tx.orderUnit.create({
-              data: {
-                id: newId('U'),
-                orderId,
-                itemId: item.id,
-                label: cupLabel(order.number, cup),
-                status: 'pending'
-              }
-            });
+        if (order.business === 'fresh') {
+          let cup = 0;
+          for (const item of items) {
+            for (let i = 0; i < item.qty; i += 1) {
+              cup += 1;
+              await tx.orderUnit.create({
+                data: {
+                  id: newId('U'),
+                  orderId,
+                  itemId: item.id,
+                  label: cupLabel(order.number, cup),
+                  status: 'pending'
+                }
+              });
+            }
           }
         }
-      }
-      await this.finance.addEntry(
-        {
-          orderId,
+        await this.finance.addEntry(
+          {
+            orderId,
+            storeId: order.business === 'retail' ? 'brand' : order.storeId,
+            type: 'SALE',
+            amountCents: order.totalCents,
+            method: method.method,
+            settlement: method.settlement,
+            memo: order.business === 'retail' ? '零售订单收款' : '订单收款',
+            costCents: items.reduce((n, x) => n + x.costCents, 0),
+            dedupeKey: `ORDER:${orderId}:SALE`,
+            at: now.getTime()
+          },
+          tx
+        );
+        await logAction(tx, {
+          actorName: '支付网关',
+          action: '支付成功',
+          detail: `${order.number} · ¥${(order.totalCents / 100).toFixed(2)}`,
+          type: 'payment',
           storeId: order.business === 'retail' ? 'brand' : order.storeId,
-          type: 'SALE',
-          amountCents: order.totalCents,
-          method: method.method,
-          settlement: method.settlement,
-          memo: order.business === 'retail' ? '零售订单收款' : '订单收款',
-          costCents: items.reduce((n, x) => n + x.costCents, 0),
-          dedupeKey: `ORDER:${orderId}:SALE`,
+          orderId,
           at: now.getTime()
-        },
-        tx
-      );
-      await logAction(tx, {
-        actorName: '支付网关',
-        action: '支付成功',
-        detail: `${order.number} · ¥${(order.totalCents / 100).toFixed(2)}`,
-        type: 'payment',
-        storeId: order.business === 'retail' ? 'brand' : order.storeId,
-        orderId,
-        at: now.getTime()
-      });
-    });
+        });
+        return 'applied';
+      }
+    );
+
+    let outcome = result;
+    if (!outcome) {
+      // 事务已结束：这里的读是新快照，能看到并发赢家已提交的结果。
+      const fresh = await this.prisma.order.findUnique({ where: { id: orderId } });
+      if (!fresh) throw notFound('订单不存在');
+      if (fresh.paymentStatus === 'paid') return 'duplicate';
+      await this.prisma.$transaction((tx) => this.logLatePayment(tx, fresh, now));
+      outcome = 'blocked-cancelled';
+    }
     if (outcome !== 'applied') return outcome;
     if ((await this.getOrderRow(orderId)).business === 'fresh') {
       await this.printing.enqueue(orderId);
     }
     return outcome;
+  }
+
+  /** 已取消订单收到支付成功：留痕并交给人工退款/对账，绝不复活订单。 */
+  private async logLatePayment(db: Prisma.TransactionClient, order: Order, at: Date): Promise<void> {
+    await logAction(db, {
+      actorName: '支付网关',
+      action: '迟到支付成功拦截',
+      detail: `${order.number} · 已取消订单收到支付成功通知 ¥${(order.totalCents / 100).toFixed(2)}，资金待人工退款/对账，未复活订单`,
+      type: 'payment',
+      storeId: order.storeId,
+      orderId: order.id,
+      at: at.getTime()
+    });
   }
 
   /**
@@ -618,8 +618,8 @@ export class OrdersService {
    * - 只有未支付订单才允许取消并回补库存。
    */
   private async markPaymentFailed(orderId: string, reason: string, actorName = '支付网关'): Promise<void> {
-    let cancelled = false;
-    await this.prisma.$transaction(async (tx) => {
+    // null = 并发没抢到写入权（事务内快照读不可信，等事务结束再回读定性）。
+    const claimed = await this.prisma.$transaction(async (tx): Promise<boolean | null> => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw notFound('订单不存在');
       if (order.paymentStatus === 'paid') {
@@ -631,10 +631,17 @@ export class OrdersService {
           storeId: order.storeId,
           orderId
         });
-        return;
+        return false;
       }
-      if (order.status === 'cancelled') return;
+      if (order.status === 'cancelled') return false;
       const items = await tx.orderItem.findMany({ where: { orderId } });
+      // 并发失败通知/查单都会走到这里：先条件认领「未支付且未取消」的订单，
+      // 只有抢到的那一个回补库存。否则两次回补会把门店库存越冲越多。
+      const claim = await tx.order.updateMany({
+        where: { id: orderId, paymentStatus: { not: 'paid' }, status: { not: 'cancelled' } },
+        data: { status: 'cancelled', paymentStatus: 'failed' }
+      });
+      if (!claim.count) return null;
       if (order.business === 'fresh') {
         for (const item of items) {
           const product = await tx.product.findUnique({ where: { id: item.productId } });
@@ -646,8 +653,6 @@ export class OrdersService {
           }
         }
       }
-      await tx.order.update({ where: { id: orderId }, data: { status: 'cancelled', paymentStatus: 'failed' } });
-      cancelled = true;
       // 支付失败：释放本单锁定的券，顾客可在重试或其他订单继续使用。
       await tx.customerCoupon.updateMany({
         where: { orderId, status: 'reserved' },
@@ -661,15 +666,33 @@ export class OrdersService {
         storeId: order.storeId,
         orderId
       });
+      return true;
     });
+    if (claimed === null) {
+      const fresh = await this.prisma.order.findUnique({ where: { id: orderId } });
+      if (!fresh) throw notFound('订单不存在');
+      // 并发成功回调赢了：保持已支付，只补一条迟到失败留痕；已取消则幂等跳过。
+      if (fresh.paymentStatus === 'paid') {
+        await this.prisma.$transaction((tx) =>
+          logAction(tx, {
+            actorName,
+            action: '迟到支付失败忽略',
+            detail: `${fresh.number} · ${reason}（订单已支付，保持原状态，不动资金与库存）`,
+            type: 'payment',
+            storeId: fresh.storeId,
+            orderId
+          })
+        );
+      }
+      return;
+    }
+    if (!claimed) return;
     // 本地已取消只在库里生效；渠道侧的预下单还挂着，顾客仍可能把它付掉。
     // 这里主动关单，顺带把悬挂的支付意图收口（关单结果未知时留待查单收敛）。
-    if (cancelled) {
-      try {
-        await this.closeChannelOrder(orderId);
-      } catch {
-        // 关单失败不影响已经完成的取消；意图保持悬挂，交给查单/对账收敛。
-      }
+    try {
+      await this.closeChannelOrder(orderId);
+    } catch {
+      // 关单失败不影响已经完成的取消；意图保持悬挂，交给查单/对账收敛。
     }
   }
 
@@ -2316,25 +2339,19 @@ export class OrdersService {
     decidedBy: string
   ): Promise<void> {
     const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
+    // false = 并发没抢到退款单（事务内快照读看不到赢家的提交，事务结束后再回读定性）。
+    const confirmed = await this.prisma.$transaction(async (tx): Promise<boolean> => {
       const fresh = await tx.refundIntent.findUnique({ where: { id: intent.id } });
       if (!fresh) throw notFound('退款单不存在');
-      if (fresh.status === 'succeeded') return;
-      // 已确定失败/已释放的退款单不能再确认：钱是否真的出去需要人工核对，
-      // 这里先原子认领状态，避免并发回调重复落账。
+      if (fresh.status === 'succeeded') return false;
+      // 只有处于占用/处理中/未知的退款单可以确认：用条件更新原子认领，
+      // 已确定失败/已释放/已被并发确认的都不落账，避免重复退款。
       const openStatuses = ['occupied', 'processing', 'unknown'];
-      if (!openStatuses.includes(fresh.status)) {
-        throw conflict(`退款单已处于 ${fresh.status} 状态，不能重复确认，请人工核对`);
-      }
       const claim = await tx.refundIntent.updateMany({
         where: { id: intent.id, status: { in: openStatuses } },
         data: { status: 'succeeded', providerRef, updatedAt: now }
       });
-      if (!claim.count) {
-        const again = await tx.refundIntent.findUnique({ where: { id: intent.id } });
-        if (again?.status === 'succeeded') return;
-        throw conflict('退款单状态已变化，不能重复确认，请人工核对');
-      }
+      if (!claim.count) return false;
       const orderRow = await tx.order.findUnique({ where: { id: intent.orderId } });
       if (!orderRow) throw notFound('订单不存在');
       const lines = JSON.parse(fresh.linesJson) as Array<{
@@ -2409,7 +2426,13 @@ export class OrdersService {
         orderId: orderRow.id,
         at: now.getTime()
       });
+      return true;
     });
+    if (confirmed) return;
+    // 事务已结束：实时回读，别被旧快照误导——并发回调已确认就按幂等跳过。
+    const again = await this.prisma.refundIntent.findUnique({ where: { id: intent.id } });
+    if (again?.status === 'succeeded') return;
+    throw conflict(`退款单已处于 ${again?.status ?? '未知'} 状态，不能重复确认，请人工核对`);
   }
 
   /** 未知/处理中退款单的重试入口（TX-04 可重试收敛）：复用同一 RF 单号调渠道。 */

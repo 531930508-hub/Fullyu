@@ -199,8 +199,9 @@ export class ApprovalsService {
     if (approval.kind === 'LOSS') {
       const payload = JSON.parse(approval.payloadJson) as { lossId: string };
       // TX-09：审批行更新与报损执行同事务——并发/中断都不会出现"扣了库存但审批仍待办"。
+      // 加锁顺序必须与驳回分支一致（先审批行、再报损/库存行）：先锁报损再锁审批，
+      // 与「批准+驳回」交错时就是 ABBA，MySQL 直接 P2034 死锁让接口 500。
       await this.prisma.$transaction(async (tx) => {
-        await this.losses.approve(staff, payload.lossId, tx);
         const claim = await tx.approval.updateMany({
           where: { id, status: 'pending' },
           data: {
@@ -213,6 +214,7 @@ export class ApprovalsService {
           }
         });
         if (!claim.count) throw conflict('该审批已处理');
+        await this.losses.approve(staff, payload.lossId, tx);
         await logAction(tx, {
           actorId: staff.id,
           actorName: staff.name,

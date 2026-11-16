@@ -16,6 +16,7 @@ import { AdminService } from '../admin/admin.service';
 import { CatalogService } from '../catalog/catalog.service';
 import { ContentService } from '../content/content.service';
 import { CouponsService } from '../coupons/coupons.service';
+import { CouponMonthlyService } from '../coupons/coupon-monthly.service';
 import { CouponRulesService } from '../coupons/coupon-rules.service';
 
 const rangeSchema = z.object({
@@ -155,11 +156,16 @@ const couponCreateSchema = z.object({
   note: z.string().max(200).optional()
 });
 
+const couponRunQuerySchema = z.object({
+  ruleId: z.string().trim().max(40).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20)
+});
+
 const couponRuleSchema = z.object({
   couponId: z.string().trim().min(1).max(40),
   // 取值与 CouponRulesService 的 CouponRuleKind 一一对应；前端若写错枚举要给出中文提示。
-  kind: z.enum(['birthday', 'welcome', 'winback'], {
-    errorMap: () => ({ message: '规则类型不支持，可选生日关怀 / 新客欢迎 / 沉睡唤回' })
+  kind: z.enum(['birthday', 'welcome', 'winback', 'monthly'], {
+    errorMap: () => ({ message: '规则类型不支持，可选生日关怀 / 新客欢迎 / 沉睡唤回 / 月度定向发放' })
   }),
   enabled: z.boolean().optional(),
   tier: z
@@ -170,7 +176,9 @@ const couponRuleSchema = z.object({
       daysBefore: z.number().int().min(0).max(30).optional(),
       withinDays: z.number().int().min(1).max(30).optional(),
       inactiveDays: z.number().int().min(7).max(365).optional(),
-      minOrders: z.number().int().min(0).max(100).optional()
+      minOrders: z.number().int().min(0).max(100).optional(),
+      // 月度：每月几号执行；只允许 1~28，保证每个月都有这一天
+      dayOfMonth: z.number().int().min(1).max(28).optional()
     })
     .strict({ message: '规则配置包含未知字段' })
     .optional(),
@@ -228,7 +236,8 @@ export class AdminController {
     private readonly catalog: CatalogService,
     private readonly content: ContentService,
     private readonly coupons: CouponsService,
-    private readonly couponRules: CouponRulesService
+    private readonly couponRules: CouponRulesService,
+    private readonly couponMonthly: CouponMonthlyService
   ) {}
 
   private async allStoreIds(): Promise<string[]> {
@@ -843,7 +852,30 @@ export class AdminController {
   @Post('coupons/rules/:id/run')
   @RequirePerm('coupon:manage')
   async runCouponRule(@Param('id') id: string, @Staff() staff: StaffContext) {
-    return { result: await this.couponRules.runRule(id, staff) };
+    const result = await this.couponRules.runRule(id, staff);
+    // 月度规则返回的是「已排队的执行记录」（后台按页推进），其他规则仍是当场跑完的结果。
+    if ('run' in result) return result;
+    return { result };
+  }
+
+  /** 月度发放的执行记录：列表页看历史，进度条轮询单条。 */
+  @Get('coupons/runs')
+  @RequirePerm('coupon:view')
+  async couponRunList(@Query() query: Record<string, unknown>) {
+    return this.couponMonthly.listRuns(parseInput(couponRunQuerySchema, query ?? {}));
+  }
+
+  @Get('coupons/runs/:id')
+  @RequirePerm('coupon:view')
+  async couponRunDetail(@Param('id') id: string) {
+    return this.couponMonthly.getRun(id);
+  }
+
+  /** 失败后续跑：从断点继续，不会重复发已经发过的人。 */
+  @Post('coupons/runs/:id/continue')
+  @RequirePerm('coupon:manage')
+  async continueCouponRun(@Param('id') id: string, @Staff() staff: StaffContext) {
+    return this.couponMonthly.continueRun(id, staff);
   }
 
   @Get('me')

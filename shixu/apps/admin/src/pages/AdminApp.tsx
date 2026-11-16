@@ -63,6 +63,7 @@ import type {
   CouponRule,
   CouponRuleKind,
   CouponRulePreview,
+  CouponRuleRun,
   Expense,
   FinanceEntry,
   HomeContent,
@@ -4540,6 +4541,13 @@ function CouponsPage() {
   );
 }
 
+const RUN_STATUS_LABEL: Record<CouponRuleRun['status'], string> = {
+  pending: '排队中',
+  running: '发放中',
+  succeeded: '已发完',
+  failed: '发放失败'
+};
+
 const RULE_TIER_LABEL: Record<CouponRule['tier'], string> = {
   all: '全部会员',
   standard: '普通会员',
@@ -4547,6 +4555,9 @@ const RULE_TIER_LABEL: Record<CouponRule['tier'], string> = {
 };
 
 function ruleConfigText(rule: CouponRule): string {
+  if (rule.kind === 'monthly') {
+    return `每月 ${rule.config.dayOfMonth ?? 1} 号给符合人群的会员各发一张，同一个月不会重复发`;
+  }
   if (rule.kind === 'birthday') {
     const days = rule.config.daysBefore ?? 0;
     return days > 0 ? `生日前 ${days} 天发放，一年一张` : '生日当天发放，一年一张';
@@ -4565,7 +4576,21 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, CouponRulePreview>>({});
+  const [historyRule, setHistoryRule] = useState<CouponRule | null>(null);
   const managed = can('coupon:manage');
+  const reloadRules = query.reload;
+
+  // 月度发放是后台分批写入：有进行中的执行就每 3 秒刷一次列表，进度条与计数自己往前走。
+  const runningMonthly = (query.data?.rules || []).some(
+    (rule) => rule.currentRun && (rule.currentRun.status === 'pending' || rule.currentRun.status === 'running')
+  );
+  useEffect(() => {
+    if (!runningMonthly) return;
+    const timer = setInterval(() => {
+      reloadRules({ silent: true }).catch(() => undefined);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [runningMonthly, reloadRules]);
 
   if (query.loading && !query.data) return <Spinner label="正在读取自动发券规则" />;
   const rules = query.data?.rules || [];
@@ -4585,7 +4610,17 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
   const run = async (rule: CouponRule) => {
     setBusy(`run:${rule.id}`);
     try {
-      const { result } = await api.adminRunCouponRule(rule.id);
+      const response = await api.adminRunCouponRule(rule.id);
+      if ('run' in response) {
+        // 月度只排队，真正写库在后台按页推进，进度由上面的轮询刷新。
+        notify(
+          `已开始 ${response.run.period} 的发放，目标 ${response.run.targetCount} 人，进度会自动刷新`,
+          'ok'
+        );
+        query.reload({ silent: true });
+        return;
+      }
+      const { result } = response;
       notify(
         result.replayed
           ? `「${rule.couponTitle}」今天已经跑过，不会重复发券`
@@ -4601,6 +4636,19 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
       query.reload({ silent: true });
     } catch (err) {
       notify(err instanceof ApiError ? err.message : '执行失败', 'danger');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const resume = async (rule: CouponRule, run: CouponRuleRun) => {
+    setBusy(`resume:${rule.id}`);
+    try {
+      await api.adminContinueCouponRun(run.id);
+      notify('已从断点继续发放，不会重复发给已经发过的人', 'ok');
+      query.reload({ silent: true });
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : '继续执行失败', 'danger');
     } finally {
       setBusy(null);
     }
@@ -4644,7 +4692,7 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
       <Panel
         eyebrow="自动化"
         title="自动发券规则"
-        description="每天凌晨自动扫描命中人群：生日关怀、新客欢迎、沉睡唤回。同一会员同一个规则周期内只会发一张，手动执行也只补发缺的那部分。"
+        description="生日关怀、新客欢迎、沉睡唤回每天自动扫描；月度定向发放按执行日给全量会员（或仅 Full愈 会员）各发一张。同一会员同一个规则周期内只会发一张，手动执行也只补发缺的那部分。"
         flush
         actions={
           managed ? (
@@ -4657,6 +4705,12 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
         <div className="mapping-list" style={{ padding: '4px 20px 12px' }}>
           {rules.map((rule) => {
             const result = previews[rule.id];
+            const current = rule.currentRun;
+            const isMonthly = rule.kind === 'monthly';
+            const running = Boolean(current && (current.status === 'pending' || current.status === 'running'));
+            // 月度同一个月只发一次：本月已发完就不给按钮，避免点出 ALREADY_DONE。
+            const doneThisMonth = current?.status === 'succeeded';
+            const failed = current?.status === 'failed';
             return (
               <div className="mapping-row" key={rule.id}>
                 <span className="mapping-ext">{rule.kindLabel}</span>
@@ -4664,36 +4718,105 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
                   <strong>{rule.couponTitle}</strong>
                   <span className="faint tiny" style={{ display: 'block', marginTop: 2 }}>
                     {ruleConfigText(rule)}
-                    {` · ${RULE_TIER_LABEL[rule.tier]}`}
+                    {` · ${rule.tierLabel}`}
                     {` · 已发 ${rule.totalIssued} 张`}
-                    {rule.lastRunAt ? ` · 上次 ${dateText(rule.lastRunAt)} 发 ${rule.lastRunIssued}` : ' · 还没跑过'}
+                    {isMonthly
+                      ? current
+                        ? ` · 本月 ${current.period} ${RUN_STATUS_LABEL[current.status]}`
+                        : ' · 本月还没发'
+                      : rule.lastRunAt
+                        ? ` · 上次 ${dateText(rule.lastRunAt)} 发 ${rule.lastRunIssued}`
+                        : ' · 还没跑过'}
                   </span>
+                  {isMonthly && current ? (
+                    <span className="run-progress">
+                      <span className="run-progress-track">
+                        <span className="run-progress-fill" style={{ width: `${current.progress}%` }} />
+                      </span>
+                      <span>
+                        已处理 {current.processed} / {current.targetCount} 人（{current.progress}%）· 发出 {current.issued} 张 · 跳过{' '}
+                        {current.skipped} 人
+                      </span>
+                    </span>
+                  ) : null}
+                  {isMonthly && current?.lastError ? (
+                    <span className="faint tiny" style={{ display: 'block', marginTop: 2, color: 'var(--danger)' }}>
+                      失败原因：{current.lastError}
+                    </span>
+                  ) : null}
                   {result ? (
                     <span className="faint tiny" style={{ display: 'block', marginTop: 2 }}>
-                      本期命中 {result.count} 人：将发 {result.willIssue} 张；本周期已发{' '}
-                      {result.alreadyThisPeriod} 人；手持同款券 {result.held} 人。
+                      {isMonthly
+                        ? `${result.period} 目标 ${result.targetCount ?? result.count} 人：本月已发 ${
+                            result.alreadyThisPeriod
+                          } 人，本次将发 ${result.willIssue} 张；无手机号跳过 ${result.noPhone ?? 0} 人；预计 ${
+                            result.estimatedSeconds ?? 1
+                          } 秒发完。`
+                        : `本期命中 ${result.count} 人：将发 ${result.willIssue} 张；本周期已发 ${
+                            result.alreadyThisPeriod
+                          } 人；手持同款券 ${result.held} 人。`}
                     </span>
                   ) : null}
                 </span>
-                <Badge tone={rule.enabled ? 'ok' : 'neutral'}>{rule.enabled ? '每日执行' : '已暂停'}</Badge>
+                <Badge
+                  tone={
+                    !rule.enabled
+                      ? 'neutral'
+                      : running
+                        ? 'warn'
+                        : doneThisMonth
+                          ? 'ok'
+                          : failed
+                            ? 'danger'
+                            : 'neutral'
+                  }
+                >
+                  {!rule.enabled
+                    ? '已暂停'
+                    : isMonthly
+                      ? running
+                        ? RUN_STATUS_LABEL[current!.status]
+                        : doneThisMonth
+                          ? '本月已发'
+                          : failed
+                            ? '发放失败'
+                            : '待执行'
+                      : '每日执行'}
+                </Badge>
                 {managed ? (
                   <div className="row-gap">
                     <button
                       type="button"
                       className="btn btn-sm btn-ghost"
-                      disabled={busy === `preview:${rule.id}`}
+                      disabled={busy === `preview:${rule.id}` || running}
                       onClick={() => preview(rule)}
                     >
                       预览
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-ghost"
-                      disabled={busy === `run:${rule.id}` || !rule.enabled}
-                      onClick={() => run(rule)}
-                    >
-                      立即执行
-                    </button>
+                    {failed && current ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        disabled={busy === `resume:${rule.id}`}
+                        onClick={() => resume(rule, current)}
+                      >
+                        继续执行
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost"
+                        disabled={busy === `run:${rule.id}` || !rule.enabled || running || doneThisMonth}
+                        onClick={() => run(rule)}
+                      >
+                        立即执行
+                      </button>
+                    )}
+                    {isMonthly ? (
+                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => setHistoryRule(rule)}>
+                        记录
+                      </button>
+                    ) : null}
                     <Switch
                       checked={rule.enabled}
                       label={`${rule.kindLabel}规则启用状态`}
@@ -4702,7 +4825,8 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
                     <button
                       type="button"
                       className="btn btn-sm btn-ghost"
-                      disabled={busy === `delete:${rule.id}`}
+                      disabled={busy === `delete:${rule.id}` || rule.runCount > 0}
+                      title={rule.runCount > 0 ? '已有执行记录，只能停用不能删除' : undefined}
                       onClick={() => remove(rule)}
                     >
                       删除
@@ -4721,6 +4845,7 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
           ) : null}
         </div>
       </Panel>
+      <CouponRunHistoryModal rule={historyRule} onClose={() => setHistoryRule(null)} />
       <CouponRuleModal
         open={creating}
         coupons={coupons.filter((coupon) => coupon.active)}
@@ -4732,6 +4857,76 @@ function CouponRulesPanel({ coupons }: { coupons: Coupon[] }) {
         }}
       />
     </>
+  );
+}
+
+/** 月度规则的历史执行记录：每月一条，失败的那条可以看到原因并续跑。 */
+function CouponRunHistoryModal({ rule, onClose }: { rule: CouponRule | null; onClose: () => void }) {
+  const [runs, setRuns] = useState<CouponRuleRun[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!rule) return;
+    setRuns(null);
+    setError(null);
+    api
+      .adminCouponRuns({ ruleId: rule.id, limit: 24 })
+      .then((data) => setRuns(data.runs))
+      .catch((err) => setError(err instanceof ApiError ? err.message : '读取执行记录失败'));
+  }, [rule]);
+
+  return (
+    <Modal
+      open={Boolean(rule)}
+      title="月度发放记录"
+      description={rule ? `「${rule.couponTitle}」· 每月一条，失败可从断点继续。` : undefined}
+      onClose={onClose}
+      footer={
+        <button type="button" className="btn btn-ghost" onClick={onClose}>
+          关闭
+        </button>
+      }
+    >
+      <InlineError message={error} />
+      {runs === null && !error ? <Spinner label="正在读取执行记录" /> : null}
+      {runs && !runs.length ? <p className="faint tiny">还没有执行记录。</p> : null}
+      <div className="mapping-list">
+        {(runs || []).map((run) => (
+          <div className="mapping-row" key={run.id}>
+            <span className="mapping-ext">{run.period}</span>
+            <span className="grow">
+              <strong>
+                {RUN_STATUS_LABEL[run.status]} · 发出 {run.issued} 张，跳过 {run.skipped} 人
+              </strong>
+              <span className="faint tiny" style={{ display: 'block', marginTop: 2 }}>
+                {run.trigger === 'auto' ? '系统按期执行' : `手动执行${run.operatorName ? ` · ${run.operatorName}` : ''}`}
+                {` · 目标 ${run.targetCount} 人`}
+                {run.finishedAt ? ` · 完成于 ${dateText(run.finishedAt)}` : ''}
+                {run.attempts > 1 ? ` · 尝试 ${run.attempts} 次` : ''}
+              </span>
+              {run.lastError ? (
+                <span className="faint tiny" style={{ display: 'block', marginTop: 2, color: 'var(--danger)' }}>
+                  {run.lastError}
+                </span>
+              ) : null}
+            </span>
+            <Badge
+              tone={
+                run.status === 'succeeded'
+                  ? 'ok'
+                  : run.status === 'failed'
+                    ? 'danger'
+                    : run.status === 'running'
+                      ? 'warn'
+                      : 'neutral'
+              }
+            >
+              {RUN_STATUS_LABEL[run.status]}
+            </Badge>
+          </div>
+        ))}
+      </div>
+    </Modal>
   );
 }
 
@@ -4753,6 +4948,7 @@ function CouponRuleModal({
   const [withinDays, setWithinDays] = useState('7');
   const [inactiveDays, setInactiveDays] = useState('60');
   const [minOrders, setMinOrders] = useState('1');
+  const [dayOfMonth, setDayOfMonth] = useState('1');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -4761,6 +4957,7 @@ function CouponRuleModal({
     if (!open) return;
     setCouponId(coupons[0]?.id || '');
     setKind('birthday');
+    setDayOfMonth('1');
     setTier('all');
     setDaysBefore('0');
     setWithinDays('7');
@@ -4777,9 +4974,15 @@ function CouponRuleModal({
         ? { daysBefore: Math.round(Number(daysBefore || 0)) }
         : kind === 'welcome'
           ? { withinDays: Math.round(Number(withinDays || 0)) }
-          : { inactiveDays: Math.round(Number(inactiveDays || 0)), minOrders: Math.round(Number(minOrders || 1)) };
+          : kind === 'monthly'
+            ? { dayOfMonth: Math.round(Number(dayOfMonth || 1)) }
+            : { inactiveDays: Math.round(Number(inactiveDays || 0)), minOrders: Math.round(Number(minOrders || 1)) };
     if (kind === 'welcome' && !(config as { withinDays: number }).withinDays) setError('新客窗口需大于 0 天');
     if (kind === 'winback' && !(config as { inactiveDays: number }).inactiveDays) setError('沉睡天数需大于 0');
+    if (kind === 'monthly' && !((config as { dayOfMonth: number }).dayOfMonth >= 1 && (config as { dayOfMonth: number }).dayOfMonth <= 28)) {
+      setError('执行日需在 1~28 之间');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -4796,7 +4999,7 @@ function CouponRuleModal({
     <Modal
       open={open}
       title="新建自动发券规则"
-      description="规则创建后立即生效，每天自动扫描；也可以随时手动执行一次。"
+      description="规则创建后立即生效：日常规则每天自动扫描，月度规则在每月执行日自动发放；也可以随时手动执行一次。"
       onClose={busy ? () => undefined : onClose}
       footer={
         <>
@@ -4817,7 +5020,8 @@ function CouponRuleModal({
             options={[
               { value: 'birthday', label: '生日关怀' },
               { value: 'welcome', label: '新客欢迎' },
-              { value: 'winback', label: '沉睡唤回' }
+              { value: 'winback', label: '沉睡唤回' },
+              { value: 'monthly', label: '月度定向发放' }
             ]}
             onChange={(next) => setKind(next)}
           />
@@ -4851,10 +5055,18 @@ function CouponRuleModal({
             </Field>
           </>
         ) : null}
-        <Field label="会员层级">
-          <select value={tier} onChange={(event) => setTier(event.target.value as CouponRule['tier'])}>
+        {kind === 'monthly' ? (
+          <Field label="每月执行日" hint="1~28 号，保证每个月都有这一天；到日由系统自动发放。">
+            <input inputMode="numeric" value={dayOfMonth} onChange={(event) => setDayOfMonth(event.target.value)} />
+          </Field>
+        ) : null}
+        <Field label="会员层级" hint={kind === 'monthly' ? '月度只支持全部会员或仅 Full愈 会员。' : undefined}>
+          <select
+            value={kind === 'monthly' && tier === 'standard' ? 'all' : tier}
+            onChange={(event) => setTier(event.target.value as CouponRule['tier'])}
+          >
             <option value="all">全部会员</option>
-            <option value="standard">普通会员</option>
+            {kind === 'monthly' ? null : <option value="standard">普通会员</option>}
             <option value="annual">Full愈大会员</option>
           </select>
         </Field>

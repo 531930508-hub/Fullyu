@@ -271,9 +271,10 @@ model Coupon {
   createdBy     String?  @map("created_by")
   createdAt     DateTime @default(now()) @map("created_at")
 
-  issued  CustomerCoupon[]
-  batches CouponBatch[]
-  rules   CouponRule[]
+  issued   CustomerCoupon[]
+  batches  CouponBatch[]
+  rules    CouponRule[]
+  ruleRuns CouponRuleRun[]
 
   @@index([claimable, validTo])
   @@map("coupons")
@@ -298,9 +299,47 @@ model CouponRule {
 
   coupon Coupon           @relation(fields: [couponId], references: [id])
   issued CustomerCoupon[]
+  runs   CouponRuleRun[]
 
   @@index([enabled])
   @@map("coupon_rules")
+}
+
+/// 月度定向发放的执行记录：一条规则一个自然月只有一条，既是「本月是否已发」的判据，
+/// 也是分批写入的断点（cursorId 指向最后一条已处理的顾客），断线后从断点续跑。
+model CouponRuleRun {
+  id           String    @id
+  ruleId       String    @map("rule_id")
+  couponId     String    @map("coupon_id")
+  // 上海时区自然月 YYYY-MM，与 customer_coupons.rule_period 同值
+  period       String
+  // manual=运营手动 / auto=调度器按期执行
+  trigger      String
+  // pending=已排队 / running=执行中 / succeeded=已完成 / failed=失败（可续跑）
+  status       String    @default("pending")
+  // 目标人数（全量会员中含手机号的部分）/ 已发出 / 已跳过（本周期已发）
+  targetCount  Int       @default(0) @map("target_count")
+  issued       Int       @default(0)
+  skipped      Int       @default(0)
+  // 断点：最后一条已处理的顾客 id，空表示从头开始
+  cursorId     String?   @map("cursor_id")
+  batchId      String?   @map("batch_id")
+  attempts     Int       @default(0)
+  lastError    String    @default("") @db.VarChar(500) @map("last_error")
+  operatorId   String?   @map("operator_id")
+  operatorName String    @default("") @map("operator_name")
+  // 租约：进程崩溃后 claimedAt 过期即可被下一轮接管，避免卡死在 running
+  claimedAt    DateTime? @map("claimed_at")
+  startedAt    DateTime? @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  rule   CouponRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  coupon Coupon     @relation(fields: [couponId], references: [id])
+
+  @@unique([ruleId, period])
+  @@index([status, claimedAt])
+  @@map("coupon_rule_runs")
 }
 
 /// 发券批次：一次发放动作的可追溯记录，发券记录与撤回都以批次为单位。
@@ -781,7 +820,10 @@ model WorkSettlement {
   // draft | posted | voided
   status String @default("draft")
 
-  linesJson String @default("[]") @map("lines_json")
+  /// 明细行快照。MySQL 的 TEXT 只有 64KB，一个月多店多段的结算明细很容易超限，
+  /// 超了直接 500（SQLite 的 TEXT 无上限，所以以前测不出来），这里用 LONGTEXT。
+  /// 不设库级默认值：MySQL 的 TEXT 系默认值只能写成表达式，交给服务端始终显式写入。
+  linesJson String @map("lines_json") @db.LongText
   /// 出单时仍处于 pending_close / lapsed 的段数：> 0 时禁止确认入账（月结硬阻断）
   unclosedCount    Int @default(0) @map("unclosed_count")
   pendingApprovals Int @default(0) @map("pending_approvals")

@@ -446,7 +446,33 @@ export type Coupon = {
   claimed?: number;
 };
 
-export type CouponRuleKind = 'birthday' | 'welcome' | 'winback';
+export type CouponRuleKind = 'birthday' | 'welcome' | 'winback' | 'monthly';
+
+/** 月度定向发放的执行状态：failed 保留断点，可点「继续执行」续跑。 */
+export type CouponRunStatus = 'pending' | 'running' | 'succeeded' | 'failed';
+
+/** 一条规则一个自然月只有一条执行记录；进度条与断点都读它。 */
+export type CouponRuleRun = {
+  id: string;
+  ruleId: string;
+  couponId: string;
+  period: string;
+  trigger: 'manual' | 'auto';
+  status: CouponRunStatus;
+  targetCount: number;
+  issued: number;
+  skipped: number;
+  processed: number;
+  progress: number;
+  batchId: string | null;
+  attempts: number;
+  lastError: string;
+  operatorName: string;
+  claimedAt: number | null;
+  startedAt: number | null;
+  finishedAt: number | null;
+  createdAt: number;
+};
 
 /** 自动发券规则：命中人群后按天幂等发放，执行记录落在发券批次上。 */
 export type CouponRule = {
@@ -460,17 +486,24 @@ export type CouponRule = {
   kindLabel: string;
   enabled: boolean;
   tier: 'all' | 'standard' | 'annual';
+  tierLabel: string;
   config: {
     daysBefore?: number;
     inactiveDays?: number;
     minOrders?: number;
     withinDays?: number;
+    /** 月度：每月几号执行（1~28）。 */
+    dayOfMonth?: number;
   };
   note: string;
   lastRunAt: number | null;
   lastRunIssued: number;
   lastRunSkipped: number;
   totalIssued: number;
+  /** 月度规则的本月执行记录；其他规则为 null。 */
+  currentRun: CouponRuleRun | null;
+  /** 历史执行记录条数：大于 0 时只能停用、不能删除。 */
+  runCount: number;
   createdAt: number;
 };
 
@@ -481,6 +514,10 @@ export type CouponRulePreview = {
   alreadyThisPeriod: number;
   period: string;
   kindLabel?: string;
+  /** 月度规则额外返回：无手机号人数与预计耗时（秒）。 */
+  targetCount?: number;
+  noPhone?: number;
+  estimatedSeconds?: number;
 };
 
 export type CouponRuleRunResult = {

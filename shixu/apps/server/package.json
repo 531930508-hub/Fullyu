@@ -61,6 +61,7 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "globalSetup": "<rootDir>/../test/global-setup.ts",
+    "setupFilesAfterEnv": ["<rootDir>/testing/setup-timeout.ts"],
     "transform": {
       "^.+\\.ts$": [
         "ts-jest",
