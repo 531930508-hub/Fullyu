@@ -21,9 +21,10 @@ import {
   issuePickupVouchers,
   maskPhone,
   memberByLocal,
-  monthKeyOf,
+  nextQuarterStart,
   nextStart,
   perksOf,
+  quarterKeyOf,
   randomCode,
   refundQuote,
   shanghaiDayStart,
@@ -41,6 +42,12 @@ const FEEDBACK_DAILY_CAP = 5;
 
 const obj = (body: unknown): Record<string, unknown> =>
   body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+
+/** 邀请人昵称脱敏：好友侧只需要认出券是谁发的。 */
+const inviterNameHint = (name: string | null | undefined): string => {
+  const trimmed = (name ?? '').trim();
+  return trimmed ? `${trimmed.slice(0, 1)}**` : '好友';
+};
 
 const text = (value: unknown, field: string, { min = 1, max = 100 } = {}): string => {
   const out = typeof value === 'string' ? value.trim() : '';
@@ -1763,26 +1770,36 @@ export class ProgramService {
 
   private async inviteQuota(memberId: string, now: Date) {
     const card = await cardActiveAt(this.prisma, memberId, now);
-    const quota = card ? perksOf(card.perksJson).presence.invitesPerMonth : 0;
-    const monthKey = monthKeyOf(now);
+    const quota = card ? perksOf(card.perksJson).presence.invitesPerQuarter : 0;
+    const periodKey = quarterKeyOf(now);
     const used = await this.prisma.memberInvite.count({
-      where: { inviterId: memberId, monthKey, status: { not: 'VOID' } }
+      where: { inviterId: memberId, periodKey, status: { not: 'VOID' } }
     });
-    return { card, quota, used, remaining: Math.max(0, quota - used), monthKey };
+    return { card, quota, used, remaining: Math.max(0, quota - used), periodKey };
+  }
+
+  /** 名额用尽：按自然季提示恢复时间。 */
+  private quotaExceeded(quota: number) {
+    const recoverAt = formatDate(nextQuarterStart(new Date()));
+    return new ApiError(409, `本季 ${quota} 个邀请名额已用完，${recoverAt} 恢复`, {
+      code: 'INVITE_QUOTA_EXCEEDED'
+    });
   }
 
   async listInvites(query: unknown, ctx: BrandMemberContext) {
     this.requirePresence(ctx);
     const member = await memberByLocal(this.prisma, ctx, obj(query).localUserId);
     const now = new Date();
-    const { quota, used, remaining, monthKey } = await this.inviteQuota(member.id, now);
+    const { quota, used, remaining, periodKey } = await this.inviteQuota(member.id, now);
     const rows = await this.prisma.memberInvite.findMany({
       where: { inviterId: member.id },
       orderBy: { createdAt: 'desc' },
       take: 30
     });
     return {
-      monthKey,
+      periodKey,
+      /** @deprecated 旧字段，值已改为季度键，保留一版兼容未升级的小程序 */
+      monthKey: periodKey,
       quota,
       used,
       remaining,
@@ -1791,7 +1808,8 @@ export class ProgramService {
         status: row.status,
         claimed: row.status === 'CLAIMED',
         createdAt: formatIso(row.createdAt),
-        claimedAt: row.claimedAt ? formatIso(row.claimedAt) : null
+        claimedAt: row.claimedAt ? formatIso(row.claimedAt) : null,
+        expiresAt: formatIso(addDays(row.createdAt, INVITE_TTL_DAYS))
       }))
     };
   }
@@ -1800,33 +1818,49 @@ export class ProgramService {
     this.requirePresence(ctx);
     const member = await memberByLocal(this.prisma, ctx, obj(body).localUserId);
     const now = new Date();
-    const { card, quota, used, monthKey } = await this.inviteQuota(member.id, now);
+    const quotaInfo = await this.inviteQuota(member.id, now);
+    const { card, quota, periodKey } = quotaInfo;
     if (!card) throw new ApiError(403, '邀请好友是品牌会员专属权益', { code: 'MEMBERS_ONLY' });
-    if (used >= quota) {
-      throw new ApiError(409, `本月 ${quota} 个邀请名额已用完，下月 1 日恢复`, {
-        code: 'INVITE_QUOTA_EXCEEDED'
-      });
+    if (quotaInfo.used >= quota) throw this.quotaExceeded(quota);
+    // 生成即扣名额：slot 唯一键兜住并发，同一周期内重复点击不会超额发放。
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const used = attempt === 0 ? quotaInfo.used : (await this.inviteQuota(member.id, new Date())).used;
+      if (used >= quota) throw this.quotaExceeded(quota);
+      let code = randomCode(10);
+      for (let i = 0; i < 5 && (await this.prisma.memberInvite.findUnique({ where: { code } })); i += 1) {
+        code = randomCode(10);
+      }
+      try {
+        const row = await this.prisma.memberInvite.create({
+          data: {
+            id: newId('INV'),
+            code,
+            inviterId: member.id,
+            business: 'zc',
+            periodKey,
+            slot: used + 1
+          }
+        });
+        return {
+          code: row.code,
+          periodKey,
+          monthKey: periodKey,
+          quota,
+          used: used + 1,
+          remaining: Math.max(0, quota - used - 1),
+          expiresAt: formatIso(addDays(row.createdAt, INVITE_TTL_DAYS))
+        };
+      } catch (e) {
+        // 并发抢同一 slot：重新读用量后重试，最终仍超额则按名额用尽报错
+        if ((e as { code?: string }).code !== 'P2002') throw e;
+      }
     }
-    let code = randomCode(10);
-    for (let i = 0; i < 5 && (await this.prisma.memberInvite.findUnique({ where: { code } })); i += 1) {
-      code = randomCode(10);
-    }
-    const row = await this.prisma.memberInvite.create({
-      data: { id: newId('INV'), code, inviterId: member.id, business: 'zc', monthKey }
-    });
-    return {
-      code: row.code,
-      monthKey,
-      quota,
-      used: used + 1,
-      remaining: Math.max(0, quota - used - 1),
-      expiresAt: formatIso(addDays(row.createdAt, INVITE_TTL_DAYS))
-    };
+    throw this.quotaExceeded(quota);
   }
 
   /**
-   * 好友领取邀请：CRM 记录邀请关系与归因，免费体验课券由在场按返回结果发放。
-   * 每位被邀请人只能领一次，邀请人不能自领。
+   * 好友领取邀请：CRM 记录邀请关系与归因，买一赠一券由在场按返回条款发放。
+   * 只拦「领自己的码」与「同一张码被两个好友领」；同一位好友可以反复领不同人的邀请（每次各得 1 张券）。
    */
   async claimInvite(body: unknown, ctx: BrandMemberContext) {
     this.requirePresence(ctx);
@@ -1839,9 +1873,27 @@ export class ProgramService {
       if (!invite || invite.status === 'VOID') {
         throw new ApiError(404, '邀请不存在或已失效', { code: 'INVITE_INVALID' });
       }
+      const inviterBrief = async () => {
+        const inviter = await tx.member.findUniqueOrThrow({ where: { id: invite.inviterId } });
+        const identity = await tx.memberIdentity.findFirst({
+          where: { memberId: inviter.id, business: 'zc' },
+          select: { localUserId: true }
+        });
+        return {
+          localUserId: identity?.localUserId ?? null,
+          memberNo: inviter.memberNo,
+          nickname: inviterNameHint(inviter.name)
+        };
+      };
       if (invite.status === 'CLAIMED') {
+        // 同一好友重复提交同一张码：幂等返回，避免在场重复发券
         if (invite.inviteeId === invitee.id) {
-          return { claimed: true, replayed: true, voucher: this.inviteVoucher() };
+          return {
+            claimed: true,
+            replayed: true,
+            voucher: this.inviteVoucher(),
+            inviter: await inviterBrief()
+          };
         }
         throw new ApiError(409, '这份邀请已经被领取', { code: 'INVITE_USED' });
       }
@@ -1850,10 +1902,6 @@ export class ProgramService {
       }
       if (now.getTime() > addDays(invite.createdAt, INVITE_TTL_DAYS).getTime()) {
         throw new ApiError(409, '邀请已过期', { code: 'INVITE_EXPIRED' });
-      }
-      const before = await tx.memberInvite.findFirst({ where: { inviteeId: invitee.id } });
-      if (before) {
-        throw new ApiError(409, '你已经领取过好友邀请的体验课', { code: 'INVITE_ALREADY_CLAIMED' });
       }
       const done = await tx.memberInvite.updateMany({
         where: { id: invite.id, status: 'ISSUED' },
@@ -1867,12 +1915,24 @@ export class ProgramService {
         target: invitee.memberNo,
         detail: `${code} · 邀请人 ${inviter.memberNo}`
       });
-      return { claimed: true, replayed: false, voucher: this.inviteVoucher() };
+      return {
+        claimed: true,
+        replayed: false,
+        voucher: this.inviteVoucher(),
+        inviter: await inviterBrief()
+      };
     });
   }
 
   private inviteVoucher() {
-    return { kind: 'PRESENCE_FREE_CLASS', title: '在场 · 免费体验课 1 节', issuer: 'presence' };
+    return {
+      kind: 'PRESENCE_BOGO_CLASS',
+      title: '在场 · 买一赠一券',
+      issuer: 'presence',
+      /** 券有效期 3 个月，与下一季发券首尾相接；过期即失效，不补发 */
+      validMonths: 3,
+      usage: '与邀请人报名同一节课，好友免费同行；邀请人退课则本席一并取消'
+    };
   }
 
   // ───────────────────────── 会员 360：净消费 ─────────────────────────

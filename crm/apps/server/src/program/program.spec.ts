@@ -530,7 +530,7 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     expect(gone.body.notices.some((row: { title: string }) => row.title === '冬季会员礼遇')).toBe(false);
   });
 
-  it('在场：畅练卡附赠同有效期品牌会员；每月邀请名额按配置；好友领一次体验课；退畅练卡撤销附赠', async () => {
+  it('在场：畅练卡附赠同有效期品牌会员；每季邀请名额按配置；好友领买一赠一券；退畅练卡撤销附赠', async () => {
     const wrongBiz = await signed('post', '/v1/brand-member/bundle', {
       body: { localUserId: 'local-m-lin', passRef: 'X1', validFrom: '2026-11-01', validUntil: '2026-12-01' }
     });
@@ -555,6 +555,9 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     const quota = await signed('get', '/v1/brand-member/invites?localUserId=local-m-su', { key: 'zc-test' });
     expect(quota.status).toBe(200);
     expect(quota.body.quota).toBe(1);
+    // 名额按自然季计，兼容字段 monthKey 与 periodKey 同值
+    expect(quota.body.periodKey).toMatch(/^\d{4}-Q[1-4]$/);
+    expect(quota.body.monthKey).toBe(quota.body.periodKey);
 
     const invite = await signed('post', '/v1/brand-member/invites/create', {
       key: 'zc-test',
@@ -562,12 +565,14 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     });
     expect(invite.status).toBe(201);
     expect(invite.body.remaining).toBe(0);
+    expect(invite.body.periodKey).toBe(quota.body.periodKey);
     const over = await signed('post', '/v1/brand-member/invites/create', {
       key: 'zc-test',
       body: { localUserId: 'local-m-su' }
     });
     expect(over.status).toBe(409);
     expect(over.body.error).toBe('INVITE_QUOTA_EXCEEDED');
+    expect(over.body.message).toContain('本季');
 
     const self = await signed('post', '/v1/brand-member/invites/claim', {
       key: 'zc-test',
@@ -580,7 +585,18 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
       body: { localUserId: 'local-m-zc-new', code: invite.body.code }
     });
     expect(claimed.status).toBe(200);
-    expect(claimed.body.voucher.kind).toBe('PRESENCE_FREE_CLASS');
+    expect(claimed.body.voucher.kind).toBe('PRESENCE_BOGO_CLASS');
+    expect(claimed.body.voucher.validMonths).toBe(3);
+    // 回传邀请人：在场据此把券绑定到同席订单
+    expect(claimed.body.inviter.localUserId).toBe('local-m-su');
+
+    // 同一好友重放同一张码：幂等，不重复占名额
+    const replay = await signed('post', '/v1/brand-member/invites/claim', {
+      key: 'zc-test',
+      body: { localUserId: 'local-m-zc-new', code: invite.body.code }
+    });
+    expect(replay.status).toBe(200);
+    expect(replay.body.replayed).toBe(true);
 
     const taken = await signed('post', '/v1/brand-member/invites/claim', {
       key: 'zc-test',
@@ -600,6 +616,76 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
       key: 'zc-test'
     });
     expect(me.body.card.state).toBe('NONE');
+  });
+
+  it('邀请额度：好友可反复领取不同人的邀请各得一张；同周期 slot 唯一键兜住并发超额', async () => {
+    const day = (offset: number) =>
+      new Date(Date.now() + 8 * 3600000 + offset * 86400000).toISOString().slice(0, 10);
+    const makeMember = async (id: string, tail: string) => {
+      await h.prisma.member.create({
+        data: { id, memberNo: `FY-TEST-${id}`, phone: `1370000${tail}`, name: '邀请额度测试' }
+      });
+      await h.prisma.memberIdentity.create({
+        data: { id: `id-${id}`, business: 'zc', localUserId: `local-${id}`, memberId: id }
+      });
+    };
+    for (const [id, pass, tail] of [
+      ['m-inv-a', 'ZC-INV-A', '901'],
+      ['m-inv-b', 'ZC-INV-B', '902']
+    ] as const) {
+      await makeMember(id, tail);
+      const card = await signed('post', '/v1/brand-member/bundle', {
+        key: 'zc-test',
+        body: { localUserId: `local-${id}`, passRef: pass, validFrom: day(0), validUntil: day(90) }
+      });
+      expect(card.status).toBe(200);
+    }
+    await makeMember('m-friend-loop', '903');
+
+    const first = await signed('post', '/v1/brand-member/invites/create', {
+      key: 'zc-test',
+      body: { localUserId: 'local-m-inv-a' }
+    });
+    const second = await signed('post', '/v1/brand-member/invites/create', {
+      key: 'zc-test',
+      body: { localUserId: 'local-m-inv-b' }
+    });
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+
+    const claimFirst = await signed('post', '/v1/brand-member/invites/claim', {
+      key: 'zc-test',
+      body: { localUserId: 'local-m-friend-loop', code: first.body.code }
+    });
+    expect(claimFirst.status).toBe(200);
+    // 旧规则「每位好友一生只能领一次」已放开：换一位邀请人的码照样能领
+    const claimSecond = await signed('post', '/v1/brand-member/invites/claim', {
+      key: 'zc-test',
+      body: { localUserId: 'local-m-friend-loop', code: second.body.code }
+    });
+    expect(claimSecond.status).toBe(200);
+    expect(claimSecond.body.replayed).toBe(false);
+    expect(claimSecond.body.inviter.localUserId).toBe('local-m-inv-b');
+    expect(
+      await h.prisma.memberInvite.count({ where: { inviteeId: 'm-friend-loop' } })
+    ).toBe(2);
+
+    // 并发兜底：同一邀请人、同一周期、同一 slot 不能落两行
+    const row = await h.prisma.memberInvite.findFirstOrThrow({
+      where: { code: first.body.code }
+    });
+    await expect(
+      h.prisma.memberInvite.create({
+        data: {
+          id: 'INV-DUP-SLOT',
+          code: 'DUPSLOT001',
+          inviterId: row.inviterId,
+          business: 'zc',
+          periodKey: row.periodKey,
+          slot: row.slot
+        }
+      })
+    ).rejects.toThrow();
   });
 
   it('畅练卡与已有品牌会员取较晚的到期日：已有更晚则保留，已有更早则接续到畅练卡截止日', async () => {

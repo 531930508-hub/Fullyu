@@ -191,7 +191,7 @@
 
 ## 6. 在场双卡
 
-- 品牌卡：CRM 卡期，在场权益 = 热门课优先排位 + 课程阶梯价（卡版本 `perks.presence`）+ 每月邀请好友。
+- 品牌卡：CRM 卡期，在场权益 = 热门课优先排位 + 课程阶梯价（卡版本 `perks.presence`）+ 每季邀请好友 1 张。
 - 在场畅练卡：在场自有卡期，权益 = 有效期内 0 元报课；有效期内附赠同期品牌会员（§9.5），附赠资格不可退款。
 - 在场畅练卡页面不展示年卡信息；只有畅练卡快到期或没有畅练卡时才露出年卡入口。
 - 课程详情/结算：
@@ -262,6 +262,11 @@
 
 - `POST /v1/brand-member/bundle`：`{ localUserId, passRef, validFrom, validUntil }`（日期 `YYYY-MM-DD`）。畅练卡有效期内附赠同期品牌会员（`FY_BUNDLE`）；续期以同一 `passRef` 重新上报，日期不变视为重放。
 - `POST /v1/brand-member/bundle/revoke`：`{ localUserId, passRef, reason }`，畅练卡退卡时撤销附赠资格（不涉及退款）。
-- `GET /v1/brand-member/invites?localUserId=...` → `{ monthKey, quota, used, remaining, invites }`；`quota` 取卡版本 `perks.presence.invitesPerMonth`。
-- `POST /v1/brand-member/invites/create`：`{ localUserId }` → `{ code, remaining, expiresAt }`，邀请 30 天有效，超额 `409 INVITE_QUOTA_EXCEEDED`。
-- `POST /v1/brand-member/invites/claim`：`{ localUserId, code }` → `{ claimed, replayed, voucher:{ kind:'PRESENCE_FREE_CLASS', ... } }`；CRM 只记关系与归因，体验课券由在场发放。每位被邀请人限领一次，不能自领。
+- `GET /v1/brand-member/invites?localUserId=...` → `{ periodKey, monthKey, quota, used, remaining, invites }`；名额按自然季计算（`periodKey` 形如 `2026-Q4`），`quota` 取卡版本 `perks.presence.invitesPerQuarter`（旧快照的 `invitesPerMonth` 按每季读）。`monthKey` 保留一版，值与 `periodKey` 相同。
+- `POST /v1/brand-member/invites/create`：`{ localUserId }` → `{ code, periodKey, monthKey, quota, used, remaining, expiresAt }`，邀请 30 天有效；生成即扣名额，同一周期内 `(inviterId, periodKey, slot)` 唯一键兜住并发，超额 `409 INVITE_QUOTA_EXCEEDED`。
+- `POST /v1/brand-member/invites/claim`：`{ localUserId, code }` → `{ claimed, replayed, voucher:{ kind:'PRESENCE_BOGO_CLASS', title, validMonths:3, usage }, inviter:{ localUserId, memberNo, nickname } }`。
+  - CRM 只记关系与归因，买一赠一券由在场按 `inviter.localUserId` 发放并绑定邀请人。
+  - 拦截规则：不能领自己发的邀请（`409 INVITE_SELF`）、同一张码只能被一位好友领（`409 INVITE_USED`）、邀请 30 天后过期（`409 INVITE_EXPIRED`）。
+  - **不再限制「同一好友只能领一次」**：同一好友可以领多位好友的邀请，每次各得 1 张券。
+  - 同一好友重复提交同一张码返回 `replayed:true`，在场侧按来源查重不重复发券。
+  - 旧 CRM 不返回 `inviter` 时，在场按旧规则发 `PRESENCE_FREE_CLASS` 免费体验券（30 天）。

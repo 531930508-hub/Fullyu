@@ -640,13 +640,17 @@ model MemberInvite {
   code      String    @unique
   inviterId String    @map("inviter_id")
   business  String
-  monthKey  String    @map("month_key")
+  /// 名额周期键，已由「月」改为「自然季」（如 2026-Q4）。列名沿用历史 month_key，避免重建列丢历史数据。
+  periodKey String    @map("month_key")
+  /// 周期内第几个名额，与唯一键一起兜住并发重复生成；历史行为空
+  slot      Int?
   status    String    @default("ISSUED") // ISSUED | CLAIMED | VOID
   inviteeId String?   @map("invitee_id")
   claimedAt DateTime? @map("claimed_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
-  @@index([inviterId, monthKey])
+  @@unique([inviterId, periodKey, slot])
+  @@index([inviterId, periodKey])
   @@index([inviteeId])
   @@map("member_invites")
 }

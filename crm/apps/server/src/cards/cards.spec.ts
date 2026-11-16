@@ -232,7 +232,8 @@ describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
     expect(saved.status).toBe(201);
     expect(saved.body.plans).toHaveLength(2);
     expect(saved.body.benefits[0]).toMatchObject({ business: 'ql', title: BENEFITS[0].title });
-    expect(saved.body.perks.presence.invitesPerMonth).toBe(2);
+    // 旧字段 invitesPerMonth 仍可写入，读出统一为 invitesPerQuarter（名额口径已由月改季）
+    expect(saved.body.perks.presence.invitesPerQuarter).toBe(2);
     expect(saved.body.gifts[0].valueCents).toBe(12800);
     expect(saved.body.updatedBy).toBeTruthy();
 
@@ -263,7 +264,7 @@ describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
     expect(again.status).toBe(201);
     // 没传礼/特权时按「清空」处理，不继承上一版。
     expect(again.body.gifts).toEqual([]);
-    expect(again.body.perks.presence.invitesPerMonth).toBe(0);
+    expect(again.body.perks.presence.invitesPerQuarter).toBe(0);
 
     const audit = await h.api(
       'get',

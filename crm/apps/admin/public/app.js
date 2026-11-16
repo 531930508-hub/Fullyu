@@ -1256,7 +1256,7 @@
                     <td>${version.validDays} 天</td>
                     <td class="small">${version.benefits.map((benefit) => `${esc(biz(benefit.business))}：${esc(benefit.title)}`).join('<br>') || '—'}</td>
                     <td class="small">${(version.gifts || []).map((gift) => `${esc(gift.title)}（${money(gift.valueCents)}）`).join('<br>') || '无实物礼'}
-                      <div class="help">${version.perks ? `在场：${version.perks.presence.prioritySeat ? '优先排位' : '—'} · ${version.perks.presence.tierPrice ? '阶梯价' : '—'} · 每月邀请 ${version.perks.presence.invitesPerMonth} 人` : ''}</div></td>
+                      <div class="help">${version.perks ? `在场：${version.perks.presence.prioritySeat ? '优先排位' : '—'} · ${version.perks.presence.tierPrice ? '阶梯价' : '—'} · 每季邀请 ${version.perks.presence.invitesPerQuarter ?? version.perks.presence.invitesPerMonth ?? 0} 人` : ''}</div></td>
                     <td>${version.gameEnabled ? pill('开启', 'green') : '关闭'}</td>
                     <td class="small">${esc(version.createdByName)}<div class="help">${fmt(version.createdAt)}</div></td>
                     <td>${
@@ -1309,7 +1309,7 @@
                   <textarea name="gifts" rows="3" placeholder="Full愈 香薰礼盒|到店凭提货码领取|128"></textarea></div>
                 <div class="field"><label class="check"><input type="checkbox" name="prioritySeat" checked /> 在场优先排位</label></div>
                 <div class="field"><label class="check"><input type="checkbox" name="tierPrice" checked /> 在场阶梯价</label></div>
-                <div class="field"><label>在场每月邀请好友名额</label><input name="invitesPerMonth" type="number" min="0" max="20" value="1" /></div>
+                <div class="field"><label>在场每季邀请好友名额（1 张 = 1 位好友免费同行一节课）</label><input name="invitesPerQuarter" type="number" min="0" max="20" value="1" /></div>
                 <div class="field full"><label>积分消耗模式（JSON，可留空）</label><textarea name="pointsSpend" rows="2" placeholder='{"sx":"BRAND"}'></textarea></div>
                 <div class="field full"><label class="check"><input type="checkbox" name="gameEnabled" checked /> 购买后开启愈行之旅</label></div>
                 <div class="field full"><label>版本备注</label><input name="note" maxlength="200" /></div>
@@ -1359,7 +1359,7 @@
       const presence = (base.perks && base.perks.presence) || {};
       form.prioritySeat.checked = presence.prioritySeat !== false;
       form.tierPrice.checked = presence.tierPrice !== false;
-      form.invitesPerMonth.value = presence.invitesPerMonth ?? 1;
+      form.invitesPerQuarter.value = presence.invitesPerQuarter ?? presence.invitesPerMonth ?? 1;
       if (base.pointsSpend && Object.keys(base.pointsSpend).length) {
         form.pointsSpend.value = JSON.stringify(base.pointsSpend);
       }
@@ -1401,7 +1401,7 @@
           presence: {
             prioritySeat: values.prioritySeat === 'on',
             tierPrice: values.tierPrice === 'on',
-            invitesPerMonth: Number(values.invitesPerMonth) || 0
+            invitesPerQuarter: Number(values.invitesPerQuarter) || 0
           }
         };
         let pointsSpend = {};

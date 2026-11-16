@@ -19,7 +19,12 @@ const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export type Db = PrismaService | Prisma.TransactionClient;
 
 export type GiftRow = { title: string; desc: string; valueCents: number };
-export type PresencePerks = { prioritySeat: boolean; tierPrice: boolean; invitesPerMonth: number };
+export type PresencePerks = {
+  prioritySeat: boolean;
+  tierPrice: boolean;
+  /** 每季邀请好友名额（2026-11 由每月改为每季，旧卡快照里的 invitesPerMonth 仍按每季读） */
+  invitesPerQuarter: number;
+};
 export type CardPerks = { presence: PresencePerks };
 
 export const randomCode = (length = 8): string => {
@@ -52,6 +57,19 @@ export const formatIso = (at: Date): string => {
 export const monthKeyOf = (at: Date): string => {
   const local = new Date(at.getTime() + TZ_MS);
   return `${local.getUTCFullYear()}-${String(local.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
+/** 邀请名额按自然季计算，键形如 2026-Q4；买一赠一券 3 个月有效期与之首尾相接。 */
+export const quarterKeyOf = (at: Date): string => {
+  const local = new Date(at.getTime() + TZ_MS);
+  return `${local.getUTCFullYear()}-Q${Math.floor(local.getUTCMonth() / 3) + 1}`;
+};
+
+/** 下一季首日（上海时区零点），用于名额用尽时的提示文案。 */
+export const nextQuarterStart = (at: Date): Date => {
+  const local = new Date(at.getTime() + TZ_MS);
+  const month = Math.floor(local.getUTCMonth() / 3) * 3 + 3;
+  return new Date(Date.UTC(local.getUTCFullYear(), month, 1) - TZ_MS);
 };
 
 export const yuan = (cents: number): string => {
@@ -93,12 +111,12 @@ export const perksOf = (raw: string | null | undefined): CardPerks => {
     source.presence && typeof source.presence === 'object'
       ? (source.presence as Record<string, unknown>)
       : {};
-  const invites = Number(presence.invitesPerMonth);
+  const invites = Number(presence.invitesPerQuarter ?? presence.invitesPerMonth);
   return {
     presence: {
       prioritySeat: presence.prioritySeat === true,
       tierPrice: presence.tierPrice === true,
-      invitesPerMonth: Number.isInteger(invites) && invites >= 0 && invites <= 20 ? invites : 0
+      invitesPerQuarter: Number.isInteger(invites) && invites >= 0 && invites <= 20 ? invites : 0
     }
   };
 };
@@ -127,15 +145,15 @@ export const validatePerks = (value: unknown): string => {
   if (value === undefined || value === null) return JSON.stringify(perksOf('{}'));
   if (typeof value !== 'object') throw badRequest('perks 必须是对象');
   const presence = ((value as Record<string, unknown>).presence || {}) as Record<string, unknown>;
-  const invites = Number(presence.invitesPerMonth ?? 0);
+  const invites = Number(presence.invitesPerQuarter ?? presence.invitesPerMonth ?? 0);
   if (!Number.isInteger(invites) || invites < 0 || invites > 20) {
-    throw badRequest('每月邀请名额需为 0–20 的整数');
+    throw badRequest('每季邀请名额需为 0–20 的整数');
   }
   return JSON.stringify({
     presence: {
       prioritySeat: presence.prioritySeat === true,
       tierPrice: presence.tierPrice === true,
-      invitesPerMonth: invites
+      invitesPerQuarter: invites
     }
   });
 };

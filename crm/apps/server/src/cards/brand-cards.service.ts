@@ -46,7 +46,7 @@ export type VersionInput = {
   note?: string;
   /** 付费年卡附带的实物礼（仅发提货券，到店核销） */
   gifts?: unknown;
-  /** 跨业务特权配置，如在场优先排位/阶梯价/每月邀请数 */
+  /** 跨业务特权配置，如在场优先排位/阶梯价/每季邀请数 */
   perks?: unknown;
 };
 

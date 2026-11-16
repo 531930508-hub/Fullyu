@@ -241,7 +241,7 @@ async function main() {
             gameEnabled: p.gameEnabled,
             giftsJson: JSON.stringify(p.gifts),
             perksJson: JSON.stringify({
-              presence: { prioritySeat: true, tierPrice: true, invitesPerMonth: 1 }
+              presence: { prioritySeat: true, tierPrice: true, invitesPerQuarter: 1 }
             }),
             note: '初始化版本',
             createdBy: 'u-admin',
