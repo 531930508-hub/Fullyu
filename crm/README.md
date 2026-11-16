@@ -22,6 +22,14 @@ pnpm dev:server                                # 先编 shared，再 tsx watch
 
 生产启动：`node apps/server/dist/main.js`（先 `pnpm build`）。生产必须显式设置 32 位以上、非示例值的 `JWT_SECRET`，否则拒绝启动。
 
+**生产库是 MySQL（2026-11-17 起）**：本地/测试仍是 SQLite。生产构建必须用 MySQL schema 生成 client，否则运行时报 `the URL must start with the protocol 'file:'`：
+
+```bash
+pnpm --filter @fullyu/crm-server build:mysql   # = schema:mysql → prisma generate(mysql) → tsc
+```
+
+细节与踩坑记录见 [`docs/mysql-迁移.md`](docs/mysql-迁移.md)。
+
 管理后台与 API 同源：启动后打开 `http://localhost:3000/admin/`（`/` 会重定向）。后台是 `apps/admin/public` 下的零构建静态页，无需单独开发服务器或构建步骤；所有权限仍由服务端逐请求校验，前端隐藏导航只是体验优化。静态文件使用 `Cache-Control: no-cache`，发布后不会沿用旧脚本。
 
 ### 合成账号（仅本地/测试）
