@@ -1,0 +1,14 @@
+# 备份守卫 fu-backup-check.sh 的配置样例（装到 /etc/fullyu/backup-check.conf，600）
+# 格式：name|base_dir|backup_log|oss_prefix|max_age_h
+#   name       状态文件名，也是日志里出现的名字
+#   base_dir   每日日期目录所在路径（下面直接放 YYYY-MM-DD/）
+#   backup_log 备份脚本写的日志（要能在里面找到 "backup start" 与 "done, size"）
+#   oss_prefix OSS 上的业务前缀（oss://<bucket>/<prefix>/<date>/），默认同 name
+#   max_age_h  最新 MANIFEST 允许的最大年龄（小时），默认 36
+#
+# 8.133.6.18（轻疗）
+qingliao|/root/backups/qingliao/daily|/var/log/fu-backup.log|qingliao|36
+# 120.55.36.3（在场）
+# presence|/root/backups/daily|/var/log/fu-backup.log|presence|36
+# 121.40.119.57（时叙）
+# teahour|/root/backups/daily|/var/log/fu-backup.log|teahour|36
