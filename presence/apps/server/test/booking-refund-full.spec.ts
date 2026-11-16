@@ -165,7 +165,7 @@ describe('综合：报名 / 候补 / 退款六大场景', () => {
     const brandMembers = new Set([member.id, member2.id])
     jest.spyOn(ctx.pricing, 'brandStatus').mockImplementation(async (userId: string) =>
       brandMembers.has(userId)
-        ? { perks: { prioritySeat: true, tierPrice: false, invitesPerMonth: 0 }, unknown: false }
+        ? { perks: { prioritySeat: true, tierPrice: false, invitesPerQuarter: 0 }, unknown: false }
         : { perks: null, unknown: false },
     )
 

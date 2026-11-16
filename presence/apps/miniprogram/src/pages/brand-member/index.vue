@@ -135,7 +135,7 @@
           <view v-if="active && inviteQuota > 0" class="group-row">
             <view class="benefit-copy">
               <text class="benefit-title">{{ tr('邀请好友来在场', 'Invite a friend') }}</text>
-              <text class="benefit-desc">{{ tr(`本月还可邀请 ${inviteRemaining} 位 · 好友得 1 节体验课`, `${inviteRemaining} left this month · friend gets 1 trial class`) }}</text>
+              <text class="benefit-desc">{{ tr(`本季还可邀请 ${inviteRemaining} 位 · 好友得 1 张买一赠一券`, `${inviteRemaining} left this quarter · friend gets a buy-one-get-one voucher`) }}</text>
             </view>
           </view>
           <view v-for="item in openInvites" :key="item.code" class="invite-row">
@@ -150,9 +150,9 @@
             <!-- #endif -->
           </view>
           <button v-if="active && inviteQuota > 0" class="btn full" :disabled="creatingInvite || inviteRemaining <= 0" @tap="newInvite">
-            {{ inviteRemaining <= 0 ? tr('本月邀请名额已用完', 'No invites left this month') : creatingInvite ? tr('生成中…', 'Creating…') : tr('生成一张邀请', 'Create an invite') }}
+            {{ inviteRemaining <= 0 ? tr('本季邀请名额已用完', 'No invites left this quarter') : creatingInvite ? tr('生成中…', 'Creating…') : tr('生成一张邀请', 'Create an invite') }}
           </button>
-          <text v-if="claimedInvites" class="fine">{{ tr(`本月已有 ${claimedInvites} 位好友领取`, `${claimedInvites} friends claimed this month`) }}</text>
+          <text v-if="claimedInvites" class="fine">{{ tr(`本季已有 ${claimedInvites} 位好友领取`, `${claimedInvites} friends claimed this quarter`) }}</text>
           <text v-if="inviteError" class="fine">{{ inviteError }}</text>
 
           <view v-if="active" class="group-row divided">
@@ -328,7 +328,7 @@ const chap = computed(() => {
 const invites = ref<BrandInviteList | null>(null)
 const inviteError = ref('')
 const creatingInvite = ref(false)
-const inviteQuota = computed(() => invites.value?.quota ?? data.value?.perks?.presence?.invitesPerMonth ?? 0)
+const inviteQuota = computed(() => invites.value?.quota ?? data.value?.perks?.presence?.invitesPerQuarter ?? 0)
 const inviteRemaining = computed(() => Math.max(0, invites.value?.remaining ?? inviteQuota.value))
 const openInvites = computed(() => (invites.value?.invites || []).filter((item) => !item.claimed && item.status !== 'EXPIRED' && item.status !== 'VOID'))
 const claimedInvites = computed(() => (invites.value?.invites || []).filter((item) => item.claimed).length)
@@ -570,11 +570,11 @@ async function openGame() {
 
 const shareTitle = () => tr('Full愈大会员｜一张卡，三店通用', 'Full Yu Member | One card across three places')
 onShareAppMessage((res: any) => {
-  // 「发给好友」按钮带邀请码：好友打开落地页，登录后领取在场免费体验课。
+  // 「发给好友」按钮带邀请码：好友打开落地页，登录后领取在场买一赠一券（与邀请人同上一节课）。
   const code = res?.from === 'button' ? res?.target?.dataset?.code : ''
   if (code) {
     return brandShareMessage(
-      tr(`${data.value?.member?.name || '朋友'}请你来在场上一节免费体验课`, 'A friend invites you to a free class at Presence'),
+      tr(`${data.value?.member?.name || '朋友'}请你在在场一起上一节课`, 'A friend invites you to take a class together at Presence'),
       inviteSharePath(code)
     )
   }

@@ -19,6 +19,7 @@ export class CourseController {
     return {
       courseReminder: this.config.get<string>('WECHAT_TMPL_COURSE_REMINDER') || '',
       waitlistPromoted: this.config.get<string>('WECHAT_TMPL_WAITLIST_PROMOTED') || '',
+      companionCancelled: this.config.get<string>('WECHAT_TMPL_COMPANION_CANCELLED') || '',
     }
   }
 

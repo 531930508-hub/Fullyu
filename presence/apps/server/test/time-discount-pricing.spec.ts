@@ -33,7 +33,7 @@ function row(over: Record<string, any> = {}) {
 }
 
 const BRAND_MEMBER = {
-  perks: { tierPrice: true, prioritySeat: true, invitesPerMonth: 4 },
+  perks: { tierPrice: true, prioritySeat: true, invitesPerQuarter: 4 },
   unknown: false,
 }
 const NOT_MEMBER = { perks: null, unknown: false }

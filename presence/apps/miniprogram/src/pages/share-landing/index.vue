@@ -25,20 +25,21 @@
       <view class="content-inner">
         <view class="card invite-card">
           <text class="eyebrow">{{ tr('Full愈会员好友邀请', 'Invited by a Full Yu member') }}</text>
-          <text class="invite-title serif">{{ tr('来在场上一节免费体验课', 'A free trial class at Presence') }}</text>
-          <text class="muted slogan">{{ tr('领取后得 1 节体验课券，登录后在课程页预约时自动抵扣为 0 元。', 'Claim a one-class voucher; it reduces a class to ¥0 when you book.') }}</text>
+          <text class="invite-title serif">{{ tr('来在场，和好友一起上一节课', 'Come to Presence and take a class with a friend') }}</text>
+          <text class="muted slogan">{{ tr('领取后得 1 张买一赠一券：3 个月内约上邀请人同上一节课，好友席免单。', 'Claim a buy-one-get-one voucher: take the same class as your inviter within 3 months, their seat is free.') }}</text>
           <view class="facts">
-            <view class="fact"><text class="fact-label">{{ tr('权益', 'Benefit') }}</text><text class="fact-value">{{ tr('免费体验课 1 节', '1 free class') }}</text></view>
-            <view class="fact"><text class="fact-label">{{ tr('有效期', 'Valid') }}</text><text class="fact-value">{{ brandVoucher ? expiryLabel({ expiresAt: brandVoucher.expiresAt } as any) : tr('领取后 30 天', '30 days after claim') }}</text></view>
+            <view class="fact"><text class="fact-label">{{ tr('权益', 'Benefit') }}</text><text class="fact-value">{{ tr('买一赠一券 ×1', '1 buy-one-get-one voucher') }}</text></view>
+            <view class="fact"><text class="fact-label">{{ tr('有效期', 'Valid') }}</text><text class="fact-value">{{ brandVoucher ? expiryLabel({ expiresAt: brandVoucher.expiresAt } as any) : tr(`领取后 ${brandVoucher?.validMonths || 3} 个月`, `${brandVoucher?.validMonths || 3} months after claim`) }}</text></view>
+            <view v-if="brandVoucher && brandInviterName" class="fact"><text class="fact-label">{{ tr('邀请人', 'Inviter') }}</text><text class="fact-value">{{ brandInviterName }}</text></view>
           </view>
           <view class="notice">
             <PresenceIcon name="info" :size="30" />
-            <text>{{ tr('每张邀请只能被一位好友领取，每个账号只能领取一次好友邀请；邀请人本人不能领取。', 'Each invite can be claimed once, each account can claim one friend invite, and the inviter cannot claim their own.') }}</text>
+            <text>{{ tr('每张邀请只能被一位好友领取；可以领取多位好友的邀请各得一张券；邀请人本人不能领取。', 'Each invite can be claimed by one friend; you may claim vouchers from multiple friends; the inviter cannot claim their own invite.') }}</text>
           </view>
           <text v-if="claimError" class="error-text">{{ claimError }}</text>
           <button v-if="brandVoucher" class="btn-primary full-width" @tap="goBook">{{ tr('去选课预约', 'Find a class') }}</button>
           <button v-else class="btn-primary full-width" :disabled="claimBusy" @tap="onClaimBrand">
-            {{ claimBusy ? tr('处理中…', 'Processing…') : guest ? tr('登录后领取', 'Log in to claim') : tr('领取体验课', 'Claim the class') }}
+            {{ claimBusy ? tr('处理中…', 'Processing…') : guest ? tr('登录后领取', 'Log in to claim') : tr('领取买一赠一券', 'Claim the voucher') }}
           </button>
           <button class="btn-secondary full-width spacing" @tap="goBook">{{ tr('先看看课程', 'Browse classes first') }}</button>
         </view>
@@ -128,6 +129,7 @@ const guest = ref(!uni.getStorageSync('token'))
 /** 品牌会员邀请好友：?brandInvite=CODE，与社群邀请的 scene 分开处理。 */
 const brandCode = ref('')
 const brandVoucher = ref<BrandInviteClaimed['voucher'] | null>(null)
+const brandInviterName = ref('')
 
 onLoad((query) => {
   const code = normalizeCode(query?.brandInvite ? decodeURIComponent(String(query.brandInvite)) : '')
@@ -227,6 +229,7 @@ async function onClaimBrand() {
     const result = await claimBrandInvite(brandCode.value)
     if (result?.claimed !== true || !result.voucher) throw new Error(tr('领取未成功，请重试。', 'The claim did not complete. Please retry.'))
     brandVoucher.value = result.voucher
+    brandInviterName.value = result.inviter?.nickname || ''
     uni.showToast({ title: result.replayed ? tr('你已领取过', 'Already claimed') : tr('已领取', 'Claimed'), icon: 'success' })
   } catch (error) {
     // 已被领取、已过期、不能领自己的邀请等文案由服务端给出，原样展示。

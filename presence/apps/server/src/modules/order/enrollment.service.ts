@@ -170,9 +170,12 @@ export class EnrollmentService {
         // 校验代金券
         let voucherDeduction = 0
         let voucherId: string | undefined
+        let sponsorOrderId: string | undefined
         if (dto.voucherId) {
-          const voucher = await this.validateVoucher(tx, dto.voucherId, userId, courseId)
+          const checked = await this.validateVoucher(tx, dto.voucherId, userId, courseId)
+          const voucher = checked.voucher
           voucherId = voucher.id
+          sponsorOrderId = checked.sponsorOrderId
           if (voucher.mode === 'REDUCE_TO') {
             // 减至模式：将实付（扣积分后）降至目标价，差额即抵扣金额
             voucherDeduction = priceAfterDiscount - pointsDeduction - voucherYuanToFen(Number(voucher.targetPrice))
@@ -181,7 +184,24 @@ export class EnrollmentService {
           }
           voucherDeduction = Math.max(0, voucherDeduction)
           // 已经 0 元（畅练卡 / 积分抵满）时不再占用代金券，避免券被白白核销
-          if (voucherDeduction === 0) voucherId = undefined
+          if (voucherDeduction === 0) {
+            voucherId = undefined
+            sponsorOrderId = undefined
+          }
+        }
+
+        // 买一赠一 = 邀请人 1 席 + 好友 1 席：同一张邀请人订单只能带一位好友。
+        // 报名按课程加锁，这里的 count 不会被并发好友插队；已退款/已取消的同席单不占名额。
+        if (sponsorOrderId) {
+          const taken = await tx.order.count({
+            where: {
+              sponsorOrderId,
+              status: { in: ['PENDING_PAYMENT', 'PAID', 'COMPLETED'] },
+            },
+          })
+          if (taken > 0) {
+            throw new BusinessException('这份邀请的同席名额已被使用，一份邀请只能带一位好友', 4022)
+          }
         }
 
         const actualPaid = Math.max(0, priceAfterDiscount - pointsDeduction - voucherDeduction)
@@ -201,6 +221,8 @@ export class EnrollmentService {
             actualPaid,
             status: 'PENDING_PAYMENT',
             voucherId: voucherId,
+            // 买一赠一好友席：记下邀请人订单，退款/退课时据此级联取消本席
+            sponsorOrderId,
             memberCardType: member.cardType ?? undefined,
             hitTimeRuleId: member.hitTimeRuleId ?? undefined,
           },
@@ -245,11 +267,32 @@ export class EnrollmentService {
       where: { userId, status: 'UNUSED', expiresAt: { gt: now } },
       orderBy: { amount: 'desc' },
     })
-    return vouchers.filter(
+    const scoped = vouchers.filter(
       (v) => v.applicableAll || (v.applicableCourseIds as string[]).includes(courseId),
     )
+    // 买一赠一券只在「邀请人也在这节课」时可展示：邀请人退课后券仍在，但不能用
+    const hostIds = [
+      ...new Set(scoped.map((v) => v.hostUserId).filter((id): id is string => Boolean(id))),
+    ]
+    if (!hostIds.length) return scoped
+    const hosts = await this.prisma.order.findMany({
+      where: {
+        courseId,
+        userId: { in: hostIds },
+        orderType: 'COURSE',
+        status: { in: ['PAID', 'COMPLETED'] },
+      },
+      select: { userId: true },
+    })
+    const joined = new Set(hosts.map((order) => order.userId))
+    return scoped.filter((v) => !v.hostUserId || joined.has(v.hostUserId))
   }
 
+  /**
+   * 校验券可用性。买一赠一券额外要求：
+   * - 不能是邀请人自己用（自己本来就付了全价）；
+   * - 邀请人在这节课有已支付订单（同席成立），并把该订单记到好友订单的 sponsorOrderId 上。
+   */
   private async validateVoucher(tx: any, voucherId: string, userId: string, courseId: string) {
     const voucher = await tx.voucher.findFirst({ where: { id: voucherId, userId } })
     if (!voucher) throw new BusinessException('代金券不存在', 4014)
@@ -257,6 +300,23 @@ export class EnrollmentService {
     if (voucher.expiresAt < new Date()) throw new BusinessException('代金券已过期', 4016)
     const applicable = voucher.applicableAll || (voucher.applicableCourseIds as string[]).includes(courseId)
     if (!applicable) throw new BusinessException('代金券不适用于该课程', 4017)
-    return voucher
+    if (!voucher.hostUserId) return { voucher, sponsorOrderId: undefined as string | undefined }
+    if (voucher.hostUserId === userId) {
+      throw new BusinessException('这是你发出的买一赠一券，请好友使用', 4020)
+    }
+    const sponsor = await tx.order.findFirst({
+      where: {
+        courseId,
+        userId: voucher.hostUserId,
+        orderType: 'COURSE',
+        status: { in: ['PAID', 'COMPLETED'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    })
+    if (!sponsor) {
+      throw new BusinessException('买一赠一券需与邀请人报名同一节课', 4021)
+    }
+    return { voucher, sponsorOrderId: sponsor.id as string | undefined }
   }
 }

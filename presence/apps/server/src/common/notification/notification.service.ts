@@ -115,4 +115,24 @@ export class NotificationService {
       `/pages/my-courses/index`,
     )
   }
+
+  /**
+   * 买一赠一同席取消提醒（邀请人退课/退款时好友席一并取消）。
+   * 模板字段：课程名称 thing1 / 上课时间 time2 / 温馨提示 thing4（thing 限 20 字内）。
+   */
+  async inviteCompanionCancelled(
+    userId: string,
+    params: { courseName: string; startTime: string },
+  ) {
+    await this.send(
+      userId,
+      'WECHAT_TMPL_COMPANION_CANCELLED',
+      {
+        thing1: { value: params.courseName },
+        time2: { value: params.startTime },
+        thing4: { value: '邀请人已退课，同席已取消，券已退回' },
+      },
+      `/pages/my-courses/index`,
+    )
+  }
 }

@@ -42,6 +42,8 @@ model User {
   orders           Order[]
   pointsRecords    PointsRecord[]
   vouchers         Voucher[]
+  /// 我发出邀请换来的买一赠一券（券归属好友，host 为邀请人）
+  hostedVouchers   Voucher[]          @relation("VoucherHost")
   reviews          Review[]
   checkIns         CheckIn[]
   trainerProfile   TrainerProfile?
@@ -548,6 +550,8 @@ model Order {
   refundAmount           Decimal?        @map("refund_amount")
   refundTime             DateTime?       @map("refund_time")
   voucherId              String?         @map("voucher_id")
+  /// 买一赠一同席单：好友免费席指向邀请人已支付的课程订单
+  sponsorOrderId         String?         @map("sponsor_order_id")
   /// 社群年费订单使用的邀请/礼遇（对账用）
   communityInviteId      String?         @map("community_invite_id")
   communityInviteClaimId String?         @map("community_invite_claim_id")
@@ -564,9 +568,13 @@ model Order {
   course            Course?            @relation(fields: [courseId], references: [id])
   community         Community?         @relation(fields: [communityId], references: [id])
   voucher           Voucher?           @relation(fields: [voucherId], references: [id])
+  /// 邀请人订单（仅买一赠一好友席有值）
+  sponsor           Order?             @relation("InviteCompanion", fields: [sponsorOrderId], references: [id])
+  companions        Order[]            @relation("InviteCompanion")
   refunds           OrderRefund[]
   waitlistEntry     WaitlistEntry?
 
+  @@index([sponsorOrderId])
   @@map("orders")
 }
 
@@ -668,12 +676,16 @@ model Voucher {
   batchNo             String?       @map("batch_no") @db.VarChar(32)
   /// 兑换时间
   redeemedAt          DateTime?     @map("redeemed_at")
+  /// 买一赠一券的邀请人（好友持券，邀请人须已报名同一节课）
+  hostUserId          String?       @map("host_user_id")
   createdAt           DateTime      @default(now()) @map("created_at")
 
   user   User?   @relation(fields: [userId], references: [id])
+  host   User?   @relation("VoucherHost", fields: [hostUserId], references: [id])
   orders Order[]
 
   @@index([batchNo])
+  @@index([hostUserId])
   @@map("vouchers")
 }
 

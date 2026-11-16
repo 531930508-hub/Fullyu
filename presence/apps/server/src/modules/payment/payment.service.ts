@@ -22,6 +22,8 @@ import { computeCommunityPaidUntil } from './community-membership.util'
 const LATE_PAYMENT_REFUND_REASON = '订单已取消后收到支付，已自动原路退款'
 /** 课程已取消后仍收到支付成功回调时，退款原因标记（订单从未占用名额） */
 const COURSE_CANCELLED_REFUND_REASON = '课程已取消，已自动原路退款'
+/** 邀请人退课/退款后，好友买一赠一同席单一并取消 */
+const COMPANION_CANCELLED_REASON = '邀请人已退课，同席取消'
 
 /**
  * 单笔退款流水自动对账次数上限（每 5 分钟一次 ≈ 1 小时）。
@@ -36,6 +38,15 @@ function skipsSeatRelease(reason: string | null | undefined): boolean {
   return (
     value.startsWith(LATE_PAYMENT_REFUND_REASON) || value.startsWith(COURSE_CANCELLED_REFUND_REASON)
   )
+}
+
+/** 订阅消息里的上课时间文案：开课日 + 钟点（startDate 库里为当天 0 点） */
+function courseStartText(startDate?: Date | null, startTime?: string | null): string {
+  if (!startDate) return '时间待确认'
+  const d = new Date(startDate)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const base = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  return startTime ? `${base} ${startTime}` : base
 }
 
 /** 退款规则条目 */
@@ -520,6 +531,10 @@ export class PaymentService {
       }
       if (order.orderType === 'COURSE' && order.courseId) {
         await this.releaseSeatAndPromote(order.courseId)
+        // 邀请人 0 元退款：好友同席一并取消
+        await this.cancelInviteCompanions(order.id, { releaseSeat: true }).catch((error) =>
+          this.logger.error(`同席取消失败 ${order.id}: ${(error as Error).message}`),
+        )
       }
       return { refundAmount: 0 }
     }
@@ -740,6 +755,9 @@ export class PaymentService {
       await this.restoreBenefits(order)
       if (order.orderType === 'COURSE' && order.courseId) {
         await this.releaseSeatAndPromote(order.courseId)
+        await this.cancelInviteCompanions(order.id, { releaseSeat: true }).catch((error) =>
+          this.logger.error(`同席取消失败 ${order.id}: ${(error as Error).message}`),
+        )
       }
       if (order.orderType === 'COMMUNITY' && order.communityId) {
         await this.recomputeCommunityMembership(order.userId, order.communityId)
@@ -1456,6 +1474,13 @@ export class PaymentService {
       await this.waitlist.promote(order.courseId).catch(() => undefined)
     }
 
+    // 邀请人整单退款：好友买一赠一同席一并取消（座位释放、券按原有效期恢复）
+    if (order.orderType === 'COURSE') {
+      await this.cancelInviteCompanions(order.id, { releaseSeat: !noSeatRelease }).catch((error) =>
+        this.logger.error(`同席取消失败 ${order.id}: ${(error as Error).message}`),
+      )
+    }
+
     if (order.orderType === 'COURSE' && order.course) {
       await this.notification.refundSuccess(order.userId, {
         courseName: order.course.title,
@@ -1485,6 +1510,61 @@ export class PaymentService {
       data: { currentEnrolled: { decrement: 1 } },
     })
     await this.waitlist.promote(courseId).catch(() => undefined)
+  }
+
+  /**
+   * 邀请人退课/退款后，好友的买一赠一同席订单一并取消：
+   * - 已支付同席单置 REFUNDED（0 元单无现金可退），释放座位并触发候补递补；
+   * - 待支付同席单直接 CANCELLED，回补预扣积分与好友券；
+   * - 好友券按原有效期恢复，已过期则置 EXPIRED（不延长有效期）；
+   * - 下发「同席取消」订阅消息，失败不阻断主流程。
+   *
+   * releaseSeat=false 用于课程整体取消等本就不应释放名额/递补的退款路径；
+   * 级联只处理同席好友，邀请人自己的订单由调用方负责收尾。
+   */
+  private async cancelInviteCompanions(
+    sponsorOrderId: string,
+    options: { releaseSeat: boolean },
+  ) {
+    const companions = await this.prisma.order.findMany({
+      where: {
+        sponsorOrderId,
+        status: { in: ['PENDING_PAYMENT', 'PAID', 'COMPLETED'] },
+      },
+      include: { course: true },
+    })
+    for (const companion of companions) {
+      const paid = companion.status !== 'PENDING_PAYMENT'
+      const closed = await this.prisma.order.updateMany({
+        where: {
+          id: companion.id,
+          status: paid ? { in: ['PAID', 'COMPLETED'] } : 'PENDING_PAYMENT',
+        },
+        data: {
+          status: paid ? 'REFUNDED' : 'CANCELLED',
+          cancelReason: COMPANION_CANCELLED_REASON,
+          ...(paid ? { refundAmount: 0, refundTime: new Date() } : {}),
+        },
+      })
+      if (!closed.count) continue
+      await this.restoreBenefits(companion)
+      if (companion.courseId) {
+        await this.redis
+          .unlockSeat(companion.courseId, companion.userId)
+          .catch(() => undefined)
+      }
+      if (paid && options.releaseSeat && companion.orderType === 'COURSE' && companion.courseId) {
+        await this.releaseSeatAndPromote(companion.courseId)
+      }
+      if (companion.course) {
+        await this.notification
+          .inviteCompanionCancelled(companion.userId, {
+            courseName: companion.course.title,
+            startTime: courseStartText(companion.course.startDate, companion.course.startTime),
+          })
+          .catch(() => undefined)
+      }
+    }
   }
 
   /**

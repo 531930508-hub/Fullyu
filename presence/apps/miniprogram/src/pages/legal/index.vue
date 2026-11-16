@@ -371,7 +371,7 @@ const MEMBER_ZH: LegalDoc = {
       h: '六、会员码、好友邀请、会员故事与意见反馈',
       p: [
         '会员码由 Full愈 通过活动或合作渠道发放，每个码有名额、兑换截止日期与对应天数，以兑换结果为准；同一账号每个码限兑一次，会员码不可转售。',
-        '品牌会员每月可在在场生成一定数量的好友邀请（以会员页显示为准）。好友登录后领取一张在场免费体验课券，每位好友限领一次，券有效期以领取结果为准，不可转让、不折现。',
+        '品牌会员每季可在在场生成 1 张好友邀请（以会员页显示为准），邀请 30 天内有效。好友登录后领取一张在场买一赠一券：领取后 3 个月内与邀请人报名同一节课，好友席免单；每张邀请只能被一位好友领取，同一账号可以领取多位好友的邀请、每次各得一张券，邀请人本人不能领取自己的邀请。邀请人退课或退款时，同席好友订单一并取消，券按原有效期恢复。券不可转让、不折现。',
         '有效会员可在会员页提交意见反馈。你勾选同意后，我们可能在匿名化处理（只保留姓氏）后将内容整理进「会员故事」，仅向会员展示。'
       ]
     },
@@ -450,7 +450,7 @@ const MEMBER_EN: LegalDoc = {
       h: '6. Member codes, friend invites, member stories and feedback',
       p: [
         'Member codes are issued by Full Yu through campaigns or partner channels. Each code has a quota, a redemption deadline and a number of days; the redemption result applies. Each account may redeem a code once, and codes cannot be resold.',
-        'Brand members can create a number of friend invites at Presence each month (as shown on the member page). A friend who logs in receives one free Presence trial class voucher; each friend can claim once. The voucher validity follows the claim result, and it cannot be transferred or converted to cash.',
+        'Brand members can create 1 friend invite at Presence each quarter (as shown on the member page); each invite is valid for 30 days. A friend who logs in receives one Presence buy-one-get-one voucher: within 3 months of claiming, book the same class as the inviter and the friend seat is free. Each invite can be claimed by one friend only; one account may claim invites from several friends, one voucher each; inviters cannot claim their own invite. If the inviter cancels or refunds, the friend seat is cancelled too and the voucher is restored with its original expiry. Vouchers cannot be transferred or converted to cash.',
         'Active members can submit feedback on the member page. If you agree, we may anonymise it (keeping only your surname) and include it in Member Stories, which are shown to members only.'
       ]
     },

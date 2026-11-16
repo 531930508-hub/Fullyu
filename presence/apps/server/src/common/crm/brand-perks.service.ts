@@ -24,18 +24,19 @@ const FRESH_MS = 60_000
 const STALE_MS = 24 * 60 * 60 * 1000
 const MAX_ENTRIES = 5000
 
-const NONE: BrandPresencePerks = { prioritySeat: false, tierPrice: false, invitesPerMonth: 0 }
+const NONE: BrandPresencePerks = { prioritySeat: false, tierPrice: false, invitesPerQuarter: 0 }
 
 function readPerks(raw: unknown): BrandPresencePerks {
   const presence =
     raw && typeof raw === 'object' ? ((raw as Record<string, unknown>).presence as unknown) : null
   if (!presence || typeof presence !== 'object') return NONE
   const record = presence as Record<string, unknown>
-  const invites = Number(record.invitesPerMonth)
+  // 2026-11 名额由每月改每季；旧卡快照仍是 invitesPerMonth，两种都读
+  const invites = Number(record.invitesPerQuarter ?? record.invitesPerMonth)
   return {
     prioritySeat: record.prioritySeat === true,
     tierPrice: record.tierPrice === true,
-    invitesPerMonth: Number.isInteger(invites) && invites > 0 ? invites : 0,
+    invitesPerQuarter: Number.isInteger(invites) && invites > 0 ? invites : 0,
   }
 }
 

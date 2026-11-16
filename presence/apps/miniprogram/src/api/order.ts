@@ -12,7 +12,7 @@ export interface EnrollQuote {
   allowDeduction: boolean
   pointsBalance: number
   maxPointsDeduction: number
-  vouchers: Array<{ id: string; amount: number; expiresAt: string }>
+  vouchers: Array<{ id: string; amount: number; expiresAt: string; mode?: string; targetPrice?: number | null; hostUserId?: string | null }>
   remaining: number
   isFull: boolean
   phase?: string

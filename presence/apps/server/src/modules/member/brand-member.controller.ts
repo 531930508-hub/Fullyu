@@ -23,17 +23,33 @@ import { RedisService } from '../../common/redis.service'
  * 品牌卡与积分以 CRM 为唯一账本（畅练卡已下线，不再合并本地卡）。
  * 购买/续费需要接入在场支付回调后再调用 CRM issue，本文件不提供绕过支付的入口。
  *
- * 2026-11-08 会议补充：会员码兑换、意见反馈、会员故事、每月邀请好友。
- * 邀请领取后由在场本地发「免费体验课」券（0 元报课），CRM 只记邀请关系与归因。
+ * 2026-11-08 会议补充：会员码兑换、意见反馈、会员故事、邀请好友。
+ * 2026-11-09 邀请改版：名额按自然季发放 1 张，好友领「买一赠一券」，
+ * 只能与邀请人报名同一节课并免费同行（券 3 个月有效，过期失效）。
+ * CRM 只记邀请关系与归因，券与同席约束都由在场落库执行。
  */
 
 const PRODUCT_CODE = /^FY_[A-Z0-9_]{2,30}$/
 const GIFT_CODE = /^[A-Z0-9]{4,16}$/
 const INVITE_CODE = /^[A-Z0-9]{4,16}$/
 const DAY_MS = 24 * 60 * 60 * 1000
-/** 好友体验课券有效期（天） */
+/** 买一赠一券有效期（月）：与 CRM 下一季发券首尾相接 */
+export const INVITE_VOUCHER_MONTHS = 3
+/** 旧 CRM（未返回邀请人）时退化为 30 天免费体验课券 */
 export const INVITE_VOUCHER_DAYS = 30
-export const inviteVoucherSource = (code: string) => `在场好友邀请体验课 · ${code}`
+export const inviteVoucherSource = (code: string) => `在场好友邀请买一赠一券 · ${code}`
+export const legacyInviteVoucherSource = (code: string) => `在场好友邀请体验课 · ${code}`
+
+/** 加自然月并夹住月末（1/31 + 3 个月 → 4/30，而不是溢出到 5/1）。 */
+function addMonths(from: Date, months: number): Date {
+  const at = new Date(from.getTime())
+  const day = at.getDate()
+  at.setDate(1)
+  at.setMonth(at.getMonth() + months)
+  const lastDay = new Date(at.getFullYear(), at.getMonth() + 1, 0).getDate()
+  at.setDate(Math.min(day, lastDay))
+  return at
+}
 
 const recordOf = (body: unknown): Record<string, unknown> =>
   body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
@@ -149,60 +165,79 @@ export class BrandMemberController {
   }
 
   @Get('invites')
-  @ApiOperation({ summary: '本月邀请名额与记录' })
+  @ApiOperation({ summary: '本季邀请名额与记录' })
   invites(@Request() req: any) {
     return this.client.invites(req.user.userId)
   }
 
   @Post('invites/create')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: '生成邀请码（占用本月名额）' })
+  @ApiOperation({ summary: '生成邀请码（占用本季名额）' })
   createInvite(@Request() req: any) {
     return this.client.createInvite(req.user.userId)
   }
 
   /**
-   * 好友领取邀请。CRM 先确认邀请有效并记归因，再由在场本地发体验课券。
+   * 好友领取邀请：CRM 确认邀请有效并回传邀请人，在场发「买一赠一券」并绑定 host。
    * 同一好友同一码重放时 CRM 返回 replayed，本地按来源查重，不重复发券；
-   * 若上次 CRM 成功但本地发券失败，重放会补发。
+   * 若上次 CRM 成功但本地发券失败，重放会补发。同一好友可领不同人的邀请，每次各得 1 张券。
    */
   @Post('invites/claim')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '领取好友邀请，获得在场免费体验课 1 节' })
+  @ApiOperation({ summary: '领取好友邀请，获得在场买一赠一券' })
   async claimInvite(@Request() req: any, @Body() body: unknown) {
     const userId = req.user.userId
     const code = readCode(body, INVITE_CODE, '邀请码格式不正确')
     return this.redis.withLock(`brand-invite-claim:${userId}`, async () => {
       const result = await this.client.claimInvite(userId, code)
-      const source = inviteVoucherSource(code)
+      const hostUserId = result.inviter?.localUserId || null
+      const source = hostUserId ? inviteVoucherSource(code) : legacyInviteVoucherSource(code)
+      // 升级窗口内可能已发过旧来源的券：两种来源一起查，避免同一码重复发券
       const existing = await this.prisma.voucher.findFirst({
-        where: { userId, source },
-        select: { id: true, expiresAt: true, status: true },
+        where: {
+          userId,
+          source: { in: [inviteVoucherSource(code), legacyInviteVoucherSource(code)] },
+        },
+        select: { id: true, expiresAt: true, status: true, hostUserId: true },
+        orderBy: { createdAt: 'desc' },
       })
       const voucher =
         existing ||
         (await this.prisma.voucher.create({
           data: {
             userId,
+            hostUserId,
             mode: 'REDUCE_TO',
             amount: 0,
             targetPrice: 0,
             applicableCourseIds: [],
             applicableAll: true,
-            expiresAt: new Date(Date.now() + INVITE_VOUCHER_DAYS * DAY_MS),
+            expiresAt: hostUserId
+              ? addMonths(new Date(), INVITE_VOUCHER_MONTHS)
+              : new Date(Date.now() + INVITE_VOUCHER_DAYS * DAY_MS),
             status: 'UNUSED',
             source,
           },
-          select: { id: true, expiresAt: true, status: true },
+          select: { id: true, expiresAt: true, status: true, hostUserId: true },
         }))
+      const isBogo = Boolean(voucher.hostUserId)
       return {
         claimed: true,
         replayed: result.replayed || Boolean(existing),
         voucher: {
           id: voucher.id,
-          title: '在场 · 免费体验课 1 节',
+          kind: isBogo ? 'PRESENCE_BOGO_CLASS' : 'PRESENCE_FREE_CLASS',
+          title: isBogo ? '在场 · 买一赠一券' : '在场 · 免费体验课 1 节',
           status: voucher.status,
           expiresAt: voucher.expiresAt,
+          daysLeft: Math.max(
+            0,
+            Math.ceil((voucher.expiresAt.getTime() - Date.now()) / DAY_MS),
+          ),
+          usage: isBogo
+            ? '与邀请人报名同一节课，好友免费同行；邀请人退课则本席一并取消'
+            : '任意可预约课程免费体验 1 次',
+          host: isBogo ? { nickname: result.inviter?.nickname || '你的好友' } : null,
         },
       }
     })

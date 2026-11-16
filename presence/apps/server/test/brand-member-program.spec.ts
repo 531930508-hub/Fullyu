@@ -174,13 +174,13 @@ describe('BrandPerksService：品牌会员权益缓存', () => {
   it('有效会员读 perks；非会员与档案未同步按非会员缓存', async () => {
     const me = jest
       .fn()
-      .mockResolvedValueOnce(payload('ACTIVE', { tierPrice: true, prioritySeat: true, invitesPerMonth: 3 }))
+      .mockResolvedValueOnce(payload('ACTIVE', { tierPrice: true, prioritySeat: true, invitesPerQuarter: 3 }))
       .mockResolvedValueOnce(payload('EXPIRED', { tierPrice: true }))
       .mockRejectedValueOnce(new BusinessException('同步中', 4041, HttpStatus.NOT_FOUND))
     const svc = new BrandPerksService({ enabled: true, me } as any, { remember: jest.fn() } as any)
 
     expect(await svc.resolve('a', 0)).toEqual({
-      perks: { tierPrice: true, prioritySeat: true, invitesPerMonth: 3 },
+      perks: { tierPrice: true, prioritySeat: true, invitesPerQuarter: 3 },
       unknown: false,
     })
     expect(await svc.resolve('a', 30_000)).toMatchObject({ unknown: false })
@@ -191,7 +191,7 @@ describe('BrandPerksService：品牌会员权益缓存', () => {
   })
 
   it('CRM 故障：24 小时内沿用上次结果，否则 unknown；forget 后重新查', async () => {
-    const perks = { tierPrice: true, prioritySeat: false, invitesPerMonth: 0 }
+    const perks = { tierPrice: true, prioritySeat: false, invitesPerQuarter: 0 }
     const me = jest
       .fn()
       .mockResolvedValueOnce(payload('ACTIVE', perks))
@@ -314,7 +314,7 @@ describe('候补优先排位：品牌会员 prioritySeat', () => {
     waitlistEntry: { count: async () => memberCount },
   })
   const brand = (prioritySeat: boolean) => ({
-    perks: { prioritySeat, tierPrice: true, invitesPerMonth: 2 },
+    perks: { prioritySeat, tierPrice: true, invitesPerQuarter: 2 },
     unknown: false,
   })
   const seat = (client: unknown, b?: unknown) =>

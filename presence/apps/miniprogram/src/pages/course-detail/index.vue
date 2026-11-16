@@ -110,8 +110,14 @@
           <view class="kv"><text>{{ tr('当前价格', 'Current price') }}</text><text>¥{{ toYuan(currentQuote.basePrice) }}</text></view>
           <view v-if="slotDiscount" class="slot-discount"><text>{{ slotDiscount.ruleName }}</text><text v-if="slotDiscount.actionType === 'FIXED_BY_DURATION' && slotDiscount.fixedPrice != null" class="secondary">{{ tr('会员时段价', 'Member time-slot price') }} ¥{{ slotDiscount.fixedPrice }}</text><text v-else-if="slotDiscount.discountPercent != null" class="secondary">{{ tr('时段计价比例', 'Time-slot rate') }} {{ slotDiscount.discountPercent }}%</text></view>
           <view v-if="currentQuote.discountAmount" class="kv"><text>{{ currentQuote.discountAmount > 0 ? tr('本次优惠', 'Discount') : tr('本次价格调整', 'Price adjustment') }}</text><text>{{ currentQuote.discountAmount > 0 ? '−' : '+' }}¥{{ toYuan(Math.abs(currentQuote.discountAmount)) }}</text></view>
-          <view class="kv total"><text>{{ tr('应付', 'Total') }}</text><text>¥{{ toYuan(currentQuote.priceAfterDiscount) }}</text></view>
+          <view v-if="voucherOptions.length" class="voucher-picks">
+            <view class="voucher-pick" :class="{ active: !selectedVoucherId }" @tap="selectedVoucherId = ''">{{ tr('不使用券', 'No voucher') }}</view>
+            <view v-for="option in voucherOptions" :key="option.id" class="voucher-pick" :class="{ active: selectedVoucherId === option.id }" @tap="selectedVoucherId = option.id">{{ option.label }}</view>
+          </view>
+          <view v-if="voucherDeductionFen > 0" class="kv"><text>{{ tr('代金券抵扣', 'Voucher') }}</text><text>−¥{{ toYuan(voucherDeductionFen) }}</text></view>
+          <view class="kv total"><text>{{ tr('应付', 'Total') }}</text><text>¥{{ toYuan(payableFen) }}</text></view>
         </view>
+        <text v-if="selectedVoucher?.hostUserId" class="secondary">{{ tr('买一赠一同席券：你和邀请人上同一节课，本单免单；邀请人退课时本单会一并取消。', 'BOGO seat: you take the same class as your inviter and this booking is free. If your inviter refunds, this booking is cancelled too.') }}</text>
         <text class="secondary">{{ tr('请确认课程安排。', 'Please review the schedule.') }}</text>
         <!-- 退款规则同意：下单前必须勾选，可展开查看规则明细 -->
         <view class="refund-consent">
@@ -125,7 +131,7 @@
           <text class="secondary">{{ tr('开课后不支持自助退款。', 'Self-service refunds are not available after the class starts.') }}</text>
         </view>
       </template>
-      <template #actions><button class="primary-btn full-btn" :disabled="busy || !currentQuote || !refundAgreed" :loading="busy" @tap="confirmBook">{{ busy ? tr('处理中', 'Processing') : `${tr('确认支付', 'Pay')} ¥${toYuan(currentQuote?.priceAfterDiscount)}` }}</button></template>
+      <template #actions><button class="primary-btn full-btn" :disabled="busy || !currentQuote || !refundAgreed" :loading="busy" @tap="confirmBook">{{ busy ? tr('处理中', 'Processing') : `${tr('确认支付', 'Pay')} ¥${toYuan(payableFen)}` }}</button></template>
     </BottomSheet>
 
     <BottomSheet :show="waitlistVisible" :title="tr('候补报名', 'Join waitlist')" :busy="busy" @close="closeWaitlist">
@@ -204,6 +210,8 @@ const refundAgreed = ref(false)
 const refundRulesOpen = ref(false)
 const waitlistVisible = ref(false)
 const currentQuote = ref<BookingQuote | null>(null)
+/** 结算时选中的代金券；买一赠一同席券只能用于与邀请人同上的这节课 */
+const selectedVoucherId = ref('')
 const waitlistQuote = ref<QueueQuote | null>(null)
 const pendingOrderId = ref('')
 const registrationComplete = ref(false)
@@ -212,6 +220,29 @@ const memberBenefitOpen = ref(false)
 const isMember = ref(false)
 const previewQuote = ref<BookingQuote | null>(null)
 const slotDiscount = computed(() => currentQuote.value?.timeDiscount ?? null)
+type VoucherOption = { id: string; label: string; hostUserId: string | null; deductionFen: number }
+const voucherOptions = computed<VoucherOption[]>(() => {
+  const quote = currentQuote.value
+  if (!quote) return []
+  const price = Number(quote.priceAfterDiscount) || 0
+  return (quote.vouchers || []).map((v) => {
+    const isBogo = Boolean(v.hostUserId) || (v.mode === 'REDUCE_TO' && Number(v.targetPrice) === 0)
+    const deductionFen = v.mode === 'REDUCE_TO' && v.targetPrice != null
+      ? Math.max(0, price - Number(v.targetPrice) * 100)
+      : Math.min(Number(v.amount) * 100, price)
+    const label = isBogo
+      ? tr('买一赠一 · 免单', 'BOGO · free seat')
+      : v.mode === 'REDUCE_TO' && v.targetPrice != null
+        ? tr(`减至 ¥${Number(v.targetPrice).toFixed(2)}`, `Reduce to ¥${Number(v.targetPrice).toFixed(2)}`)
+        : tr(`抵扣 ¥${(Number(v.amount) || 0).toFixed(2)}`, `¥${(Number(v.amount) || 0).toFixed(2)} off`)
+    return { id: v.id, label, hostUserId: v.hostUserId ?? null, deductionFen: Math.round(deductionFen) }
+  })
+})
+const selectedVoucher = computed(() => voucherOptions.value.find((option) => option.id === selectedVoucherId.value) || null)
+const voucherDeductionFen = computed(() => (currentQuote.value ? selectedVoucher.value?.deductionFen ?? 0 : 0))
+/** 弹层里展示的应付：询价价减去选中的券，最终以下单返回的 actualPaid 为准 */
+const payableFen = computed(() => Math.max(0, Number(currentQuote.value?.priceAfterDiscount ?? 0) - voucherDeductionFen.value))
+
 const syllabus = computed(() => course.value?.syllabus?.length ? course.value.syllabus : course.value?.sessions || [])
 const capacityKnown = computed(() => course.value && Number.isFinite(course.value.currentEnrolled) && Number.isFinite(course.value.maxCapacity) && course.value.maxCapacity > 0)
 const seatsLeft = computed(() => capacityKnown.value ? Math.max(0, course.value.maxCapacity - course.value.currentEnrolled) : 0)
@@ -487,7 +518,7 @@ function getUserPrice() {
   const tier = c.priceTiers.find((t: any) => position >= t.seatFrom && position <= t.seatTo)
   return tier ? tier.price : c.originalPrice
 }
-function closeBooking() { if (!busy.value) { bookingVisible.value = false; currentQuote.value = null } }
+function closeBooking() { if (!busy.value) { bookingVisible.value = false; currentQuote.value = null; selectedVoucherId.value = '' } }
 function closeWaitlist() { if (!busy.value) { waitlistVisible.value = false; waitlistQuote.value = null } }
 function handlePrimary() {
   if (busy.value) return
@@ -510,6 +541,9 @@ async function handleBook() {
     }
     if (quote.courseId !== course.value.id || quote.priceAfterDiscount == null || !Number.isFinite(Number(quote.priceAfterDiscount))) return
     currentQuote.value = quote
+    // 好友从邀请落地页来：只有一张同席券时直接选中，避免多一步操作。
+    const bogo = (quote.vouchers || []).filter((v) => Boolean(v.hostUserId))
+    selectedVoucherId.value = bogo.length === 1 ? bogo[0].id : (quote.vouchers || []).length === 1 ? quote.vouchers[0].id : ''
     refundAgreed.value = false
     refundRulesOpen.value = false
     bookingVisible.value = true
@@ -539,16 +573,17 @@ async function confirmBook() {
   try {
     await requestBookingReminders('BOOK')
     let order
-    try { order = await enrollCourse(course.value.id) } catch {
+    try { order = await enrollCourse(course.value.id, selectedVoucherId.value ? { voucherId: selectedVoucherId.value } : {}) } catch {
       // 保留下单失败与支付失败的区别：未创建订单，不提示续付。
       bookingVisible.value = false
       currentQuote.value = null
+      selectedVoucherId.value = ''
       return
     }
     pendingOrderId.value = order.orderId
     bookingVisible.value = false
     // 询价不占位，真正锁价在下单；并发导致变价时先让用户核对，不静默扣新金额。
-    if (Number(order.actualPaid) !== Number(currentQuote.value.priceAfterDiscount)) {
+    if (Number(order.actualPaid) !== Number(payableFen.value)) {
       promptPendingOrder(tr(`订单金额已更新为 ¥${toYuan(order.actualPaid)}，请到「我的预约」核对后继续支付。`, `The order total is now ¥${toYuan(order.actualPaid)}. Please review it in My Bookings before paying.`))
       return
     }
@@ -732,6 +767,9 @@ button[disabled] { opacity: .55; }
 .summary-box .subheading { margin-top: 0; }
 .total { margin-top: 12rpx; padding-top: 24rpx; border-top: 1rpx solid var(--line-soft); font-weight: 600; color: var(--c-primary); }
 .slot-discount { padding: 16rpx 0; color: var(--c-brown); }
+.voucher-picks { display: flex; flex-wrap: wrap; gap: 12rpx; margin: 8rpx 0 16rpx; }
+.voucher-pick { padding: 10rpx 20rpx; border-radius: 24rpx; background: var(--c-card-2); color: var(--c-brown); font-size: 24rpx; }
+.voucher-pick.active { background: var(--c-primary); color: var(--c-rice); }
 .full-btn { width: 100%; }
 .waitlist-card { margin-top: 24rpx; padding: 28rpx; border-radius: var(--radius-card); background: var(--c-card); box-shadow: var(--shadow-card); border-left: 6rpx solid var(--c-gold); }
 .waitlist-card-head { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }

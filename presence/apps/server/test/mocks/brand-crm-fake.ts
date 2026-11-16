@@ -24,7 +24,7 @@ export interface FakeBrandCrm {
   dice: number
   failNext: { status: number; body: unknown } | null
   delayMs: number
-  perks: { prioritySeat: boolean; tierPrice: boolean; invitesPerMonth: number }
+  perks: { prioritySeat: boolean; tierPrice: boolean; invitesPerQuarter: number }
   /** passRef → 附赠卡（含撤销状态） */
   bundles: Map<string, { localUserId: string; validFrom: string; validUntil: string; state: string }>
   /** orderRef → 已上报订单 */
@@ -92,7 +92,7 @@ export async function startFakeBrandCrm(options: {
     dice: 12,
     failNext: null,
     delayMs: 0,
-    perks: { prioritySeat: true, tierPrice: true, invitesPerMonth: 2 },
+    perks: { prioritySeat: true, tierPrice: true, invitesPerQuarter: 2 },
     bundles: new Map(),
     orders: new Map(),
     invites: new Map(),
@@ -171,7 +171,7 @@ export async function startFakeBrandCrm(options: {
         savedCents: 0,
         benefits: [{ business, title: '在场 · 课程会员价', desc: '没有畅练卡时按品牌会员价' }],
         businessCards: [],
-        perks: { presence: state.cardState === 'ACTIVE' ? state.perks : { prioritySeat: false, tierPrice: false, invitesPerMonth: 0 } },
+        perks: { presence: state.cardState === 'ACTIVE' ? state.perks : { prioritySeat: false, tierPrice: false, invitesPerQuarter: 0 } },
         game: {
           enabled: state.cardState === 'ACTIVE',
           dice: state.dice,
@@ -327,10 +327,10 @@ export async function startFakeBrandCrm(options: {
     if (req.method === 'GET' && route === '/api/v1/brand-member/invites') {
       const mine = [...state.invites.entries()].filter(([, v]) => v.inviter === localUserId)
       reply(res, 200, {
-        monthKey: '2026-11',
-        quota: state.perks.invitesPerMonth,
+        periodKey: '2026-Q4',
+        quota: state.perks.invitesPerQuarter,
         used: mine.length,
-        remaining: Math.max(0, state.perks.invitesPerMonth - mine.length),
+        remaining: Math.max(0, state.perks.invitesPerQuarter - mine.length),
         invites: mine.map(([code, v]) => ({
           code,
           status: v.invitee ? 'CLAIMED' : 'ISSUED',
@@ -348,8 +348,8 @@ export async function startFakeBrandCrm(options: {
         reply(res, 403, { error: 'MEMBERS_ONLY', message: '开通品牌会员后才能邀请好友' })
         return
       }
-      if (used >= state.perks.invitesPerMonth) {
-        reply(res, 409, { error: 'INVITE_QUOTA_EXCEEDED', message: '本月邀请名额已用完' })
+      if (used >= state.perks.invitesPerQuarter) {
+        reply(res, 409, { error: 'INVITE_QUOTA_EXCEEDED', message: '本季邀请名额已用完' })
         return
       }
       seq += 1
@@ -357,10 +357,10 @@ export async function startFakeBrandCrm(options: {
       state.invites.set(code, { inviter: localUserId, invitee: null, createdAt: '2026-11-08T10:00:00+08:00' })
       reply(res, 201, {
         code,
-        monthKey: '2026-11',
-        quota: state.perks.invitesPerMonth,
+        periodKey: '2026-Q4',
+        quota: state.perks.invitesPerQuarter,
         used: used + 1,
-        remaining: state.perks.invitesPerMonth - used - 1,
+        remaining: state.perks.invitesPerQuarter - used - 1,
         expiresAt: '2026-11-22T10:00:00+08:00',
       })
       return
@@ -368,14 +368,24 @@ export async function startFakeBrandCrm(options: {
 
     if (req.method === 'POST' && route === '/api/v1/brand-member/invites/claim') {
       const invite = state.invites.get(String(input.code || ''))
-      const voucher = { kind: 'PRESENCE_FREE_CLASS', title: '在场 · 免费体验课 1 节', issuer: 'presence' }
+      const voucher = {
+        kind: 'PRESENCE_BOGO_CLASS',
+        title: '在场 · 买一赠一券',
+        issuer: 'presence',
+        validMonths: 3,
+      }
       if (!invite) {
         reply(res, 404, { error: 'INVITE_INVALID', message: '邀请不存在或已失效' })
         return
       }
       if (invite.invitee) {
         if (invite.invitee === localUserId) {
-          reply(res, 201, { claimed: true, replayed: true, voucher })
+          reply(res, 201, {
+            claimed: true,
+            replayed: true,
+            voucher,
+            inviter: { localUserId: invite.inviter, nickname: '好友' },
+          })
           return
         }
         reply(res, 409, { error: 'INVITE_USED', message: '这份邀请已经被领取' })
@@ -386,7 +396,12 @@ export async function startFakeBrandCrm(options: {
         return
       }
       invite.invitee = localUserId
-      reply(res, 201, { claimed: true, replayed: false, voucher })
+      reply(res, 201, {
+        claimed: true,
+        replayed: false,
+        voucher,
+        inviter: { localUserId: invite.inviter, nickname: '好友' },
+      })
       return
     }
 

@@ -384,6 +384,7 @@ erDiagram
 | cancelTime / cancelReason | — | 取消时间与原因 |
 | refundAmount / refundTime | — | 退款金额与时间 |
 | voucherId | String? | 使用的代金券 |
+| sponsorOrderId | String? | 买一赠一好友席记的邀请人订单；邀请人退课时据此级联取消本单 |
 | orderType | OrderType | COURSE / MEMBERCARD 订单类型（决策 ✅） |
 | memberCardProductId | String? | 会员卡商品 id（购买的是哪款卡） |
 | memberCardId | String? | 支付成功后生成的会员卡唯一 id |
@@ -478,6 +479,7 @@ actualPaid = max(0, originalPrice − discountAmount − pointsDeduction − vou
 | expiresAt | DateTime | 有效期 |
 | status | VoucherStatus | UNUSED / USED / EXPIRED / REVOKED |
 | source | String | 来源描述 |
+| hostUserId | String? | 买一赠一券的邀请人；非空即「同席券」，报名需与邀请人同课 |
 | usedAt | DateTime? | 使用时间 |
 | createdAt | DateTime | 时间戳 |
 
@@ -485,6 +487,10 @@ actualPaid = max(0, originalPrice − discountAmount − pointsDeduction − vou
 - 下单时校验券：`status=UNUSED` + 未过期 + 课程适用（`applicableAll` 或 `courseId ∈ applicableCourseIds`）。
 - 使用后 `status=USED, usedAt=now`；到期定时任务置 `EXPIRED`；后台可 `REVOKED` 回收。
 - **决策 ✅（按建议扩展）**：Voucher 增 `mode`(REDUCE_BY 减额 / REDUCE_TO 减至)、`condition`(使用门槛金额)、`targetPrice`(减至目标价)；另建发放模板表记录发放方式(manual/all/card)与 maxIssue/issued/used 统计。
+- **买一赠一券**：好友领好友邀请时发放（`mode=REDUCE_TO, targetPrice=0`，即整单减至 0），有效期 3 个月，`hostUserId` 记邀请人。
+  - 报价/报名只展示「邀请人在这节课已付」的券；邀请人退课后券仍在但暂不可用。
+  - 报名校验：邀请人本人不能用自己发出的券；邀请人在同课有 `PAID/COMPLETED` 课程订单才可同席，并把该订单写入好友订单 `sponsorOrderId`。
+  - 邀请人退课/退款：同席好友单级联 `REFUNDED`（待支付则 `CANCELLED`），释放名额、回补积分，券按原有效期恢复（已过期置 `EXPIRED`，不延长），并下发「同席取消」通知。
 
 ---
 

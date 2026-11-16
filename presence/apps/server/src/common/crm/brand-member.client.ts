@@ -88,8 +88,8 @@ export type BrandPresencePerks = {
   prioritySeat: boolean
   /** 会员价（时段折扣 / 课程会员折扣，原挂在畅练卡上） */
   tierPrice: boolean
-  /** 每月可邀请好友免费体验次数 */
-  invitesPerMonth: number
+  /** 每季可邀请好友名额（1 张 = 1 位好友免费同行 1 节课）；旧 CRM 只回 invitesPerMonth，读入时归一 */
+  invitesPerQuarter: number
 }
 
 export type BrandDiceProgress = {
@@ -145,7 +145,10 @@ export type BrandPassBundle = {
 }
 
 export type BrandInviteList = {
-  monthKey: string
+  /** 名额周期键：自然季（如 2026-Q4） */
+  periodKey: string
+  /** @deprecated 旧字段，值已改为季度键，仅兼容未升级的 CRM */
+  monthKey?: string
   quota: number
   used: number
   remaining: number
@@ -155,12 +158,16 @@ export type BrandInviteList = {
     claimed: boolean
     createdAt: string
     claimedAt: string | null
+    /** 邀请码有效期（超过后用码直接过期，与券有效期是两件事） */
+    expiresAt?: string
   }>
 }
 
 export type BrandInviteCreated = {
   code: string
-  monthKey: string
+  periodKey?: string
+  /** @deprecated 同 periodKey */
+  monthKey?: string
   quota: number
   used: number
   remaining: number
@@ -170,7 +177,15 @@ export type BrandInviteCreated = {
 export type BrandInviteClaim = {
   claimed: boolean
   replayed: boolean
-  voucher: { kind: string; title: string; issuer: string }
+  voucher: {
+    kind: string
+    title: string
+    issuer: string
+    validMonths?: number
+    usage?: string
+  }
+  /** 邀请人（在场据此把券绑定到同席订单上）；旧 CRM 不返回 */
+  inviter?: { localUserId: string | null; memberNo?: string; nickname?: string }
 }
 
 /**

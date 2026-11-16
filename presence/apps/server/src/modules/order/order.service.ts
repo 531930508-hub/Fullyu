@@ -277,12 +277,18 @@ export class OrderService {
           })
         }
 
-        // 回补预占代金券
+        // 回补预占代金券：已过期的券不能复活，否则等于延长有效期
         if (order.voucherId) {
-          await tx.voucher.update({
-            where: { id: order.voucherId },
-            data: { status: 'UNUSED', usedAt: null },
-          })
+          const voucher = await tx.voucher.findUnique({ where: { id: order.voucherId } })
+          if (voucher) {
+            await tx.voucher.update({
+              where: { id: voucher.id },
+              data: {
+                status: voucher.expiresAt.getTime() > Date.now() ? 'UNUSED' : 'EXPIRED',
+                usedAt: null,
+              },
+            })
+          }
         }
 
         return true

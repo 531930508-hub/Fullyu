@@ -75,7 +75,7 @@ export interface BrandMemberData {
   vouchers?: BrandPickupVoucher[]
   /** 会员公告：后台发布后只对有效会员返回，置顶优先，最多 3 条。 */
   notices?: BrandNotice[]
-  perks?: { presence?: { prioritySeat: boolean; tierPrice: boolean; invitesPerMonth: number } }
+  perks?: { presence?: { prioritySeat: boolean; tierPrice: boolean; invitesPerQuarter: number } }
   benefits: BrandBenefit[]
   businessCards: LocalBusinessCard[]
   game: { enabled: boolean; dice: number; ticket?: string; url?: string | null }
@@ -123,7 +123,9 @@ export interface BrandStory {
 }
 
 export interface BrandInviteList {
-  monthKey: string
+  /** 名额周期：自然季（2026-Q4）；旧服务端只回 monthKey，保留兼容 */
+  periodKey: string
+  monthKey?: string
   quota: number
   used: number
   remaining: number
@@ -132,7 +134,8 @@ export interface BrandInviteList {
 
 export interface BrandInviteCreated {
   code: string
-  monthKey: string
+  periodKey: string
+  monthKey?: string
   quota: number
   used: number
   remaining: number
@@ -142,7 +145,10 @@ export interface BrandInviteCreated {
 export interface BrandInviteClaimed {
   claimed: boolean
   replayed: boolean
-  voucher: { id: string; title: string; status: string; expiresAt: string }
+  /** 买一赠一券：3 个月内有效，与邀请人同上一节课 */
+  voucher: { id: string; kind?: string; title: string; status: string; expiresAt: string; validMonths?: number }
+  /** 邀请人（旧 CRM 不返回时为 null，落地页退化为免费体验课券；新流程都返回买一赠一券） */
+  inviter?: { localUserId: string; nickname: string } | null
 }
 
 export interface BrandQuote {
@@ -308,7 +314,7 @@ export function createMockState(cardState = 'ACTIVE'): BrandMemberData {
           }
         ]
       : [],
-    perks: { presence: { prioritySeat: brandOn, tierPrice: brandOn, invitesPerMonth: brandOn ? 2 : 0 } },
+    perks: { presence: { prioritySeat: brandOn, tierPrice: brandOn, invitesPerQuarter: brandOn ? 1 : 0 } },
     benefits: BENEFITS.map((item) => ({ ...item })),
     businessCards: [],
     game: { enabled: brandOn, dice: brandOn ? 12 : 0 },
@@ -465,18 +471,18 @@ export function loadStories(): Promise<{ stories: BrandStory[] }> {
   return get('/member/brand/stories')
 }
 
-let mockInvites: BrandInviteList = { monthKey: '2026-11', quota: 2, used: 0, remaining: 2, invites: [] }
+let mockInvites: BrandInviteList = { periodKey: '2026-Q4', monthKey: '2026-Q4', quota: 2, used: 0, remaining: 2, invites: [] }
 
-/** 本月邀请名额与已发邀请；名额 N 由 CRM 会员卡权益配置。 */
+/** 本季邀请名额与已发邀请；名额 N 由 CRM 会员卡权益配置（每季 1 张）。 */
 export function loadInvites(): Promise<BrandInviteList> {
   if (isMock) return Promise.resolve(clone(mockInvites))
   return get('/member/brand/invites')
 }
 
-/** 生成一张邀请：每张只能被一位好友领取，占用本月一个名额。 */
+/** 生成一张邀请：每张只能被一位好友领取，占用本季一个名额。 */
 export function createInvite(): Promise<BrandInviteCreated> {
   if (isMock) {
-    if (mockInvites.remaining <= 0) return Promise.reject(new Error('本月邀请名额已用完'))
+    if (mockInvites.remaining <= 0) return Promise.reject(new Error('本季邀请名额已用完'))
     const code = `INV${String(mockInvites.used + 1).padStart(5, '0')}`
     mockInvites = {
       ...mockInvites,
@@ -484,12 +490,12 @@ export function createInvite(): Promise<BrandInviteCreated> {
       remaining: mockInvites.remaining - 1,
       invites: [{ code, status: 'OPEN', claimed: false, createdAt: nowText(), claimedAt: null }, ...mockInvites.invites]
     }
-    return Promise.resolve({ code, monthKey: mockInvites.monthKey, quota: mockInvites.quota, used: mockInvites.used, remaining: mockInvites.remaining, expiresAt: '2026-12-31' })
+    return Promise.resolve({ code, periodKey: mockInvites.periodKey, monthKey: mockInvites.monthKey, quota: mockInvites.quota, used: mockInvites.used, remaining: mockInvites.remaining, expiresAt: '2026-12-31' })
   }
   return post('/member/brand/invites/create')
 }
 
-/** 好友领取邀请：CRM 记关系，在场本地发一张 0 元体验课券。 */
+/** 好友领取邀请：CRM 记关系，在场本地发一张买一赠一券（3 个月内与邀请人同上 1 节课）。 */
 export function claimBrandInvite(code: string): Promise<BrandInviteClaimed> {
   const normalized = normalizeCode(code)
   if (isMock) {
@@ -497,7 +503,8 @@ export function claimBrandInvite(code: string): Promise<BrandInviteClaimed> {
     return Promise.resolve({
       claimed: true,
       replayed: false,
-      voucher: { id: 'v_mock', title: '在场 · 免费体验课 1 节', status: 'UNUSED', expiresAt: '2026-12-31' }
+      voucher: { id: 'v_mock', kind: 'PRESENCE_BOGO_CLASS', title: '在场 · 买一赠一券', status: 'UNUSED', expiresAt: '2026-12-31', validMonths: 3 },
+      inviter: { localUserId: 'local-mock-inviter', nickname: '林女士' }
     })
   }
   return post('/member/brand/invites/claim', { code: normalized })

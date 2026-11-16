@@ -42,7 +42,7 @@
           <view v-for="group in voucherGroups" :key="group.title" class="voucher-group">
             <text class="group-title">{{ group.title }} · {{ group.items.length }}</text>
             <view v-for="voucher in group.items" :key="voucher.id" class="voucher-card" :class="{ inactive: voucher.statusClass !== 'active' }">
-              <view class="voucher-value"><text class="voucher-mode">{{ voucher.modeLabel }}</text><text v-if="voucher.displayAmount !== null" class="voucher-amount">¥{{ voucher.displayAmount.toFixed(2) }}</text><text v-else class="voucher-mode">{{ tr('金额待确认', 'Amount pending') }}</text></view>
+              <view class="voucher-value"><text class="voucher-mode">{{ voucher.modeLabel }}</text><text v-if="voucher.valueText" class="voucher-amount">{{ voucher.valueText }}</text><text v-else class="voucher-mode">{{ tr('金额待确认', 'Amount pending') }}</text></view>
               <view class="voucher-copy">
                 <text class="voucher-name">{{ voucher.name }}</text>
                 <text class="secondary">{{ voucher.condition }}</text>
@@ -84,8 +84,8 @@ const pointsBalance = ref(0)
 const historyTotal = ref(0)
 const pointsHistory = ref<Array<{ id: string; title: string; amount: number; time: string }>>([])
 // mode/targetPrice are returned by the voucher service, but not yet declared in the shared client type.
-type ServerVoucher = VoucherItem & { mode?: string; targetPrice?: number | null }
-interface VoucherView { id: string; amount: number; displayAmount: number | null; modeLabel: string; name: string; condition: string; expire: string; statusLabel: string; statusClass: string; courseIds: string[]; applicableAll: boolean }
+type ServerVoucher = VoucherItem & { mode?: string; targetPrice?: number | null; kind?: string; hostUserId?: string | null }
+interface VoucherView { id: string; amount: number; displayAmount: number | null; valueText: string; modeLabel: string; name: string; condition: string; expire: string; statusLabel: string; statusClass: string; courseIds: string[]; applicableAll: boolean }
 const vouchers = ref<VoucherView[]>([])
 const usableVoucherCount = computed(() => vouchers.value.filter(v => v.statusClass === 'active').length)
 const voucherGroups = computed(() => [
@@ -100,8 +100,17 @@ function formatTime(value?: string) {
   if (isEnglish()) return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+/** 券有效期倒计时：买一赠一券只有 3 个月，临期要一眼看见。 */
+function remainingLabel(msLeft: number) {
+  const hours = Math.ceil(msLeft / 3600000)
+  if (hours <= 0) return tr('今天到期', 'Expires today')
+  if (hours < 24) return tr(`剩 ${hours} 小时`, `${hours}h left`)
+  return tr(`剩 ${Math.ceil(hours / 24)} 天`, `${Math.ceil(hours / 24)} days left`)
+}
 function toVoucher(v: ServerVoucher): VoucherView {
   const date = new Date(v.expiresAt).getTime()
+  // BOGO 券是 targetPrice=0 的减至券；老接口不回 kind 时用 hostUserId 识别
+  const isBogo = v.kind === 'PRESENCE_BOGO_CLASS' || Boolean(v.hostUserId)
   const expired = v.status === 'EXPIRED' || (Number.isFinite(date) && date <= Date.now())
   const amount = Number(v.amount)
   const reduceTo = v.mode === 'REDUCE_TO'
@@ -112,10 +121,17 @@ function toVoucher(v: ServerVoucher): VoucherView {
   const courseIds = Array.isArray(v.applicableCourseIds) ? v.applicableCourseIds : []
   return {
     id: v.id, amount, displayAmount,
-    modeLabel: reduceTo ? tr('减至券', 'Reduce-to voucher') : tr('减额券', 'Discount voucher'),
-    name: v.source || tr('代金券', 'Voucher'),
-    condition: v.applicableAll ? tr('全部课程可用', 'Valid for all courses') : tr(`指定 ${courseIds.length} 门课程可用`, `Valid for ${courseIds.length} selected courses`),
-    expire: formatTime(v.expiresAt) ? tr(`有效期至 ${formatTime(v.expiresAt)}`, `Valid until ${formatTime(v.expiresAt)}`) : tr('有效期信息暂缺', 'Expiry information unavailable'),
+    valueText: isBogo ? tr('免单', 'Free') : displayAmount !== null ? `¥${displayAmount.toFixed(2)}` : '',
+    modeLabel: isBogo ? tr('买一赠一', 'BOGO') : reduceTo ? tr('减至券', 'Reduce-to voucher') : tr('减额券', 'Discount voucher'),
+    name: v.source || (isBogo ? tr('好友邀请 · 买一赠一券', 'Friend invite · buy-one-get-one') : tr('代金券', 'Voucher')),
+    condition: isBogo
+      ? tr('和邀请人同上一节课，好友席免单', 'Take the same class as your inviter; their seat is free')
+      : v.applicableAll ? tr('全部课程可用', 'Valid for all courses') : tr(`指定 ${courseIds.length} 门课程可用`, `Valid for ${courseIds.length} selected courses`),
+    expire: formatTime(v.expiresAt)
+      ? (usable && Number.isFinite(date)
+          ? tr(`有效期至 ${formatTime(v.expiresAt)} · ${remainingLabel(date - Date.now())}`, `Valid until ${formatTime(v.expiresAt)} · ${remainingLabel(date - Date.now())}`)
+          : tr(`有效期至 ${formatTime(v.expiresAt)}`, `Valid until ${formatTime(v.expiresAt)}`))
+      : tr('有效期信息暂缺', 'Expiry information unavailable'),
     statusLabel, statusClass: usable ? 'active' : 'inactive', courseIds, applicableAll: v.applicableAll,
   }
 }
