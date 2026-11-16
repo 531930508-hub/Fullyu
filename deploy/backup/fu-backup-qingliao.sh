@@ -19,8 +19,10 @@ KEEP=${KEEP_DAYS:-7}
 
 # 保留策略：只认 $BASE 下形如 YYYY-MM-DD 的一级目录，按名字排序留最新 KEEP 份。
 # 不用 mtime：目录 mtime 会被 rsync/tar 解包、touch 等干扰；名字即备份日期，最确定。
+# 注意：函数里任何"最后一条命令非零"的写法都会让 set -e 直接终结整个备份脚本
+#       （presence/teahour 的旧 prune 就这么让 11-14 起的 OSS 上传静默跳过），统一收口到 return 0。
 prune_old() {
-  local keep=$KEEP total excess name d deleted=0
+  local keep=$KEEP total excess name d
   total=$(find "$BASE" -mindepth 1 -maxdepth 1 -type d -name '20??-??-??' 2>/dev/null | wc -l)
   if [ "$total" -le "$keep" ]; then
     echo "$(date '+%F %T') [retention] 现有 $total 份 <= 保留 $keep 份，无需清理"
@@ -28,7 +30,6 @@ prune_old() {
   fi
   excess=$((total - keep))
   echo "$(date '+%F %T') [retention] 现有 $total 份，保留最新 $keep 份，清理 $excess 份"
-  find "$BASE" -mindepth 1 -maxdepth 1 -type d -name '20??-??-??' 2>/dev/null | sort | head -n "$excess" |
   while IFS= read -r d; do
     name=$(basename "$d")
     # 护栏：名字必须是合法日期，且今天这份无论如何不删
@@ -37,10 +38,13 @@ prune_old() {
     [ "$d" = "$BASE/$name" ] || continue
     if [ "${DRY_RUN:-0}" = "1" ]; then
       echo "$(date '+%F %T') [retention] dry-run 将删除 $d"
+    elif rm -rf -- "$d"; then
+      echo "$(date '+%F %T') [retention] 已删除 $d"
     else
-      rm -rf -- "$d" && { echo "$(date '+%F %T') [retention] 已删除 $d"; deleted=$((deleted+1)); }
+      echo "$(date '+%F %T') [retention] 删除失败：$d"
     fi
-  done
+  done < <(find "$BASE" -mindepth 1 -maxdepth 1 -type d -name '20??-??-??' 2>/dev/null | sort | head -n "$excess")
+  return 0
 }
 
 mkdir -p "$BASE"
