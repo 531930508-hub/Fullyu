@@ -344,6 +344,19 @@ export class CourseService {
     return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) }
   }
 
+  /**
+   * 后台下拉用的课程选项（发券选「适用课程」等）。
+   * 走原生 SQL 只取 id/title/start_date：`courses.type` 在库里是 varchar，
+   * 一旦存在 Prisma 枚举之外的历史值（如 'camp'），findMany 反序列化会让整条查询报错，
+   * 下拉不该因为一条脏数据就整体不可用。
+   */
+  async adminOptions() {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; title: string; start_date: Date | null }>
+    >`SELECT id, title, start_date FROM courses WHERE status <> 'CANCELLED' ORDER BY start_date DESC, created_at DESC LIMIT 500`
+    return rows.map((row) => ({ id: row.id, title: row.title, startDate: row.start_date }))
+  }
+
   /** 课程状态中文名（用于报错提示） */
   private readonly STATUS_LABEL: Record<CourseStatus, string> = {
     DRAFT: '草稿',

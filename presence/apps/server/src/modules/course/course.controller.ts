@@ -46,6 +46,13 @@ export class CourseController {
     })
   }
 
+  @Get('admin/options')
+  @AdminAuth('course:view')
+  @ApiOperation({ summary: '后台课程下拉选项（轻量，读原始列，避免脏枚举值拖垮整条查询）' })
+  async adminOptions() {
+    return this.courseService.adminOptions()
+  }
+
   @Get()
   @ApiOperation({ summary: '获取课程列表' })
   async list(

@@ -341,7 +341,7 @@ import {
 } from '@/api/voucher'
 import { useAuthStore } from '@/stores/auth'
 import { adminListUsers } from '@/api/user'
-import { adminListCourses } from '@/api/course'
+import { adminCourseOptions } from '@/api/course'
 import { voucherStatusColor, voucherStatusLabel } from '@fullyu/shared'
 
 const loading = ref(false)
@@ -488,13 +488,16 @@ async function loadOptions() {
     userOptions.value = list.map((u: any) => ({ label: `${u.nickname || '未命名'}（${u.phone || u.id}）`, value: u.id }))
   } catch (e) {}
   try {
-    const res = await adminListCourses({ page: 1, pageSize: 200 })
-    const list = Array.isArray(res) ? res : (res?.items || res?.list || [])
-    courseOptions.value = list.map((c: any) => {
-      const dateStr = c.startDate ? new Date(c.startDate).toISOString().slice(0, 10).replace(/-/g, '') : ''
+    // 轻量选项接口：只取 id/title/startDate，不再整表反序列化课程枚举
+    const list = await adminCourseOptions()
+    courseOptions.value = (Array.isArray(list) ? list : []).map((c: any) => {
+      const dateStr = c.startDate ? dayjs(c.startDate).format('YYYYMMDD') : ''
       return { label: dateStr ? `${c.title}-${dateStr}` : c.title, value: c.id }
     })
-  } catch (e) {}
+  } catch (e) {
+    courseOptions.value = []
+    message.warning('课程下拉加载失败，指定课程暂不可选；请稍后重试或联系技术检查课程数据')
+  }
 }
 
 function openGrant() {

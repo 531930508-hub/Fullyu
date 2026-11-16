@@ -15,6 +15,11 @@ export function adminListCourses(params: CourseListParams) {
   return get('/courses/admin/list', params)
 }
 
+/** 后台下拉用的课程选项（只取 id/title/startDate，不受历史脏枚举值影响） */
+export function adminCourseOptions() {
+  return get('/courses/admin/options')
+}
+
 /** 课程详情 */
 export function getCourse(id: string) {
   return get(`/courses/${id}`)
