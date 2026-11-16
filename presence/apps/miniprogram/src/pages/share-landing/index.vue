@@ -29,7 +29,7 @@
           <text class="muted slogan">{{ tr('领取后得 1 张买一赠一券：3 个月内约上邀请人同上一节课，好友席免单。', 'Claim a buy-one-get-one voucher: take the same class as your inviter within 3 months, their seat is free.') }}</text>
           <view class="facts">
             <view class="fact"><text class="fact-label">{{ tr('权益', 'Benefit') }}</text><text class="fact-value">{{ tr('买一赠一券 ×1', '1 buy-one-get-one voucher') }}</text></view>
-            <view class="fact"><text class="fact-label">{{ tr('有效期', 'Valid') }}</text><text class="fact-value">{{ brandVoucher ? expiryLabel({ expiresAt: brandVoucher.expiresAt } as any) : tr(`领取后 ${brandVoucher?.validMonths || 3} 个月`, `${brandVoucher?.validMonths || 3} months after claim`) }}</text></view>
+            <view class="fact"><text class="fact-label">{{ tr('有效期', 'Valid') }}</text><text class="fact-value">{{ brandVoucher ? expiryLabel({ expiresAt: brandVoucher.expiresAt } as any) : tr('领取后 3 个月内有效', 'Valid for 3 months after claim') }}</text></view>
             <view v-if="brandVoucher && brandInviterName" class="fact"><text class="fact-label">{{ tr('邀请人', 'Inviter') }}</text><text class="fact-value">{{ brandInviterName }}</text></view>
           </view>
           <view class="notice">
