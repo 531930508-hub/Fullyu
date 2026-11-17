@@ -13,9 +13,12 @@ export type BrandOrderReportResult = { reported: number; refunded: number; skipp
 /**
  * 把已付款茶饮/零售订单的实付与累计退款上报给 Full愈 CRM，用于「每满 ¥300 得一颗骰子」。
  *
- * - 订单表是唯一持久来源：只扫最近 7 天已付款、有顾客、实付 > 0 的订单；
+ * - 扫最近 7 天已付款、有顾客、实付 > 0 的订单，外加最近 7 天有退款成功的订单：
+ *   退款可能发生在付款 7 天之后，只按 paidAt 扫会让老订单的累计退款永远到不了 CRM；
  * - CRM 按 orderRef 幂等（同额重放成功、改额 409），退款按累计金额上报，
  *   所以进程重启后重复上报不会多发骰子；内存指纹只用来省掉无变化的请求；
+ * - 累计退款与退款时间都取退款单事实：金额为全部成功退款单之和（与订单列取大，
+ *   兼容历史数据），退款时间为最后一笔成功退款的确认时间，而不是本轮同步时间；
  * - 任一失败都不记指纹，下一轮继续；服务不可用时整批停下，不把失败当成功。
  * - savedCents 取订单落库的年卡会员每杯立减总额；CRM 退款接口按累计退款比例冲回节省。
  */
@@ -71,13 +74,23 @@ export class BrandOrderReporter implements OnModuleInit, OnModuleDestroy {
   async runOnce(now: Date): Promise<BrandOrderReportResult> {
     const result: BrandOrderReportResult = { reported: 0, refunded: 0, skipped: 0, failed: 0 };
     if (!this.brand.enabled) return result;
+    const since = new Date(now.getTime() - WINDOW_MS);
+    const recentlyRefunded = await this.prisma.refundIntent.findMany({
+      where: { status: 'succeeded', updatedAt: { gte: since } },
+      select: { orderId: true }
+    });
+    const refundedOrderIds = [...new Set(recentlyRefunded.map((row) => row.orderId))];
     const orders = await this.prisma.order.findMany({
       where: {
         // 退款只累加 refundedCents、不改 paymentStatus，所以已退款订单仍在 paid 内。
         paymentStatus: 'paid',
         customerId: { not: null },
         totalCents: { gt: 0 },
-        paidAt: { gte: new Date(now.getTime() - WINDOW_MS) }
+        OR: [
+          { paidAt: { gte: since } },
+          // 退款发生在付款 7 天后：按退款失败/延迟上报的订单补扫，累计金额才不会停在旧值。
+          ...(refundedOrderIds.length ? [{ id: { in: refundedOrderIds } }] : [])
+        ]
       },
       orderBy: { paidAt: 'asc' },
       select: {
@@ -91,13 +104,33 @@ export class BrandOrderReporter implements OnModuleInit, OnModuleDestroy {
       take: 500
     });
 
+    // 一次取回本批订单的全部成功退款：累计金额是多次部分退款之和，
+    // 退款时间取最后一笔确认时间；只按窗口内的退款算会少报并触发 CRM 409。
+    const refunds = orders.length
+      ? await this.prisma.refundIntent.findMany({
+          where: { orderId: { in: orders.map((order) => order.id) }, status: 'succeeded' },
+          select: { orderId: true, amountCents: true, updatedAt: true }
+        })
+      : [];
+    const refundSummary = new Map<string, { cents: number; at: Date }>();
+    for (const refund of refunds) {
+      const summary = refundSummary.get(refund.orderId) ?? { cents: 0, at: refund.updatedAt };
+      summary.cents += refund.amountCents;
+      if (refund.updatedAt > summary.at) summary.at = refund.updatedAt;
+      refundSummary.set(refund.orderId, summary);
+    }
+
     let attempts = 0;
     for (const order of orders) {
       if (attempts >= BATCH) break;
       const customerId = order.customerId as string;
-      const refunded = Math.min(Math.max(0, order.refundedCents || 0), order.totalCents);
+      const summary = refundSummary.get(order.id);
+      // 历史数据可能只有订单列的累计值而没有退款单：金额取大，避免向 CRM 报小；此时没有真实退款时间。
+      const cumulative = Math.max(summary?.cents ?? 0, order.refundedCents || 0);
+      const refunded = Math.min(Math.max(0, cumulative), order.totalCents);
       const savedCents = Math.max(0, order.memberDiscountCents || 0);
-      const fingerprint = `${order.totalCents}:${refunded}:${savedCents}`;
+      // 退款时间也进指纹：先按历史累计值上报过、后来补到退款单时，需要用真实日期重报一次。
+      const fingerprint = `${order.totalCents}:${refunded}:${savedCents}:${summary?.at.getTime() ?? ''}`;
       if (this.sent.get(order.id) === fingerprint) {
         result.skipped += 1;
         continue;
@@ -120,7 +153,8 @@ export class BrandOrderReporter implements OnModuleInit, OnModuleDestroy {
           await this.brand.refundOrder(customerId, {
             orderRef: order.id,
             refundCents: refunded,
-            occurredAt: now.toISOString()
+            // 用退款实际确认时间；只有历史数据缺退款单时才退回本轮时间。
+            occurredAt: (summary?.at ?? now).toISOString()
           });
           result.refunded += 1;
         }
