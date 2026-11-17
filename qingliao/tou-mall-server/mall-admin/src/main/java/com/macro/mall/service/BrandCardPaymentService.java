@@ -19,6 +19,7 @@ import com.macro.mall.mapper.MemberCardOrderMapper;
 import com.macro.mall.mapper.OrderMapper;
 import com.macro.mall.pay.PayChannel;
 import com.macro.mall.pay.PayService;
+import com.macro.mall.pay.RefundPayResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -75,6 +76,8 @@ public class BrandCardPaymentService {
     private static final String REFUND_NONE = "NONE";
     private static final String REFUND_SUCCESS = "SUCCESS";
     private static final String REFUND_PENDING_CRM = "PENDING_CRM";
+    /** 渠道明确退款失败：钱没退出去，订单退回待人工处理 */
+    private static final String REFUND_FAILED = "FAILED";
 
     /** 下单防重：刚创建 60 秒内的待支付单视为同一次点击，直接拒绝。 */
     private static final int CREATE_DEDUP_SECONDS = 60;
@@ -358,7 +361,14 @@ public class BrandCardPaymentService {
         if ("F".equals(transStat)) {
             String message = "退款失败（汇付）：" + (hasText(bankMessage) ? bankMessage : "未返回原因")
                     + "，退款流水 " + (hasText(hfSeqId) ? hfSeqId : "-") + "，请人工核对";
+            // 钱没退出去却留在「已退款」= 用户钱货两空：退回待人工状态，
+            // 让后台退款入口重新可见，不再让这笔单伪装成退款完成。
+            order.setState(MemberCardOrder.STATE_PAID_PENDING);
+            order.setRefundState(REFUND_FAILED);
             order.setPayError(message.substring(0, Math.min(255, message.length())));
+            if (hasText(hfSeqId)) {
+                order.setRefundHfSeqId(hfSeqId);
+            }
             orderMapper.updateById(order);
             log.error("品牌会员卡退款失败回调, orderSn={}, bankMessage={}", orderSn, bankMessage);
             return;
@@ -495,6 +505,35 @@ public class BrandCardPaymentService {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    /**
+     * 发起汇付退款并取回退款流水号。
+     *
+     * <p>只有渠道明确受理才返回；明确拒绝可以安全重试，结果未知（可能已受理）
+     * 绝不能在本地落「已退款」，也不能让运营无脑重发——重试会用同一个 req_seq_id，
+     * 渠道幂等能兜住，但界面必须先告知「待确认」。</p>
+     */
+    private String requestRefundHfSeqId(Order refundOrder, BigDecimal refundAmount, String orderSn, String scene) {
+        RefundPayResult result;
+        try {
+            result = payService.refundPay(refundOrder, refundAmount);
+        } catch (RuntimeException e) {
+            log.error("品牌会员卡{}失败, orderSn={}, error={}", scene, orderSn, e.getMessage());
+            throw new BusinessException("退款通道处理失败，请稍后重试或联系工作人员", 503);
+        }
+        if (result.isFailed()) {
+            log.error("品牌会员卡{}被拒, orderSn={}, code={}, msg={}", scene, orderSn, result.getCode(), result.getMessage());
+            throw new BusinessException("退款通道拒绝：" + result.getMessage(), 503);
+        }
+        if (result.isUnknown()) {
+            log.error("品牌会员卡{}结果未知, orderSn={}, msg={}", scene, orderSn, result.getMessage());
+            throw new BusinessException("退款结果待确认，请勿重复提交，稍后到汇付后台核对", 409);
+        }
+        if (!hasText(result.getHfSeqId())) {
+            throw new BusinessException("退款通道处理失败，请稍后重试或联系工作人员", 503);
+        }
+        return result.getHfSeqId();
     }
 
     /**
@@ -902,15 +941,7 @@ public class BrandCardPaymentService {
             refundOrder.setHasRefundAmount(BigDecimal.ZERO);
             refundOrder.setState(OrderState.PAID_NOT_COMMENT.getValue());
             refundOrder.setRefundState(0);
-            try {
-                refundHfSeqId = payService.refundPay(refundOrder, centsToYuan(refundCents));
-            } catch (RuntimeException e) {
-                log.error("品牌会员卡汇付退款失败, orderSn={}, error={}", orderSn, e.getMessage());
-                throw new BusinessException("退款通道处理失败，请稍后重试或联系工作人员", 503);
-            }
-            if (refundHfSeqId == null || refundHfSeqId.isEmpty()) {
-                throw new BusinessException("退款通道处理失败，请稍后重试或联系工作人员", 503);
-            }
+            refundHfSeqId = requestRefundHfSeqId(refundOrder, centsToYuan(refundCents), orderSn, "汇付退款");
         } else {
             refundHfSeqId = "MOCK-REFUND-" + System.currentTimeMillis();
         }
@@ -1358,15 +1389,7 @@ public class BrandCardPaymentService {
             refundOrder.setHasRefundAmount(BigDecimal.ZERO);
             refundOrder.setState(OrderState.PAID_NOT_COMMENT.getValue());
             refundOrder.setRefundState(0);
-            try {
-                refundHfSeqId = payService.refundPay(refundOrder, centsToYuan(cents));
-            } catch (RuntimeException e) {
-                log.error("品牌会员卡协商退款（汇付）失败, orderSn={}, error={}", orderSn, e.getMessage());
-                throw new BusinessException("退款通道处理失败，请稍后重试或联系工作人员", 503);
-            }
-            if (!hasText(refundHfSeqId)) {
-                throw new BusinessException("退款通道处理失败，请稍后重试或联系工作人员", 503);
-            }
+            refundHfSeqId = requestRefundHfSeqId(refundOrder, centsToYuan(cents), orderSn, "协商退款（汇付）");
         } else {
             refundHfSeqId = "MOCK-REFUND-" + System.currentTimeMillis();
         }

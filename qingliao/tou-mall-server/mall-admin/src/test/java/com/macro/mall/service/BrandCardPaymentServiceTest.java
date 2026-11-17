@@ -15,6 +15,7 @@ import com.macro.mall.entity.Order;
 import com.macro.mall.mapper.MemberCardOrderMapper;
 import com.macro.mall.mapper.OrderMapper;
 import com.macro.mall.pay.PayService;
+import com.macro.mall.pay.RefundPayResult;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -688,7 +689,8 @@ class BrandCardPaymentServiceTest {
         MemberCardOrder order = paidOrder(37L, LocalDateTime.now().minusDays(1));
         order.setMerOrdId("C202611081200000037A001");
         when(orderMapper.selectOne(any())).thenReturn(order);
-        when(payService.refundPay(any(Order.class), any(BigDecimal.class))).thenReturn("H-REFUND-37");
+        when(payService.refundPay(any(Order.class), any(BigDecimal.class)))
+                .thenReturn(RefundPayResult.accepted("H-REFUND-37", null, null));
         when(orderMapper.selectList(any())).thenReturn(new ArrayList<>());
 
         service.refund(CUSTOMER_ID, order.getOrderSn(), "退款", false, null);
