@@ -644,16 +644,20 @@ public class DouGongPayClient implements IPayClient {
 
     /** 与退款发起保持同一个商户号，否则查不到别的商户下的交易 */
     private String initCertForShop(Order order) {
-        if (order.getShopId() != null && order.getShopId() == 8) {
-            doInit3();
-            return PayCert.sysId3;
+        try {
+            if (order.getShopId() != null && order.getShopId() == 8) {
+                doInit3();
+                return PayCert.sysId3;
+            }
+            if (order.getShopId() != null && order.getShopId() == 1) {
+                doInit2();
+                return PayCert.sysId2;
+            }
+            doInit1();
+            return PayCert.sysId1;
+        } catch (Exception e) {
+            throw new ApiException("初始化支付证书失败");
         }
-        if (order.getShopId() != null && order.getShopId() == 1) {
-            doInit2();
-            return PayCert.sysId2;
-        }
-        doInit1();
-        return PayCert.sysId1;
     }
 
     public static String convertChannelId2TradeType(String channelId) {

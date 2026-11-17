@@ -13,7 +13,9 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.servlet.http.HttpServletRequest;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Collections;
@@ -76,7 +78,7 @@ public class BrandCardWebhookController {
             return unauthorized();
         }
 
-        byte[] body = request.getInputStream().readAllBytes();
+        byte[] body = readAll(request.getInputStream());
         String expected = sign(properties.getSecret(), timestamp, nonce, webhookPath, body);
         if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8),
                 signature.getBytes(StandardCharsets.UTF_8))) {
@@ -105,6 +107,17 @@ public class BrandCardWebhookController {
 
     private static boolean isEmpty(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    /** Java 8 兼容：ServletInputStream#readAllBytes 是 Java 9+ API */
+    private static byte[] readAll(InputStream input) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int read;
+        while ((read = input.read(chunk)) != -1) {
+            buffer.write(chunk, 0, read);
+        }
+        return buffer.toByteArray();
     }
 
     static String sign(String secret, String timestamp, String nonce, String path, byte[] body)
