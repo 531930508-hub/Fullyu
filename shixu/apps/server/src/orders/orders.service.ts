@@ -2039,7 +2039,13 @@ export class OrdersService {
       throw forbidden('当前账号没有退款权限');
     }
     if (order.paymentStatus !== 'paid') throw conflict('订单未支付，不能退款');
-    if (order.refundPending) throw conflict('该订单已有待审批的退款申请');
+    if (order.refundPending) {
+      // 被占住时要说清是「有退款在途」还是「有退款申请在等审批」，门店的处理动作不同。
+      const open = await this.prisma.refundIntent.count({
+        where: { orderId: order.id, status: { in: ['occupied', 'processing', 'unknown'] } }
+      });
+      throw conflict(open ? '该订单有退款处理中，请稍后核对' : '该订单已有待审批的退款申请');
+    }
     const quote = await this.quoteRefund(order, options.lines);
     if (quote.amount <= 0) throw conflict('退款金额为 0');
     const prepared = await this.isPrepared(order);
@@ -2140,7 +2146,25 @@ export class OrdersService {
       const fresh = await tx.order.findUnique({ where: { id: order.id } });
       if (!fresh) throw notFound('订单不存在');
       if (fresh.paymentStatus !== 'paid') throw conflict('订单未支付，不能退款');
-      if (fresh.refundPending && !opts.approvalId) throw conflict('该订单已有待审批的退款申请');
+      // 直退没有审批行可认领，必须先在订单行上抢同一个条件位：
+      // MySQL 是 RR 隔离，两个并发退款都会读到 refundPending=false、都通过金额与
+      // pendingRefundQty 校验，最后双双落账（11-17 在 teahour_test 上实测复现，
+      // refund-chain.spec.ts「TX-04 并发重复退款」拿到 [201,201]）。SQLite 时代靠
+      // 全库串行写掩盖了这个洞。审批路径的串行点是下面的 approval.updateMany。
+      if (!opts.approvalId) {
+        const claimed = await tx.order.updateMany({
+          where: { id: order.id, refundPending: false },
+          data: { refundPending: true }
+        });
+        if (!claimed.count) {
+          // 提示要区分两种占用：还有在途退款单（渠道未知/处理中）时说“处理中”，
+          // 只是审批单占着位时才说“待审批”，否则门店按提示会走错处理路径。
+          const open = await tx.refundIntent.count({
+            where: { orderId: order.id, status: { in: ['occupied', 'processing', 'unknown'] } }
+          });
+          throw conflict(open ? '该订单有退款处理中，请稍后核对' : '该订单已有待审批的退款申请');
+        }
+      }
       // 先认领审批行再校验金额：并发批准时第二笔必须以「已被处理」失败，
       // 而不是走到金额冲突被上层记成一条“已通过但执行失败”的误导记录。
       // refundIntentId 为空才可认领：前一笔执行中/待人工核对的退款单不能被第二次批准覆盖。
@@ -2314,6 +2338,13 @@ export class OrdersService {
       }
       if (fresh.approvalId) {
         await tx.approval.update({ where: { id: fresh.approvalId }, data: { executionStatus: status } });
+      } else {
+        // 直退在 occupyRefund 里抢过 refundPending，失败/撤销要还回去，
+        // 否则这单以后再也发不起退款（审批路径的 refundPending 由审批生命周期管，不动）。
+        await tx.order.updateMany({
+          where: { id: fresh.orderId, refundPending: true },
+          data: { refundPending: false }
+        });
       }
       const order = await tx.order.findUnique({ where: { id: intent.orderId } });
       await logAction(tx, {
