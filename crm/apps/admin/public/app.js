@@ -56,7 +56,6 @@
     { id: 'adjustments', label: '调整审批', group: '会员与积分', any: ['crm:adjust:create', 'crm:adjust:approve', 'crm:adjust:batch'] },
     { id: 'brand-cards', label: '品牌会员', group: '卡与规则', perm: 'crm:card:view' },
     { id: 'issued-cards', label: '会员卡台账', group: '卡与规则', perm: 'crm:card:view' },
-    { id: 'business-cards', label: '业务会员卡', group: '卡与规则', perm: 'crm:card:view' },
     { id: 'rules', label: '规则配置', group: '卡与规则', perm: 'crm:config:edit' },
     { id: 'prizes', label: '游戏礼物', group: '愈行之旅', perm: 'crm:member:view' },
     { id: 'gifts', label: '会员码', group: '会员运营', perm: 'crm:card:view' },
@@ -1478,80 +1477,6 @@
             reportError(error);
           }
         });
-      });
-    });
-  }
-
-  /* ---------------------------------------------------------------- 业务会员卡 */
-
-  async function pageBusinessCards(ctx) {
-    ctx.setTitle('业务会员卡', '业务自有的卡目录；来源系统与售卖归属只读，CRM 只维护展示与排序');
-    const data = await api('/business-cards');
-    ctx.view.innerHTML = `
-      <div class="panel">
-        <div class="note">在场畅练卡、轻疗旧卡等由业务端拥有；CRM 不伪造有效期或权益，只读展示并提供管理路径。</div>
-      </div>
-      <div class="panel">
-        <div class="table-wrap"><table>
-          <thead><tr><th>业务</th><th>卡</th><th>权益</th><th>来源</th><th>售卖</th><th>状态</th><th>管理</th></tr></thead>
-          <tbody>
-            ${
-              data.cards.length
-                ? data.cards
-                    .map(
-                      (card) => `<tr>
-                        <td>${esc(card.businessName || biz(card.business))}</td>
-                        <td>${esc(card.name)}<div class="help mono">${esc(card.cardCode)}</div></td>
-                        <td class="small">${esc(card.benefit)}${card.description ? `<div class="help">${esc(card.description)}</div>` : ''}</td>
-                        <td class="small">${esc(card.sourceSystem)}${card.readOnly ? ' · 只读' : ''}</td>
-                        <td>${card.sellableInCrm ? pill('CRM 可售', 'green') : '业务端售卖'}</td>
-                        <td>${statusPill(card.status)}</td>
-                        <td>${
-                          can('crm:card:edit')
-                            ? `<details><summary class="small">编辑</summary>
-                                <form class="biz-form" data-business="${esc(card.business)}" data-code="${esc(card.cardCode)}" style="margin-top:10px;min-width:260px">
-                                  <div class="field"><label>名称</label><input name="name" value="${esc(card.name)}" maxlength="30" /></div>
-                                  <div class="field"><label>权益</label><input name="benefit" value="${esc(card.benefit)}" maxlength="120" /></div>
-                                  <div class="field"><label>补充说明</label><input name="description" value="${esc(card.description)}" maxlength="300" /></div>
-                                  <div class="field"><label>管理路径</label><input name="managePath" value="${esc(card.managePath)}" maxlength="200" /></div>
-                                  <div class="field"><label>状态</label><select name="status">${options([['ACTIVE', '上架'], ['HIDDEN', '隐藏']], card.status)}</select></div>
-                                  <div class="field"><label>排序</label><input name="sort" type="number" value="${card.sort}" /></div>
-                                  <button class="btn small" type="submit">保存</button>
-                                </form>
-                              </details>`
-                            : `<span class="small">${esc(card.managePath || '—')}</span>`
-                        }</td>
-                      </tr>`
-                    )
-                    .join('')
-                : emptyRow(7)
-            }
-          </tbody>
-        </table></div>
-      </div>`;
-    ctx.view.querySelectorAll('.biz-form').forEach((form) => {
-      form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const values = formValues(form);
-        try {
-          await guard(event.submitter, async () => {
-            await api(`/business-cards/${form.dataset.business}/${form.dataset.code}`, {
-              method: 'PATCH',
-              body: {
-                name: values.name,
-                benefit: values.benefit,
-                description: values.description,
-                managePath: values.managePath,
-                status: values.status,
-                sort: Number(values.sort) || 0
-              }
-            });
-            toast('业务卡展示信息已更新');
-            route();
-          });
-        } catch (error) {
-          reportError(error);
-        }
       });
     });
   }
@@ -3374,9 +3299,28 @@
     const perms = data.permissions;
     ctx.view.innerHTML = `
       <div class="panel">
+        <div class="panel-head"><h2>角色概览</h2><span class="help">共 ${data.roles.length} 个角色，按创建时间排列</span></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>角色</th><th>说明</th><th>人员数量</th><th>创建时间</th><th>类型</th></tr></thead>
+          <tbody>
+            ${data.roles
+              .map(
+                (role) => `<tr>
+                  <td>${esc(role.name)}<div class="help mono">${esc(role.id)}</div></td>
+                  <td class="small">${esc(role.description || '—')}</td>
+                  <td>${role.staffCount} 人</td>
+                  <td class="small">${fmt(role.createdAt)}</td>
+                  <td>${role.builtin ? pill('内置') : pill('自定义', 'green')}</td>
+                </tr>`
+              )
+              .join('')}
+          </tbody>
+        </table></div>
+      </div>
+      <div class="panel">
         <div class="matrix">
           <table>
-            <thead><tr><th>权限</th>${data.roles.map((role) => `<th>${esc(role.name)}<div class="help">${esc(role.id)}</div></th>`).join('')}</tr></thead>
+            <thead><tr><th>权限</th>${data.roles.map((role) => `<th>${esc(role.name)}<div class="help">${esc(role.description || role.id)}</div></th>`).join('')}</tr></thead>
             <tbody>
               ${perms
                 .map(
@@ -3397,6 +3341,25 @@
             </tbody>
           </table>
         </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>新建角色</h2><span class="help">创建后可在上方权限矩阵继续调整</span></div>
+        <form id="role-create-form">
+          <div class="form-grid">
+            <div class="field"><label>角色名称</label><input name="name" required maxlength="20" placeholder="例如：市场" /></div>
+            <div class="field full"><label>角色说明</label><input name="description" maxlength="200" placeholder="说明该角色的职责范围" /></div>
+          </div>
+          <div class="field" style="margin-top:12px"><label>权限点</label>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">
+              ${perms
+                .map(
+                  (perm) => `<label class="check"><input type="checkbox" name="role-perm" value="${esc(perm.code)}" />${esc(perm.name)} <span class="help mono">${esc(perm.code)}</span></label>`
+                )
+                .join('')}
+            </div>
+          </div>
+          <div class="row-actions" style="margin-top:14px"><button class="btn" type="submit">创建角色</button></div>
+        </form>
       </div>
       <div class="panel">
         <div class="panel-head"><h2>保存角色</h2><span class="help">取消勾选并保存后，该角色下一次请求即失去权限</span></div>
@@ -3428,6 +3391,26 @@
         });
       });
     });
+    const createForm = document.getElementById('role-create-form');
+    createForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const values = formValues(createForm);
+      const selected = [...createForm.querySelectorAll('input[name="role-perm"]:checked')].map(
+        (input) => input.value
+      );
+      await guard(event.submitter, async () => {
+        try {
+          await api('/roles', {
+            method: 'POST',
+            body: { name: values.name, description: values.description, perms: selected }
+          });
+          toast('角色已创建');
+          route();
+        } catch (error) {
+          reportError(error);
+        }
+      });
+    });
   }
 
   /* ---------------------------------------------------------------- 启动 */
@@ -3439,7 +3422,6 @@
     adjustments: pageAdjustments,
     'brand-cards': pageBrandCards,
     'issued-cards': pageIssuedCards,
-    'business-cards': pageBusinessCards,
     rules: pageRules,
     prizes: pagePrizes,
     gifts: pageGifts,
