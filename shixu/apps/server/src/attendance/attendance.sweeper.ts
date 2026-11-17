@@ -1,4 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { taskGateOrLog } from '../common/tasks-config';
 import { AttendanceService } from './attendance.service';
 
 const TICK_MS = 5 * 60_000;
@@ -18,6 +19,7 @@ export class AttendanceSweeper implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) return;
+    if (!taskGateOrLog('attendance', this.logger, '考勤清扫')) return;
     if (['0', 'false', 'off'].includes(String(process.env.ATTENDANCE_SWEEP_ENABLED || '').toLowerCase())) {
       return;
     }

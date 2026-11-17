@@ -1,4 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { taskGateOrLog } from '../common/tasks-config';
 import { OrdersService } from './orders.service';
 
 const SHANGHAI = 'Asia/Shanghai';
@@ -40,6 +41,7 @@ export class DailySweepService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     // 集成测试里订单由用例自己控制，避免定时任务在断言中途改状态。
     if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) return;
+    if (!taskGateOrLog('daily-sweep', this.logger, '订单日清扫')) return;
     if (['0', 'false', 'off'].includes(String(process.env.READY_SWEEP_ENABLED || '').toLowerCase())) return;
     void this.tick();
     this.timer = setInterval(() => void this.tick(), TICK_MS);

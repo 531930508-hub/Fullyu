@@ -1,5 +1,6 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import type { StaffContext } from '../common/auth.types';
+import { taskGateOrLog } from '../common/tasks-config';
 import { CouponMonthlyService } from './coupon-monthly.service';
 import { CouponRulesService } from './coupon-rules.service';
 
@@ -45,6 +46,7 @@ export class CouponRuleScheduler implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) return;
+    if (!taskGateOrLog('coupon', this.logger, '券规则调度')) return;
     if (!autoRunGloballyAllowed(process.env.COUPON_RULES_ENABLED)) {
       this.logger.warn('COUPON_RULES_ENABLED 已关闭，全部发券规则停止自动执行');
       return;

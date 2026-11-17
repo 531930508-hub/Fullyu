@@ -1,5 +1,6 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { taskGateOrLog } from '../common/tasks-config';
 import { BrandMemberClient, BrandResponseError } from './brand-member.client';
 
 const TICK_MS = 60_000;
@@ -34,6 +35,7 @@ export class BrandOrderReporter implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) return;
+    if (!taskGateOrLog('brand-order', this.logger, '品牌订单上报')) return;
     if (!this.switchedOn()) return;
     if (!this.brand.enabled) return;
     void this.tick();
