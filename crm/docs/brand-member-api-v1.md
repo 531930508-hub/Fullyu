@@ -1,7 +1,7 @@
 # Full愈品牌会员 · 三端接口契约 v1（本地联调版）
 
 日期：2026-11-08
-状态：三端 UI 与本地 mock 依据；**CRM 1B（产品/版本/业务卡目录）与 1C 品牌会员签名接口已于本地实现，骰子规则与 game/roll 尚未实现**。本文是联调契约，不是上线或真实开卡授权。
+状态：三端 UI 与本地 mock 依据；**CRM 1B（大会员卡产品/版本）与 1C 品牌会员签名接口已于本地实现，骰子规则与 game/roll 尚未实现**。本文是联调契约，不是上线或真实开卡授权。
 
 ## 1. 产品口径
 
@@ -76,18 +76,6 @@
     { "business": "retreat", "title": "轻疗 · 项目会员价", "desc": "提前预约 7.8 折，当日 8.8 折" },
     { "business": "presence", "title": "在场 · 课程会员价", "desc": "课程会员价，具体以在场课程配置为准" }
   ],
-  "businessCards": [
-    {
-      "business": "presence",
-      "type": "PRESENCE_PASS",
-      "name": "在场畅练卡",
-      "state": "ACTIVE",
-      "validUntil": "2026-12-31",
-      "remainingDays": 53,
-      "benefit": "有效期内课程免费",
-      "managePath": "/pages/member/index"
-    }
-  ],
   "game": {
     "enabled": true,
     "dice": 12,
@@ -106,7 +94,7 @@
 - `PENDING`：续费已支付、尚未生效，显示新卡期开始日。
 - 未登录也返回 `NONE`，不返回空对象，避免前端把失败当空数据。
 
-1C 实现补充：响应 `card` 另带 `cardId`；已有生效卡且又有续费时，`card` 是当前卡，`pendingCard` 是待生效卡。`savedCents` 尚无账本来源，暂返回 0；`businessCards` 暂返回 `[]`，CRM 1C 尚未收到在场畅练卡/轻疗历史卡的会员级卡期快照，不以目录冒充持卡。`game.url` 在 `CRM_GAME_URL` 未配置时为 `null`，不伪造可玩。
+1C 实现补充：响应 `card` 另带 `cardId`；已有生效卡且又有续费时，`card` 是当前卡，`pendingCard` 是待生效卡。`savedCents` 尚无账本来源，暂返回 0。`game.url` 在 `CRM_GAME_URL` 未配置时为 `null`，不伪造可玩。
 
 ## 3.1 产品目录
 

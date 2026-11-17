@@ -176,7 +176,6 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
       'retreat',
       'teahour'
     ]);
-    expect(res.body.businessCards).toEqual([]);
     expect(res.body.game.enabled).toBe(true);
     expect(res.body.game.dice).toBe(12);
     expect(res.body.game.url).toContain('https://game.test/play');
@@ -269,7 +268,6 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     expect(res.body.card).toEqual({ state: 'NONE' });
     expect(res.body.points.balance).toBe(0);
     expect(res.body.benefits).toEqual([]);
-    expect(res.body.businessCards).toEqual([]);
     expect(res.body.game.enabled).toBe(false);
     expect(res.body.game.url).toBeNull();
   });

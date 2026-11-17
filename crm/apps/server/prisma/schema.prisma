@@ -35,6 +35,7 @@ model CrmRole {
   description String      @default("")
   builtin     Boolean     @default(false)
   permsJson   String      @map("perms_json")
+  createdAt   DateTime    @default(now()) @map("created_at")
   staff       StaffRole[]
 
   @@map("crm_roles")
@@ -224,27 +225,6 @@ model BrandCardVersion {
   @@unique([productCode, version])
   @@index([productCode, status])
   @@map("brand_card_versions")
-}
-
-// 1B 业务会员卡目录：只描述各业务自有卡，CRM 不接管卡期与核销。
-model BusinessCardCatalog {
-  id            String   @id
-  business      String
-  cardCode      String   @map("card_code")
-  name          String
-  benefit       String
-  description   String   @default("")
-  sourceSystem  String   @map("source_system") // crm | presence | retreat
-  readOnly      Boolean  @default(true) @map("read_only")
-  sellableInCrm Boolean  @default(false) @map("sellable_in_crm")
-  managePath    String   @default("") @map("manage_path")
-  status        String   @default("ACTIVE") // ACTIVE | HIDDEN
-  sort          Int      @default(0)
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  @@unique([business, cardCode])
-  @@index([business, status, sort])
-  @@map("business_card_catalog")
 }
 
 // 1C 三端签名接口：nonce 只保留一个有效窗口，过期即清理，防重放。

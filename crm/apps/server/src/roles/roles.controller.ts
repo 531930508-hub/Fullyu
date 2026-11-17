@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { RequirePerm, Staff } from '../auth/decorators';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { StaffGuard } from '../auth/staff.guard';
@@ -14,6 +14,15 @@ export class RolesController {
   @RequirePerm('crm:role:edit')
   list() {
     return this.roles.list();
+  }
+
+  @Post()
+  @RequirePerm('crm:role:edit')
+  create(
+    @Body() body: { name?: unknown; description?: unknown; perms?: unknown },
+    @Staff() staff: StaffContext
+  ) {
+    return this.roles.create(body, staff);
   }
 
   @Patch(':id')

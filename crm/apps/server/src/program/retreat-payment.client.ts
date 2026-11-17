@@ -6,7 +6,7 @@ import { ApiError } from '../common/errors';
  * CRM → 轻疗内部支付接口。
  * 签名串：timestamp\nnonce\nMETHOD\nrequestURI(+?query)\nsha256hex(body)
  * 配置：CRM_RETREAT_BASE_URL / CRM_RETREAT_KEY_ID / CRM_RETREAT_SECRET，三者齐全才启用。
- * baseUrl 指向轻疗服务的对外根（例：https://mall-test.fullyu.cn/api），签名只覆盖 /crm-internal 相对路径。
+ * baseUrl 指向轻疗服务的对外根（例：https://test-cityretreat.fullyu.cn/api），签名只覆盖 /crm-internal 相对路径。
  */
 export type RetreatConfig = {
   baseUrl: string;
