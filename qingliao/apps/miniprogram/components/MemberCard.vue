@@ -110,7 +110,7 @@
 	const opened = ref(false)
 
 	const BRAND_LABEL = { all: '全品牌', retreat: '轻疗', teahour: '时叙', presence: '在场' }
-	const BRAND_LABEL_EN = { all: 'All brands', retreat: 'Light Heal', teahour: 'Teahour', presence: 'Presence' }
+	const BRAND_LABEL_EN = { all: 'All brands', retreat: 'City Retreat', teahour: 'Teahour', presence: 'Presence' }
 	const STATE_EN = {
 		ACTIVE: 'Active',
 		EXPIRING: 'Expiring',
@@ -140,7 +140,7 @@
 	})
 	const whoLine = computed(() => {
 		const member = (props.data && props.data.member) || {}
-		if (!props.active) return tt('轻疗放松 · 时叙喝茶 · 在场上课', 'Light Heal · Teahour tea · Presence classes')
+		if (!props.active) return tt('轻疗放松 · 时叙喝茶 · 在场上课', 'City Retreat · Teahour tea · Presence classes')
 		return `${member.name || ''}${member.memberNo ? ' · ' + member.memberNo : ''}`
 	})
 	const validLine = computed(() => {

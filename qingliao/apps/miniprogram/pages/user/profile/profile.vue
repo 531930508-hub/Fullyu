@@ -1,5 +1,5 @@
 <template>
-	<view class="pf-page">
+	<view class="pf-page" :class="localeClass()">
 		<!-- 导航高度 = 状态栏 + 导航条（导航条由胶囊位置算出），body 按总高度让位，避免白框压到标题 -->
 		<view class="pf-nav" :style="{ paddingTop: statusBar + 'px' }">
 			<view class="pf-nav-row" :style="{ height: navBar + 'px' }">

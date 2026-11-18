@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen  bg-[#F6F4F2] text-[#584219]">
+	<view class="min-h-screen  bg-[#F6F4F2] text-[#584219]" :class="localeClass()">
 		<TopTitle></TopTitle>
 		<view :style="{position: '-webkit-sticky',position:'sticky',top:customBar+'rpx','z-index':'99',minHeight:'1300rpx',paddingBottom:'calc(150rpx + 40rpx + env(safe-area-inset-bottom))'}">
 			<view v-if="topiconStr" class="w-full flex justify-center pt-4" :style="{marginTop:(customBar-10)+'rpx'}">
@@ -82,7 +82,8 @@
 
 <script setup>
 	import { t } from '../../../utils/locale'
-	import { img, shareImg } from '../../../utils/image'
+	import { shareImg } from '../../../utils/image'
+	import { img } from '../../../utils/imageLocale'
 	import {
 		onLoad,
 		onShareAppMessage,

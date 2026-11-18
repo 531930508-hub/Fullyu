@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen index pb-[200rpx]">
+	<view class="min-h-screen index pb-[200rpx]" :class="localeClass()">
 		<view class="header px-4 pb-2 flex items-center text-white" :class="{ 'header-bg': swiperIndex }"
 			:style="{ paddingTop: statusBar + 'px', height: customBar + 'px' }">
 			<!-- <view @click="go_page('/pages/index/shop/shop')" class="flex border flex justify-center items-center "
@@ -35,7 +35,7 @@
 			<view v-if="couponUnread > 0" class="coupon-notice-banner" @click="goCouponNotices">
 				<image src="/static/icons/time.png" class="coupon-notice-icon" mode="aspectFit"></image>
 				<view class="coupon-notice-main">
-					<text class="coupon-notice-title">{{ tt('有 ' + couponUnreadText + t(' 条卡券到期提醒'), couponUnreadText + ' passes expiring soon') }}</text>
+					<text class="coupon-notice-title">{{ tt('有 ' + couponUnreadText + t(' 条卡券到期提醒'), couponUnreadText + ' coupons expiring soon') }}</text>
 					<text class="coupon-notice-sub">{{ tt('到期前 5 天、3 天提醒，记得安排相愈', 'We remind you 5 and 3 days ahead — plan your visit') }}</text>
 				</view>
 				<text class="coupon-notice-action">{{ tt('去看看', 'View') }}</text>
@@ -86,7 +86,7 @@
 							</image>
 							<text class="truncate">{{ heroOrder.title }}</text>
 						</view>
-						<text class="ml-2 flex-shrink-0">{{heroOrder.productTitle}} <text
+						<text class="ml-2 flex-shrink-0">{{t(heroOrder.productTitle)}} <text
 								class="font-medium ml-1 ">{{heroOrder.duration}}</text>
 							mins </text>
 					</view>
@@ -306,7 +306,7 @@
 
 <script setup>
 	import { t } from '../../utils/locale'
-	import { img } from '../../utils/image'
+	import { img } from '../../utils/imageLocale'
 	import CustomTabBar from '../../components/CustomTabBar.vue';
 	import AiButton from '../../components/AiButton.vue';
 	import LangSwitch from '../../components/LangSwitch.vue';
@@ -634,15 +634,15 @@
 			expired,
 			lead: expired ? nameLead : tt('会员还有 ', 'Membership ends in '),
 			strong: expired ? tt('已到期', 'expired') : daysText,
-			tail: expired ? '' : tt('到期', ''),
+			tail: expired ? '' : t('到期'),
 			// 有卡期就用卡期说顺延，没有就只说到期日，不写死 365。
 			sub: expired
 				? tt('续费后恢复三店会员价', 'Renew to restore member pricing')
 				: tt('续费后' + spanText, 'Renewal ' + spanText),
 			// 独立卡：有真实「本年已省」就先报账，没有就回到到期日，不编数字。
-			slimLead: savedText ? tt('过去已为你省下 ', 'Saved with your pass: ') : (expired ? nameLead : tt('会员还有 ', 'Membership ends in ')),
+			slimLead: savedText ? tt('过去已为你省下 ', 'Saved with your membership: ') : (expired ? nameLead : tt('会员还有 ', 'Membership ends in ')),
 			slimStrong: savedText || (expired ? tt('已到期', 'expired') : daysText),
-			slimTail: savedText || expired ? '' : tt('到期', ''),
+			slimTail: savedText || expired ? '' : t('到期'),
 			slimSub: expired
 				? tt('会员已到期，续费后恢复三店会员价', 'Expired — renew to restore member pricing')
 				: tt('会员还有 ' + days + ' 天到期，续费' + spanText, 'Ends in ' + days + ' days — renewal ' + spanText)

@@ -1,5 +1,5 @@
 <template>
-	<view class="bm-page">
+	<view class="bm-page" :class="localeClass()">
 		<view class="bm-nav" :style="{ paddingTop: statusBar + 'px', height: customBar + 'px' }">
 			<view class="bm-nav-row">
 				<image class="bm-back" src="/static/icons/leftjiantou.png" mode="aspectFit" @click="goBack"></image>
@@ -178,7 +178,7 @@
 
 				<view class="bm-foot">
 					<text>{{ tt('放松有道　自在生活', 'Relax with intention. Live at ease.') }}</text>
-					<text class="bm-foot-sub">{{ tt('Full愈 · 轻疗', 'Full Yu · Light Heal') }}</text>
+					<text class="bm-foot-sub">{{ tt('Full愈 · 轻疗', 'Full Yu · City Retreat') }}</text>
 				</view>
 			</template>
 			
@@ -203,7 +203,7 @@
 				<view class="bm-renew-row"><text>{{ tt('账户', 'Account') }}</text><text>{{ renewAccountLine }}</text></view>
 				<view class="bm-renew-row"><text>{{ tt('包含', 'Includes') }}</text><text>{{ tt('三店会员价 · 积分与会员礼', 'Member prices across three stores · points and gifts') }}</text></view>
 				<view class="bm-renew-row"><text>{{ tt('卡类型', 'Card type') }}</text><text>{{ tt('服务权益卡（非储值，不可提现）', 'Service-benefit card (no stored balance)') }}</text></view>
-				<view class="bm-renew-row"><text>{{ tt('收款方', 'Paid to') }}</text><text>{{ tt('轻疗（本小程序）', 'Light Heal (this mini program)') }}</text></view>
+				<view class="bm-renew-row"><text>{{ tt('收款方', 'Paid to') }}</text><text>{{ tt('轻疗（本小程序）', 'City Retreat (this mini program)') }}</text></view>
 				<view v-if="profileSaved" class="bm-renew-profile">
 					<text>{{ tt('会员档案', 'Member profile') }} · {{ profileSummary }}</text>
 					<text class="bm-renew-edit" @click="openProfile('edit')">{{ tt('修改', 'Edit') }}</text>
@@ -652,7 +652,7 @@
 	}
 
 	function businessShort(business) {
-		if (lang.value === 'en') return { retreat: 'LH', teahour: 'TH', presence: 'PR' }[business] || 'FY'
+		if (lang.value === 'en') return { retreat: 'CR', teahour: 'TH', presence: 'PR' }[business] || 'FY'
 		return {
 			retreat: '轻',
 			teahour: '时',
@@ -966,7 +966,7 @@
 					throw new Error((status && status.payError) || tt('模拟支付未完成，请稍后在购卡记录查看', 'Simulated payment incomplete. Please check your purchase records later.'))
 				}
 				uni.showToast({
-					title: tt('模拟支付成功，会员卡已开通', 'Simulated payment succeeded. Your pass is active.'),
+					title: tt('模拟支付成功，会员卡已开通', 'Simulated payment succeeded. Your membership is active.'),
 					icon: 'none'
 				})
 				await afterPurchase()
@@ -1037,7 +1037,7 @@
 					settled = true
 					uni.hideLoading()
 					uni.showToast({
-						title: tt('支付成功，会员卡已开通', 'Payment succeeded. Your pass is active.'),
+						title: tt('支付成功，会员卡已开通', 'Payment succeeded. Your membership is active.'),
 						icon: 'none'
 					})
 					await afterPurchase()
@@ -1048,7 +1048,7 @@
 					uni.hideLoading()
 					uni.showModal({
 						title: tt('已收到付款', 'Payment received'),
-						content: tt(`开卡暂时没有完成：${status.payError}。系统已记录，工作人员会尽快处理。`, `Your pass is not active yet: ${status.payError}. Our team has been notified and will follow up shortly.`),
+						content: tt(`开卡暂时没有完成：${status.payError}。系统已记录，工作人员会尽快处理。`, `Your membership is not active yet: ${status.payError}. Our team has been notified and will follow up shortly.`),
 						showCancel: false
 					})
 					void fetchBrandLock()
@@ -1061,7 +1061,7 @@
 			if (!settled && !disposed) {
 				uni.showModal({
 					title: tt('支付结果确认中', 'Confirming payment'),
-					content: tt('如已扣款，会员卡会在几分钟内自动开通，可在「订单 · 卡券与会员」查看。', 'If payment was taken, your pass will activate within minutes. Check Orders · Passes & Membership.'),
+					content: tt('如已扣款，会员卡会在几分钟内自动开通，可在「订单 · 卡券与会员」查看。', 'If payment was taken, your membership will activate within minutes. Check Orders · Coupons & Membership.'),
 					showCancel: false
 				})
 				void fetchBrandLock()

@@ -1,9 +1,9 @@
 <template>
-  <view class="splash-container">
+  <view class="splash-container" :class="localeClass()">
     <!-- 背景图片 -->
     <image 
       v-if="splashImage" 
-      :src="splashImage" 
+      :src="img(splashImage)" 
       class="splash-bg" 
       mode="aspectFill"
     />

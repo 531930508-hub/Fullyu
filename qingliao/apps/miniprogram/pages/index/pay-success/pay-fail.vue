@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen  bg-[#F6F4F2] ">
+	<view class="min-h-screen  bg-[#F6F4F2] " :class="localeClass()">
 		<TopTitle></TopTitle>
 		<view class="flex justify-around items-center mt-[500rpx]">
 			<image mode="widthFix" class="h-[160rpx] w-[160rpx]" src="/static/icons/payfail.png"></image>

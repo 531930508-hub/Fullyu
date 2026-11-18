@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen  bg-[#F6F4F2] pb-[200rpx]">
+	<view class="min-h-screen  bg-[#F6F4F2] pb-[200rpx]" :class="localeClass()">
 		<TopTitleNotBack></TopTitleNotBack>
 		<view class="tab-nav" :style="{position: '-webkit-sticky',position:'sticky',top:customBar+'px','z-index':'99'}">
 			<view :class="['tab-item', { active: activeTab === 'buy' }]" @click="go_page_new('buy')">

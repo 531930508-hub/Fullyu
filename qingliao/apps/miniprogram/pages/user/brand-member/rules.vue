@@ -1,5 +1,5 @@
 <template>
-	<view class="rules-page">
+	<view class="rules-page" :class="localeClass()">
 		<view class="rules-top">
 			<text class="rules-eyebrow">FULL YU MEMBER</text>
 		</view>
@@ -44,7 +44,7 @@
 		if (!products.length) {
 			return tt(
 				'本规则适用于 Full愈大会员（90 天 / 一年两个卡期）：它们是在有效期内享受轻疗、时叙、在场会员权益的服务权益卡，不是储值卡。卡内不含可消费本金，不产生余额，不可提现、转账、代付或找零。',
-				'These rules apply to the Full Yu Member card (90-day and one-year terms): a service-benefit card for enjoying member benefits at Light Heal, Teahour and Presence during the validity period. They are not stored-value cards: they carry no spendable balance, cannot be withdrawn, transferred, used to pay for others, or exchanged for change.'
+				'These rules apply to the Full Yu Member card (90-day and one-year terms): a service-benefit card for enjoying member benefits at City Retreat, Teahour and Presence during the validity period. They are not stored-value cards: they carry no spendable balance, cannot be withdrawn, transferred, used to pay for others, or exchanged for change.'
 			)
 		}
 		const en = lang.value === 'en'
@@ -59,7 +59,7 @@
 			})
 			.join(en ? ' and ' : '与')
 		return en
-			? `${plans} are service-benefit cards for enjoying member benefits at Light Heal, Teahour and Presence during the validity period. They are not stored-value cards: they carry no spendable balance, cannot be withdrawn, transferred, used to pay for others, or exchanged for change.`
+			? `${plans} are service-benefit cards for enjoying member benefits at City Retreat, Teahour and Presence during the validity period. They are not stored-value cards: they carry no spendable balance, cannot be withdrawn, transferred, used to pay for others, or exchanged for change.`
 			: `${plans}是在有效期内享受轻疗、时叙、在场会员权益的服务权益卡，不是储值卡。卡内不含可消费本金，不产生余额，不可提现、转账、代付或找零。`
 	})
 
@@ -159,18 +159,18 @@
 		{
 			h: '3. Scope of benefits',
 			p: [
-				'Benefits are configured per business: Light Heal, Teahour and Presence each provide the member price or discount shown on their pages. Eligible stores, treatments, products and discounts follow the current member configuration, store notices and the checkout page.',
+				'Benefits are configured per business: City Retreat, Teahour and Presence each provide the member price or discount shown on their pages. Eligible stores, treatments, products and discounts follow the current member configuration, store notices and the checkout page.',
 				'Member prices do not stack with coupon packs, points or promotional prices; each transaction is settled using the single most favourable option for you.',
-				'Light Heal booking discounts are calculated from the current member configuration and the booking date (member price applies to bookings made at least one day ahead); Teahour and Presence benefits follow the respective stores and checkout pages.'
+				'City Retreat booking discounts are calculated from the current member configuration and the booking date (member price applies to bookings made at least one day ahead); Teahour and Presence benefits follow the respective stores and checkout pages.'
 			]
 		},
 		{
 			h: '4. Points',
 			p: [
-				'Points are recorded centrally by the Full Yu Brand Member Centre; Light Heal, Teahour and Presence share one points account.',
+				'Points are recorded centrally by the Full Yu Brand Member Centre; City Retreat, Teahour and Presence share one points account.',
 				'Points are earned through spending, events and the Journey. They cannot be purchased, withdrawn or transferred, and do not constitute prepayment.',
 				'Points expire in batches; unused points lapse automatically. The page shows the nearest expiry date.',
-				'At Light Heal checkout, 1 point offsets ¥1. The amount and scope of each redemption follow the checkout page; Teahour and Presence display points only this term and do not accept point redemption yet.',
+				'At City Retreat checkout, 1 point offsets ¥1. The amount and scope of each redemption follow the checkout page; Teahour and Presence display points only this term and do not accept point redemption yet.',
 				'When an order is refunded, points used are returned according to the checkout page and after-sales rules.',
 				'Journey dice accrue from the actual amounts paid across the three spaces; each full threshold (shown on the member page) earns 1 die, with any remainder carried to the next die. Dice and gifts along the way cannot be transferred or converted to cash. If an order is fully refunded, dice earned from that purchase are deducted accordingly.'
 			]
@@ -203,7 +203,7 @@
 		{
 			h: '8. Personal information',
 			p: [
-				'To provide cross-store benefits, your phone number, member ID, term and points are shared within the Full Yu brand membership system (Light Heal, Teahour, Presence). We do not sell your personal information.',
+				'To provide cross-store benefits, your phone number, member ID, term and points are shared within the Full Yu brand membership system (City Retreat, Teahour, Presence). We do not sell your personal information.',
 				'See the Privacy Policy for details. You can view and correct your information under Me, or contact us to close your account.'
 			]
 		},

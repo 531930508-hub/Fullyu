@@ -170,4 +170,169 @@
 			}
 		}
 	}
+	.locale-en {
+		--en-tracking: 0.05em;
+		--en-title-tracking: 0.06em;
+		--en-label-tracking: 0.12em;
+		font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+		letter-spacing: var(--en-tracking);
+		word-break: normal;
+		overflow-wrap: break-word;
+	}
+
+	.locale-en view,
+	.locale-en text,
+	.locale-en button,
+	.locale-en input,
+	.locale-en textarea {
+		letter-spacing: var(--en-tracking) !important;
+		word-break: normal;
+		overflow-wrap: break-word;
+	}
+
+	.locale-en .modal-title,
+	.locale-en .treatment-name,
+	.locale-en .booking-service-name,
+	.locale-en .bm-title,
+	.locale-en .st-title,
+	.locale-en .rules-title {
+		letter-spacing: var(--en-title-tracking) !important;
+		line-height: 1.4;
+	}
+
+	.locale-en .st-eyebrow,
+	.locale-en .rules-eyebrow,
+	.locale-en .year-card-eyebrow,
+	.locale-en .bmc-eyebrow {
+		letter-spacing: var(--en-label-tracking) !important;
+	}
+
+	.locale-en button {
+		min-width: 0;
+		max-width: 100%;
+		font-size: 26rpx;
+		white-space: normal;
+		line-height: 1.4 !important;
+	}
+
+	.locale-en .tab-nav {
+		height: auto;
+		min-height: 88rpx;
+	}
+
+	.locale-en .tab-item {
+		min-width: 0;
+		padding: 20rpx 8rpx;
+		white-space: normal;
+		text-align: center;
+		line-height: 1.35;
+	}
+
+	.locale-en .action-buttons {
+		flex-wrap: wrap;
+		gap: 16rpx;
+	}
+
+	.locale-en .action-buttons button,
+	.locale-en .action-buttons > .btn,
+	.locale-en .action-buttons > .review-button-container {
+		flex: 1 1 160rpx;
+		height: auto;
+		min-height: 80rpx;
+		padding: 16rpx 20rpx;
+	}
+
+	.locale-en .modal-title {
+		min-width: 0;
+		flex: 1;
+		padding-right: 20rpx;
+	}
+
+	.locale-en .treatment-types {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 12rpx;
+	}
+
+	.locale-en .treatment-type {
+		width: auto;
+		min-width: 0;
+		min-height: 88rpx;
+		padding: 12rpx 8rpx;
+		justify-content: center;
+	}
+
+	.locale-en .treatment-name {
+		font-size: 26rpx;
+		white-space: normal;
+		text-align: center;
+	}
+
+	.locale-en .form-label,
+	.locale-en .date-name,
+	.locale-en .duration-description {
+		line-height: 1.5;
+	}
+
+	.locale-en .booking-footer > view:first-child {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto;
+		gap: 16rpx;
+		font-size: 24rpx;
+	}
+
+	.locale-en .booking-footer > view:first-child > view {
+		width: auto;
+	}
+
+	.locale-en .booking-footer > view:nth-child(2) {
+		height: auto;
+		min-height: 80rpx;
+		padding: 12rpx 0;
+		margin-top: 0 !important;
+		gap: 16rpx;
+		align-items: flex-start;
+	}
+
+	.locale-en .payment-footer {
+		align-items: center;
+		padding-left: 32rpx;
+		padding-right: 32rpx;
+	}
+
+	.locale-en .payment-footer > view:first-child {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.locale-en .payment-footer > view:last-child {
+		flex: 0 0 42%;
+	}
+
+	.locale-en .payment-footer .btn-modify {
+		gap: 12rpx;
+		flex-wrap: wrap;
+		padding: 22rpx 12rpx;
+	}
+
+	.locale-en .payment-footer .countdown-timer {
+		position: static;
+		flex-shrink: 0;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.locale-en .renew-title,
+	.locale-en .early-bird-head {
+		flex-wrap: wrap;
+		gap: 8rpx;
+	}
+
+	.locale-en .points-notice-action {
+		max-width: 160rpx;
+		text-align: center;
+	}
+
+	.locale-en .booking-service-name {
+		font-size: 26rpx;
+	}
 </style>

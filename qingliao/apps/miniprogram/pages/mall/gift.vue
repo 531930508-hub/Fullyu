@@ -1,5 +1,5 @@
 <template>
-	<view class="receive-gift min-h-screen bg-gray-100 relative">
+	<view class="receive-gift min-h-screen bg-gray-100 relative" :class="localeClass()">
 		<!-- Main content area -->
 		<view class="relative z-10 pt-8 px-4">
 			<!-- Blessing message section -->
@@ -30,7 +30,7 @@
 				<view class="mt-8" v-if="detail.useType == 1">
 					<view class="flex items-center mb-2">
 						<view class="text-gray-800 text-base font-semibold">{{ t('礼物2：') }}{{ detail.name }}</view>
-						<button class="coupon-badge">Full愈</button>
+						<button class="coupon-badge">{{ tt('Full愈', 'Full Yu') }}</button>
 					</view>
 					<view class="bg-white rounded-lg shadow-sm p-4 text-sm text-gray-600 leading-relaxed">
 						{{detail.comment}}
@@ -54,8 +54,9 @@
 
 
 <script setup>
-	import { t } from '../../utils/locale'
-	import { img } from '../../utils/image'
+	import { t, useLocale } from '../../utils/locale'
+	const { tt } = useLocale()
+	import { img } from '../../utils/imageLocale'
 	import {
 		onLoad,
 		onShow

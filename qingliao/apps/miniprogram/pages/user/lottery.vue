@@ -1,10 +1,10 @@
 <template>
-  <view class="lottery-bg" :style="{ backgroundImage: `url(${lotteryBg})` }">
+  <view class="lottery-bg" :class="localeClass()" :style="{ backgroundImage: `url(${lotteryBg})` }">
     <view class="container">
       <!-- 标题 -->
       <view class="title-section">
         <image :src="leafImage" class="leaf-img"></image>
-        <image :src="titleImage" class="title-img"></image>
+        <image :src="img(titleImage)" class="title-img"></image>
       </view>
 
       <!-- 九宫格 -->
@@ -25,7 +25,7 @@
 
       <!-- 描述信息 -->
       <view class="points-info">
-        <image :src="pointsInfoImage" class="points-info-img"></image>
+        <image :src="img(pointsInfoImage)" class="points-info-img"></image>
       </view>
     </view>
 
@@ -34,7 +34,7 @@
 
 <script setup>
 	import { t, useLocale } from '../../utils/locale'
-	import { img } from '../../utils/image'
+	import { img } from '../../utils/imageLocale'
 
 const { tt } = useLocale()
 
