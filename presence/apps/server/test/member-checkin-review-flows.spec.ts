@@ -16,7 +16,10 @@ describe('签到/评价非资金流程', () => {
   beforeAll(async () => {
     ctx = await buildTestContext()
     seeder = new Seeder(ctx.prisma)
-    checkin = new CheckinService(ctx.prisma)
+    // CheckinService 第 2 个构造参数是 CrmClient（生日回填）；CRM 未配置时它就返回空 Map，
+    // 这里给同样的桩，避免把「CRM 连不上」和「签到逻辑」混在一起断言。
+    const crm = { getBirthdays: async () => new Map<string, string | null>() } as never
+    checkin = new CheckinService(ctx.prisma, crm)
     review = new ReviewService(ctx.prisma)
   })
 

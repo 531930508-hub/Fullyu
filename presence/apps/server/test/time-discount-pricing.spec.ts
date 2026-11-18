@@ -110,11 +110,10 @@ describe('PricingService.getMemberDiscount：时段折扣', () => {
     expect((await noOrg.getMemberDiscount('u1', 'c1', BASE_PRICE_FEN, SAT_1530)).hitTimeRuleId).toBe('r-global')
   })
 
-  it('时长不在价目表 → 视为未命中，回退课程固定折扣', async () => {
+  it('时长不在价目表 → 视为未命中，品牌会员无额外优惠', async () => {
     const res = await svc(
       {
         course: { findUnique: async () => ({ duration: 45, venue: { orgId: 'S1' } }) },
-        courseMemberDiscount: { findUnique: async () => ({ discountPercent: 70 }) },
       },
       [
         row({
@@ -128,28 +127,28 @@ describe('PricingService.getMemberDiscount：时段折扣', () => {
 
     expect(res.hitTimeRuleId).toBeNull()
     expect(res.timeDiscount).toBeNull()
-    expect(res.discountPercent).toBe(70)
-    expect(res.discountAmount).toBe(10800) // 36000 * 0.3
+    expect(res.discountPercent).toBeNull()
+    expect(res.discountAmount).toBe(0)
   })
 
-  it('无时段规则时保持原有固定折扣行为；非品牌会员则无折扣', async () => {
-    const fallback = await svc({
-      courseMemberDiscount: { findUnique: async () => ({ discountPercent: 85 }) },
-    }).getMemberDiscount('u1', 'c1', BASE_PRICE_FEN, SAT_1530)
+  it('无时段规则时品牌会员无额外优惠；非品牌会员则无折扣', async () => {
+    // 课程 × 卡类型固定折扣表已随畅练卡体系移除，未命中时段规则就是原价。
+    const fallback = await svc({}).getMemberDiscount('u1', 'c1', BASE_PRICE_FEN, SAT_1530)
     expect(fallback).toMatchObject({
       cardType: null,
-      discountPercent: 85,
-      discountAmount: 5400, // 36000 * 0.15
+      discountPercent: null,
+      discountAmount: 0,
       hitTimeRuleId: null,
       timeDiscount: null,
       memberSource: 'BRAND',
     })
 
-    const noCard = await svc(
-      { courseMemberDiscount: { findUnique: async () => ({ discountPercent: 85 }) } },
-      [],
-      NOT_MEMBER,
-    ).getMemberDiscount('u1', 'c1', BASE_PRICE_FEN, SAT_1530)
+    const noCard = await svc({}, [], NOT_MEMBER).getMemberDiscount(
+      'u1',
+      'c1',
+      BASE_PRICE_FEN,
+      SAT_1530,
+    )
     expect(noCard).toEqual({
       cardType: null,
       discountPercent: null,
