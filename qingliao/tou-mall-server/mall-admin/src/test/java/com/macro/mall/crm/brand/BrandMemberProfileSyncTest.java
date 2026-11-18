@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -94,6 +95,54 @@ class BrandMemberProfileSyncTest {
         assertEquals("旧名字", customer.getNickname());
         assertEquals(3L, customer.getCrmProfileVersion());
         verifyNoInteractions(customerMapper);
+    }
+
+    @Test
+    void pullKeepsLocalRealNicknameWhenCrmStillHoldsPlaceholder() throws Exception {
+        when(client.isActive()).thenReturn(true);
+        // CRM 里还是在场默认昵称「用户+后四位」：不许盖掉顾客自己起的名字
+        when(client.me("7")).thenReturn(node("{\"member\":{\"profileVersion\":9,\"profile\":{"
+                + "\"nickname\":\"用户7229\",\"gender\":2}}}"));
+        // 占位名不算名字：拉完立刻把本地真名补推上去，CRM 才不会一直停在「用户7229」
+        when(client.updateProfile("7", 9L, "旧名字", "avatars/2026/a.jpg", 2, "1990-01-01"))
+                .thenReturn(node("{\"member\":{\"profileVersion\":10,\"profile\":{\"nickname\":\"旧名字\"}}}"));
+
+        Customer customer = customer(7L);
+        sync.refreshQuietly(customer);
+
+        assertEquals("旧名字", customer.getNickname());
+        // 其它字段照常同步，版本号前进，下次不会反复拉
+        assertEquals(2, customer.getGender());
+        assertEquals(10L, customer.getCrmProfileVersion());
+        verify(customerMapper, atLeastOnce()).updateById(customer);
+        verify(client).updateProfile("7", 9L, "旧名字", "avatars/2026/a.jpg", 2, "1990-01-01");
+    }
+
+    @Test
+    void pullDoesNotPushPlaceholderBackToCrm() throws Exception {
+        when(client.isActive()).thenReturn(true);
+        when(client.me("7")).thenReturn(node("{\"member\":{\"profileVersion\":9,\"profile\":{"
+                + "\"nickname\":\"用户7229\"}}}"));
+
+        Customer customer = customer(7L);
+        customer.setNickname("用户1380");
+        sync.refreshQuietly(customer);
+
+        // 两边都是占位名，没有任何真名可推，别把占位名再打回 CRM 白涨版本号
+        assertEquals("用户7229", customer.getNickname());
+        verify(client, never()).updateProfile(anyString(), anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void pullAcceptsRealNicknameFromCrm() throws Exception {
+        when(client.isActive()).thenReturn(true);
+        when(client.me("7")).thenReturn(node("{\"member\":{\"profileVersion\":9,\"profile\":{"
+                + "\"nickname\":\"小鹿4821\"}}}"));
+
+        Customer customer = customer(7L);
+        sync.refreshQuietly(customer);
+
+        assertEquals("小鹿4821", customer.getNickname());
     }
 
     @Test

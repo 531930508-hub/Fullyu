@@ -156,6 +156,18 @@ public class BrandMemberProfileSync {
             if (remote.applyTo(customer)) {
                 persist(customer);
             }
+            // CRM 里只有占位名不算"有名字"：本地真名补推上去，
+            // 否则本地早就改过名的顾客，CRM 会一直停在别处建档时的「用户+手机号」。
+            String localNickname = RemoteProfile.trimToNull(customer.getNickname());
+            if ((remote.nickname == null || isPlaceholderNickname(remote.nickname))
+                    && localNickname != null && !isPlaceholderNickname(localNickname)) {
+                try {
+                    pushOrThrow(customer);
+                } catch (BrandMemberException e) {
+                    log.warn("会员昵称补推失败，customerId={} code={} message={}",
+                            customer.getId(), e.getCode(), e.getMessage());
+                }
+            }
             return;
         }
         // CRM 还没有资料，本地有：把本地补上去，会员中心才不至于空着
@@ -273,10 +285,13 @@ public class BrandMemberProfileSync {
 
         /**
          * 只覆盖 CRM 给了值的字段：CRM 为空表示"没设"，不清掉本地已有资料。
+         * 昵称例外：CRM 里的占位名（会员 / 用户+手机号）不许盖掉本地真实昵称，
+         * 否则 CRM 还没回填完时打开个人中心，顾客自己起的名字会被冲掉。
          */
         boolean applyTo(Customer customer) {
             boolean changed = false;
-            if (nickname != null && !nickname.equals(trimToNull(customer.getNickname()))) {
+            if (nickname != null && !nickname.equals(trimToNull(customer.getNickname()))
+                    && !(isPlaceholderNickname(nickname) && !isPlaceholderNickname(customer.getNickname()))) {
                 customer.setNickname(nickname);
                 changed = true;
             }
@@ -369,5 +384,18 @@ public class BrandMemberProfileSync {
         private static String blankToNull(String value) {
             return Strings.isBlank(value) ? null : value;
         }
+    }
+
+    /**
+     * 与 CRM 侧一致的占位名判定：空、「会员」、以及各业务端历史默认昵称
+     * 「用户+手机号/后四位」（含带国际区号落库成「用户+86…」的旧数据）。
+     * 占位名只是没名字，不是顾客起的名字，不能拿它盖掉真实昵称。
+     */
+    static boolean isPlaceholderNickname(String nickname) {
+        if (nickname == null) {
+            return true;
+        }
+        String trimmed = nickname.trim();
+        return trimmed.isEmpty() || "会员".equals(trimmed) || trimmed.matches("用户\\+?\\d{4,15}");
     }
 }
