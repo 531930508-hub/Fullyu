@@ -1,10 +1,10 @@
 <template>
-	<view class="min-h-screen " style="background-color:#F6F4F2 ;">
+	<view class="min-h-screen " :class="localeClass()" style="background-color:#F6F4F2 ;">
 		<TopTitle></TopTitle>
 		<view class="about" :style="{position: '-webkit-sticky',position:'sticky',top:customBar+'px','z-index':'99'}">
 			<image :src="img('https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/icon/about.png', 750)" :webp="true"></image>
 			<view class="content">
-				<view class="title text-[#8A6A40]">Full愈</view>
+				<view class="title text-[#8A6A40]">{{ tt('Full愈', 'Full Yu') }}</view>
 				<text class="desc text-[#8A6A40]">
 					{{ t('Full愈定位为都市中的中高端放松及疗愈品牌，在Full愈，我们以纯净精油的自然香气为起点， 以空间为载体，创造一个全方位的沉浸式放松体验。 我们用「Full愈」空间调动五感视觉、听觉、嗅觉、触觉和味觉， 让放松渗透每个感官⻆落。Full愈，是全方位的放松，是深层次的自我回归。') }}
 				</text>
@@ -17,7 +17,8 @@
 
 <script setup>
 	
-	import { t } from '../../utils/locale'
+	import { t, useLocale } from '../../utils/locale'
+	const { tt } = useLocale()
 	import { img } from '../../utils/image'
 	import {
 		onLoad,

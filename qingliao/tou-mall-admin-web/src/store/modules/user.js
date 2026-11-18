@@ -13,6 +13,7 @@ const user = {
   state: {
     token: getToken(),
     name: '',
+    nickName: '',
     userId: '',
     shopId: normalizeShopId(getShopId()),
     avatar: 'https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/icon/icon0703/defaultAvatar.png',
@@ -29,6 +30,9 @@ const user = {
     },
     SET_NAME: (state, name) => {
       state.name = name
+    },
+    SET_NICK_NAME: (state, nickName) => {
+      state.nickName = nickName
     },
     SET_USER_ID: (state, userId) => {
       state.userId = userId
@@ -90,6 +94,8 @@ const user = {
             data.icon="https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/"+data.icon;
           }
           commit('SET_NAME', data.username)
+          // 员工姓名（用户账号里的昵称）用于界面展示，登录名 name 保留给改密等逻辑
+          commit('SET_NICK_NAME', data.nickName || '')
           commit('SET_USER_ID', data.userId)
           commit('SET_ShopIdArr', data.shopIdArr)
           commit('SET_AVATAR', data.icon)
@@ -123,6 +129,7 @@ const user = {
           commit('SET_ROLES', [])
           commit('SET_SHOP_ID', '')
           commit('SET_TRAINER', false)
+          commit('SET_NICK_NAME', '')
           removeToken()
           removeShopId()
           resolve()
@@ -138,6 +145,7 @@ const user = {
         commit('SET_TOKEN', '')
         commit('SET_SHOP_ID', '')
         commit('SET_TRAINER', false)
+        commit('SET_NICK_NAME', '')
         removeToken()
         removeShopId()
         resolve()

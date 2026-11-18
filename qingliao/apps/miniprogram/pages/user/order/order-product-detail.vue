@@ -1,5 +1,5 @@
 <template>
-	<view class="  bg-[#F6F4F2] pb-4">
+	<view class="  bg-[#F6F4F2] pb-4" :class="localeClass()">
 		<TopTitle></TopTitle>
 		<view class="treatment-detail" :style="{'margin-top': (customBar-10)+'px'}">
 
@@ -17,7 +17,7 @@
 				</view>
 				<view class="order-item">
 					<text class="order-label">{{ t('购买商品') }}</text>
-					<text class="order-value">{{orderInfo.productTitle}}</text>
+					<text class="order-value">{{t(orderInfo.productTitle)}}</text>
 				</view>
 
 				<view class="order-item">

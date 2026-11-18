@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen  bg-[#F6F4F2] ">
+	<view class="min-h-screen  bg-[#F6F4F2] " :class="localeClass()">
 		<!-- :style="{position: '-webkit-sticky',position:'sticky',top:customBar+'px','z-index':'99'}" -->
 		<view class="pb-8">
 			<!-- <view class="bg-white h-[120rpx] font-semibold flex items-center pl-5 text-[#584219]">
@@ -60,7 +60,7 @@
 
 <script setup>
 	import { t } from '../../../utils/locale'
-	import { img } from '../../../utils/image'
+	import { img } from '../../../utils/imageLocale'
 	import { storeName, storeAddress } from '../../../utils/storeLocale'
 	import {
 		onLoad,

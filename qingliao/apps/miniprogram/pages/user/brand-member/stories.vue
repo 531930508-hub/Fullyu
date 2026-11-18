@@ -1,11 +1,11 @@
 <template>
-	<view class="st-page">
+	<view class="st-page" :class="localeClass()">
 		<view class="st-head">
 			<text class="st-eyebrow">FULL YU MEMBER</text>
 			<view class="st-title-row">
 				<text class="st-title serif">{{ tt('会员故事', 'Member stories') }}</text>
 			</view>
-			<text class="st-lead">{{ tt('从会员的建议开始，一点一点把轻疗、时叙、在场变成大家想要的样子。', 'Starting from member feedback, we are shaping Light Heal, Teahour and Presence into the places you want them to be.') }}</text>
+			<text class="st-lead">{{ tt('从会员的建议开始，一点一点把轻疗、时叙、在场变成大家想要的样子。', 'Starting from member feedback, we are shaping City Retreat, Teahour and Presence into the places you want them to be.') }}</text>
 		</view>
 
 		<view v-if="loading" class="st-state">{{ tt('正在读会员故事…', 'Loading member stories…') }}</view>
@@ -31,7 +31,7 @@
 
 		<view class="st-foot">
 			<text>{{ tt('放松有道　自在生活', 'Relax with intention. Live at ease.') }}</text>
-			<text class="st-foot-sub">{{ tt('Full愈 · 轻疗', 'Full Yu · Light Heal') }}</text>
+			<text class="st-foot-sub">{{ tt('Full愈 · 轻疗', 'Full Yu · City Retreat') }}</text>
 		</view>
 	</view>
 </template>
@@ -58,8 +58,8 @@
 	/** CRM 故事可能带内部键或对外键，这里都映射成门店名。 */
 	function businessLabel(business) {
 		const labels = lang.value === 'en' ? {
-			retreat: 'Light Heal',
-			ql: 'Light Heal',
+			retreat: 'City Retreat',
+			ql: 'City Retreat',
 			teahour: 'Teahour',
 			sx: 'Teahour',
 			presence: 'Presence',

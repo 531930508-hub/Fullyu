@@ -21,6 +21,7 @@ import {
   DEFAULT_PRODUCT_CODE,
   defaultProduct,
   discountText,
+  entryPrice,
   findProduct,
   formatYuan,
   normalizeCatalog,
@@ -296,10 +297,8 @@ export async function loadYearCardSummary() {
   const products = catalog.products
   // 入口卖点固定展示大会员档；目录里没有这一档时退回默认卡型，仍不写死任何价格。
   const annual = findProduct(products, DEFAULT_PRODUCT_CODE) || defaultProduct(products)
-  const fromPriceCents = products.reduce(
-    (min, item) => (item.priceCents === null ? min : min === null ? item.priceCents : Math.min(min, item.priceCents)),
-    null
-  )
+  // 入口价不是大会员档的价：多档并存时取最低一档，并由 entryPrice 判定要不要标「起」。
+  const entry = entryPrice(products)
   const face = {
     cardType: card.productCode === 'FY_MONTH' ? 'month' : 'year',
     cardName: card.productName || ''
@@ -319,7 +318,8 @@ export async function loadYearCardSummary() {
     product: annual,
     products,
     defaultProductCode: catalog.defaultProductCode,
-    fromPriceCents,
+    // 未开通入口价（最低一档 + 是否多档），页面直接用它拼「¥99 起」。
+    entry,
     // 入口卖点只读 CRM 权益文案；没有配置时页面隐藏这一行。
     benefits: Array.isArray(brand && brand.benefits) ? brand.benefits : []
   }

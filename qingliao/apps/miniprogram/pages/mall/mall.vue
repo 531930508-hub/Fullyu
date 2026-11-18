@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen  bg-[#F6F4F2] pb-[200rpx]">
+	<view class="min-h-screen  bg-[#F6F4F2] pb-[200rpx]" :class="localeClass()">
 		<TopTitleNotBack></TopTitleNotBack>
 		<view class="tab-nav" :style="{position: '-webkit-sticky',position:'sticky',top:customBar+'px','z-index':'99'}">
 			<view :class="['tab-item', { active: activeTab === 'buy' }]" @click="go_page_new('buy')">
@@ -19,7 +19,7 @@
 						</view>
 						<view v-if="memberHeroPrice" class="member-hero-price">
 							<text class="member-hero-price-num">{{ memberHeroPrice }}</text>
-							<text class="member-hero-price-unit"> {{ t('元起') }}</text>
+							<text class="member-hero-price-unit"> {{ memberHeroPriceUnit }}</text>
 						</view>
 					</view>
 					<view v-if="memberHeroBenefit" class="member-hero-rates">
@@ -392,7 +392,8 @@
 	import cookie from "../../utils/cookieUtil"
 	import productApi from "../../api/product"
 	import customerApi from '../../api/customer'
-	import { loadYearCardSummary, formatYuan } from '../../api/brandMember'
+	import { loadCardCatalog, loadYearCardSummary, formatYuan } from '../../api/brandMember'
+	import { entryPrice } from '../../utils/memberCatalog'
 
 	const tabs = ref([{
 			name: t('购券'),
@@ -502,22 +503,29 @@
 	// Full愈大会员
 	const memberCardConfig = ref({})
 	const memberCardInfo = ref({})
+	// 公开目录兜底：未登录时没有身份摘要，入口价仍要显示（/brandMember/products 不含身份）。
+	const memberCatalog = ref({ products: [] })
 	const showOtherCards = ref(false)
 	const memberCardState = computed(() => memberCardInfo.value.state || 'none')
 	const { tt, locale } = useLocale()
-	// 卡期、售价与折扣都来自 CRM 目录；目录没拿到时只显示门店范围，不猜金额。
+	// 入口价：多档取最低一档（90 天 ¥99 与 365 天 ¥365 并存时报 ¥99），
+	// 「起」只在多档时出现，和会员页卡脚、时叙首页同一套口径。
+	const memberProducts = computed(() => {
+		const rows = (memberCardInfo.value && memberCardInfo.value.products) || []
+		return rows.length ? rows : (memberCatalog.value.products || [])
+	})
+	const memberEntry = computed(() => entryPrice(memberProducts.value))
+	// 卡期跟着入口价那一档走，避免出现「¥99 起 · 365 天」这种把两档拼在一起的文案。
 	const memberHeroPeriod = computed(() => {
-		const days = Number(memberCardConfig.value.validDays) || 0
+		const days = memberEntry.value ? Number(memberEntry.value.validDays) || 0 : 0
 		if (!days) return t('时叙、在场、轻疗三店通用')
 		return tt(
 			`${days} 天 · 时叙、在场、轻疗三店通用`,
-			`${days} days · Teahour, Presence and Light Heal`
+			`${days} days · Teahour, Presence and City Retreat`
 		)
 	})
-	const memberHeroPrice = computed(() => {
-		const cents = memberCardConfig.value.priceCents
-		return cents === null || cents === undefined ? '' : formatYuan(cents)
-	})
+	const memberHeroPrice = computed(() => (memberEntry.value ? formatYuan(memberEntry.value.amountCents) : ''))
+	const memberHeroPriceUnit = computed(() => (memberEntry.value && memberEntry.value.from ? t('元起') : t('元')))
 	// 卖点只展示 CRM 当前配置的第一条权益标题，不在页面写折扣或金额。
 	const memberHeroBenefit = computed(() => {
 		const rows = memberCardInfo.value.benefits || []
@@ -530,6 +538,13 @@
 		const summary = (await loadYearCardSummary()) || {}
 		memberCardInfo.value = summary
 		memberCardConfig.value = summary.product || {}
+		if (((summary && summary.products) || []).length) return
+		// 未登录（或身份摘要没带目录）时退回公开目录，入口价照样显示；读不到就保持不写金额。
+		try {
+			memberCatalog.value = await loadCardCatalog()
+		} catch (error) {
+			memberCatalog.value = { products: [] }
+		}
 	}
 
 	const goMemberCard = () => {

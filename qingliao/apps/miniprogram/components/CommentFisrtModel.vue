@@ -1,5 +1,5 @@
 <template>
-	<view class="evaluate-modal" v-if="visible" @click="handleCancel">
+	<view class="evaluate-modal" :class="localeClass()" v-if="visible" @click="handleCancel">
 		<view class="modal-content" :class="{show: modalVisible,slowdisplay:!visible}" @click.stop>
 			<view class="modal-header">
 				<text class="modal-title">{{ t('订单评价') }}</text>
@@ -12,7 +12,7 @@
 						:src="therapistRatings[0].avatar"></image>
 				</view>
 				<view class="text-center  text-[#584219] text-[34rpx] mt-2">{{therapistRatings[0].name}}</view>
-				<view class="text-center  text-[#8A6A40] text-[26rpx] mt-1">{{order.productTitle}} {{order.duration}}mins
+				<view class="text-center  text-[#8A6A40] text-[26rpx] mt-1">{{t(order.productTitle)}} {{order.duration}}mins
 				</view>
 				<view class="text-center  text-[#584219] text-[28rpx] mt-3">{{ t('请对本次服务进行评价') }}</view>
 				<view class="therapist-item-modal">

@@ -1,7 +1,7 @@
 <template>
-	<view class="min-h-screen index">
+	<view class="min-h-screen index" :class="localeClass()">
 		<view class="flex justify-center items-center mt-3">
-			<image mode="aspectFit" class="w-[670rpx] h-[60rpx]" 
+			<image mode="aspectFit" class="nature-title w-[670rpx] h-[60rpx]" 
 				:src="img('https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/icon/v2.0/fullnature.png', 750)" :webp="true"></image>
 		</view>
 		<view class="flex justify-center items-center px-5 mt-2 ">
@@ -49,9 +49,11 @@
 <script setup>
 
 	import { t } from '../../utils/locale'
-	import { img } from '../../utils/image'
+	import { img } from '../../utils/imageLocale'
 </script>
 
-<style>
-
+<style scoped>
+.locale-en .nature-title {
+	height: 110rpx;
+}
 </style>

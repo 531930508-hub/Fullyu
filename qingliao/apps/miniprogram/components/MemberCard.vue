@@ -24,7 +24,7 @@
 			<view class="bmc-cell bmc-saved" @click="onSaved">
 				<text class="bmc-lab">{{ active ? tt('本年已省', 'Saved this year') : tt('开卡', 'Join') }}</text>
 				<text class="bmc-amt serif">{{ footAmount }}</text>
-				<text v-if="!active && annualPrice !== null" class="bmc-more">{{ tt('起', 'from') }}</text>
+				<text v-if="!active && entry && entry.from" class="bmc-more">{{ tt('起', 'from') }}</text>
 			</view>
 			<view class="bmc-cell bmc-toggle" @click="onFoot">
 				<text>{{ footText }}</text>
@@ -81,9 +81,7 @@
 		formatDate
 	} from '../api/brandMember'
 	import {
-		DEFAULT_PRODUCT_CODE,
-		defaultProduct,
-		findProduct,
+		entryPrice,
 		formatYuan
 	} from '../utils/memberCatalog'
 	import { useLocale } from '../utils/locale'
@@ -110,7 +108,7 @@
 	const opened = ref(false)
 
 	const BRAND_LABEL = { all: '全品牌', retreat: '轻疗', teahour: '时叙', presence: '在场' }
-	const BRAND_LABEL_EN = { all: 'All brands', retreat: 'Light Heal', teahour: 'Teahour', presence: 'Presence' }
+	const BRAND_LABEL_EN = { all: 'All brands', retreat: 'City Retreat', teahour: 'Teahour', presence: 'Presence' }
 	const STATE_EN = {
 		ACTIVE: 'Active',
 		EXPIRING: 'Expiring',
@@ -140,7 +138,7 @@
 	})
 	const whoLine = computed(() => {
 		const member = (props.data && props.data.member) || {}
-		if (!props.active) return tt('轻疗放松 · 时叙喝茶 · 在场上课', 'Light Heal · Teahour tea · Presence classes')
+		if (!props.active) return tt('轻疗放松 · 时叙喝茶 · 在场上课', 'City Retreat · Teahour tea · Presence classes')
 		return `${member.name || ''}${member.memberNo ? ' · ' + member.memberNo : ''}`
 	})
 	const validLine = computed(() => {
@@ -151,15 +149,17 @@
 		const tail = expiring.value && days ? tt(` · 剩 ${days} 天`, ` · ${days} days left`) : ''
 		return tt(`至 ${until} 到期${tail} · 全门店可用`, `Valid until ${until}${tail} · all locations`)
 	})
-	/** 卡脚金额：已开通看本年已省；未开通看 CRM 目录起价，目录没拿到就只显示占位符。 */
+	/**
+	 * 卡脚金额：已开通看本年已省；未开通看 CRM 目录入口价（多档取最低一档），
+	 * 目录没拿到就只显示占位符。「起」由 entry.from 决定，不在模板里写死。
+	 */
+	const entry = computed(() => {
+		const rows = props.products.length ? props.products : ((props.data && props.data.products) || [])
+		return entryPrice(rows)
+	})
 	const footAmount = computed(() => {
 		if (props.active) return `¥${formatYuan(savedCents.value)}`
-		return annualPrice.value === null ? '—' : `¥${formatYuan(annualPrice.value)}`
-	})
-	const annualPrice = computed(() => {
-		const rows = props.products.length ? props.products : ((props.data && props.data.products) || [])
-		const hit = findProduct(rows, DEFAULT_PRODUCT_CODE) || defaultProduct(rows)
-		return hit && hit.priceCents !== null && hit.priceCents !== undefined ? hit.priceCents : null
+		return entry.value ? `¥${formatYuan(entry.value.amountCents)}` : '—'
 	})
 	const benefitRows = computed(() => {
 		const rows = props.benefits.length ? props.benefits : ((props.data && props.data.benefits) || [])

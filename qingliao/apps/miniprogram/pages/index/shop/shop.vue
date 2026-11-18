@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen  bg-[#F6F4F2] ">
+	<view class="min-h-screen  bg-[#F6F4F2] " :class="localeClass()">
 		<TopTitle></TopTitle>
 		<view class="treatment-record"
 			:style="{position: '-webkit-sticky',position:'sticky',top:customBar+'px','z-index':'99'}">

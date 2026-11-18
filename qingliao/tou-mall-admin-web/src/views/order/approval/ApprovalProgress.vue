@@ -166,11 +166,11 @@ export default {
       }
       return textMap[state] || ''
     },
-    //请假审批：申请人优先取申请单上的疗愈师，取不到再退回审批发起人
+    //请假审批：申请人取申请提交人（用户账号上的员工姓名），不展示疗愈师档案姓名
     leaveApplicant() {
-      if (this.detailData.massagistName) return this.detailData.massagistName
-      if (!this.approval.createUser) return '—'
-      return this.$options.filters['adminUsernameFilter'](this.approval.createUser)
+      if (this.detailData.createUserName) return this.detailData.createUserName
+      if (this.approval.createUser) return this.$options.filters['adminUsernameFilter'](this.approval.createUser)
+      return '—'
     },
     //请假日期按天展示并带上星期，历史数据没有勾选日期时退回起止时间
     leaveDates() {

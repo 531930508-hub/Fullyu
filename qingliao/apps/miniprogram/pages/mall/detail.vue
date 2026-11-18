@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen  bg-[#F6F4F2] text-[#584219]">
+	<view class="min-h-screen  bg-[#F6F4F2] text-[#584219]" :class="localeClass()">
 		<TopTitle></TopTitle>
 		<view :style="{position: '-webkit-sticky',position:'sticky',top:customBar+'px','z-index':'99'}">
 
@@ -120,7 +120,7 @@
 
 <script setup>
 	import { t } from '../../utils/locale'
-	import { img } from '../../utils/image'
+	import { img } from '../../utils/imageLocale'
 	import {
 		onLoad,
 		onShareAppMessage,
