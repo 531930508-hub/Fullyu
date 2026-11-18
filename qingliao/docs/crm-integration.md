@@ -325,7 +325,7 @@ mvn -pl mall-admin -am -DskipTests package                               # 全�
 
 | 端点 | 用途 |
 |---|---|
-| `POST /brandMember/gift/claim {code}` | 兑换会员码（渠道 / 推荐人 / 天数默认 30 / 名额 / 截止日由 CRM 配置；名额满返回“已满”；> 30 天需 CRM 审批后生效） |
+| `POST /brandMember/gift/claim {code}` | 兑换会员码（渠道 / 推荐人 / 天数默认 30 / 名额 / 截止日 / 仅限新会员由 CRM 配置；名额满返回“已满”；同一活动重复领取返回 409「已领取过」并透出 CRM 文案；> 30 天需 CRM 审批后生效） |
 | `POST /brandMember/feedback {content, allowStory}` | 有效会员提交意见反馈，可勾选同意匿名（只留姓氏）整理进会员故事 |
 | `GET /brandMember/stories` | 会员故事，仅有效会员可见 |
 
