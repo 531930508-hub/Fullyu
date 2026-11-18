@@ -283,15 +283,20 @@ describe('订单生命周期与金额口径', () => {
       // 回调前名额仍占用，回调解锁并置已退款
       expect((await getCourse(course.id))!.currentEnrolled).toBe(1)
 
-      // 现金全额退回，积分与代金券应一并返还，避免用户钱与权益双失
-      expect(await latestPointsBalance(user.id)).toBe(20)
+      // 网关只受理、钱没到账：权益先不还，避免「已退款但权益没回来/重复返还」
+      expect(await latestPointsBalance(user.id)).toBe(0)
       expect((await ctx.prisma.voucher.findUnique({ where: { id: voucher.id } }))!.status).toBe(
-        'UNUSED',
+        'USED',
       )
 
       await ctx.payment.handleRefundNotify(refundNotify(orderId))
       expect((await getOrder(orderId))!.status).toBe('REFUNDED')
       expect((await getCourse(course.id))!.currentEnrolled).toBe(0)
+      // 到账后现金全额退回，积分与代金券一并返还，避免用户钱与权益双失
+      expect(await latestPointsBalance(user.id)).toBe(20)
+      expect((await ctx.prisma.voucher.findUnique({ where: { id: voucher.id } }))!.status).toBe(
+        'UNUSED',
+      )
     })
 
     it('部分退款不返还积分与券（折扣按实际支付比例结算）', async () => {
