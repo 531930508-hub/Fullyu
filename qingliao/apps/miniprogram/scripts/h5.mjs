@@ -65,8 +65,9 @@ function build() {
         UNI_INPUT_DIR: ROOT,
         UNI_OUTPUT_DIR: OUT,
         NODE_ENV: 'production',
-        // 本流程部署目标是测试环境；生产 H5 需显式传 VITE_API_BASE=https://cityretreat.fullyu.cn/api
-        VITE_API_BASE: process.env.VITE_API_BASE || 'https://test-cityretreat.fullyu.cn/api',
+        // API 基址默认走同源相对路径 /api：测试与生产 H5 各自跟随部署域名自动选后端。
+        // 只有 API 与页面不同源的特殊部署才需要显式传 VITE_API_BASE。
+        VITE_API_BASE: process.env.VITE_API_BASE || '',
       },
     },
   );

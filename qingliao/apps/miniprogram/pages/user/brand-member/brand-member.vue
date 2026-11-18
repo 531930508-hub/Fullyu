@@ -1122,6 +1122,31 @@
 		}
 	}
 
+	// 失败原因必须带出来：固定文案会让测试/客服分不清后端挂了、登录过期还是网络不通。
+	// 主动文案保持不变，真实原因（接口 message / 网络 errMsg / HTTP 状态）追加在后面。
+	function loadErrorText(e) {
+		const base = tt(
+			'请稍后重试，会员状态不会被误判为未开通。',
+			'Please try again later. Your membership status will not be mistaken for inactive.'
+		)
+		console.error('[brand-member] 会员信息加载失败:', e)
+		let detail = ''
+		if (typeof e === 'string') {
+			detail = e
+		} else if (e) {
+			detail =
+				e.errMsg ||
+				e.message ||
+				(e.data && (e.data.message || e.data.code)) ||
+				(e.statusCode ? `HTTP ${e.statusCode}` : '')
+		}
+		detail = String(detail || '').trim().slice(0, 60)
+		if (detail === 'BRAND_MEMBER_PAYLOAD_INVALID') {
+			detail = tt('返回数据不完整', 'incomplete response')
+		}
+		return detail ? `${base}（${detail}）` : base
+	}
+
 	async function load() {
 		loading.value = true
 		error.value = ''
@@ -1152,7 +1177,7 @@
 				await fetchBrandLock()
 			}
 		} catch (e) {
-			error.value = tt('请稍后重试，会员状态不会被误判为未开通。', 'Please try again later. Your membership status will not be mistaken for inactive.')
+			error.value = loadErrorText(e)
 		} finally {
 			loading.value = false
 		}
