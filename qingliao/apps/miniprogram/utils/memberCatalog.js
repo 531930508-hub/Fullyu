@@ -80,6 +80,22 @@ export function priceLabel(product) {
 }
 
 /**
+ * 入口价：只报目录里最便宜的一档（90 天 ¥99 与 365 天 ¥365 并存时报 ¥99）。
+ * 「起」由这里判定：目录里有多档才标，单档时写「起」是假话——点进去只有一个价。
+ * 入口文案必须用它，不能拿默认档（大会员）的价再手写「起」，否则会和购买页对不上。
+ */
+export function entryPrice(products) {
+	const rows = (Array.isArray(products) ? products : []).filter((item) => item && toNumber(item.priceCents) !== null)
+	if (!rows.length) return null
+	const cheapest = rows.reduce((low, item) => (Number(item.priceCents) < Number(low.priceCents) ? item : low))
+	return {
+		amountCents: Number(cheapest.priceCents),
+		validDays: toNumber(cheapest.validDays) || 0,
+		from: rows.length > 1
+	}
+}
+
+/**
  * 折扣文案：中文直接用服务端下发的「7.5 折」；英文按折扣率换算成「25% off」。
  * 没有折扣率时返回空串，页面隐藏该行。
  */

@@ -366,10 +366,11 @@
 	const invaliditySingleCard = ref([])
 	const memberCardInfo = ref({})
 	// 未开通卖点：最低一档价格同样来自 CRM 目录，目录没拿到时只留门店范围。
+	// 「起」只在目录里有多档时才写，单档写「起」会与点进去的唯一价格自相矛盾。
 	const notJoinedText = computed(() => {
-		const cents = memberCardInfo.value.fromPriceCents
-		if (cents === null || cents === undefined) return t('未开通 · 三店通用')
-		return `${t('未开通 · 三店通用 · ')}¥${formatYuan(cents)}${t(' 起')}`
+		const entry = memberCardInfo.value.entry
+		if (!entry || entry.amountCents === null || entry.amountCents === undefined) return t('未开通 · 三店通用')
+		return `${t('未开通 · 三店通用 · ')}¥${formatYuan(entry.amountCents)}${entry.from ? t(' 起') : ''}`
 	})
 	const showLegacyCards = ref(true)
 	const legacyTouched = ref(false)
