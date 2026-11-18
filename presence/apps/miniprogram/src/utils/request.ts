@@ -8,11 +8,14 @@
 
 // 后端基础地址：mp-weixin 需完整域名并在小程序后台配置合法域名；H5 可走相对路径
 // 正式域名以 docs/deploy/domains.tsv 为准：在场 = presence.fullyu.cn（不是"去掉 test- 前缀"）。
-// 发布前必须在小程序后台（appid wxa7572dea26f5f4e4）把 presence.fullyu.cn 加入 request 合法域名。
-// 2026-11-13 起 test-zaichang 的 DNS 与 vhost 已下线，旧版本小程序不再可用，必须发新版本。
-let baseUrl = 'https://presence.fullyu.cn/api/v1'
+// 发布前必须在小程序后台（appid wxa7572dea26f5f4e4）把 presence.fullyu.cn 加入 request 合法域名；
+// 测试构建还需把 test-presence.fullyu.cn 加入合法域名。
+// 环境由编译期注入：VITE_API_BASE=https://test-presence.fullyu.cn/api/v1 即测试构建；
+// 未注入时 mp-weixin 走生产、H5 走同源（pnpm build:mp-weixin:test / build:mp-weixin）。
+const injectedBase = ((import.meta as any).env?.VITE_API_BASE as string | undefined) || ''
+let baseUrl = injectedBase || 'https://presence.fullyu.cn/api/v1'
 // #ifdef H5
-baseUrl = '/api/v1'
+baseUrl = injectedBase || '/api/v1'
 // #endif
 export const BASE_URL = baseUrl
 

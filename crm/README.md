@@ -314,3 +314,11 @@ E2 证据（测试环境，2026-11-08）：
 - **管理后台**：静态资源与 API 基址改造见“测试环境部署”；`/crm-admin/` 加载 `config.js`（`/crm-api/api`）、登录表单渲染正常，错误口令请求命中 `/crm-api/api/auth/login` 并返回 401；服务端用真实账号验证 `/auth/me`、`/members`、`/adjustments`、`/brand-cards`、`/rules`、`/game/prizes`、`/sync/status`、`/queue`、`/reports/monthly`、`/audit`、`/roles` 均 `200`。登录后的页面渲染未在浏览器内复验（避免在日志中传递口令），此前本机已完成同版本 UI 走查。
 
 已知缺口：真实支付未接，三端购卡返回“支付通道尚未接入”；身份合并后台操作未做；三端小程序已上传开发版，体验版切换与提审待公众平台操作；时叙/在场积分仍只读 CRM，写入权威未切换（本批只完成轻疗写入切换）；CRM 不再计算积分过期（`getInvalidIntegration` 恒为 0），过期规则需随写入切换单独实现；CRM 写入成功但本地事务回滚的崩溃窗口只能靠稳定 ref 重放核对，尚无自动巡检。
+
+## 环境对接调整（2026-11-18）
+
+- 测试轻疗：`test-cityretreat.fullyu.cn` 的 `/crm-api/` 与 `/crm-admin/` 由生产 CRM 改为本机 `127.0.0.1:8897`（`fullyu-crm-test`，库 `crm_test`）；`/opt/fullyu-mall-test/crm.env` 的 `CRM_SECRET` 同步为 crm_test 的 `ql-mall-test`。
+- 测试在场/时叙：`presence-test`、`teahour-test` 打开 `CRM_ENABLED` / `BRAND_CRM_ENABLED`，指向 `https://test-crm.fullyu.cn`，密钥用 crm_test 的 `zc-presence` / `sx-teahour`。
+- 测试 CRM：`CRM_EXT_WEBHOOKS` 只配 `ql` / `sx` / `zc` 三个 test 域名，`CRM_OUTBOX_INTERVAL_MS=15000`。
+- 生产 CRM：移除 `retreat` webhook 与 `ql-mall-test` 密钥，仅保留 `presence` / `teahour`；轻疗批次 1 前不要加回。
+- 小程序：`presence` / `qingliao` 支持 `VITE_API_BASE` 编译期注入。测试构建 `build:mp-weixin:test`（在场/时叙）、`build:mp:test`（轻疗）；默认 mp 构建走生产，在场 H5 走同源，轻疗 H5 部署脚本默认注入测试地址（生产需显式覆盖）。测试域名仍需在三个 appid 后台加入 request 合法域名。
