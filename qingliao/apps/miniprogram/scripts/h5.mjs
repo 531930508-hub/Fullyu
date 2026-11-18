@@ -91,13 +91,13 @@ function verify() {
   // 与同目录的 mall.vue 撞名但文件不同，靠前缀匹配必然误判。
   // 改为校验真实链接关系：每个页面在路由里有登记，且入口 import 的目标文件都在。
   const pages = pageList();
-  const jsText = files.filter((f) => f.endsWith('.js')).map((f) => fs.readFileSync(path.join(ASSETS, f), 'utf8'));
+  const entryText = fs.readFileSync(path.join(ASSETS, entryOf(fs.readFileSync(path.join(OUT, 'index.html'), 'utf8'))), 'utf8');
+  // 只查路由表（在入口 chunk 里），不能全量搜 bundle：别的代码带着页面 URL 会让缺失页蒙混过关。
   // 首页是以 path:"/" + alias 登记的，其余是 path:"/xxx"，统一按带引号的完整路径查。
-  const noRoute = pages.filter((p) => !jsText.some((t) => t.includes(`/${p}"`)));
+  const noRoute = pages.filter((p) => !entryText.includes(`/${p}"`));
   if (noRoute.length) {
     throw new Error(`有 ${noRoute.length} 个页面没有出现在路由里：\n  - ${noRoute.join('\n  - ')}`);
   }
-  const entryText = fs.readFileSync(path.join(ASSETS, entryOf(fs.readFileSync(path.join(OUT, 'index.html'), 'utf8'))), 'utf8');
   const linked = [...entryText.matchAll(/import\("\.\/([^"]+\.js)"\)/g)].map((m) => m[1]);
   const broken = linked.filter((r) => !files.includes(r));
   if (broken.length) {
