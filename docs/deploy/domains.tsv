@@ -12,7 +12,7 @@
 #
 业务	正式名	别名	服务器IP	nginx文件	端口与路径	状态	备注
 在场 / Full愈 主应用	presence.fullyu.cn		120.55.36.3	/etc/nginx/conf.d/presence.conf	/api/→127.0.0.1:3000；/→/opt/fullyu/apps/admin/dist（静态）	已上线	唯一入口；旧名 test-zaichang 于 2026-11-13 下线；汇付回调是否已在商户后台改指本域待复核
-在场 测试	test-presence.fullyu.cn		8.133.6.18	/etc/nginx/sites-enabled/test-presence.fullyu.cn.conf	/api/→127.0.0.1:3000；/→/opt/presence-test/app/apps/admin/dist	已上线	2026-11-17 建；库 fullyu_test（本机 MySQL），沙箱：CRM/BRAND_CRM 关闭，无微信支付/汇付/OSS/短信凭据
+在场 测试	test-presence.fullyu.cn		8.133.6.18	/etc/nginx/sites-enabled/test-presence.fullyu.cn.conf	/api/→127.0.0.1:3000；/→/opt/presence-test/app/apps/admin/dist	已上线	2026-11-17 建；库 fullyu_test（本机 MySQL），沙箱：2026-11-18 起 CRM/BRAND_CRM 已开启并指向 https://test-crm.fullyu.cn（crm_test），无微信支付/汇付/OSS/短信凭据
 时叙 后台	teahour.fullyu.cn		121.40.119.57	/etc/nginx/sites-enabled/teahour-teahour.fullyu.cn.conf	/api/与/uploads/→127.0.0.1:18787；/→admin/dist；/mp/→小程序 H5	已上线	唯一入口；admin 内含 StoreApp（吧台点单/收款）与 AdminApp；设备与会员渠道仍为 mock
 时叙 测试	test-teahour.fullyu.cn		8.133.6.18	/etc/nginx/sites-enabled/test-teahour.fullyu.cn.conf	/api/与/uploads/→127.0.0.1:18788；/→/opt/teahour-test/app/apps/admin/dist	已上线	2026-11-17 建；库 teahour_test（本机 MySQL），INTEGRATIONS_*=mock（支付/打印/微信假实现），/mp/ 未部署
 轻疗	cityretreat.fullyu.cn	manage.fullytherapy.com	120.55.36.3	/etc/nginx/conf.d/cityretreat.conf	→127.0.0.1:9929	已上线	2026-11-17 00:22 生产迁入 120.55；8.133 上的同名 conf 已无 DNS 指向，属遗留
