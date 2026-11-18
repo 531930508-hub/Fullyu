@@ -8,6 +8,7 @@ import { BusinessException } from '../../common/exceptions/business.exception'
 import { PasswordPolicyService } from '../../common/password-policy.service'
 import { resolveVisibleOrgIds } from '../../common/utils/data-scope.util'
 import { CrmClient } from '../../common/crm/crm.client'
+import { randomNickname } from '../../common/nickname'
 
 @Injectable()
 export class AuthService {
@@ -48,7 +49,7 @@ export class AuthService {
       user = await this.prisma.user.create({
         data: {
           phone,
-          nickname: `用户${phone.slice(-4)}`,
+          nickname: randomNickname(),
           openId: session.openid,
           unionId: session.unionid,
         },
@@ -104,7 +105,7 @@ export class AuthService {
       user = await this.prisma.user.create({
         data: {
           phone: normalizedPhone,
-          nickname: `用户${normalizedPhone.slice(-4)}`,
+          nickname: randomNickname(),
         },
       })
     }
