@@ -39,10 +39,11 @@ export default {
   },
   methods: {
     open(orderId, payAmount, payType, couponCode) {
-      this.form = {payAmount: 0}
+      // 默认留空，强制人工填写；以前默认 0，打开直接点确定就是 0 元成交
+      this.form = {payAmount: null}
       this.dialogVisible = true
       this.form.id = orderId
-      if (payAmount) {
+      if (payAmount !== null && payAmount !== undefined && payAmount !== '') {
         this.form.payAmount = parseFloat(payAmount).toFixed(2)
       }
       if (couponCode) {
