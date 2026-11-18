@@ -42,6 +42,17 @@
 #      巡检报警（2026-11-13 实测）⇒ 本脚本装了 EXIT trap：只要进入「已停服」阶段后
 #      任何一步失败/Ctrl-C，都会恢复备份 jar 并重新拉起；后端已就绪而前端失败则回滚
 #      admin-dist。发布期间写 $APP_DIR/.deploy.lock，避免和 bin/backend-guard.sh 抢。
+#   8) 测试机其实由 systemd 托管（mall-test.service，MALL_FOREGROUND=1 + Restart=on-failure）。
+#      脚本再手工 setsid 起一个 JVM → 双实例、定时任务跑两遍（2026-11-18 13:07 实测：
+#      19929 没监听却有两个 java 在跑）⇒ 有 unit 就只走 systemctl stop/start，
+#      并清掉历史上手工启动的残留进程。unit 名可用 UNIT=xxx 覆盖。
+#   9) 回滚基线放在 target/ 里等于没有：mvn clean 先删 jar 再编译，一旦构建失败
+#      （2026-11-18 12:56 测试源码编不过）target 里就没 jar，下一次发布的「备份 jar」
+#      和 on_exit 回滚全部落空 ⇒ 额外维护 $APP_DIR/backup/last-good/ 的常驻副本，
+#      每次发布成功刷新，target 缺 jar 时拿它当基线。
+#  10) ssh 断连会打断打包（2026-11-18 13:02：mvn 跑到一半 connection reset，本地
+#      trap 直接进入回滚）⇒ 打包改成服务器端 setsid 后台跑 + 本地轮询 build.rc，
+#      断连只影响轮询，不影响构建，脚本重连后接着判断结果。
 set -euo pipefail
 
 HOST="${DEPLOY_HOST:-test-cityretreat}"
@@ -50,6 +61,10 @@ SRC_REMOTE="$APP_DIR/src/tou-mall-server"
 JAR_REMOTE="$SRC_REMOTE/mall-admin/target/mall-admin-1.0-SNAPSHOT.jar"
 HEALTH_URL="${HEALTH_URL:-https://test-cityretreat.fullyu.cn/api/shop/authorized}"
 START_SH="$APP_DIR/start-backend.sh"
+# systemd 托管单元（测试机实际形态）；没有这个 unit 时退回老的手工 setsid 启动
+UNIT="${UNIT:-mall-test}"
+# 常驻回滚基线：不放在 target/ 里，避免被 mvn clean 连带删掉
+LAST_GOOD="$APP_DIR/backup/last-good/mall-admin-1.0-SNAPSHOT.jar"
 
 cd "$(dirname "$0")/.."
 SRV="$(cd .. && pwd)"
@@ -78,7 +93,11 @@ step() { STEP_NO=$((STEP_NO + 1)); echo "== $STEP_NO/$STEP_TOTAL $1 =="; }
 
 # 远端公共片段：只挑 java 进程，避免匹配到 shell 自身
 RC='APP_DIR="$1"; JAR_REMOTE="$2"; START_SH="$3"
-pids() { ps -C java -o pid=,args= | awk "/mall-admin-1\\.0-SNAPSHOT\\.jar/ {print \$1}"; }'
+UNIT="\${MALL_UNIT:-mall-test}"
+pids() { ps -C java -o pid=,args= | awk "/mall-admin-1\\.0-SNAPSHOT\\.jar/ {print \$1}"; }
+# 测试机由 systemd 托管：有 unit 就别再手工起第二个 JVM
+has_unit() { [ -n "\$UNIT" ] && systemctl cat "\$UNIT" >/dev/null 2>&1; }
+unit_main_pid() { systemctl show -p MainPID --value "\$UNIT" 2>/dev/null | tr -d "[:space:]"; }'
 
 # 解析「应用实际连哪个库」：start-backend.sh 的 profile → config/application-<profile>.yml
 # （Spring 优先级最高）→ config/application.yml → $APP_DIR/application*.yml → jar 内 application*.yml
@@ -126,10 +145,12 @@ PY
 
 # ---------- --status ----------
 if [ "$STATUS_ONLY" = 1 ]; then
-  ssh "$HOST" bash -s -- "$APP_DIR" "$JAR_REMOTE" "$START_SH" <<REMOTE
+  ssh "$HOST" MALL_UNIT="$UNIT" bash -s -- "$APP_DIR" "$JAR_REMOTE" "$START_SH" <<REMOTE
 set -uo pipefail
 $RC
 echo "== jar =="; ls -l --time-style=+%m-%d_%H:%M "\$JAR_REMOTE" || echo 缺 jar
+echo "== 回滚基线 =="; ls -l --time-style=+%m-%d_%H:%M "$LAST_GOOD" 2>/dev/null || echo 缺 last-good
+echo "== systemd =="; if has_unit; then echo "\$UNIT: \$(systemctl is-active "\$UNIT")（MainPID=\$(unit_main_pid)）"; else echo "无 \$UNIT 单元，走手工启动"; fi
 echo "== 进程 =="; P=\$(pids); if [ -n "\$P" ]; then ps -C java -o pid=,lstart=,args= | grep 'mall-admin-1.0-SNAPSHOT' | cut -c1-90; else echo 未运行; fi
 echo "== 端口 =="; ss -lntp 2>/dev/null | grep 19929 | head -1 || echo 未监听
 echo "== 开关 =="; grep -E 'SHOP_SCOPE|INCENTIVE_TEAM' "\$START_SH" || echo '未显式设置（走 application.yml 默认）'
@@ -156,16 +177,40 @@ PHASE="init"
 LOCK_REMOTE="$APP_DIR/.deploy.lock"
 
 rollback_backend() {
-  ssh "$HOST" bash -s -- "$APP_DIR" "$JAR_REMOTE" "$START_SH" "$BK" <<'REMOTE'
+  ssh "$HOST" MALL_UNIT="$UNIT" bash -s -- "$APP_DIR" "$JAR_REMOTE" "$START_SH" "$BK" "$LAST_GOOD" <<'REMOTE'
 set -uo pipefail
-APP_DIR="$1"; JAR_REMOTE="$2"; START_SH="$3"; BK="$4"
-pids() { ps -C java -o pid=,args= | awk "/mall-admin-1\\.0-SNAPSHOT\\.jar/ {print \$1}"; }
-if [ -n "$(pids)" ]; then echo "已有实例在跑，无需回滚启动"; exit 0; fi
+APP_DIR="$1"; JAR_REMOTE="$2"; START_SH="$3"; BK="$4"; LAST_GOOD="$5"
+UNIT="${MALL_UNIT:-mall-test}"
+pids() { ps -C java -o pid=,args= | awk "/mall-admin-1\.0-SNAPSHOT\.jar/ {print \$1}"; }
+has_unit() { [ -n "$UNIT" ] && systemctl cat "$UNIT" >/dev/null 2>&1; }
+main_pid() { systemctl show -p MainPID --value "$UNIT" 2>/dev/null | tr -d "[:space:]"; }
+
+# 基线优先级：本次备份 → 常驻 last-good → 都没有就明确报错（别再假装"用当前 jar 启动"）
+SRC_JAR=""
 if [ -f "$BK/mall-admin-1.0-SNAPSHOT.jar" ]; then
-  cp -a "$BK/mall-admin-1.0-SNAPSHOT.jar" "$JAR_REMOTE" && echo "已恢复备份 jar"
+  SRC_JAR="$BK/mall-admin-1.0-SNAPSHOT.jar"; echo "回滚基线：本次备份 $SRC_JAR"
+elif [ -f "$LAST_GOOD" ]; then
+  SRC_JAR="$LAST_GOOD"; echo "回滚基线：last-good $SRC_JAR"
 else
-  echo "没有备份 jar，直接用当前 jar 启动"
+  echo "!! 没有可回滚的 jar（$BK 与 $LAST_GOOD 都不存在）"
+  echo "!! 手工处理：从 CI 产物或上一版 tag 重新打包，再 systemctl start $UNIT"
+  exit 1
 fi
+cp -f "$SRC_JAR" "$JAR_REMOTE" && echo "已恢复 jar"
+
+if has_unit; then
+  # unit 带 Restart=on-failure，必须先 stop 再从 unit 起来，否则手工进程 + unit 进程并存
+  systemctl stop "$UNIT" >/dev/null 2>&1 || true
+  for p in $(pids); do kill -9 "$p" 2>/dev/null || true; done
+  sleep 1
+  systemctl start "$UNIT" || { echo "!! systemctl start $UNIT 失败"; exit 1; }
+  echo "已 systemctl start $UNIT（MainPID=$(main_pid)），等待健康检查"
+  exit 0
+fi
+
+if [ -n "${MALL_FORCE_RESTART:-}" ]; then echo "MALL_FORCE_RESTART 已设置，强制按基线重启"; fi
+P=$(pids)
+if [ -n "$P" ]; then echo "已有实例在跑: $P，先清掉再按修复后的 jar 重启"; kill -9 $P 2>/dev/null || true; sleep 2; fi
 cd "$APP_DIR" || exit 1
 # 必须做二次 fork 的后台启动：start-backend.sh 里 exec 出来的 JVM 若是这里的子进程，
 # 这个 bash -s 会一直等它，ssh 通道不关闭、本地发布脚本卡死（2026-11-13 实测）
@@ -277,15 +322,23 @@ fi
 
 # ---------- 2. 备份 + 停应用 ----------
 step "备份 jar、停应用"
-ssh "$HOST" bash -s -- "$APP_DIR" "$JAR_REMOTE" "$START_SH" "$BK" <<REMOTE
+ssh "$HOST" MALL_UNIT="$UNIT" bash -s -- "$APP_DIR" "$JAR_REMOTE" "$START_SH" "$BK" <<REMOTE
 set -uo pipefail
 $RC
 BK="\$4"
 mkdir -p "\$BK"
 if [ -f "\$JAR_REMOTE" ]; then cp -a "\$JAR_REMOTE" "\$BK/" && echo "已备份到 \$BK"; else echo "没有可备份的 jar"; fi
+# systemd 托管时先 stop unit：Restart=on-failure 会把手杀/崩掉的进程自动拉回来，
+# 只 kill 进程等于和 systemd 抢，停不掉还可能起两个（2026-11-18 13:07 实测）
+if has_unit; then
+  echo "systemctl stop \$UNIT"
+  systemctl stop "\$UNIT" 2>&1 || true
+  for i in \$(seq 1 15); do [ "\$(unit_main_pid)" = "0" ] && break; sleep 1; done
+  echo "\$UNIT 状态: \$(systemctl is-active "\$UNIT")（MainPID=\$(unit_main_pid)）"
+fi
 P=\$(pids)
 if [ -z "\$P" ]; then echo "没有运行中的实例"; exit 0; fi
-echo "停止旧进程: \$P"
+echo "停止残留进程: \$P"
 kill \$P 2>/dev/null || true
 for i in \$(seq 1 15); do if [ -z "\$(pids)" ]; then break; fi; sleep 1; done
 L=\$(pids)
@@ -298,21 +351,67 @@ REMOTE
 PHASE="stopped"
 
 # ---------- 3. 打包 ----------
-step "mvn package（服务器上，60~120s）"
-ssh "$HOST" bash -s -- "$SRC_REMOTE" "$JAR_REMOTE" <<'REMOTE'
+step "mvn package（服务器后台跑，60~180s）"
+BUILD_RC="$APP_DIR/.build.rc"; BUILD_LOG="$APP_DIR/.build.log"
+# 2026-11-18 13:02 实测：mvn 在前台跑，ssh 一断（connection reset）本地 trap 直接进回滚，
+# 构建跟着被杀、target 里连 jar 都没有。改成 setsid 后台跑 + 轮询 rc 文件，断连只影响轮询。
+ssh "$HOST" bash -s -- "$SRC_REMOTE" "$JAR_REMOTE" "$BUILD_RC" "$BUILD_LOG" <<'REMOTE'
 set -uo pipefail
-cd "$1" || exit 1
-mvn -q -pl mall-admin -am -DskipTests clean package 2>&1 | tail -25
-rc=${PIPESTATUS[0]}
-echo "build-exit: $rc"
-[ "$rc" = 0 ] || exit "$rc"
-ls -l --time-style=+%m-%d_%H:%M "$2"
+rm -f "$3" "$4"
+setsid --fork nohup bash -c 'cd "$1" || exit 1
+  mvn -q -pl mall-admin -am -DskipTests clean package >>"$3" 2>&1
+  echo $? >"$2"' _ "$1" "$3" "$4" </dev/null >/dev/null 2>&1
+echo "构建已在服务器后台启动"
 REMOTE
+echo -n "构建中"
+rc=""
+for i in $(seq 1 240); do
+  rc=$(ssh "$HOST" "cat '$BUILD_RC' 2>/dev/null" || true)
+  [ -n "$rc" ] && break
+  echo -n "."; sleep 3
+  ssh -o ConnectTimeout=5 "$HOST" true 2>/dev/null || true   # 断连不致命，下一轮重试
+done
+echo
+if [ -z "$rc" ]; then
+  echo "!! 12 分钟没等到构建结果（构建可能还在服务器上跑：tail -f $BUILD_LOG）"
+  echo "!! 处理后可直接重跑本脚本，它会在「已停服」阶段接管回滚/重启"
+  exit 1
+fi
+if [ "$rc" != "0" ]; then
+  echo "!! 构建失败（exit $rc），日志尾部："
+  ssh "$HOST" "tail -40 '$BUILD_LOG'" || true
+  exit "$rc"
+fi
+echo "构建成功，jar 时间："
+ssh "$HOST" "ls -l --time-style=+%m-%d_%H:%M '$JAR_REMOTE'" || true
 
 # ---------- 4. 启动 ----------
 step "启动"
-# setsid --fork 二次 fork：前台/普通 & 都会让 ssh 一直等这个 JVM，脚本卡死在这一步
-ssh "$HOST" "cd $(dirname "$START_SH") && setsid --fork nohup ./$(basename "$START_SH") >>$APP_DIR/logs/app.log 2>&1 </dev/null & sleep 1; echo 已触发启动"
+ssh "$HOST" MALL_UNIT="$UNIT" bash -s -- "$APP_DIR" "$JAR_REMOTE" "$START_SH" <<'REMOTE'
+set -uo pipefail
+APP_DIR="$1"; JAR_REMOTE="$2"; START_SH="$3"
+UNIT="${MALL_UNIT:-mall-test}"
+pids() { ps -C java -o pid=,args= | awk "/mall-admin-1\.0-SNAPSHOT\.jar/ {print \$1}"; }
+has_unit() { [ -n "$UNIT" ] && systemctl cat "$UNIT" >/dev/null 2>&1; }
+main_pid() { systemctl show -p MainPID --value "$UNIT" 2>/dev/null | tr -d "[:space:]"; }
+
+[ -f "$JAR_REMOTE" ] || { echo "!! 构建产物不存在：$JAR_REMOTE"; exit 1; }
+
+if has_unit; then
+  # 托管模式：手工进程必须先清掉，否则 systemctl start 后就是两个 JVM
+  P=$(pids)
+  if [ -n "$P" ]; then echo "清理手工启动的残留进程: $P"; kill -9 $P 2>/dev/null || true; sleep 1; fi
+  systemctl start "$UNIT" || { echo "!! systemctl start $UNIT 失败（journalctl -u $UNIT -n 50）"; exit 1; }
+  echo "已 systemctl start $UNIT（MainPID=$(main_pid)）"
+  exit 0
+fi
+
+# 无 unit：老的手工启动。setsid --fork 二次 fork，否则 ssh 会一直等这个 JVM、脚本卡死
+( cd "$APP_DIR" || exit 1
+  setsid --fork nohup ./"$(basename "$START_SH")" >>"$APP_DIR/logs/app.log" 2>&1 </dev/null & )
+sleep 1
+echo "已触发启动（手工模式）"
+REMOTE
 
 # ---------- 5. 健康检查 ----------
 step "健康检查"
@@ -324,33 +423,48 @@ for i in $(seq 1 60); do
   echo -n "."; sleep 2
 done
 
-n=$(ssh "$HOST" bash -s -- "$APP_DIR" "$JAR_REMOTE" "$START_SH" <<REMOTE
+n=$(ssh "$HOST" MALL_UNIT="$UNIT" bash -s -- "$APP_DIR" "$JAR_REMOTE" "$START_SH" <<'REMOTE'
 set -uo pipefail
-$RC
+APP_DIR="$1"; JAR_REMOTE="$2"; START_SH="$3"
+UNIT="${MALL_UNIT:-mall-test}"
+pids() { ps -C java -o pid=,args= | awk "/mall-admin-1\.0-SNAPSHOT\.jar/ {print \$1}"; }
+main_pid() { systemctl show -p MainPID --value "$UNIT" 2>/dev/null | tr -d "[:space:]"; }
+has_unit() { [ -n "$UNIT" ] && systemctl cat "$UNIT" >/dev/null 2>&1; }
 count() { pids | awk 'NF' | wc -l; }
 # start-backend.sh 里的 setsid 会 fork，偶发一次发布拉起两个 JVM（2026-11-13 18:37 实测），
 # 这里收敛到「启动时间最新」的那个，其余强杀，避免双实例跑定时任务。
-if [ "\$(count)" -gt 1 ]; then
-  P=\$(pids)
-  KEEP=\$(ps -C java -o pid=,etimes=,args= | awk '/mall-admin-1\\.0-SNAPSHOT\\.jar/ {print \$2, \$1}' | sort -n | head -1 | awk '{print \$2}')
-  echo "检测到多实例，保留最新进程 \$KEEP，清理其余" >&2
-  for p in \$P; do [ "\$p" = "\$KEEP" ] || kill -9 "\$p" 2>/dev/null || true; done
+if [ "$(count)" -gt 1 ]; then
+  P=$(pids)
+  KEEP=$(ps -C java -o pid=,etimes=,args= | awk '/mall-admin-1\.0-SNAPSHOT\.jar/ {print $2, $1}' | sort -n | head -1 | awk '{print $2}')
+  echo "检测到多实例，保留最新进程 $KEEP，清理其余" >&2
+  for p in $P; do [ "$p" = "$KEEP" ] || kill -9 "$p" 2>/dev/null || true; done
   sleep 2
+fi
+# 健康检查 200 却对不上 unit 主进程 = 19929 上跑的是野进程（历史手工启动 / guard 拉起），
+# 正是「双 JVM、定时任务跑两遍」的现场，直接按异常处理
+if has_unit; then
+  MP=$(main_pid)
+  echo "UNIT=$(systemctl is-active "$UNIT" 2>/dev/null || true) MainPID=$MP"
+  if [ "$MP" = "0" ]; then echo "!! unit 内没有主进程，19929 上是野进程" >&2; echo 0; exit 0; fi
 fi
 count
 REMOTE
 )
+n=$(printf '%s\n' "$n" | tail -1)
 echo "运行中实例数: ${n}（应为 1）"
 
 if [ "$ok" != 1 ] || [ "$n" != "1" ]; then
   echo
-  echo "发布异常，先清掉残留实例，再由 on_exit 恢复备份 jar 并重新拉起。"
-  ssh "$HOST" "ps -C java -o pid=,args= | awk '/mall-admin-1\\.0-SNAPSHOT\\.jar/ {print \$1}' | xargs -r kill -9" || true
+  echo "发布异常：健康检查 ${ok}，实例数 ${n}。先清掉残留实例，再由 on_exit 恢复备份 jar 并重新拉起。"
+  echo "  诊断：ssh $HOST 'systemctl status $UNIT --no-pager -l | head -30; journalctl -u $UNIT -n 50 --no-pager; tail -40 $APP_DIR/logs/app.log'"
+  ssh "$HOST" "ps -C java -o pid=,args= | awk '/mall-admin-1\\.0-SNAPSHOT\\.jar/ {print \$1}' | xargs -r kill -9; systemctl stop $UNIT 2>/dev/null || true" || true
   sleep 2
-  echo "  手工兜底命令：ssh $HOST \"cp $BK/mall-admin-1.0-SNAPSHOT.jar $JAR_REMOTE; cd $APP_DIR && ./start-backend.sh\""
   exit 1
 fi
 PHASE="started"
+
+# 刷新常驻回滚基线：下次发布无论 mvn clean 有没有删 target，都有 jar 可退回
+ssh "$HOST" "mkdir -p '$(dirname "$LAST_GOOD")' && cp -f '$JAR_REMOTE' '$LAST_GOOD' && echo 'last-good 已刷新'" || true
 
 # ---------- 6~7. 管理端前端发布（仅 --with-web） ----------
 if [ "$WEB" = 1 ]; then
