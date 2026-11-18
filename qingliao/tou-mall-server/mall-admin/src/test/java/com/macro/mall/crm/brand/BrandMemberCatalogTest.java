@@ -34,7 +34,7 @@ class BrandMemberCatalogTest {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> row(Map<String, Object> view, String code) {
         List<Map<String, Object>> products = (List<Map<String, Object>>) view.get("products");
-        return products.stream().filter(item -> code.equals(item.get("code"))).findFirst().orElseThrow();
+        return products.stream().filter(item -> code.equals(item.get("code"))).findFirst().orElseThrow(IllegalStateException::new);
     }
 
     @Test

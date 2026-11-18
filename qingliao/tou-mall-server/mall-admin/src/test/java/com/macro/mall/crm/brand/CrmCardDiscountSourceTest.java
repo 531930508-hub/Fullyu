@@ -40,8 +40,8 @@ class CrmCardDiscountSourceTest {
 
         CrmCardDiscountSource source = new CrmCardDiscountSource(client);
 
-        assertEquals(new BigDecimal("0.7550"), source.advanceRate("year").orElseThrow());
-        assertEquals(new BigDecimal("0.9400"), source.advanceRate("month").orElseThrow());
+        assertEquals(new BigDecimal("0.7550"), source.advanceRate("year").orElseThrow(IllegalStateException::new));
+        assertEquals(new BigDecimal("0.9400"), source.advanceRate("month").orElseThrow(IllegalStateException::new));
         // 后台自定义发卡不受 CRM 约束
         assertFalse(source.advanceRate("custom").isPresent());
     }
@@ -81,6 +81,6 @@ class CrmCardDiscountSourceTest {
         assertTrue(source.advanceRate("year").isPresent());
 
         // 失败落在退避窗口内，仍返回上次成功值，而不是回落到本地配置
-        assertEquals(new BigDecimal("0.7550"), source.advanceRate("year").orElseThrow());
+        assertEquals(new BigDecimal("0.7550"), source.advanceRate("year").orElseThrow(IllegalStateException::new));
     }
 }
