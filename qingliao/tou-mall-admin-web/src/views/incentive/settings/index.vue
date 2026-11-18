@@ -12,6 +12,7 @@
           value-format="yyyy-MM"
           format="yyyy 年 MM 月"
           :clearable="false"
+          :picker-options="monthOptions"
           placeholder="生效月份"
           @change="loadAll"/>
         <el-button size="small" icon="el-icon-back" @click="$router.push('/incentive/board')">返回看板</el-button>
@@ -526,6 +527,12 @@ export default {
   data() {
     return {
       month: currentMonth(),
+      monthOptions: {
+        disabledDate(date) {
+          // 2026-11 之前的薪资在旧版工资系统，避免两套数字并存
+          return date.getTime() > Date.now() || date.getTime() < new Date(2026, 10, 1).getTime()
+        }
+      },
       activeTab: 'config',
       shops: [],
       bundle: {usingDefault: false, config: null, coefficients: [], tiers: [], trainingProjects: []},

@@ -1,5 +1,7 @@
 package com.macro.mall.incentive.calc;
 
+import com.macro.mall.common.exception.BusinessException;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -81,8 +83,18 @@ public final class IncentiveMath {
         parseMonth(month);
     }
 
+    /**
+     * 激励/结算模块从 2026-11 起接管薪资口径；更早月份的薪资在旧版工资系统里，
+     * 这里直接拒绝，避免两套数字并存造成误会（历史月份没有落库快照，都是实时算的）。
+     */
+    public static final YearMonth FIRST_SUPPORTED_MONTH = YearMonth.of(2026, 11);
+
     public static String normalizeMonth(String month) {
-        return parseMonth(month).toString();
+        YearMonth selected = parseMonth(month);
+        if (selected.isBefore(FIRST_SUPPORTED_MONTH)) {
+            throw new BusinessException("2026-11 之前的薪资请在旧版工资系统中查看");
+        }
+        return selected.toString();
     }
 
     public static String currentMonth() {

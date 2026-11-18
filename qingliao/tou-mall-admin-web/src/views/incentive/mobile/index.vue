@@ -38,6 +38,7 @@
                 v-model="month"
                 type="month"
                 :max="currentMonth"
+                :min="minMonth"
                 aria-label="统计月份"
                 @change="onMonthChange">
             </label>
@@ -641,6 +642,8 @@ export default {
     return {
       month: currentMonth(),
       currentMonth: currentMonth(),
+      // 2026-11 之前的薪资在旧版工资系统，避免两套数字并存
+      minMonth: '2026-11',
       board: null,
       config: null,
       published: null,
@@ -1014,7 +1017,7 @@ export default {
       const parts = this.month.split('-')
       const date = new Date(Number(parts[0]), Number(parts[1]) - 1 + delta, 1)
       const next = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0')
-      if (next > this.currentMonth) {
+      if (next > this.currentMonth || next < this.minMonth) {
         return
       }
       this.month = next
@@ -1027,6 +1030,9 @@ export default {
       if (this.month > this.currentMonth) {
         this.month = this.currentMonth
       }
+      if (this.month < this.minMonth) {
+        this.month = this.minMonth
+      }
       this.loadData()
     },
     resetMonth() {
@@ -1036,7 +1042,7 @@ export default {
     applyRouteMonth() {
       const query = (this.$route && this.$route.query) || {}
       const month = typeof query.month === 'string' ? query.month : ''
-      if (/^\d{4}-\d{2}$/.test(month) && month <= this.currentMonth) {
+      if (/^\d{4}-\d{2}$/.test(month) && month <= this.currentMonth && month >= this.minMonth) {
         this.month = month
       }
     },

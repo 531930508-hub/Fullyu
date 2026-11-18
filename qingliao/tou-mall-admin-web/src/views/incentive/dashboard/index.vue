@@ -249,7 +249,8 @@ export default {
       warningsOpen: true,
       monthOptions: {
         disabledDate(date) {
-          return date.getTime() > Date.now()
+          // 2026-11 之前的薪资在旧版工资系统，避免两套数字并存
+          return date.getTime() > Date.now() || date.getTime() < new Date(2026, 10, 1).getTime()
         }
       }
     }
