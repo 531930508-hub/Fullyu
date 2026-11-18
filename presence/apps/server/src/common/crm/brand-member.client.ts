@@ -197,6 +197,8 @@ const PASSTHROUGH_CODES: Record<string, [number, HttpStatus]> = {
   GIFT_CODE_PAUSED: [4093, HttpStatus.CONFLICT],
   GIFT_CODE_EXPIRED: [4094, HttpStatus.CONFLICT],
   GIFT_CODE_FULL: [4095, HttpStatus.CONFLICT],
+  GIFT_ALREADY_CLAIMED: [4102, HttpStatus.CONFLICT],
+  GIFT_NEW_MEMBER_ONLY: [4103, HttpStatus.CONFLICT],
   MEMBERS_ONLY: [4037, HttpStatus.FORBIDDEN],
   FEEDBACK_RATE_LIMIT: [4291, HttpStatus.TOO_MANY_REQUESTS],
   REFUND_NOT_ALLOWED: [4096, HttpStatus.CONFLICT],
@@ -356,7 +358,7 @@ export class BrandMemberClient {
     }
   }
 
-  /** 会员码兑换：码由顾客输入，身份固定为当前登录顾客；CRM 按「同人同码」幂等。 */
+  /** 会员码兑换：码由顾客输入，身份固定为当前登录顾客；同一活动重复领取由 CRM 返回 409 并透出原因。 */
   async claimGift(localUserId: string, code: string) {
     try {
       const body = await this.request<{ card?: BrandCardView; days?: number; replayed?: boolean }>(
