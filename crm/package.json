@@ -5,6 +5,7 @@
   "description": "Full愈 CRM 中台（会员、积分、年卡唯一账本）",
   "scripts": {
     "dev:server": "pnpm --filter @fullyu/crm-shared build && pnpm --filter @fullyu/crm-server dev",
+    "dev:console": "pnpm --filter @fullyu/crm-console dev",
     "build": "pnpm -r build",
     "build:server": "pnpm --filter @fullyu/crm-shared build && pnpm --filter @fullyu/crm-server build",
     "test": "pnpm --filter @fullyu/crm-server test",
