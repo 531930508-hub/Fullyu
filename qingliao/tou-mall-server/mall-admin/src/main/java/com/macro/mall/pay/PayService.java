@@ -68,6 +68,7 @@ public class PayService {
                 PayCertsysId3=PayCert.sysId1;
             }
         }catch (Exception e){
+            log.error("支付初始化失败 orderId={} shopId={} reason={}", order.getId(), order.getShopId(), e.getMessage(), e);
             throw new ApiException("支付失败: 系统异常");
         }
 
@@ -122,7 +123,8 @@ public class PayService {
             retMap.put("payType", String.valueOf(payType));
             return retMap;
         } catch (Exception e) {
-            log.error("支付接口调用异常, e = {}", e.getMessage());
+            log.error("支付接口调用异常 orderSn={} channel={} amount={} e={}",
+                    orderSn, order.getPayChannel(), order.getPayAmount(), e.getMessage(), e);
             throw new ApiException("支付失败: 支付平台异常");
         }
     }
@@ -177,6 +179,7 @@ public class PayService {
                 PayCertsysId3 = PayCert.sysId1;
             }
         } catch (Exception e) {
+            log.error("退款初始化失败 orderId={} shopId={} reason={}", order.getId(), order.getShopId(), e.getMessage(), e);
             throw new ApiException("支付失败: 系统异常");
         }
         // 网关调用本身的异常由 client 落成 UNKNOWN；这里只透传结果，不再把未知吞成 null
@@ -202,13 +205,13 @@ public class PayService {
             try{
                 douGongPayClient.doInit();
             }catch (Exception e){
+                log.error("退款查单初始化失败 orderId={} reason={}", order.getId(), e.getMessage(), e);
                 throw new ApiException("支付失败: 系统异常");
             }
 
             return douGongPayClient.queryRefundState(order);
         } catch (Exception e) {
-            e.printStackTrace();
-            log.error("查询退款状态失败");
+            log.error("查询退款状态失败 orderId={}", order.getId(), e);
             throw new ApiException("查询退款状态失败");
         }
     }
@@ -218,6 +221,7 @@ public class PayService {
         try{
             douGongPayClient.doInit();
         }catch (Exception e){
+            log.error("退款验签初始化失败 orderId={} reason={}", orderId, e.getMessage(), e);
             throw new ApiException("支付失败: 系统异常");
         }
         return douGongPayClient.validateRefundSign(orderId, sign);

@@ -66,6 +66,7 @@ public class DouGongPayClient implements IPayClient {
    // @PostConstruct
     public void doInit() throws Exception {
         log.info("Start Init DouGong Pay");
+        PayConfigGuard.require("默认商户(兜底)", PayCert.sysId, "PAY_SYS_ID", PayCert.paySecret, "PAY_SECRET");
         BasePay.debug = true;
         if (active.equals("prod")) {
             BasePay.prodMode = BasePay.MODE_PROD;
@@ -87,6 +88,7 @@ public class DouGongPayClient implements IPayClient {
 
     public void doInit1() throws Exception {
         log.info("Start Init DouGong Pay");
+        PayConfigGuard.require("总公司", PayCert.sysId1, "PAY_SYS_ID_1", PayCert.paySecret1, "PAY_SECRET_1");
         BasePay.debug = true;
         if (active.equals("prod")) {
             BasePay.prodMode = BasePay.MODE_PROD;
@@ -108,6 +110,7 @@ public class DouGongPayClient implements IPayClient {
 
     public void doInit2() throws Exception {
         log.info("Start Init DouGong Pay");
+        PayConfigGuard.require("来福士", PayCert.sysId2, "PAY_SYS_ID_2", PayCert.paySecret2, "PAY_SECRET_2");
         BasePay.debug = true;
         if (active.equals("prod")) {
             BasePay.prodMode = BasePay.MODE_PROD;
@@ -129,6 +132,7 @@ public class DouGongPayClient implements IPayClient {
 
     public void doInit3() throws Exception {
         log.info("Start Init DouGong Pay");
+        PayConfigGuard.require("世纪汇", PayCert.sysId3, "PAY_SYS_ID_3", PayCert.paySecret3, "PAY_SECRET_3");
         BasePay.debug = true;
         if (active.equals("prod")) {
             BasePay.prodMode = BasePay.MODE_PROD;
