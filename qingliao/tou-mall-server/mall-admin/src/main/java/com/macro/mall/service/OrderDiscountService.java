@@ -74,6 +74,8 @@ public class OrderDiscountService extends BaseService<OrderDiscountMapper, Order
         lqw.le(OrderDiscount::getStartTime, now);
         lqw.gt(OrderDiscount::getEndTime, now);
         lqw.in(OrderDiscount::getUseType, useTypeList);
+        // 折扣值为 0 或负数是脏配置：不能参与比价，否则会被选成「最低价」导致整单 0 元
+        lqw.gt(OrderDiscount::getDiscount, 0);
         lqw.and(qw -> qw.eq(OrderDiscount::getType, 1).or(q -> q.eq(OrderDiscount::getType, 2).eq(OrderDiscount::getDuration, duration)));
         List<OrderDiscount> list = list(lqw);
         if (CollectionUtils.isEmpty(list)) {
