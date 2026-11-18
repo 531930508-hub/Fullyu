@@ -286,6 +286,7 @@ const dict = {
 	'支付遇到了问题': 'Payment problem',
 	'积分支付成功': 'Points payment successful',
 	'已支付': 'Paid',
+	'切换支付方式失败, 请重试': 'Could not switch payment method, please try again',
 
 	// ===================== 卡券 =====================
 	'我的卡券': 'My coupons',

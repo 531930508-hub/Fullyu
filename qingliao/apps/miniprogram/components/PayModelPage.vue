@@ -479,10 +479,11 @@
 		}
 	}
 	//切换优惠方案：写入后端并同步订单金额
+	//返回是否切换成功：点「微信支付」时要靠它确认真的切换过去了，切不过去就不能按微信付
 	const choosePriceSource = async (source) => {
 		const option = source === 0 ? null : sourceOption(source)
 		if (source !== 0 && !option) {
-			return
+			return false
 		}
 		if (option && option.available === false) {
 			uni.showToast({
@@ -492,16 +493,16 @@
 			if (source == 5) {
 				cardDisplayStatus.value = true
 			}
-			return
+			return false
 		}
 		if (selectedSource.value == source && payMothedValue.value) {
 			applyPriceSelection(source)
-			return
+			return true
 		}
 		const orderId = checkoutData.value.order && checkoutData.value.order.id
 		if (!orderId) {
 			applyPriceSelection(source)
-			return
+			return true
 		}
 		uni.showLoading({
 			title: t('处理中'),
@@ -526,8 +527,14 @@
 			if (source == 5) {
 				cardDisplayStatus.value = false
 			}
+			return true
 		} catch (e) {
-			// fetch 已提示错误
+			// fetch 已提示错误；这里补一句，避免用户以为已经切成微信支付，结果确认时扣了券
+			uni.showToast({
+				title: t('切换支付方式失败, 请重试'),
+				icon: 'none'
+			})
+			return false
 		} finally {
 			uni.hideLoading()
 		}
@@ -569,7 +576,7 @@
 			}
 		}
 	}
-	const payMothed = (text) => {
+	const payMothed = async (text) => {
 		if (text == 'card') {
 			//新比价：Full愈券对应优惠方案5，可用才可切换
 			if (priceOptions.value.length) {
@@ -589,7 +596,7 @@
 					})
 					return
 				}
-				choosePriceSource(5)
+				await choosePriceSource(5)
 				return
 			}
 			if (checkoutData.value.canUseCouponCount >= checkoutData.value.costCouponCount) {
@@ -621,19 +628,16 @@
 				cardDisplayStatus.value = false
 				selectPayCard.value = 0
 				if (target == null) {
-					//没有任何优惠方案，按原价支付
-					payMothedValue.value = text
-					selectedSource.value = null
-					productRealPrice.value = checkoutData.value.order.totalAmount
-					productPrice.value = checkoutData.value.order.totalAmount
-					realPayMoney.value = checkoutData.value.order.totalAmount
-					useIntegrationState.value = false
-					integration.value = 0
+					//没有任何现金方案：服务端还停在券/0 元上，必须先把优惠来源改成原价。
+					//只在本地改显示不算数，否则用户以为在点微信支付，确认时却被静默核销了券
+					await choosePriceSource(0)
+					return
 				} else if (target == selectedSource.value) {
 					payMothedValue.value = text
 					applyPriceSelection(target)
 				} else {
-					choosePriceSource(target)
+					//切方案失败时保持原选中项，按钮状态和后台订单口径一致，不能先摆成微信支付
+					await choosePriceSource(target)
 				}
 				return
 			}
@@ -835,7 +839,9 @@
 					// 必须让服务端按优惠来源结清（积分全额抵扣已在 jifenPayOrder 里结清），
 					// 结不清就不能报「支付成功」，否则小程序显示成功、后台订单仍是未支付。
 					await orderApi.OrderSplit(order.id);
-					const settled = await orderApi.settleZero(order.id);
+					// 把界面上当前选中的优惠来源一起传上去：服务端只按这个口径结清，
+					// 券单必须显式传才会核销，避免「用户以为在付微信、后台却把券扣了」
+					const settled = await orderApi.settleZero(order.id, selectedSource.value);
 					if (!settled) {
 						throw new Error('order not settled')
 					}
@@ -1098,6 +1104,11 @@
 				if (countdown.value > 0) {
 					waitOrderId = vm.$Cache.get('waitOrderId')
 					vm.$Cache.remove('waitOrderId')
+				}
+				// 购券意图只对当时那张单有效：缓存里是上一张单（或不是当前单）就不能拿来替你选券，
+				// 否则打开别的单会被自动核销券
+				if (waitOrderId && order.id && waitOrderId != order.id) {
+					waitOrderId = null
 				}
 				const backendSelected = data.selectedPriceSource != null ? data.selectedPriceSource : null
 				pointsDismissed.value = backendSelected === 0

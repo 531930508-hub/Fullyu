@@ -180,10 +180,15 @@ export default {
 		})
 	},
 	// 0 元单结清：券/折扣把单抵成 0 元时没有微信收银台可拉起，必须让服务端确认结清
-	settleZero(orderId){
+	// priceSource 传界面上当前选中的优惠来源：服务端只认和订单一致的方案，券单必须显式传，否则不核销
+	settleZero(orderId, priceSource){
+		const params = {orderId}
+		if (priceSource !== undefined && priceSource !== null) {
+			params.priceSource = priceSource
+		}
 		return http.post({
 			url: '/order/settleZero',
-			params: {orderId}
+			params
 		})
 	},
 	newCustomerZheKou(shopId){

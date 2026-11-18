@@ -155,10 +155,11 @@ public class PayGroupService {
         boolean orderUnpaid = OrderState.NOT_PAY.getValue().equals(order.getState());
         boolean cardOnly = false;
         if (orderUnpaid && orderAmount.compareTo(BigDecimal.ZERO) == 0) {
-            // 0 元单没有现金要收，但也不能默认「已结清」：先按优惠来源结清（券在这一步核销），
-            // 否则合并单只收卡费开卡，预约单会一直停在未支付
-            if (!orderService.settleZeroOrder(customerId, orderId)) {
-                throw new BusinessException("订单金额已变化，请刷新后重试");
+            // 0 元单没有现金要收，但也不能默认「已结清」：先按优惠来源结清，
+            // 否则合并单只收卡费开卡，预约单会一直停在未支付。
+            // 这里没有用户意图（他点的是微信支付卡费），券单不允许顺手核销——必须回结算页明确选券。
+            if (!orderService.settleZeroOrder(customerId, orderId, null)) {
+                throw new BusinessException("该订单需要先用券支付，请返回结算页重新选择支付方式");
             }
             order = orderService.getById(orderId);
             orderUnpaid = OrderState.NOT_PAY.getValue().equals(order.getState());

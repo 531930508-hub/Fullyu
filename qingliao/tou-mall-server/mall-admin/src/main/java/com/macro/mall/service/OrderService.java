@@ -2979,9 +2979,17 @@ public class OrderService extends BaseService<OrderMapper, Order> {
      * OrderSplit，而拆分逻辑只处理多明细订单，单明细订单服务端什么都没做：前端提示「支付成功」，
      * 后台订单却一直停在未支付，直到超时被自动取消。这里按优惠来源补上服务端结清，并做成幂等。</p>
      *
-     * @return true 订单已结清；false 订单还有现金要走微信支付，不能在这里结清
+     * <p>券是唯一不可逆的扣减（核销后只能人工退券），所以券单必须由用户在结算页明确选了券、
+     * 并把界面上选中的优惠来源传上来才核销。老客户端、合并支付这类「拿不到用户意图」的调用
+     * 一律不核销券：宁可让订单超时取消（还能重新下单），也不能白扣用户的券。</p>
+     *
+     * @param expectedPriceSource 客户端界面上选中的优惠来源，null 表示调用方没有用户意图（老接口 / 内部调用）
+     * @return true 订单已结清；false 订单还有现金要走微信支付、或券单没被明确确认，不能在这里结清
      */
-    public boolean settleZeroOrder(Long customerId, Long orderId) {
+    // 内部还会调 payCheckout（自调用不会开启它自己的事务），所以事务边界放在这里，
+    // 扣券和置为已支付要么一起成功、要么一起回滚
+    @Transactional(rollbackFor = Exception.class)
+    public boolean settleZeroOrder(Long customerId, Long orderId, Integer expectedPriceSource) {
         if (orderId == null) {
             throw new ApiException("订单不存在");
         }
@@ -3006,7 +3014,16 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 // 还有现金要收，必须走微信支付，不在结清接口里放行
                 return false;
             }
-            if (Integer.valueOf(MemberCardPriceEngine.SOURCE_COUPON).equals(order.getPriceSource())) {
+            Integer priceSource = order.getPriceSource();
+            if (expectedPriceSource != null && !Objects.equals(expectedPriceSource, priceSource)) {
+                // 客户端显示的价格和服务端要结清的口径不是一回事：让它刷新，别按猜的口径扣任何东西
+                throw new ApiException("订单金额已变化，请刷新后重试");
+            }
+            if (Integer.valueOf(MemberCardPriceEngine.SOURCE_COUPON).equals(priceSource)) {
+                if (expectedPriceSource == null) {
+                    log.warn("settle zero order skipped: coupon order needs explicit intent, orderId={}", orderId);
+                    return false;
+                }
                 // 券在支付时才核销：结清用的是券支付那一套（按券数扣券 + 置为已支付 + 通知）
                 payCheckout(customerId, orderId, OrderPayType.COUPON.getValue());
                 return true;
@@ -4734,7 +4751,13 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 }
                 updateById(order);
                 if (BigDecimal.ZERO.compareTo(order.getPayAmount()) == 0) {
-                    finishPay(order);
+                    if (Integer.valueOf(MemberCardPriceEngine.SOURCE_COUPON).equals(order.getPriceSource())) {
+                        // 券单只能靠券结清：积分把应付抵成 0 也不能在这里置为已支付，
+                        // 否则订单显示已付、券却没核销，等于白送一单
+                        log.warn("jifenPayOrder skipped settling coupon order, orderId={}", orderId);
+                    } else {
+                        finishPay(order);
+                    }
                 }
             }
             else {
@@ -4954,11 +4977,12 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         }
         // 兼容还没升级的小程序：0 元单结清时旧版客户端只调本接口，单明细订单原来在这里什么都不做，
         // 订单就一直停在未支付。顺手按优惠来源结清，新客户端再调 settleZeroOrder 也是幂等的。
+        // 注意这里拿不到用户意图（他选的是微信支付）：券单不核销，老客户端要用券走的是 payCheckout(2)。
         if (orderDetails.size() <= 1
                 && OrderState.NOT_PAY.getValue().equals(order.getState())
                 && order.getPayAmount() != null
                 && order.getPayAmount().compareTo(BigDecimal.ZERO) == 0) {
-            settleZeroOrder(customerId, orderId);
+            settleZeroOrder(customerId, orderId, null);
         }
     }
 
