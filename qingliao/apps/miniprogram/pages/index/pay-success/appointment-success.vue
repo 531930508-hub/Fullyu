@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen  bg-[#F6F4F2] ">
+	<view class="min-h-screen  bg-[#F6F4F2] " :class="localeClass()">
 		<TopTitle></TopTitle>
 		<view
 			:style="{position: '-webkit-sticky',position:'sticky',top:customBar+'px','z-index':'99',marginTop:customBar+'px'}">
@@ -29,7 +29,7 @@
 					</view>
 					<view class="pt-3 pb-1 flex justify-center items-center text-[28rpx]">
 						<view class="w-1/5">{{ t('项目') }}</view>
-						<view class="w-4/5 flex justify-end">{{item.productTitle}}
+						<view class="w-4/5 flex justify-end">{{t(item.productTitle)}}
 							{{item.orderDetailList[0].duration}}mins</view>
 					</view>
 					<view class="pt-1 pb-1 flex justify-center items-center text-[28rpx]">
@@ -64,7 +64,7 @@
 						</view>
 						<view class="px-2 pt-4 pb-4 text-[#584219] font-semibold"
 							style="border-bottom:1rpx dashed lightgray;border-top:1rpx dashed lightgray;">
-							<view class="text-center pb-1">{{item.productTitle}}
+							<view class="text-center pb-1">{{t(item.productTitle)}}
 								{{item.orderDetailList[0].duration}}mins</view>
 							<view class="text-center pb-1">{{item.cardimage}}</view>
 							<view class="text-center"> {{ storeName(shop[0]) }}</view>
@@ -106,7 +106,8 @@
 
 <script setup>
 	import { t } from '../../../utils/locale'
-	import { img, shareImg } from '../../../utils/image'
+	import { shareImg } from '../../../utils/image'
+	import { img } from '../../../utils/imageLocale'
 	import { storeName, storeAddress } from '../../../utils/storeLocale'
 	import {
 		onLoad,

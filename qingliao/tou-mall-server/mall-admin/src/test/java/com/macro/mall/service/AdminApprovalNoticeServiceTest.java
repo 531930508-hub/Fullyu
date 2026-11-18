@@ -39,7 +39,7 @@ class AdminApprovalNoticeServiceTest {
         ReflectionTestUtils.setField(service,"enabled",true);
         ReflectionTestUtils.setField(service,"appId","synthetic-app");
         ReflectionTestUtils.setField(service,"templateId","synthetic-template");
-        ReflectionTestUtils.setField(service,"adminWebUrl","https://mall-test.fullyu.cn/mall-admin/");
+        ReflectionTestUtils.setField(service,"adminWebUrl","https://test-cityretreat.fullyu.cn/");
         ReflectionTestUtils.setField(service,"clock",Clock.fixed(
             LocalDateTime.of(2026,11,12,9,30).atZone(ZoneId.of("Asia/Shanghai")).toInstant(),ZoneId.of("Asia/Shanghai")));
     }
@@ -102,7 +102,7 @@ class AdminApprovalNoticeServiceTest {
         WxMpTemplateMessage message=sent();
         assertEquals("synthetic-open-id",message.getToUser());
         assertEquals("synthetic-template",message.getTemplateId());
-        assertEquals("https://mall-test.fullyu.cn/mall-admin/#/todo/index",message.getUrl());
+        assertEquals("https://test-cityretreat.fullyu.cn/#/todo/index",message.getUrl());
         assertEquals(5,message.getData().size());
         assertEquals("待审批",message.getData().get(1).getValue());
         verify(delivery).delivered(job(),"msg-1");
@@ -111,7 +111,7 @@ class AdminApprovalNoticeServiceTest {
     @Test void pendingNoticeLinksToMobileApprovalPage() throws Exception {
         setup();
         AdminNoticeLinkService links=new AdminNoticeLinkService();
-        ReflectionTestUtils.setField(links,"adminWebUrl","https://mall-test.fullyu.cn/mall-admin/");
+        ReflectionTestUtils.setField(links,"adminWebUrl","https://test-cityretreat.fullyu.cn/");
         ReflectionTestUtils.setField(links,"linkSecret","synthetic-link-secret");
         ReflectionTestUtils.setField(links,"linkTtlHours",168L);
         ReflectionTestUtils.setField(service,"linkService",links);
@@ -121,7 +121,7 @@ class AdminApprovalNoticeServiceTest {
         when(sender.send(eq("synthetic-app"),any(WxMpTemplateMessage.class))).thenReturn("msg-2");
         service.process(1L);
         String url=sent().getUrl();
-        assertTrue(url.startsWith("https://mall-test.fullyu.cn/mall-admin/static/notice-approval.html?"));
+        assertTrue(url.startsWith("https://test-cityretreat.fullyu.cn/static/notice-approval.html?"));
         assertTrue(url.contains("approvalId=100"));
         assertTrue(url.contains("detailId=200"));
         assertTrue(url.contains("adminId=7"));

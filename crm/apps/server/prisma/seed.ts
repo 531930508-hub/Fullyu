@@ -1,5 +1,5 @@
 /**
- * CRM 本地初始化：四个内置角色、四个后台账号、三位合成会员。
+ * CRM 本地初始化：内置角色、后台账号、三位合成会员。
  * 密码只用于本地开发与测试，由 SEED_PASSWORD 提供；不得写入任何真实凭据。
  */
 import { PrismaClient } from '@prisma/client';
@@ -81,7 +81,6 @@ async function main() {
   await prisma.member.deleteMany();
   await prisma.brandCardVersion.deleteMany();
   await prisma.brandCardProduct.deleteMany();
-  await prisma.businessCardCatalog.deleteMany();
   await prisma.staffRole.deleteMany();
   await prisma.staff.deleteMany();
   await prisma.crmRole.deleteMany();
@@ -89,7 +88,13 @@ async function main() {
 
   for (const t of CRM_ROLE_TEMPLATES) {
     await prisma.crmRole.create({
-      data: { id: t.id, name: t.name, builtin: true, permsJson: JSON.stringify(t.perms) }
+      data: {
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        builtin: true,
+        permsJson: JSON.stringify(t.perms)
+      }
     });
   }
 
@@ -253,35 +258,6 @@ async function main() {
     });
   }
 
-  const businessCards = [
-    {
-      id: 'bcc-zc-presence-pass',
-      business: 'zc',
-      cardCode: 'PRESENCE_PASS',
-      name: '在场畅练卡',
-      benefit: '有效期内课程免费',
-      description: '在场自有卡期，CRM 只读展示，不修改有效期与核销。',
-      sourceSystem: 'presence',
-      managePath: '/pages/member/index',
-      sort: 1
-    },
-    {
-      id: 'bcc-ql-legacy-card',
-      business: 'ql',
-      cardCode: 'RETREAT_LEGACY_CARD',
-      name: '轻疗历史年卡',
-      benefit: '历史卡到期前继续有效，续费走 Full愈大会员',
-      description: '轻疗旧卡升级为品牌卡后的只读目录项，不在 CRM 单独售卖。',
-      sourceSystem: 'retreat',
-      managePath: '/pages/user/member-card/member-card',
-      sort: 2
-    }
-  ] as const;
-
-  for (const card of businessCards) {
-    await prisma.businessCardCatalog.create({ data: card });
-  }
-
   // 1C：给林小满一张生效中的会员卡与骰子进度，供三端联调读取真实卡期。
   const annualVersion = await prisma.brandCardVersion.findUniqueOrThrow({
     where: { productCode_version: { productCode: 'FY_ANNUAL', version: 1 } }
@@ -404,8 +380,7 @@ async function main() {
 
   console.log(
     `seeded ${CRM_ROLE_TEMPLATES.length} roles, ${ACCOUNTS.length} staff, ${MEMBERS.length} members, ` +
-      `${brandProducts.length} brand products, ${businessCards.length} business cards, ` +
-      `1 active brand card`
+      `${brandProducts.length} brand products, 1 active brand card`
   );
 }
 

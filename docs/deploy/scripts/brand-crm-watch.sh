@@ -9,7 +9,7 @@ BASE=${BASE:-/opt/fullyu-mall-test}
 APP_LOG=${APP_LOG:-$BASE/logs/app.log}
 OUT=${OUT:-$BASE/logs/brand-crm-watch.log}
 ENVF=${ENVF:-$BASE/crm.env}
-PROBE=${PROBE:-https://mall-test.fullyu.cn/crm-api/api/external/members/1}
+PROBE=${PROBE:-https://test-cityretreat.fullyu.cn/crm-api/api/external/members/1}
 
 since=$(date -d '-1 hour' '+%F %H:%M:%S')
 now=$(date '+%F %T')

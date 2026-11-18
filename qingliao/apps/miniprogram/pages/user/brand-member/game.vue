@@ -1,5 +1,5 @@
 <template>
-	<view class="gm-page">
+	<view class="gm-page" :class="localeClass()">
 		<web-view v-if="url && !failed" :src="url" @error="onError"></web-view>
 
 		<view v-else class="gm-empty">

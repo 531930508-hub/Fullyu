@@ -54,8 +54,7 @@ export function projectTitleFilter(projectId) {
                 projectMap.set(project.id, project.title)
             }
         })
-    // 项目名是业务数据，保持原文
-    return projectMap.get(projectId) || t('无')
+    return t(projectMap.get(projectId)) || t('无')
 }
 
 // 礼物状态

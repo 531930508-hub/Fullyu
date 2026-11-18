@@ -44,7 +44,7 @@ export const CRM_PERMISSIONS = [
   { code: 'crm:adjust:batch', name: '发起批量积分调整' },
   { code: 'crm:adjust:approve', name: '审批积分调整' },
   { code: 'crm:audit:view', name: '查看审计日志' },
-  { code: 'crm:card:view', name: '查看大会员卡与业务卡目录' },
+  { code: 'crm:card:view', name: '查看大会员卡' },
   { code: 'crm:card:edit', name: '维护大会员卡' },
   { code: 'crm:config:edit', name: '维护规则配置' },
   { code: 'crm:report:view', name: '查看月度对账' },
@@ -52,6 +52,7 @@ export const CRM_PERMISSIONS = [
   { code: 'crm:sync:view', name: '查看三端同步' },
   { code: 'crm:sync:retry', name: '重投同步事件' },
   { code: 'crm:role:edit', name: '维护角色权限' },
+  { code: 'crm:staff:edit', name: '维护后台用户' },
   { code: 'crm:gift:edit', name: '维护赠送会员码' },
   { code: 'crm:gift:approve', name: '审批超默认天数的会员码' },
   { code: 'crm:voucher:redeem', name: '核销年卡实物礼券' },
@@ -61,12 +62,13 @@ export const CRM_PERMISSIONS = [
 
 export const CRM_PERMISSION_CODES = CRM_PERMISSIONS.map((p) => p.code);
 
-/** 设计 §7.6 的四个内置角色；管理员用 '*' 表示全部。 */
+/** 设计 §7.6 的内置角色；管理员用 '*' 表示全部。 */
 export const CRM_ROLE_TEMPLATES = [
-  { id: 'crm-admin', name: 'CRM 管理员', perms: ['*'] },
+  { id: 'crm-admin', name: 'CRM 管理员', description: '系统全部权限，不可修改', perms: ['*'] },
   {
     id: 'crm-ops',
     name: '会员运营',
+    description: '会员档案、积分调整、大会员卡与规则维护',
     perms: [
       'crm:member:view',
       'crm:member:edit',
@@ -85,6 +87,7 @@ export const CRM_ROLE_TEMPLATES = [
   {
     id: 'crm-finance',
     name: '财务',
+    description: '积分审批、对账、异常处理与退款',
     perms: [
       'crm:member:view',
       'crm:adjust:approve',
@@ -100,6 +103,7 @@ export const CRM_ROLE_TEMPLATES = [
   {
     id: 'crm-cs',
     name: '客服',
+    description: '会员资料、积分发起、核销与反馈处理',
     perms: [
       'crm:member:view',
       'crm:member:edit',
@@ -109,7 +113,18 @@ export const CRM_ROLE_TEMPLATES = [
       'crm:feedback:handle'
     ]
   },
-  { id: 'crm-store', name: '门店核销', perms: ['crm:member:view', 'crm:voucher:redeem'] }
+  {
+    id: 'crm-market',
+    name: '市场',
+    description: '查看会员与大会员卡，处理会员故事、反馈与月度内容复盘',
+    perms: ['crm:member:view', 'crm:card:view', 'crm:feedback:handle', 'crm:report:view']
+  },
+  {
+    id: 'crm-store',
+    name: '门店核销',
+    description: '只读会员与提货核销',
+    perms: ['crm:member:view', 'crm:voucher:redeem']
+  }
 ] as const;
 
 /** 单笔调整免审阈值；超过（绝对值）需另一人审批。 */

@@ -5,6 +5,7 @@ import { ApiError, badRequest, conflict, notFound } from '../common/errors';
 import { newId } from '../common/ids';
 import { logAction } from '../common/logs';
 import { PrismaService } from '../common/prisma.service';
+import { taskGateOrLog } from '../common/tasks-config';
 import { FinanceService } from '../finance/finance.service';
 import { HardwareService } from '../hardware/hardware.module';
 import { BrandMemberClient } from './brand-member.client';
@@ -129,7 +130,9 @@ export class BrandCardPaymentService implements OnModuleInit, OnModuleDestroy {
 
   /** 后台巡检：钱已到、卡没开的单，到点就自动重开，不依赖顾客回来看页面或员工手动对账。 */
   onModuleInit(): void {
-    if (process.env.NODE_ENV === 'test' || !this.brand.enabled) return;
+    if (process.env.NODE_ENV === 'test') return;
+    if (!taskGateOrLog('card-sweep', this.logger, '会员卡开卡巡检')) return;
+    if (!this.brand.enabled) return;
     void this.sweepIssues().catch((error) => {
       this.logger.warn(`会员卡开卡巡检启动失败: ${error instanceof Error ? error.message : String(error)}`);
     });

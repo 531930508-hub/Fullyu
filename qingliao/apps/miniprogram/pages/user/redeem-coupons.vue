@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen " style="background-color:#F6F4F2 ;">
+	<view class="min-h-screen " :class="localeClass()" style="background-color:#F6F4F2 ;">
 		<TopTitle></TopTitle>
 		<view :style="{position: '-webkit-sticky',position:'sticky',top:customBar+'px','z-index':'99'}">
 			<view class="redeem-coupons">

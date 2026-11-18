@@ -12,6 +12,7 @@ import { OrderController } from '../src/modules/order/order.controller'
 import { PaymentService } from '../src/modules/payment/payment.service'
 import { WaitlistService } from '../src/modules/waitlist/waitlist.service'
 import { BrandPresenceSync } from '../src/modules/member/brand-presence.sync'
+import { AlertService } from '../src/common/alert/alert.service'
 
 /**
  * Redis mock：
@@ -131,6 +132,9 @@ export async function buildTestContext(): Promise<TestContext> {
       { provide: HuifuPayService, useValue: createHuifuPayMock() },
       { provide: NotificationService, useValue: createNotificationMock() },
       { provide: BrandPresenceSync, useValue: createBrandSyncMock() },
+      // 真实 AlertService：它没有依赖，未配 ALERT_WEBHOOK_URL 时只落日志，
+      // 测试里不能省——PaymentService 第 7 个构造参数就是它，缺了 Nest 会解析失败。
+      AlertService,
     ],
   })
     .overrideGuard(AuthGuard('jwt'))

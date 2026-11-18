@@ -219,14 +219,27 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             order.setTotalAmount(totalAmount);
             order.setPayAmount(totalAmount);
             Integration integration = null;
+            //加钟单沿用原单的到店编号：它是原单的延续，跨零点时按开始时间算会多记一次到店
+            boolean addServiceOrder = isAddServiceOrder(orderDetailDto);
+            if (!addServiceOrder && Objects.equals(orderDetailDto.getAddType(), 1)) {
+                //入口标了加钟却没带原单：只能按新单算，留痕，别让它变成一笔无声的差价
+                log.warn("加钟入口缺少原单 orderId，按新单处理, customerId={}", orderDetailDto.getCustomerId());
+            }
             //到店次数：下单时按自然日静态写入，历史订单不回填
             Integer visitNo = null;
             if (OrderType.PRODUCT.getValue().equals(orderDetailDto.getType())) {
                 visitNo = resolveVisitNo(orderDetailDto.getCustomerId(), orderDetailDto.getStartTime());
+                if (addServiceOrder) {
+                    Order originOrder = resolveAddServiceOrigin(orderDetailDto.getFromOrderId(), order);
+                    if (originOrder.getVisitNo() != null) {
+                        visitNo = originOrder.getVisitNo();
+                    }
+                }
                 order.setVisitNo(visitNo);
             }
             if (OrderType.PRODUCT.getValue().equals(orderDetailDto.getType())) {
-                if (!isManage && AppointmentType.HAND.getValue().equals(appointmentType)) {
+                //加钟不再按新客/积分口径自己算一遍折扣：优惠方案在结算页沿用原单，建单只留原价
+                if (!isManage && !addServiceOrder && AppointmentType.HAND.getValue().equals(appointmentType)) {
 //                    Long count = countByCustomerId(orderDetailDto.getCustomerId());
                     OrderDiscount orderDiscount = orderDiscountService.getDiscountByCount(visitNo.longValue(), orderDetailDto.getShopId(), orderDetailDto.getDurationMinutes(), product.getAmount());
                     //查询此人是否有积分，如果有就不走折扣
@@ -387,8 +400,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             List<Massagist> resultList = new ArrayList<>();
             List<Massagist> massagistList = massagistService.listByShopId(shopId);
             Map<Long, Massagist> massagistMap = massagistList.stream().collect(Collectors.toMap(Massagist::getId, Function.identity()));
-            List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(
-                    orderDetailService.getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
+            List<OrderDetail> detailList = orderDetailService.findOccupiedDetails(shopId, startTime, durationMinutes);
 
             //luxin删除
            /* if (CollectionUtils.isEmpty(detailList) && personCount == 1) {
@@ -551,8 +563,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             log.error("查询到店时间失败，所有床位状态不可用，date={}", date);
             return Collections.emptyList();
         }
-        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(
-                orderDetailService.getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
+        List<OrderDetail> detailList = orderDetailService.findOccupiedDetails(shopId, startTime, durationMinutes);
         if (CollectionUtils.isEmpty(detailList)) {
             return allBedList;
         }
@@ -2574,14 +2585,130 @@ public class OrderService extends BaseService<OrderMapper, Order> {
      */
     private PriceContext buildPriceContext(Order order, List<OrderDetail> orderDetails,
                                            Integer canUseCount, Integer costCouponCount) {
+        //加钟是原单同一次服务的延续：沿用原单的优惠口径但要和券/积分一起参与比价取最低，
+        //不再像以前那样直接锁死成原单用的那一种（原单走会员价、加钟落回原价就是这里出的问题）
+        return buildStandardPriceContext(order, orderDetails, canUseCount, costCouponCount,
+                findAddServiceOriginId(order, orderDetails));
+    }
+
+    /**
+     * 加钟单的原单 id：明细里带 from_order_id 才算加钟，普通单返回 null。
+     * 判「是不是加钟」只认明细，不看原单能不能读到，避免原单异常时又按新客/通用折扣算一遍。
+     */
+    private Long findAddServiceOriginId(Order order, List<OrderDetail> orderDetails) {
+        if (order == null || !OrderType.PRODUCT.getValue().equals(order.getType())
+                || CollectionUtils.isEmpty(orderDetails)) {
+            return null;
+        }
+        for (OrderDetail detail : orderDetails) {
+            if (detail.getFromOrderId() > 0) {
+                return detail.getFromOrderId();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 加钟判定：只认明细 from_order_id。
+     *
+     * <p>结算页（{@link #findAddServiceOriginId}）、服务日期归属都是按这个字段认的，
+     * 建单不能再单独看 addType，否则同一张单「结算按加钟、落单按新单」，折扣和到店号两套算法，
+     * 预览价和实付价必然对不上。addType 只留给排班/入口校验用。</p>
+     */
+    private boolean isAddServiceOrder(OrderDetailDto orderDetailDto) {
+        return orderDetailDto.getFromOrderId() != null && orderDetailDto.getFromOrderId() > 0;
+    }
+
+    /**
+     * 加钟单引用的原单：存在性、自引用、归属校验，建单与结算共用。
+     *
+     * <p>from_order_id 是前端传上来的，不校验就能挂到别人/别家门店的订单上继承优惠。
+     * 这里不判原单状态——现金单可能先服务后收款，建单不能被状态拦住；
+     * 只有「能不能继承原单优惠」才看状态，见 {@link #assertOriginInheritable}。</p>
+     */
+    private Order resolveAddServiceOrigin(Long originOrderId, Order order) {
+        Order originOrder = originOrderId == null ? null : getById(originOrderId);
+        if (originOrder == null) {
+            throw new BusinessException("加钟原订单不存在，请返回重新下单");
+        }
+        if (Objects.equals(originOrder.getId(), order.getId())) {
+            throw new BusinessException("加钟单不能引用自身作为原单");
+        }
+        if (!Objects.equals(originOrder.getCustomerId(), order.getCustomerId())
+                || !Objects.equals(originOrder.getShopId(), order.getShopId())) {
+            throw new BusinessException("加钟原订单与当前订单不匹配，请返回重新下单");
+        }
+        return originOrder;
+    }
+
+    /**
+     * 原单能否作为优惠依据：只认已付款未退款。
+     *
+     * <p>未付款/超时/取消/退款中/已退款时，原单那笔优惠没真正成立或已被冲回，
+     * 加钟再算一次等于重复让利。校验不过直接报错而不是悄悄按原价算——
+     * 静默降级的坑是预览还显示着会员价，落单那一刻原单刚退款成功，客户按原价付了钱。</p>
+     */
+    private void assertOriginInheritable(Order originOrder) {
+        Integer state = originOrder.getState();
+        if (!OrderState.PAID_NOT_COMMENT.getValue().equals(state)
+                && !OrderState.PAID_COMMENTED.getValue().equals(state)) {
+            String label = OrderState.getLabel(state);
+            throw new BusinessException("原订单" + (label == null ? "状态异常" : label) + "，无法按加钟结算，请重新下单");
+        }
+    }
+
+    /**
+     * 原单实际用的优惠方案。
+     *
+     * <p>priceSource 是结算页写入的；前台建单直接收款的单没有这一列，
+     * 按落单时一并写下的 member_rate / discount / use_integration_state 反推，
+     * 否则加钟会因为原单没有 price_source 丢掉会员价。</p>
+     */
+    private Integer resolveOriginPriceSource(Order originOrder) {
+        if (originOrder == null) {
+            return null;
+        }
+        Integer source = originOrder.getPriceSource();
+        if (source != null) {
+            // 2 是历史数据里的「年卡当日价」，落单逻辑只有 1 这一支，统一按 1 处理
+            return source == MemberCardPriceEngine.SOURCE_CARD_SAME_DAY
+                    ? MemberCardPriceEngine.SOURCE_CARD_ADVANCE : source;
+        }
+        if (originOrder.getMemberRate() != null || originOrder.getMemberCardId() != null) {
+            return MemberCardPriceEngine.SOURCE_CARD_ADVANCE;
+        }
+        if (originOrder.getDiscount() != null) {
+            return MemberCardPriceEngine.SOURCE_DISCOUNT;
+        }
+        if (Objects.equals(originOrder.getUseIntegrationState(), 1)) {
+            return MemberCardPriceEngine.SOURCE_POINTS;
+        }
+        return 0;
+    }
+
+    /**
+     * 折扣文案。
+     *
+     * <p>类型 1 是比例、类型 2 是固定金额，历史数据里比例的单位口径并不统一（85 与 8500 都出现过），
+     * 所以比例一律用「实付 / 原价」反推，避免把 85 当成 8500 显示成 0.0085折。</p>
+     */
+    private String discountLabel(Integer type, BigDecimal base, BigDecimal discountPay, boolean inherited) {
+        String prefix = inherited ? "沿用原单折扣"
+                : (type != null && type == 1 ? "新客折扣" : "通用折扣");
+        if (type == null || type == 1) {
+            BigDecimal rate = base.compareTo(BigDecimal.ZERO) > 0
+                    ? discountPay.divide(base, 4, RoundingMode.HALF_UP) : BigDecimal.ONE;
+            return prefix + "（" + MemberCardPriceEngine.discountText(rate) + "）";
+        }
+        BigDecimal reduce = base.subtract(discountPay).setScale(2, RoundingMode.HALF_UP);
+        return prefix + "（立减" + reduce.toPlainString() + "元）";
+    }
+
+    private PriceContext buildStandardPriceContext(Order order, List<OrderDetail> orderDetails,
+                                                   Integer canUseCount, Integer costCouponCount,
+                                                   Long addServiceOriginId) {
         PriceContext context = new PriceContext();
         BigDecimal base = order.getTotalAmount();
-        Product product = productService.getProductLimit(order.getProductId());
-        //到店次数用与建单一致的静态自然日编号，保证「预览价」和「实际下单折扣」口径相同
-        Long visitNo = order.getVisitNo() != null ? order.getVisitNo().longValue()
-                : resolveVisitNo(order.getCustomerId(), orderDetails.get(0).getStartTime()).longValue();
-        OrderDiscount orderDiscount = orderDiscountService.getDiscountByCount(visitNo, order.getShopId(),
-                orderDetails.get(0).getDuration(), product.getAmount());
         Long customerIntegration = integrationService.getIntegrationByCustomerId(order.getCustomerId());
 
         MemberCardPriceEngine.Input input = new MemberCardPriceEngine.Input();
@@ -2599,35 +2726,63 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         if (cardRate != null) {
             input.setAdvanceRate(cardRate);
         }
+        context.card = card;
+        context.cardRate = cardRate;
 
-        if (orderDiscount != null) {
-            BigDecimal discountPay = calculateDiscountPayAmount(orderDiscount.getType(), orderDiscount.getDiscount(),
-                    base, orderDetails.size());
-            if (discountPay.compareTo(base) < 0) {
-                input.setDiscountPayAmount(discountPay);
-                boolean newCustomer = orderDiscount.getType() != null && orderDiscount.getType() == 1;
-                String prefix = newCustomer ? "新客折扣" : "通用折扣";
-                String label;
-                if (newCustomer) {
-                    // 类型1：discount 为百分比（8500 → 8.5折）
-                    BigDecimal rate = BigDecimal.valueOf(orderDiscount.getDiscount())
-                            .divide(BigDecimal.valueOf(10000), 4, RoundingMode.HALF_UP);
-                    label = prefix + "（" + MemberCardPriceEngine.discountText(rate) + "）";
-                } else {
-                    // 类型2：discount 为直减后的应付金额（17700 → 177.00元）
-                    BigDecimal reduce = base.subtract(discountPay);
-                    label = prefix + "（立减" + reduce.setScale(2, RoundingMode.HALF_UP).toPlainString() + "元）";
+        boolean addService = addServiceOriginId != null;
+        if (!addService) {
+            //常规单：通用/新客折扣与会员价一起参与比价
+            Product product = productService.getProductLimit(order.getProductId());
+            //到店次数用与建单一致的静态自然日编号，保证「预览价」和「实际下单折扣」口径相同
+            Long visitNo = order.getVisitNo() != null ? order.getVisitNo().longValue()
+                    : resolveVisitNo(order.getCustomerId(), orderDetails.get(0).getStartTime()).longValue();
+            OrderDiscount orderDiscount = orderDiscountService.getDiscountByCount(visitNo, order.getShopId(),
+                    orderDetails.get(0).getDuration(), product.getAmount());
+            if (orderDiscount != null) {
+                BigDecimal discountPay = calculateDiscountPayAmount(orderDiscount.getType(), orderDiscount.getDiscount(),
+                        base, orderDetails.size());
+                if (discountPay.compareTo(base) < 0) {
+                    input.setDiscountPayAmount(discountPay);
+                    input.setDiscountLabel(discountLabel(orderDiscount.getType(), base, discountPay, false));
                 }
-                input.setDiscountLabel(label);
+            }
+            context.discount = orderDiscount;
+        } else {
+            //加钟：原单必须存在、属于同店同客户，且优惠仍然有效，校验不过直接报错，不静默按原价算
+            Order originOrder = resolveAddServiceOrigin(addServiceOriginId, order);
+            assertOriginInheritable(originOrder);
+            //加钟：不查实时折扣（新客折扣只按到店第 1 次计入，加钟再算一遍等于重复领），
+            //只把原单享过的那一档原样带过来，和券/积分的候选方案一起比价取最低
+            Integer originSource = resolveOriginPriceSource(originOrder);
+            if (originSource != null && originSource == MemberCardPriceEngine.SOURCE_CARD_ADVANCE) {
+                //加钟同一次服务，原单享了会员价就继续享，不再卡「必须提前预约」
+                BigDecimal inheritRate = originOrder.getMemberRate() != null
+                        ? originOrder.getMemberRate() : cardRate;
+                if (inheritRate != null) {
+                    input.setInheritCardRate(inheritRate);
+                    //落单按原单费率写 member_rate，退款试算据此还原已享优惠
+                    context.cardRate = inheritRate;
+                }
+            } else if (originSource != null && originSource == MemberCardPriceEngine.SOURCE_DISCOUNT
+                    && originOrder.getDiscount() != null) {
+                Integer discountType = originOrder.getDiscountType() == null ? 1 : originOrder.getDiscountType();
+                Integer discount = originOrder.getDiscount();
+                BigDecimal discountPay = calculateDiscountPayAmount(discountType, discount, base, orderDetails.size());
+                if (discountPay.compareTo(base) < 0) {
+                    input.setDiscountPayAmount(discountPay);
+                    input.setDiscountLabel(discountLabel(discountType, base, discountPay, true));
+                    //落单时把原单的折扣字段原样写回，退款试算才能还原优惠
+                    OrderDiscount inherited = new OrderDiscount();
+                    inherited.setDiscount(discount);
+                    inherited.setType(discountType);
+                    context.discount = inherited;
+                }
             }
         }
         input.setPoints(customerIntegration);
         input.setCanUseCouponCount(canUseCount);
         input.setCouponCostCount(costCouponCount);
 
-        context.card = card;
-        context.cardRate = cardRate;
-        context.discount = orderDiscount;
         context.result = MemberCardPriceEngine.compute(input);
         return context;
     }
@@ -2692,10 +2847,16 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             order.setMemberRate(null);
             order.setPayAmount(base);
             order.setUseIntegrationState(1);
-        } else {
+        } else if (source != null && source == MemberCardPriceEngine.SOURCE_COUPON) {
             order.setMemberCardId(null);
             order.setMemberRate(null);
             order.setPayAmount(BigDecimal.ZERO);
+            order.setUseIntegrationState(0);
+        } else {
+            //0 = 原价（加钟沿用原单原价时会走到这里），金额以方案里的应付为准，别再归零
+            order.setMemberCardId(null);
+            order.setMemberRate(null);
+            order.setPayAmount(option.getPayAmount() == null ? base : option.getPayAmount());
             order.setUseIntegrationState(0);
         }
     }
@@ -2727,7 +2888,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     private static class PriceContext {
         private MemberCardPriceEngine.Result result;
         private CustomerMemberCard card;
-        /** 本单使用的年卡费率（实时口径），落到 s_order.member_rate */
+        /** 本单使用的会员费率，落到 s_order.member_rate：常规单是实时费率，加钟单是沿用原单的费率 */
         private BigDecimal cardRate;
         private OrderDiscount discount;
     }
@@ -2857,8 +3018,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         orderDetailDto.setAppointmentType(AppointmentType.HAND.getValue());
         //小程序端硬校验：客户已设为暂别的疗愈师不可被指定
         //加钟是继续当前这次服务，疗愈师正在客户身边，不能被暂别规则拦住
-        boolean isAddServiceOrder = orderDetailDto.getAddType() != null && orderDetailDto.getAddType() == 1;
-        if (!isAddServiceOrder
+        boolean addService = isAddServiceOrder(orderDetailDto);
+        if (!addService
                 && customerMassagistBlockService.isAnyBlocked(orderDetailDto.getCustomerId(), orderDetailDto.getMassagistIdList())) {
             throw new BusinessException("该疗愈师暂不可预约，请选择其他疗愈师");
         }
@@ -3230,7 +3391,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         }
         List<OrderDetail> details = orderDetailService.getBaseMapper().selectList(
                 new LambdaQueryWrapper<OrderDetail>()
-                        .select(OrderDetail::getOrderId, OrderDetail::getStartTime)
+                        .select(OrderDetail::getOrderId, OrderDetail::getStartTime, OrderDetail::getFromOrderId)
                         .in(OrderDetail::getOrderId, orderIds));
         if (CollectionUtils.isEmpty(details)) {
             return orderServiceDateMap;
@@ -3242,7 +3403,52 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             LocalDate date = d.getStartTime().toLocalDate();
             orderServiceDateMap.merge(d.getOrderId(), date, (a, b) -> a.isBefore(b) ? a : b);
         });
+        //加钟跟着原单算同一个自然日：跨零点的加钟（23:30→00:30）否则会被算成「次日到店」，到店次数多记一次
+        mergeAddServiceServiceDate(details, orderServiceDateMap);
         return orderServiceDateMap;
+    }
+
+    /**
+     * 把带 from_order_id 的加钟明细并到原单的自然日上。
+     * 原单不在本次查询范围内时，单独查一次原单的第一条明细日期。
+     */
+    private void mergeAddServiceServiceDate(List<OrderDetail> details, Map<Long, LocalDate> orderServiceDateMap) {
+        Map<Long, Long> addOrderToOrigin = new HashMap<>();
+        Set<Long> missingOriginIds = new HashSet<>();
+        for (OrderDetail detail : details) {
+            if (detail.getOrderId() == null || detail.getFromOrderId() <= 0
+                    || Objects.equals(detail.getOrderId(), detail.getFromOrderId())) {
+                continue;
+            }
+            addOrderToOrigin.put(detail.getOrderId(), detail.getFromOrderId());
+            if (!orderServiceDateMap.containsKey(detail.getFromOrderId())) {
+                missingOriginIds.add(detail.getFromOrderId());
+            }
+        }
+        if (addOrderToOrigin.isEmpty()) {
+            return;
+        }
+        if (!missingOriginIds.isEmpty()) {
+            List<OrderDetail> originDetails = orderDetailService.getBaseMapper().selectList(
+                    new LambdaQueryWrapper<OrderDetail>()
+                            .select(OrderDetail::getOrderId, OrderDetail::getStartTime)
+                            .in(OrderDetail::getOrderId, missingOriginIds));
+            originDetails.forEach(d -> {
+                if (d.getOrderId() == null || d.getStartTime() == null) {
+                    return;
+                }
+                LocalDate date = d.getStartTime().toLocalDate();
+                orderServiceDateMap.merge(d.getOrderId(), date, (a, b) -> a.isBefore(b) ? a : b);
+            });
+        }
+        addOrderToOrigin.forEach((addOrderId, originId) -> {
+            LocalDate originDate = orderServiceDateMap.get(originId);
+            if (originDate == null) {
+                return;
+            }
+            LocalDate current = orderServiceDateMap.get(addOrderId);
+            orderServiceDateMap.put(addOrderId, current == null || originDate.isBefore(current) ? originDate : current);
+        });
     }
 
     /**
@@ -4047,8 +4253,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             //luxin修改了，获取所欲技师列表，因为有调店技师
             List<Massagist> massagistList = massagistService.listNotWhere();
             Map<Long, Massagist> massagistMap = massagistList.stream().collect(Collectors.toMap(Massagist::getId, Function.identity()));
-            List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(
-                    orderDetailService.getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
+            List<OrderDetail> detailList = orderDetailService.findOccupiedDetails(shopId, startTime, durationMinutes);
             Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
             detailList.forEach(d -> {
                 List<OrderDetail> massagistDetailList = massagistDetailMap.get(d.getMassagistId());
@@ -4790,8 +4995,9 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         List<String> timeList = new ArrayList<>(40);
         Map<String,String> map = new HashMap<>();
         timeList.add(clockInTime);
-        //先查出当天店铺下的所有订单
-        List<OrderDetail> detailList =orderDetailService.getBaseMapper().findSimpleListByStartDateAndShop(timeCurent, id);
+        //先查出该自然日有交集的订单（含前一天跨零点单的凌晨段，否则 00:00-00:30 会被算成空闲）
+        List<OrderDetail> detailList = orderDetailService.findOccupiedDetails(id,
+                currentDate.atStartOfDay(), currentDate.plusDays(1).atStartOfDay());
         //先查询当天店铺下排班的技师
         List<MassagistSchedules> allMassagistList = massagistSchedulesService.simpleListByDateAndShopId(timeCurent, id);
         //根据时间段查询有多少订单

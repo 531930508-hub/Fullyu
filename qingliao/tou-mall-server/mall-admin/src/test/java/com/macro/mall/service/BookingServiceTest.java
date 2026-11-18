@@ -44,7 +44,7 @@ class BookingServiceTest {
         when(beds.listByStatusAndTypeAndShopId(anyInt(), anyInt(), eq(1L))).thenReturn(Arrays.asList(a, b));
         when(schedules.getBaseMapper()).thenReturn(mapper);
         when(mapper.findListByProjectIdAndShopId(eq(1L), anyString(), anyString())).thenAnswer(i -> shifts);
-        when(details.findSimpleListByStartDateAndShop(anyString(), eq(1L))).thenAnswer(i -> bookings);
+        when(details.findOverlapListByShopAndTime(eq(1L), any(), any())).thenAnswer(i -> bookings);
         when(blocks.excludeBlocked(any(), anyList())).thenAnswer(i -> i.getArgument(1));
         doAnswer(i -> i.getArgument(0)).when(service).sortMassagist(anyList(), any(), any(), anyLong(), anyInt());
         for (long id : new long[]{1, 2}) {

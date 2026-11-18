@@ -1,7 +1,7 @@
 <template>
-	<view class="terms-policy">
+	<view class="terms-policy" :class="localeClass()">
 		<view class="content">
-			<view class="title">Full愈</view>
+			<view class="title">{{ tt('Full愈', 'Full Yu') }}</view>
 			<text class="desc">
 				{{ t('条款政策') }}				
 			</text>
@@ -13,7 +13,8 @@
 
 <script setup>
 	
-	import { t } from '../../utils/locale'
+	import { t, useLocale } from '../../utils/locale'
+	const { tt } = useLocale()
 </script>
 
 <style lang="less" scoped>

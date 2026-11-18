@@ -1,5 +1,5 @@
 <template>
-	<view class="appointment-page safe-bottom">
+	<view class="appointment-page safe-bottom" :class="localeClass()">
 		<!-- 预约弹框组件 -->
 		<AppointmentModal v-model:visible="showModifyModal" :title="modalTitle" :confirm-text="modalConfirmText"
 			:therapist="therapist" :order="order" @confirm="handleModifyConfirm" @cancel="handleModifyCancel" />
@@ -30,7 +30,7 @@
 				<view class="message-content">
 					<view class="message-bubble">
 						<view class="message-text">
-							{{!!vipLevel ? tt('尊贵的', 'Dear ') + nickname + vipLevel : nickname }}{{ tt('，您好 ！我是智能助手小愈。欢迎来到这里，请问您想预约', ', hello! I am Xiaoyu, your booking assistant. Welcome! Are you looking to book') }}<text v-for="(item,index) in projectList" :key="item"><text v-show="index !=0">{{ tt('还是', ' or ') }}</text>{{ item.title }}</text>{{ tt('？ 方便告诉我预约的时间和前来的人数吗？我将协助您高效完成预约。', '? Tell me your preferred time and party size, and I will help you book efficiently.') }}
+							{{!!vipLevel ? tt('尊贵的', 'Dear ') + nickname + vipLevel : nickname }}{{ tt('，您好 ！我是智能助手小愈。欢迎来到这里，请问您想预约', ', hello! I am Xiaoyu, your booking assistant. Welcome! Are you looking to book') }}<text v-for="(item,index) in projectList" :key="item"><text v-show="index !=0">{{ tt('还是', ' or ') }}</text>{{ t(item.title) }}</text>{{ tt('？ 方便告诉我预约的时间和前来的人数吗？我将协助您高效完成预约。', '? Tell me your preferred time and party size, and I will help you book efficiently.') }}
 						</view>
 						<view class="quick-actions">
 							<text class="text-xs">{{ t('您也可以选择：') }}</text>

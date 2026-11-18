@@ -1,0 +1,40 @@
+# 轻疗生产后端（mall-admin）。装到 120.55:/etc/systemd/system/mall-admin.service
+# 目的：现在只有 nohup + start-120.sh，机器重启/进程被 OOM 杀掉后不会自己回来，
+# 也没人知道它挂了。这个单元只解决「托管 + 自启 + 崩溃拉起」，不改任何业务配置。
+#
+# 参数与 start-120.sh 完全一致（独立 JDK8，不动系统默认 java 25，那是给在场用的）。
+# 密码等 Redis/DB 配置仍来自 jar 内 application-prod.yml，单元里不重复写。
+[Unit]
+Description=Full愈轻疗 mall-admin (Spring Boot, prod)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/server/java/fully
+Environment=LANG=en_US.UTF-8
+Environment=LC_ALL=en_US.UTF-8
+Environment=TZ=Asia/Shanghai
+Environment=JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+ExecStart=/usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java \
+  -Xms1g -Xmx2560m \
+  -Dfile.encoding=UTF-8 \
+  -Dspring.profiles.active=prod \
+  -jar mall-admin-1.0-SNAPSHOT.jar
+# 启动慢（Spring Boot + 远端 RDS/Redis），给足时间再判定失败
+TimeoutStartSec=180
+# 停服务时先 SIGTERM 让 Spring 优雅关闭连接池；超时才 SIGKILL
+TimeoutStopSec=60
+KillSignal=SIGTERM
+Restart=on-failure
+RestartSec=10
+# 连续 5 分钟内重启超过 5 次就停下，避免疯狂重启把日志刷爆（此时人工介入）
+StartLimitIntervalSec=300
+StartLimitBurst=5
+# 日志：继续追加到原来的文件，运维习惯不变；systemd 侧不接管 stdout
+StandardOutput=append:/server/java/fully/logs/mall-admin-systemd.log
+StandardError=append:/server/java/fully/logs/mall-admin-systemd.log
+
+[Install]
+WantedBy=multi-user.target

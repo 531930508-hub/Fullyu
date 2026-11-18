@@ -1,5 +1,5 @@
 <template>
-	<view class="bgimage" :style="{height:heightvalue+'px'}">
+	<view class="bgimage" :class="localeClass()" :style="{height:heightvalue+'px'}">
 		<TopTitle></TopTitle>
 		<view class="banner-detail " :style="{position: '-webkit-sticky',position:'sticky',marginTop:customBar+'px','z-index':'99'}">
 		 <image :show-menu-by-longpress="true" :src="img('https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/icon/v2.0/enterprisecode.jpg', 750)" :webp="true" mode="widthFix"></image>
@@ -11,7 +11,7 @@
 import {ref} from 'vue'
 import {onShow, onLoad} from '@dcloudio/uni-app'
 import TopTitle from '../../../components/TopTitle.vue';
-import { img } from '../../../utils/image'
+import { img } from '../../../utils/imageLocale'
 const customBar = ref(0)
 	const statusBar = ref(0)
 	const topNumber=ref(0)

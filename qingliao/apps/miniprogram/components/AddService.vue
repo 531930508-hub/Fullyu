@@ -1,5 +1,5 @@
 <template>
-	<view class="evaluate-modal" v-if="visible">
+	<view class="evaluate-modal" :class="localeClass()" v-if="visible">
 		<view class="modal-content " :class="{show: modalVisible}" @click.stop>
 			<view class="modal-header">
 				<text class="modal-title">{{ t('加钟') }}</text>
@@ -8,28 +8,21 @@
 
 			<view class="therapist-list-modal">
 				<view class="text-[#584219] font-medium text-[26rpx]">
-					<view class="pt-3 pb-1"> {{ t('项目类型') }}<text class="text-[#8A6A40] text-[24rpx]">&nbsp;&nbsp; (Treatment
-							Type)</text></view>
+					<view class="pt-3 pb-1">{{ t('项目类型') }}</view>
 					<view class="treatment-types">
 						<view class="treatment-type " :class="{active:0==yinxiangone}" @click="selectTreatment(0)">
-							<text class="treatment-name">{{ t('全感舒筋') }}</text>
-							<text class="treatment-name-en text-[20rpx]">Full Senses Massage</text>
-						</view>
+							<text class="treatment-name">{{ t('全感舒筋') }}</text>						</view>
 						<view class="treatment-type " :class="{active:1==yinxiangone}" @click="selectTreatment(1)">
-							<text class="treatment-name">{{ t('头部水疗') }}</text>
-							<text class="treatment-name-en text-[20rpx]">Full Head Spa</text>
-						</view>
+							<text class="treatment-name">{{ t('头部水疗') }}</text>						</view>
 						<view class="treatment-type " :class="{active:2==yinxiangone}" @click="selectTreatment(2)">
-							<text class="treatment-name">{{ t('全感悦耳') }}</text>
-							<text class="treatment-name-en text-[20rpx]">Full Ear Spa</text>
-						</view>
+							<text class="treatment-name">{{ t('全感悦耳') }}</text>						</view>
 					</view>
 					<view>
 						<text>{{ t(ArrDurationDescr[yinxiangone]) }}</text>
 					</view>
 				</view>
 				<view class="text-[#584219] font-medium text-[26rpx]">
-					<view class="pt-3 pb-1">{{ t('放松时长') }}<text class="text-[#8A6A40] text-[24rpx]">&nbsp;&nbsp;(Duration)</text>
+					<view class="pt-3 pb-1">{{ t('放松时长') }}
 					</view>
 					<view class="treatment-types">
 						<view v-for="(item,index1) in ArrDuration" :key="index1" class="treatment-type "

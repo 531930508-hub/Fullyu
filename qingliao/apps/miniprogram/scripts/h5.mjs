@@ -8,12 +8,15 @@
  *
  * 校验三件事，任一不过即非 0 退出：
  *   1. 主包体积正常（防止又出"空壳"）
- *   2. pages.json 里每个页面都产出了 chunk（防止页面漏编译）
+ *   2. pages.json 里每个页面都在路由中登记，且入口 import 的页面产物都存在（防止页面漏编译）
  *   3. 线上 mall-test 的资产指纹与本地产物是否一致（防止 H5 不是最新）
  *
- * 部署目标：mall-test = root@121.40.119.57:/opt/fullyu-mall-test/web
- *   （nginx `sites-available/mall-test.fullyu.cn.conf` 的 root；可用 H5_DEPLOY_HOST 覆盖）
- * 优先级：build/check 只读；deploy 会先备份到 backups/web-<时间戳>.tgz 再原子切换目录。
+ * 部署目标：test-cityretreat = root@8.133.6.18:/opt/fullyu-mall-test/h5
+ *   （nginx `sites-enabled/test-cityretreat.fullyu.cn.conf` 的 `location /h5/`；可用 H5_DEPLOY_HOST 覆盖）
+ * 2026-11-17 起 H5 站点在 `https://test-cityretreat.fullyu.cn/h5/`（manifest 的 h5.router.base 已改为 /h5/）。
+ * 注意：线上那份产物是改名当天把旧构建（base=/）就地改前缀得到的，指纹与本地新构建不可比；
+ *      下次 `npm run h5:build && npm run h5:deploy` 正式重建覆盖后即恢复可比。
+ * 优先级：build/check 只读；deploy 会先备份到 backups/h5-<时间戳>.tgz 再原子切换目录。
  *
  * 注意（2026-11 踩过的坑）：vite-plugin-uni 只加载 package.json 里声明过的平台包，
  * 且识别的是带 `uni-app.apply` 字段的那个——H5 必须声明 `@dcloudio/uni-h5`，
@@ -27,9 +30,9 @@ import path from 'node:path';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const OUT = path.join(ROOT, 'unpackage/dist/build/h5');
 const ASSETS = path.join(OUT, 'assets');
-const LIVE = process.env.H5_LIVE_URL || 'https://mall-test.fullyu.cn/';
-const DEPLOY_HOST = process.env.H5_DEPLOY_HOST || 'root@121.40.119.57';
-const DEPLOY_DIR = process.env.H5_DEPLOY_DIR || '/opt/fullyu-mall-test/web';
+const LIVE = process.env.H5_LIVE_URL || 'https://test-cityretreat.fullyu.cn/h5/';
+const DEPLOY_HOST = process.env.H5_DEPLOY_HOST || 'root@8.133.6.18';
+const DEPLOY_DIR = process.env.H5_DEPLOY_DIR || '/opt/fullyu-mall-test/h5';
 const MIN_MAIN_KB = 200;
 const MIN_ASSETS = 80;
 
@@ -83,13 +86,22 @@ function verify() {
     throw new Error(`主包 ${mainJs ? mainJs.kb.toFixed(0) + 'KB' : '缺失'}，低于 ${MIN_MAIN_KB}KB，疑似空壳`);
   }
 
+  // 页面产物校验不能靠「路径拼文件名」猜 chunk：uni 对目录下的 index.vue
+  // 会把 chunk 命名成 <上级目录>-<目录名>（pages/mall/index → pages-mall-mall），
+  // 与同目录的 mall.vue 撞名但文件不同，靠前缀匹配必然误判。
+  // 改为校验真实链接关系：每个页面在路由里有登记，且入口 import 的目标文件都在。
   const pages = pageList();
-  const missing = pages.filter((p) => {
-    const flat = p.replace(/\//g, '-');
-    return !files.some((f) => f.startsWith(flat + '.'));
-  });
-  if (missing.length) {
-    throw new Error(`有 ${missing.length} 个页面没有产物：\n  - ${missing.join('\n  - ')}`);
+  const entryText = fs.readFileSync(path.join(ASSETS, entryOf(fs.readFileSync(path.join(OUT, 'index.html'), 'utf8'))), 'utf8');
+  // 只查路由表（在入口 chunk 里），不能全量搜 bundle：别的代码带着页面 URL 会让缺失页蒙混过关。
+  // 首页是以 path:"/" + alias 登记的，其余是 path:"/xxx"，统一按带引号的完整路径查。
+  const noRoute = pages.filter((p) => !entryText.includes(`/${p}"`));
+  if (noRoute.length) {
+    throw new Error(`有 ${noRoute.length} 个页面没有出现在路由里：\n  - ${noRoute.join('\n  - ')}`);
+  }
+  const linked = [...entryText.matchAll(/import\("\.\/([^"]+\.js)"\)/g)].map((m) => m[1]);
+  const broken = linked.filter((r) => !files.includes(r));
+  if (broken.length) {
+    throw new Error(`入口引用了不存在的页面产物：\n  - ${broken.join('\n  - ')}`);
   }
 
   console.log(`✔ 资产 ${files.length} 个 / 主包 ${mainJs.kb.toFixed(0)}KB / 页面 ${pages.length} 个全部产出`);

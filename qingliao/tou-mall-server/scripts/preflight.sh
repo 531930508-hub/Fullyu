@@ -6,7 +6,7 @@
 set -uo pipefail
 
 PROD=root@8.133.6.18
-TEST=mall-test
+TEST=test-cityretreat
 SSH_PROD="ssh -o ConnectTimeout=15 -o BatchMode=yes -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes $PROD"
 SSH_TEST="ssh -o ConnectTimeout=15 -o BatchMode=yes $TEST"
 APP_DIR=/server/java/fully

@@ -50,7 +50,8 @@ function assertSafeMysqlTarget(url: string): void {
   } catch {
     throw new Error(`TEST_DATABASE_URL 不是合法连接串：${url}`);
   }
-  if (!/_test\b|_test$|rehearsal/.test(dbName)) {
+  // `_test` 后面允许再接分隔符：teahour_test_run_template 这类 jest 专用模板库也算测试库。
+  if (!/_test([_-]|$)|rehearsal/.test(dbName)) {
     throw new Error(
       `TEST_DATABASE_URL 的库名必须含 _test 或 rehearsal（当前「${dbName}」）：测试会 force-reset 整库`
     );

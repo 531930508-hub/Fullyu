@@ -180,7 +180,7 @@ const requireText = (value: unknown, field: string, max = 100): string => {
  * - 会员身份用「本业务本地用户 id」定位，不接受手机号/会员号，避免 PII 进入 URL 与日志；
  * - 卡期与权益在开卡时按产品版本快照，后续改价/改权益不影响已购；
  * - 续费接在当前卡期结束后一天，未生效期间返回 PENDING；
- * - CRM 不接管在场畅练卡与轻疗历史卡的卡期，1C 的 businessCards 保持空数组，待 1F 快照接入。
+ * - CRM 不接管在场畅练卡与轻疗历史卡的卡期，品牌会员只返回 Full愈大会员卡。
  */
 @Injectable()
 export class BrandMemberService {
@@ -309,7 +309,6 @@ export class BrandMemberService {
         expireAt: row.expireAt ? formatDate(row.expireAt) : null,
         publishedAt: row.publishedAt ? formatDate(row.publishedAt) : null
       })),
-      businessCards: [],
       game: {
         enabled: gameEligible,
         dice: gameState.balance,

@@ -7,14 +7,18 @@
 > **09-12 构建**（进程 2026-10-15 02:02 起），代码落后约两个月，
 > 生产库 `tou_mall_current` 相对 `sql/` 缺 **92 个对象（19 个脚本）**。
 
-## 一、生产现状（2026-11-11 只读核验）
+## 一、生产现状（2026-11-11 建立；**2026-11-18 更新主机事实**）
+
+> 11-17 生产轻疗已从 8.133 迁到 120.55（见 `docs/deploy/domains.tsv` 与
+> `docs/deploy/生产方案-最终版.md` §9.8）。下表「主机/运行」两行已按新机器改写；
+> 「jar 构建时间」与「差距」两项 11-18 复核仍然成立（jar 仍是 09-12、库仍是 123 表）。
 
 | 项 | 值 |
 |---|---|
-| 主机 | 8.133.6.18（`iZuf65vldmwxpfmvbfzjh9Z`，已装部署公钥 `fullyu-deploy@Mac`） |
-| 运行 | `java -Dspring.profiles.active=prod -jar mall-admin-1.0-SNAPSHOT.jar`，PID 1635289，2026-10-15 起 |
-| jar 构建时间 | `mall-admin-1.0-SNAPSHOT.jar` = **09-12 01:30** |
-| 数据库 | 阿里云 RDS `tou_mall_current`：123 张表、9977 位客户 |
+| 主机 | **120.55.36.3**（原 8.133.6.18，11-17 00:22 迁入）；进程在 `/server/java/fully/`，启动/停止脚本 `start-120.sh` / `stop-120.sh` |
+| 运行 | `java -Dspring.profiles.active=prod -jar mall-admin-1.0-SNAPSHOT.jar --spring.redis.password=…`（**无 systemd，PPID=1**；Redis 密码走命令行，jar 内该值为空） |
+| jar 构建时间 | `mall-admin-1.0-SNAPSHOT.jar` = **09-12 01:30**（11-18 实测未变） |
+| 数据库 | 阿里云 RDS `tou_mall_current`：**123 张表**（11-18 实测未变）、9977 位客户 |
 | 差距 | 92 个对象 / 19 个脚本（清单见下） |
 
 ## 二、演练结论（已在生产库的影子副本上验证）
@@ -85,14 +89,14 @@ for f in $(ls sql/prod/2026-*.sql | sort); do
 done
 
 # 2) 校验结构：必须输出 ✅
-./scripts/sql-audit.py --host mall-test --db tou_mall_current \
+./scripts/sql-audit.py --host test-cityretreat --db tou_mall_current \
   "--mysql-opts=--defaults-extra-file=/opt/fullyu-mall-test/.rds.cnf"
 
 # 3) 换 jar（发版流程，另行执行）
 ```
 
 > 生产机没有 `mysql` 客户端（只有 jar），所以第 1 步实际是在**能连 RDS 的测试机**上执行：
-> `ssh mall-test 'mysql --defaults-extra-file=/opt/fullyu-mall-test/.rds.cnf tou_mall_current' < sql/prod/xxx.sql`
+> `ssh test-cityretreat 'mysql --defaults-extra-file=/opt/fullyu-mall-test/.rds.cnf tou_mall_current' < sql/prod/xxx.sql`
 
 ## 五、这批脚本会写数据的部分（执行前过一眼）
 
@@ -125,7 +129,7 @@ ALTER TABLE `n_admin_approval_notice_attempt` DROP COLUMN `result`;
 
 - [ ] 1. RDS 控制台打一次快照（或测试机 `mysqldump tou_mall_current` 全量导出）
 - [ ] 2. 按文件名顺序执行 `sql/prod/*.sql`（26 个，均幂等，可重跑）
-- [ ] 3. `./scripts/sql-audit.py --host mall-test --db tou_mall_current "--mysql-opts=--defaults-extra-file=/opt/fullyu-mall-test/.rds.cnf"` → 必须 **✅**
+- [ ] 3. `./scripts/sql-audit.py --host test-cityretreat --db tou_mall_current "--mysql-opts=--defaults-extra-file=/opt/fullyu-mall-test/.rds.cnf"` → 必须 **✅**
 - [ ] 4. 换 jar（后端）+ 发布管理端前端（`/server/www/fully/dist/`，与菜单脚本同一批）
 - [ ] 5. **换 jar 之后**执行客户昵称迁移（见 §九；必须放在新 jar 之后，否则中间新建的客户又变回「用户+手机号」）
 - [ ] 6. 冒烟：后台能登录且左侧导航正常 → 建单（搜手机号）→ 首页今日服务安排 → 会员卡列表 → 审批待办 → 定时任务日志无 `Unknown column`
@@ -162,7 +166,7 @@ ALTER TABLE `n_admin_approval_notice_attempt` DROP COLUMN `result`;
 生产执行：
 
 ```bash
-ssh mall-test 'mysql --defaults-extra-file=/opt/fullyu-mall-test/.rds.cnf tou_mall_current' \
+ssh test-cityretreat 'mysql --defaults-extra-file=/opt/fullyu-mall-test/.rds.cnf tou_mall_current' \
   < sql/prod/2026-11-12-customer-nickname-anonymize.sql
 ```
 
@@ -204,7 +208,7 @@ UPDATE `c_customer` c
 生产执行与自检：
 
 ```bash
-ssh mall-test 'mysql --defaults-extra-file=/opt/fullyu-mall-test/.rds.cnf tou_mall_current' \
+ssh test-cityretreat 'mysql --defaults-extra-file=/opt/fullyu-mall-test/.rds.cnf tou_mall_current' \
   < sql/prod/2026-12-01-order-visit-no-backfill.sql
 ```
 
@@ -342,7 +346,7 @@ information_schema 判存量，天然幂等）。扩到 **37 个**脚本重跑�
 
 ```
 # 1) 库（在 121.40 上，有 RDS 凭据）
-ssh mall-test /root/bin/night2-rollback.sh db
+ssh test-cityretreat /root/bin/night2-rollback.sh db
 
 # 2) 代码（在 Mac 的仓库里）
 ./scripts/rollback-prod-code.sh --jar-dir 20261115-230731 \

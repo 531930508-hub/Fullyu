@@ -9,6 +9,7 @@ import { GameModule } from '../game/game.module';
 import { ReportsModule } from '../reports/reports.module';
 import { SyncModule } from '../sync/sync.module';
 import { RolesModule } from '../roles/roles.module';
+import { StaffModule } from '../staff/staff.module';
 import { ProgramModule } from '../program/program.module';
 
 @Controller('health')
@@ -20,7 +21,7 @@ export class HealthController {
 }
 
 @Module({
-  imports: [MembersModule, PointsModule, AuditModule, CardsModule, ExternalModule, GameModule, ReportsModule, SyncModule, RolesModule, BrandMemberModule, ProgramModule],
+  imports: [MembersModule, PointsModule, AuditModule, CardsModule, ExternalModule, GameModule, ReportsModule, SyncModule, RolesModule, StaffModule, BrandMemberModule, ProgramModule],
   controllers: [HealthController]
 })
 export class ApiModule {}

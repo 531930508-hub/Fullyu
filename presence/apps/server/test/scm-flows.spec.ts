@@ -48,6 +48,11 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
   const productionIds: string[] = []
   const purchaseIds: string[] = []
   let supplierId = ''
+  // 自有仓组织 id：测试库是从生产克隆的，组织 id 随门店调整变过（S001 → SH001 等），
+  // 所以从「自有仓地点」反查，不再写死，否则数据一动整套 spec 全挂。
+  let OWN_ORG = 'S001'
+  // 集团根组织 id 同理：老数据叫 HQ，现在生产是 SH001。
+  let HQ_ORG = 'HQ'
 
   async function product(
     label: string,
@@ -89,6 +94,18 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
     })
 
   beforeAll(async () => {
+    // 自有仓取「有仓的门店组织」：老数据是 S001 门店，新生产是 SH401 西岸云阶店。
+    const storeOrg = await prisma.organization.findFirst({
+      where: { type: 'STORE', hasWarehouse: true },
+      orderBy: { id: 'asc' },
+    })
+    OWN_ORG = storeOrg?.id || OWN_ORG
+    const rootOrg = await prisma.organization.findFirst({
+      where: { parentId: null },
+      orderBy: { id: 'asc' },
+    })
+    HQ_ORG = rootOrg?.id || HQ_ORG
+    admin.orgId = HQ_ORG
     const supplier = await prisma.scmSupplier.create({
       data: {
         name: `测试代工厂-${suffix}`,
@@ -100,9 +117,9 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
     supplierId = supplier.id
 
     for (const [label, type, orgId] of [
-      ['供应商处', 'SUPPLIER', 'HQ'],
+      ['供应商处', 'SUPPLIER', HQ_ORG],
       // 委外测试从 S001 领料，代工厂地点的物权须跟材料一致
-      ['代工厂处', 'FACTORY', 'S001'],
+      ['代工厂处', 'FACTORY', OWN_ORG],
     ] as const) {
       const row = await prisma.scmLocation.create({
         data: {
@@ -146,21 +163,21 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
   it('调拨：源地点扣减、目标地点增加，撤销后双向回滚', async () => {
     const p = await product('调拨', 'PACK', 0.1)
     const [supplierLoc] = locationIds
-    await addStock('S001', 'S001', p.id, 100)
+    await addStock(OWN_ORG, OWN_ORG, p.id, 100)
 
     const created = await transfers.create(admin, {
-      fromLocationId: 'S001',
+      fromLocationId: OWN_ORG,
       toLocationId: supplierLoc,
       items: [{ productId: p.id, qty: 30 }],
     })
     transferIds.push(created.id)
     expect(created.status).toBe('COMPLETED')
-    expect(Number((await balance('S001', p.id))!.qty)).toBe(70)
+    expect(Number((await balance(OWN_ORG, p.id))!.qty)).toBe(70)
     expect(Number((await balance(supplierLoc, p.id))!.qty)).toBe(30)
-    expect((await balance(supplierLoc, p.id))!.ownerOrgId).toBe('HQ')
+    expect((await balance(supplierLoc, p.id))!.ownerOrgId).toBe(HQ_ORG)
 
     await transfers.cancel(admin, created.id)
-    expect(Number((await balance('S001', p.id))!.qty)).toBe(100)
+    expect(Number((await balance(OWN_ORG, p.id))!.qty)).toBe(100)
     expect(Number((await balance(supplierLoc, p.id))!.qty)).toBe(0)
     expect((await prisma.scmTransfer.findUnique({ where: { id: created.id } }))!.status).toBe(
       'CANCELLED',
@@ -181,14 +198,14 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
     })
     expect(bom.version).toBe(1)
 
-    await addStock('S001', 'S001', bottle.id, 100)
-    await addStock('S001', 'S001', liquid.id, 100)
+    await addStock(OWN_ORG, OWN_ORG, bottle.id, 100)
+    await addStock(OWN_ORG, OWN_ORG, liquid.id, 100)
 
     const order = await production.create(admin, {
       productId: finished.id,
       plannedQty: 10,
-      sourceLocationId: 'S001',
-      outputLocationId: 'S001',
+      sourceLocationId: OWN_ORG,
+      outputLocationId: OWN_ORG,
       processingFee: 0.2,
     })
     productionIds.push(order.id)
@@ -197,14 +214,14 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
     expect(Number(order.totalCost)).toBeCloseTo(1.03, 2)
 
     await production.issue(admin, order.id)
-    expect(Number((await balance('S001', bottle.id))!.qty)).toBe(79)
-    expect(Number((await balance('S001', liquid.id))!.qty)).toBe(90)
+    expect(Number((await balance(OWN_ORG, bottle.id))!.qty)).toBe(79)
+    expect(Number((await balance(OWN_ORG, liquid.id))!.qty)).toBe(90)
 
     const done = await production.complete(admin, order.id)
     expect(done.status).toBe('COMPLETED')
     expect(Number(done.outputQty)).toBe(10)
     expect(Number(done.unitCost)).toBeCloseTo(0.103, 6)
-    expect(Number((await balance('S001', finished.id))!.qty)).toBe(10)
+    expect(Number((await balance(OWN_ORG, finished.id))!.qty)).toBe(10)
   })
 
   it('委外：领料先调拨到代工厂，完工在代工厂核销，成品回自有仓', async () => {
@@ -220,41 +237,41 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
         { componentId: liquid.id, qtyPerUnit: 1, lossRate: 0 },
       ],
     })
-    await addStock('S001', 'S001', bottle.id, 50)
-    await addStock('S001', 'S001', liquid.id, 50)
+    await addStock(OWN_ORG, OWN_ORG, bottle.id, 50)
+    await addStock(OWN_ORG, OWN_ORG, liquid.id, 50)
 
     const order = await production.create(admin, {
       productId: finished.id,
       plannedQty: 20,
-      sourceLocationId: 'S001',
-      outputLocationId: 'S001',
+      sourceLocationId: OWN_ORG,
+      outputLocationId: OWN_ORG,
       factoryLocationId: factoryLoc,
       processingFee: 0.4,
     })
     productionIds.push(order.id)
 
     await production.issue(admin, order.id)
-    expect(Number((await balance('S001', bottle.id))!.qty)).toBe(30)
+    expect(Number((await balance(OWN_ORG, bottle.id))!.qty)).toBe(30)
     expect(Number((await balance(factoryLoc, bottle.id))!.qty)).toBe(20)
     expect(Number((await balance(factoryLoc, liquid.id))!.qty)).toBe(20)
 
     await production.complete(admin, order.id)
     expect(Number((await balance(factoryLoc, bottle.id))!.qty)).toBe(0)
     expect(Number((await balance(factoryLoc, liquid.id))!.qty)).toBe(0)
-    expect(Number((await balance('S001', finished.id))!.qty)).toBe(20)
+    expect(Number((await balance(OWN_ORG, finished.id))!.qty)).toBe(20)
   })
 
   it('总部供货：收货时扣减总部库存，总部无结存则按直发不扣、不出现负库存', async () => {
     const stocked = await product('总部有货', 'FINISHED', 0.1)
     const dropShip = await product('总部直发', 'FINISHED', 0.1)
-    await addStock('HQ', 'HQ', stocked.id, 100)
+    await addStock(HQ_ORG, HQ_ORG, stocked.id, 100)
 
     async function purchaseOrder(productId: string, qty: number) {
       const id = `TPO${suffix}${purchaseIds.length}`
       await prisma.purchaseOrder.create({
         data: {
           id,
-          buyerId: 'S001',
+          buyerId: OWN_ORG,
           supplierType: 'HQ',
           supplierName: '总部',
           totalAmount: 0,
@@ -280,28 +297,28 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
     const first = await purchaseOrder(stocked.id, 40)
     await purchase.createReceipt(admin, {
       poId: first,
-      warehouseId: 'S001',
+      warehouseId: OWN_ORG,
       items: [{ productId: stocked.id, acceptQty: 40, rejectQty: 0 }],
     })
-    expect(Number((await balance('HQ', stocked.id))!.qty)).toBe(60)
-    expect(Number((await balance('S001', stocked.id))!.qty)).toBe(40)
+    expect(Number((await balance(HQ_ORG, stocked.id))!.qty)).toBe(60)
+    expect(Number((await balance(OWN_ORG, stocked.id))!.qty)).toBe(40)
 
     const second = await purchaseOrder(dropShip.id, 5)
     await purchase.createReceipt(admin, {
       poId: second,
-      warehouseId: 'S001',
+      warehouseId: OWN_ORG,
       items: [{ productId: dropShip.id, acceptQty: 5, rejectQty: 0 }],
     })
-    expect(Number((await balance('S001', dropShip.id))!.qty)).toBe(5)
-    expect(await balance('HQ', dropShip.id)).toBeNull()
+    expect(Number((await balance(OWN_ORG, dropShip.id))!.qty)).toBe(5)
+    expect(await balance(HQ_ORG, dropShip.id)).toBeNull()
   })
 
   it('批次 FIFO：先到期先出，流水按批次拆行，结存金额按批次成本汇总', async () => {
     const p = await product('批次', 'PACK', 0.1)
     await prisma.$transaction((tx) =>
       stock.move(tx, {
-        warehouseId: 'S001',
-        ownerOrgId: 'S001',
+        warehouseId: OWN_ORG,
+        ownerOrgId: OWN_ORG,
         productId: p.id,
         qty: 10,
         type: 'IN',
@@ -311,8 +328,8 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
     )
     await prisma.$transaction((tx) =>
       stock.move(tx, {
-        warehouseId: 'S001',
-        ownerOrgId: 'S001',
+        warehouseId: OWN_ORG,
+        ownerOrgId: OWN_ORG,
         productId: p.id,
         qty: 10,
         type: 'IN',
@@ -323,8 +340,8 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
 
     const out = await prisma.$transaction((tx) =>
       stock.move(tx, {
-        warehouseId: 'S001',
-        ownerOrgId: 'S001',
+        warehouseId: OWN_ORG,
+        ownerOrgId: OWN_ORG,
         productId: p.id,
         qty: -12,
         type: 'OUT',
@@ -338,14 +355,14 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
     expect(out.cost).toBeCloseTo(0.8, 6)
 
     const batches = await prisma.scmStockBatch.findMany({
-      where: { warehouseId: 'S001', productId: p.id },
+      where: { warehouseId: OWN_ORG, productId: p.id },
       orderBy: { batchNo: 'asc' },
     })
     expect(batches.map((it) => [it.batchNo, Number(it.qty)])).toEqual([
       ['B-EARLY', 0],
       ['B-LATE', 8],
     ])
-    expect(Number((await balance('S001', p.id))!.qty)).toBe(8)
+    expect(Number((await balance(OWN_ORG, p.id))!.qty)).toBe(8)
 
     const ledgers = await prisma.stockLedger.findMany({
       where: { productId: p.id, ref: `FIFO-${suffix}` },
@@ -371,8 +388,8 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
     ] as const) {
       await prisma.$transaction((tx) =>
         stock.move(tx, {
-          warehouseId: 'S001',
-          ownerOrgId: 'S001',
+          warehouseId: OWN_ORG,
+          ownerOrgId: OWN_ORG,
           productId: p.id,
           qty,
           type: 'IN',
@@ -406,7 +423,7 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
     await prisma.purchaseOrder.create({
       data: {
         id: poId,
-        buyerId: 'S001',
+        buyerId: OWN_ORG,
         supplierType: 'EXTERNAL',
         supplierId,
         supplierName: '测试代工厂',
@@ -430,7 +447,7 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
 
     const receipt = await purchase.createReceipt(admin, {
       poId,
-      warehouseId: 'S001',
+      warehouseId: OWN_ORG,
       items: [
         {
           productId: p.id,
@@ -444,7 +461,7 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
     expect(receipt.items[0].expiryDate!.toISOString().slice(0, 10)).toBe('2027-11-01')
 
     const batch = await prisma.scmStockBatch.findFirst({
-      where: { warehouseId: 'S001', productId: p.id },
+      where: { warehouseId: OWN_ORG, productId: p.id },
     })
     expect(batch!.batchNo).toBe(receipt.id)
     expect(batch!.expiryDate!.toISOString().slice(0, 10)).toBe('2027-11-01')
@@ -469,18 +486,18 @@ describe('进销存一期：多地点 / 调拨 / BOM 生产 / 总部供货扣减
 
   it('库存不足时整单回滚，不会留下半截调拨流水', async () => {
     const p = await product('不足', 'PACK', 0.1)
-    await addStock('S001', 'S001', p.id, 3)
+    await addStock(OWN_ORG, OWN_ORG, p.id, 3)
     const [supplierLoc] = locationIds
 
     await expect(
       transfers.create(admin, {
-        fromLocationId: 'S001',
+        fromLocationId: OWN_ORG,
         toLocationId: supplierLoc,
         items: [{ productId: p.id, qty: 5 }],
       }),
     ).rejects.toThrow('库存不足')
 
-    expect(Number((await balance('S001', p.id))!.qty)).toBe(3)
+    expect(Number((await balance(OWN_ORG, p.id))!.qty)).toBe(3)
     expect(await balance(supplierLoc, p.id)).toBeNull()
   })
 })

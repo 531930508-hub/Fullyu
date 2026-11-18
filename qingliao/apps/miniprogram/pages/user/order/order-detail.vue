@@ -1,5 +1,5 @@
 <template>
-	<view class="  bg-[#F6F4F2] pb-4">
+	<view class="  bg-[#F6F4F2] pb-4" :class="localeClass()">
 		<TopTitle></TopTitle>
 		<view class="treatment-detail" :style="{'margin-top': (customBar-10)+'px'}">
 			<!-- 顶部时间信息卡片 -->
@@ -7,7 +7,7 @@
 				<view class="w-full px-5 ">
 					<view class="text-[#584219] font-semibold h-[100rpx] text-center flex justify-center items-center"
 						style="border-bottom: 2rpx solid #EEECE8;">
-						{{orderInfo.productTitle}}
+						{{t(orderInfo.productTitle)}}
 					</view>
 				</view>
 				<view class="time-card">

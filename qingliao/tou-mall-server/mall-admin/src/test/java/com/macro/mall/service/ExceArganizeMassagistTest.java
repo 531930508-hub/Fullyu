@@ -94,7 +94,7 @@ class ExceArganizeMassagistTest {
                 .thenReturn(new ArrayList<>(Arrays.asList(schedules)));
         ReflectionTestUtils.setField(service, "massagistSchedulesService", schedulesService);
 
-        when(mapper.findSimpleListByStartDateAndShop(anyString(), eq(1L))).thenReturn(new ArrayList<>());
+        when(mapper.findOverlapListByShopAndTime(eq(1L), any(), any())).thenReturn(new ArrayList<>());
 
         RoundSchedule pick = new RoundSchedule();
         pick.setMassagistId(11L);
@@ -197,7 +197,7 @@ class ExceArganizeMassagistTest {
                 .thenReturn(Arrays.asList(schedules));
         ReflectionTestUtils.setField(service, "massagistSchedulesService", schedulesService);
 
-        when(mapper.findSimpleListByStartDateAndShop(anyString(), eq(1L))).thenReturn(new ArrayList<>());
+        when(mapper.findOverlapListByShopAndTime(eq(1L), any(), any())).thenReturn(new ArrayList<>());
 
         // 轮值表给回来的是一个脏疗愈师id（0）→ 必须在这里被拦住
         RoundSchedule dirty = new RoundSchedule();

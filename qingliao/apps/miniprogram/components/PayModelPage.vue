@@ -1,6 +1,6 @@
 <template>
 	<!-- 支付弹框 -->
-	<view class="modal-overlay" v-if="visible">
+	<view class="modal-overlay" :class="localeClass()" v-if="visible">
 		<view class="payment-modal" @click.stop>
 			<view class="modal-header">
 				<text class="modal-title text-[#584219]">{{ t('选择支付方式') }}</text>
@@ -51,7 +51,7 @@
 					</view>
 					<view class="text-[20rpx] pt-1 text-[#8A6A40]">
 						<text v-if="couponEnough">{{ t('本次预约消耗 ') }}{{(checkoutData.costCouponCount*30)}}{{ t(' 分钟Full愈时刻') }}</text>
-						<text v-else>{{ t('券还差 ') }}{{couponShortCount}}{{ t(' 张，本单已按微信支付最低价结算') }}</text>
+						<text v-else>{{ t('券还差 ') }}{{couponShortCount}}{{ t(' 张，本单按微信支付结算') }}</text>
 					</view>
 				</view>
 
@@ -217,7 +217,7 @@
 				</view>
 			</view>
 
-			<view class="modal-footer shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+			<view class="modal-footer payment-footer shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
 				<view class="w-1/2  text-[#584219] ">
 					<view>
 						<text class="text-[32rpx]">{{ t('需支付：') }}</text>

@@ -98,7 +98,7 @@
 
 <script setup>
 	import { t, useLocale } from '../utils/locale'
-	import { img } from '../utils/image'
+	import { img } from '../utils/imageLocale'
 import { ref, reactive, onMounted, toRefs,getCurrentInstance } from 'vue';
 
 import EmptyData from './empty-data.vue';

@@ -80,7 +80,7 @@ class DragScheduleConflictTest {
 
     private void givenOccupiedBy(OrderDetail dragged, OrderDetail other) {
         when(mapper.selectById(dragged.getId())).thenReturn(dragged);
-        when(mapper.findSimpleListByStartDateAndShop(anyString(), eq(1L)))
+        when(mapper.findOverlapListByShopAndTime(eq(1L), any(), any()))
                 .thenReturn(new ArrayList<>(Arrays.asList(dragged, other)));
     }
 
@@ -139,7 +139,7 @@ class DragScheduleConflictTest {
         assertEquals(Long.valueOf(7L), captor.getValue().getBedId());
         assertEquals(DAY.atTime(16, 0), captor.getValue().getStartTime());
         assertEquals(DAY.atTime(17, 0), captor.getValue().getEndTime());
-        verify(mapper, never()).findSimpleListByStartDateAndShop(anyString(), any());
+        verify(mapper, never()).findOverlapListByShopAndTime(any(), any(), any());
     }
 
     @Test

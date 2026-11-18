@@ -30,14 +30,18 @@ const configOf = (values: Record<string, string | undefined>): ConfigService =>
 
 const user = (userId: string) => ({ user: { userId } })
 
-/** 只实现本测试用到的 voucher 读写 */
+/** 只实现本测试用到的 voucher 读写（注意 source 既可能是字符串，也可能是 { in: [...] }） */
 function voucherStore() {
   const rows: any[] = []
+  const matchSource = (source: any, wanted: any) =>
+    wanted && typeof wanted === 'object' && Array.isArray(wanted.in)
+      ? wanted.in.includes(source)
+      : source === wanted
   return {
     rows,
     voucher: {
       findFirst: jest.fn(async ({ where }: any) =>
-        rows.find((r) => r.userId === where.userId && r.source === where.source) || null,
+        rows.find((r) => r.userId === where.userId && matchSource(r.source, where.source)) || null,
       ),
       create: jest.fn(async ({ data }: any) => {
         const row = { id: `v-${rows.length + 1}`, ...data }
@@ -113,7 +117,7 @@ describe('在场品牌会员新增接口', () => {
     expect((denied as BusinessException).getStatus()).toBe(HttpStatus.FORBIDDEN)
   })
 
-  it('邀请：名额用完拒绝；好友领取后本地发 0 元体验课券，重放不重复发券', async () => {
+  it('邀请：名额用完拒绝；好友领取后本地发买一赠一券并绑定邀请人，重放不重复发券', async () => {
     const first = await controller.createInvite(user('inviter'))
     await controller.createInvite(user('inviter'))
     const over = await controller.createInvite(user('inviter')).catch((e) => e)
@@ -128,19 +132,25 @@ describe('在场品牌会员新增接口', () => {
     expect(store.rows).toHaveLength(0)
 
     const claimed = await controller.claimInvite(user('friend'), { code: first.code.toLowerCase() })
-    expect(claimed).toMatchObject({ claimed: true, replayed: false })
+    expect(claimed).toMatchObject({
+      claimed: true,
+      replayed: false,
+      // CRM 回传了邀请人 → 买一赠一券，而不是老流程的 0 元体验课券
+      voucher: { kind: 'PRESENCE_BOGO_CLASS', host: { nickname: '好友' } },
+    })
     expect(store.rows).toHaveLength(1)
     expect(store.rows[0]).toMatchObject({
       userId: 'friend',
-      mode: 'REDUCE_TO',
-      targetPrice: 0,
+      mode: 'BOGO',
+      targetPrice: null,
+      hostUserId: 'inviter',
       applicableAll: true,
       status: 'UNUSED',
       source: inviteVoucherSource(first.code),
     })
     const days = (store.rows[0].expiresAt.getTime() - Date.now()) / 86_400_000
-    expect(days).toBeGreaterThan(29.9)
-    expect(days).toBeLessThanOrEqual(30)
+    expect(days).toBeGreaterThan(89.9)
+    expect(days).toBeLessThanOrEqual(93)
 
     const again = await controller.claimInvite(user('friend'), { code: first.code })
     expect(again).toMatchObject({ claimed: true, replayed: true, voucher: { id: 'v-1' } })

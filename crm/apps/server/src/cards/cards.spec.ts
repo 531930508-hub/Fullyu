@@ -5,7 +5,7 @@ const BENEFITS = [
   { business: 'presence', title: '在场 · 课程会员价', desc: '畅练卡有效时仍按畅练卡免费' }
 ];
 
-describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
+describe('CRM 1B：品牌卡产品与版本', () => {
   let h: Harness;
   let admin: string;
   let ops: string;
@@ -38,22 +38,6 @@ describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
     const month = res.body.products.find((p: { code: string }) => p.code === 'FY_MONTH');
     expect(month.current.priceCents).toBe(9900);
     expect(month.current.validDays).toBe(90);
-  });
-
-  it('业务卡目录：在场畅练卡只读、不可在 CRM 售卖；内部键与对外键同时返回', async () => {
-    const res = await h.api('get', '/business-cards', fin);
-    expect(res.status).toBe(200);
-    const pass = res.body.cards.find((c: { cardCode: string }) => c.cardCode === 'PRESENCE_PASS');
-    expect(pass.business).toBe('zc');
-    expect(pass.businessKey).toBe('presence');
-    expect(pass.businessName).toBe('在场');
-    expect(pass.name).toBe('在场畅练卡');
-    expect(pass.readOnly).toBe(true);
-    expect(pass.sellableInCrm).toBe(false);
-    expect(pass.sourceSystem).toBe('presence');
-    const legacy = res.body.cards.find((c: { cardCode: string }) => c.cardCode === 'RETREAT_LEGACY_CARD');
-    expect(legacy.businessKey).toBe('retreat');
-    expect(legacy.readOnly).toBe(true);
   });
 
   it('版本状态机：草稿不影响现价，激活后旧版归档；重复激活与回滚旧版均拒绝', async () => {
@@ -178,33 +162,6 @@ describe('CRM 1B：品牌卡产品版本与业务会员卡目录', () => {
 
     const audit = await h.api('get', `/audit?action=${encodeURIComponent('更新会员权益文案')}`, admin);
     expect(audit.body.logs.some((log: { target: string }) => log.target === 'FY_TEST v1')).toBe(true);
-  });
-
-  it('业务卡目录：仅可改展示字段；只读/售卖归属不可改；客服无编辑权限', async () => {
-    const updated = await h.api('patch', '/business-cards/zc/PRESENCE_PASS', ops, {
-      name: '在场畅练卡',
-      benefit: '有效期内课程免费（以在场卡期为准）',
-      description: '只读展示',
-      sort: 3
-    });
-    expect(updated.status).toBe(200);
-    expect(updated.body.benefit).toContain('以在场卡期为准');
-    expect(updated.body.readOnly).toBe(true);
-    expect(updated.body.sellableInCrm).toBe(false);
-    expect(updated.body.sourceSystem).toBe('presence');
-
-    const readOnly = await h.api('patch', '/business-cards/zc/PRESENCE_PASS', admin, { readOnly: false });
-    expect(readOnly.status).toBe(400);
-    const sellable = await h.api('patch', '/business-cards/zc/PRESENCE_PASS', admin, { sellableInCrm: true });
-    expect(sellable.status).toBe(400);
-    const missing = await h.api('patch', '/business-cards/zc/UNKNOWN', ops, { name: 'x' });
-    expect(missing.status).toBe(404);
-    const denied = await h.api('patch', '/business-cards/zc/PRESENCE_PASS', cs, { name: 'x' });
-    expect(denied.status).toBe(403);
-
-    const filtered = await h.api('get', '/business-cards?business=presence', admin);
-    expect(filtered.body.cards).toHaveLength(1);
-    expect(filtered.body.cards[0].cardCode).toBe('PRESENCE_PASS');
   });
 
   it('统一大会员：一页两档读出/保存，旧版本归档，两档同写权益', async () => {

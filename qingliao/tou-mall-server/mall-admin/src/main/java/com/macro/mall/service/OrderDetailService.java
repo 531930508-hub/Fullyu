@@ -234,6 +234,27 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
     }
 
     /**
+     * 占用明细：按服务时段查交集（两侧各留整理期缓冲），替代「按 DATE(start_time) 查当天」。
+     * 当天口径会漏掉跨零点前一单在凌晨那段（23:30→00:30 的 00:00-00:30 不在次日列表里），
+     * 于是同一疗愈师/床位在 00:00 之后还能被重复预约。
+     */
+    public List<OrderDetail> findOccupiedDetails(Long shopId, LocalDateTime startTime, Integer durationMinutes) {
+        if (shopId == null || startTime == null || durationMinutes == null) {
+            return Collections.emptyList();
+        }
+        return findOccupiedDetails(shopId, startTime, DateUtil.addTimeByMinutes(startTime, durationMinutes));
+    }
+
+    public List<OrderDetail> findOccupiedDetails(Long shopId, LocalDateTime startTime, LocalDateTime endTime) {
+        if (shopId == null || startTime == null || endTime == null) {
+            return Collections.emptyList();
+        }
+        int buffer = BookingAvailability.BED_TURNOVER_MINUTES;
+        return BookingAvailability.withoutFinishedFuture(getBaseMapper().findOverlapListByShopAndTime(
+                shopId, startTime.minusMinutes(buffer), endTime.plusMinutes(buffer)));
+    }
+
+    /**
      * 再次检查是否可以下订单预约（可约的话返回订单明细并填充床位和疗愈师）
      * 不可预约时抛异常
      *
@@ -288,7 +309,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 }
             });
         }
-        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
+        List<OrderDetail> detailList = findOccupiedDetails(shopId, startTime, durationMinutes);
         Map<Long, List<OrderDetail>> bedDetailMap = new HashMap<>(detailList.size());
         Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
         detailList.forEach(d -> {
@@ -612,7 +633,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             } else if (!isAddService && personCount > allMassagistList.size()) {
                 throw new BusinessException("抱歉，疗愈师不满足人数要求");
             }
-            List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
+            List<OrderDetail> detailList = findOccupiedDetails(shopId, startTime, durationMinutes);
             Map<Long, List<OrderDetail>> bedDetailMap = new HashMap<>(detailList.size());
             Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
             detailList.forEach(d -> {
@@ -1971,9 +1992,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         if (start == null || end == null || (massagistId == null && bedId == null)) {
             return Collections.emptyList();
         }
-        String date = DateUtil.toYYYYMMDD(start);
-        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(
-                getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
+        // 按时段查交集，跨零点单的次日凌晨段才不会漏判
+        List<OrderDetail> detailList = findOccupiedDetails(shopId, start, end);
         if (CollectionUtils.isEmpty(detailList)) {
             return Collections.emptyList();
         }
@@ -2100,7 +2120,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         } else if (personCount > allMassagistList.size()) {
             throw new BusinessException("抱歉，疗愈师不满足人数要求");
         }
-        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
+        List<OrderDetail> detailList = findOccupiedDetails(shopId, startTime, durationMinutes);
         Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
         detailList.forEach(d -> {
             List<OrderDetail> massagistDetailList = massagistDetailMap.get(d.getMassagistId());
@@ -2407,7 +2427,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             return null;
         }
         String date = DateUtil.toYYYYMMDD(startTime);
-        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
+        List<OrderDetail> detailList = findOccupiedDetails(shopId, startTime, durationMinutes);
         Map<Long, List<OrderDetail>> bedDetailMap = new HashMap<>(detailList.size());
         Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
         detailList.forEach(d -> {
@@ -2517,7 +2537,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         } else if (personCount > allMassagistList.size()) {
             throw new BusinessException("抱歉，疗愈师不满足人数要求");
         }
-        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
+        List<OrderDetail> detailList = findOccupiedDetails(shopId, startTime, durationMinutes);
         Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
         detailList.forEach(d -> {
             //luxin新增，当项目为全感项目时，把采耳项目加进来，并且采耳项目id为4
@@ -2790,7 +2810,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         } else if (personCount > allMassagistList.size()) {
             throw new BusinessException("抱歉，疗愈师不满足人数要求");
         }
-        List<OrderDetail> detailList = BookingAvailability.withoutFinishedFuture(getBaseMapper().findSimpleListByStartDateAndShop(date, shopId));
+        List<OrderDetail> detailList = findOccupiedDetails(shopId, startTime, durationMinutes);
         Map<Long, List<OrderDetail>> bedDetailMap = new HashMap<>(detailList.size());
         Map<Long, List<OrderDetail>> massagistDetailMap = new HashMap<>(detailList.size());
         detailList.forEach(d -> {
