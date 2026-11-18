@@ -57,9 +57,10 @@ export interface LedgerResult {
 export interface SyncBusinessRow {
   business: string
   lastSeenAt: string | null
+  lastPath: string
   lagSeconds: number | null
   webhookConfigured: boolean
-  snapshotVersion: number
+  deliveredCount: number
   pending: number
   failed: number
 }
@@ -68,6 +69,7 @@ export interface SyncStatus {
   businesses: SyncBusinessRow[]
   pending: number
   failed: number
+  delivery: { enabled: boolean; intervalMs: number }
 }
 
 export interface AdjustmentRow {

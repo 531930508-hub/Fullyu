@@ -72,6 +72,18 @@ describe('CRM 1C：业务端签名接口、身份与积分', () => {
     expect(unknown.status).toBe(401);
   });
 
+  it('签名通过后刷新该端同步状态：只调会员/积分的端也算已接入', async () => {
+    await h.prisma.businessSyncState.deleteMany({ where: { business: 'zc' } });
+    const res = await signed('get', '/external/members/zc-not-exist', { key: 'zc-test' });
+    expect(res.status).toBe(404);
+
+    const state = await h.prisma.businessSyncState.findUniqueOrThrow({
+      where: { business: 'zc' }
+    });
+    expect(state.lastPath).toBe('/api/external/members/zc-not-exist');
+    expect(Date.now() - state.lastSeenAt.getTime()).toBeLessThan(5000);
+  });
+
   it('身份解析：首次新建会员，重复调用同一会员', async () => {
     const body = {
       localUserId: 'ql-u-1',
@@ -92,6 +104,82 @@ describe('CRM 1C：业务端签名接口、身份与积分', () => {
     expect(again.body.created).toBe(false);
     expect(again.body.memberId).toBe(first.body.memberId);
     expect(again.body.memberNo).toBe(first.body.memberNo);
+  });
+
+  it('占位昵称可被真实昵称升级，真实昵称不会被占位昵称盖回', async () => {
+    // 在场先登录：注册默认昵称「用户+手机号后四位」占住了档案
+    const zc = await signed('post', '/external/members/resolve', {
+      key: 'zc-test',
+      body: { localUserId: 'zc-u-placeholder', phone: '13700007777', name: '用户7777' }
+    });
+    expect(zc.status).toBe(200);
+    // 新建不再落占位昵称
+    expect(zc.body.name).toBe('会员');
+
+    // 模拟存量数据：老库里的名字是「用户+手机号后四位」
+    await h.prisma.member.update({ where: { id: zc.body.memberId }, data: { name: '用户7777' } });
+
+    // 轻疗随后解析同一手机号：真实昵称升级占位名
+    const ql = await signed('post', '/external/members/resolve', {
+      body: { localUserId: 'ql-u-real', phone: '13700007777', name: '昊昊昊' }
+    });
+    expect(ql.status).toBe(200);
+    expect(ql.body.memberId).toBe(zc.body.memberId);
+    expect(ql.body.name).toBe('昊昊昊');
+
+    // 在场再登录：占位昵称不能把真实昵称盖回去
+    const again = await signed('post', '/external/members/resolve', {
+      key: 'zc-test',
+      body: { localUserId: 'zc-u-placeholder', phone: '13700007777', name: '用户7777' }
+    });
+    expect(again.status).toBe(200);
+    expect(again.body.name).toBe('昊昊昊');
+  });
+
+  it('带国际区号的旧占位名（用户+86…）也是占位名，可被真实昵称升级', async () => {
+    const phone = '13700005555';
+    const legacy = `用户+86${phone}`;
+    const created = await signed('post', '/external/members/resolve', {
+      body: { localUserId: 'ql-u-plus86', phone, name: legacy }
+    });
+    expect(created.body.name).toBe('会员');
+
+    // 轻疗旧库确实存过「用户+86…」这种形状
+    await h.prisma.member.update({ where: { id: created.body.memberId }, data: { name: legacy } });
+
+    const real = await signed('post', '/external/members/resolve', {
+      body: { localUserId: 'ql-u-plus86-real', phone, name: '青竹1234' }
+    });
+    expect(real.status).toBe(200);
+    expect(real.body.name).toBe('青竹1234');
+  });
+
+  it('新建会员不落占位昵称，真实名之间的改写只走资料回写', async () => {
+    const created = await signed('post', '/external/members/resolve', {
+      body: { localUserId: 'ql-u-defaultname', phone: '13700006666', name: '用户6666' }
+    });
+    expect(created.status).toBe(200);
+    expect(created.body.name).toBe('会员');
+
+    // 另一端解析带来的另一个真实名不改写（resolve 不裁决谁的名字更好）
+    const other = await signed('post', '/external/members/resolve', {
+      body: { localUserId: 'ql-u-defaultname-2', phone: '13700006666', name: '小鹿4821' }
+    });
+    expect(other.status).toBe(200);
+    expect(other.body.name).toBe('小鹿4821');
+
+    const third = await signed('post', '/external/members/resolve', {
+      body: { localUserId: 'ql-u-defaultname-3', phone: '13700006666', name: '另一个名字' }
+    });
+    expect(third.status).toBe(200);
+    expect(third.body.name).toBe('小鹿4821');
+
+    // 顾客自己改资料（资料回写接口）才是覆盖语义
+    const edited = await signed('post', '/external/members/profile', {
+      body: { localUserId: 'ql-u-defaultname-3', name: '第三个名字' }
+    });
+    expect(edited.status).toBe(200);
+    expect(edited.body.name).toBe('第三个名字');
   });
 
   it('按本地用户批量读取生日，未同步用户忽略且按业务隔离', async () => {

@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { crmApi, type AdjustmentRow, type MonthlyReport, type PrizeRow, type SyncStatus } from '../api'
 import { ApiError } from '@/shell/api'
 import { useSessionStore } from '@/shell/session'
-import { bizLabel, fmt, money, shanghaiMonth } from '@/shell/format'
+import { bizLabel, fmt, fmtLag, lagColor, money, shanghaiMonth } from '@/shell/format'
 
 const session = useSessionStore()
 
@@ -18,13 +18,18 @@ const month = shanghaiMonth()
 
 const pendingAdjust = computed(() => adjustments.value.filter((row) => row.status === 'PENDING'))
 
+/** 未接入（lag 为 null）不参与统计；三端全未接入时返回 null，避免显示成「总滞后 0 秒」。 */
 const maxLag = computed(() => {
   if (!sync.value) return null
   const lags = sync.value.businesses
     .map((row) => row.lagSeconds)
     .filter((value): value is number => value !== null)
-  return lags.length ? Math.max(0, ...lags) : 0
+  return lags.length ? Math.max(0, ...lags) : null
 })
+
+const deliveryDisabled = computed(() =>
+  Boolean(sync.value && (!sync.value.delivery || !sync.value.delivery.enabled))
+)
 
 /** 与旧后台一致：403/404 视为「没有这块数据」，不阻塞概览。 */
 async function safe<T>(allowed: boolean, load: () => Promise<T>, fallback: T): Promise<T> {
@@ -44,7 +49,7 @@ const syncColumns = [
   { title: 'Webhook', dataIndex: 'webhookConfigured', key: 'webhookConfigured' },
   { title: '待投递', dataIndex: 'pending', key: 'pending' },
   { title: '失败', dataIndex: 'failed', key: 'failed' },
-  { title: '快照版本', dataIndex: 'snapshotVersion', key: 'snapshotVersion' }
+  { title: '已投递', dataIndex: 'deliveredCount', key: 'deliveredCount' }
 ]
 
 async function load() {
@@ -105,6 +110,14 @@ onMounted(load)
     </a-row>
 
     <a-card size="small" class="block" title="三端同步">
+      <a-alert
+        v-if="deliveryDisabled"
+        type="warning"
+        show-icon
+        class="block-gap"
+        message="投递 worker 未启用（未设置 CRM_OUTBOX_INTERVAL_MS）"
+        description="事件只会累积在「待投递」，不会自动送达各端；需在 crm.env 配置间隔后重启，或手动触发投递。"
+      />
       <a-table
         v-if="sync"
         :columns="syncColumns"
@@ -115,9 +128,13 @@ onMounted(load)
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'business'">{{ bizLabel(record.business) }}</template>
-          <template v-else-if="column.key === 'lastSeenAt'">{{ fmt(record.lastSeenAt) }}</template>
+          <template v-else-if="column.key === 'lastSeenAt'">
+            <a-tag v-if="!record.lastSeenAt" color="default">未接入</a-tag>
+            <span v-else :title="record.lastPath">{{ fmt(record.lastSeenAt) }}</span>
+          </template>
           <template v-else-if="column.key === 'lagSeconds'">
-            {{ record.lagSeconds === null ? '—' : `${record.lagSeconds}s` }}
+            <a-tag v-if="record.lagSeconds === null" color="default">—</a-tag>
+            <a-tag v-else :color="lagColor(record.lagSeconds)">{{ fmtLag(record.lagSeconds) }}</a-tag>
           </template>
           <template v-else-if="column.key === 'webhookConfigured'">
             <a-tag :color="record.webhookConfigured ? 'success' : 'warning'">
@@ -128,14 +145,16 @@ onMounted(load)
             <a-tag v-if="record.failed" color="error">{{ record.failed }}</a-tag>
             <span v-else>0</span>
           </template>
-          <template v-else-if="column.key === 'snapshotVersion'">
-            <span class="mono">{{ record.snapshotVersion }}</span>
+          <template v-else-if="column.key === 'deliveredCount'">
+            <span class="mono">{{ record.deliveredCount }}</span>
           </template>
         </template>
       </a-table>
       <div v-else class="help">{{ loading ? '加载中…' : '当前账号无同步查看权限' }}</div>
       <div v-if="sync" class="help block-gap">
-        总滞后 {{ maxLag === null ? '—' : `${maxLag} 秒` }}；未配置 Webhook 时事件保留在待投递，不当作已同步。
+        滞后 = 距该端最近一次签名调用（会员/积分与品牌卡接口都算），未接入显示「—」；超过 12 小时黄、48 小时红。
+        当前总滞后（仅已接入端）{{ maxLag === null ? '无可统计的端' : fmtLag(maxLag) }}。
+        「已投递」是累计成功事件数。未配置 Webhook 时事件保留在待投递，不当作已同步。
       </div>
     </a-card>
 

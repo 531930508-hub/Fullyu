@@ -34,6 +34,12 @@ const maxAttempts = (): number => {
   return Number.isInteger(value) && value > 0 ? Math.min(value, 10) : 5;
 };
 
+/** 自动投递间隔；未配置或非法时为 0，表示「worker 关闭，只能手动投递」。 */
+const outboxIntervalMs = (): number => {
+  const value = Number(process.env.CRM_OUTBOX_INTERVAL_MS || 0);
+  return Number.isInteger(value) && value > 0 ? value : 0;
+};
+
 const signWebhook = (
   secret: string,
   timestamp: string,
@@ -54,8 +60,8 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly prisma: PrismaService) {}
 
   onModuleInit(): void {
-    const interval = Number(process.env.CRM_OUTBOX_INTERVAL_MS || 0);
-    if (Number.isInteger(interval) && interval > 0) {
+    const interval = outboxIntervalMs();
+    if (interval > 0) {
       this.timer = setInterval(() => {
         this.deliverDue().catch(() => undefined);
       }, interval);
@@ -92,15 +98,18 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         lastPath: state?.lastPath || '',
         lagSeconds: state ? Math.max(0, Math.floor((now - state.lastSeenAt.getTime()) / 1000)) : null,
         webhookConfigured: Boolean(hooks[item.key]),
-        snapshotVersion: delivered,
+        // 累计成功投递的事件数，不是快照版本号；0 只表示「从未成功投递」。
+        deliveredCount: delivered,
         pending,
         failed
       });
     }
+    const intervalMs = outboxIntervalMs();
     return {
       businesses,
       pending: businesses.reduce((sum, item) => sum + item.pending, 0),
       failed: businesses.reduce((sum, item) => sum + item.failed, 0),
+      delivery: { enabled: intervalMs > 0, intervalMs },
       now: new Date().toISOString()
     };
   }

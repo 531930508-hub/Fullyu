@@ -130,6 +130,29 @@ export function fmt(value?: string | number | null, withTime = true): string {
     .replace(/\//g, '-')
 }
 
+/**
+ * 同步滞后阈值：滞后 = 距该端最近一次签名调用。
+ * 12 小时内算正常（夜间闭店不调用是常态），超过 48 小时基本可判定接入断了。
+ */
+export const LAG_WARN_SECONDS = 12 * 60 * 60
+export const LAG_ERROR_SECONDS = 48 * 60 * 60
+
+export function fmtLag(seconds?: number | null): string {
+  if (seconds === null || seconds === undefined) return '—'
+  const value = Math.max(0, Math.floor(seconds))
+  if (value < 60) return `${value} 秒`
+  if (value < 3600) return `${Math.floor(value / 60)} 分钟`
+  if (value < 86400) return `${Math.floor(value / 3600)} 小时`
+  return `${Math.floor(value / 86400)} 天`
+}
+
+export function lagColor(seconds?: number | null): string {
+  if (seconds === null || seconds === undefined) return 'default'
+  if (seconds >= LAG_ERROR_SECONDS) return 'error'
+  if (seconds >= LAG_WARN_SECONDS) return 'warning'
+  return 'success'
+}
+
 /** 上海时区的 YYYY-MM */
 export function shanghaiMonth(): string {
   const parts = new Intl.DateTimeFormat('en-CA', {

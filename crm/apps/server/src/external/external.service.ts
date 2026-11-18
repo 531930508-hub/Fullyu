@@ -6,6 +6,7 @@ import { PointsService } from '../points/points.service';
 import { audit } from '../common/audit';
 import { badRequest, conflict, notFound } from '../common/errors';
 import { newId } from '../common/ids';
+import { DEFAULT_MEMBER_NAME, isPlaceholderName } from '../common/member-name';
 import { runIdempotent } from '../common/idempotency';
 import { normalizePhone } from '../common/phone';
 import { buildProfileUpdate, type ProfilePatch } from '../members/profile-input';
@@ -357,7 +358,7 @@ export class ExternalService {
           id: newId('MEM'),
           memberNo,
           phone: input.phone,
-          name: input.name || '会员',
+          name: isPlaceholderName(input.name) ? DEFAULT_MEMBER_NAME : input.name!,
           gender: input.gender,
           birthday: input.birthday ? new Date(input.birthday) : null,
           avatarUrl: input.avatarUrl
@@ -378,7 +379,14 @@ export class ExternalService {
     });
   }
 
-  /** 首次绑定时补齐 CRM 缺失的资料；已有值不被外部覆盖，避免两端来回改。 */
+  /**
+   * 首次绑定时补齐 CRM 缺失的资料；已有值不被外部覆盖，避免两端来回改。
+   *
+   * 昵称是例外：占位名（CRM 默认「会员」、各业务端历史默认昵称「用户+手机号/后四位」）
+   * 不是顾客自己起的名字，允许被业务端真实昵称升级；反过来占位名永远盖不掉真实昵称，
+   * 否则最后一个登录的端会把别的端起的名字冲掉。真实名之间的改写只走资料回写接口
+   * （{@link updateProfile}），那是顾客主动改，语义是覆盖。
+   */
   private async touchMissingProfile(
     member: Member,
     input: ReturnType<ExternalService['normalizeResolve']>,
@@ -390,7 +398,9 @@ export class ExternalService {
       const canonical = normalizePhone(member.phone);
       if (canonical && canonical !== member.phone) data.phone = canonical;
     }
-    if ((member.name === '会员' || !member.name) && input.name) data.name = input.name;
+    if (input.name && !isPlaceholderName(input.name) && isPlaceholderName(member.name)) {
+      data.name = input.name;
+    }
     if (member.gender === null && input.gender) data.gender = input.gender;
     if (!member.birthday && input.birthday) data.birthday = new Date(input.birthday);
     if (!member.avatarUrl && input.avatarUrl) data.avatarUrl = input.avatarUrl;

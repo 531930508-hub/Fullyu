@@ -15,6 +15,7 @@ type KeyName = keyof typeof SECRETS;
 process.env.CRM_EXT_KEYS = JSON.stringify(SECRETS);
 process.env.CRM_GAME_URL = 'https://game.test/play';
 process.env.CRM_OUTBOX_MAX_ATTEMPTS = '1';
+delete process.env.CRM_OUTBOX_INTERVAL_MS;
 
 const signFy = (
   secret: string,
@@ -161,11 +162,16 @@ describe('CRM 1C 收尾：outbox 投递、同步滞后与异常队列', () => {
     expect(status.status).toBe(200);
     const ql = status.body.businesses.find((b: { business: string }) => b.business === 'retreat');
     const sx = status.body.businesses.find((b: { business: string }) => b.business === 'teahour');
+    const zc = status.body.businesses.find((b: { business: string }) => b.business === 'presence');
     expect(ql.webhookConfigured).toBe(true);
     expect(ql.lastSeenAt).toBeTruthy();
     expect(ql.pending).toBeGreaterThanOrEqual(1);
+    expect(ql.deliveredCount).toBe(0);
     expect(sx.webhookConfigured).toBe(false);
     expect(sx.pending).toBeGreaterThanOrEqual(1);
+    // 完全没调用过的端不应伪装成「滞后 0 秒」
+    expect(zc.lagSeconds).toBeNull();
+    expect(status.body.delivery).toEqual({ enabled: false, intervalMs: 0 });
 
     const run = await h.api('post', '/sync/run', ops, {});
     expect(run.status).toBe(200);
@@ -186,6 +192,12 @@ describe('CRM 1C 收尾：outbox 投递、同步滞后与异常队列', () => {
     });
     expect(delivered.status).toBe('DELIVERED');
     expect(delivered.deliveredAt).toBeTruthy();
+
+    const afterRun = await h.api('get', '/sync/status', finance);
+    const qlAfter = afterRun.body.businesses.find(
+      (b: { business: string }) => b.business === 'retreat'
+    );
+    expect(qlAfter.deliveredCount).toBe(1);
   });
 
   it('投递失败进入异常队列；重投成功后清除；无权限角色被拒', async () => {

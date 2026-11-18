@@ -5,6 +5,7 @@ import type { Request } from 'express';
 import type { Business } from '@fullyu/crm-shared';
 import { PrismaService } from '../common/prisma.service';
 import { ApiError } from '../common/errors';
+import { touchBusinessSyncState } from '../common/sync-state';
 import { externalClients } from '../external/external.clients';
 
 export const FY_MAX_SKEW_SECONDS = 300;
@@ -94,15 +95,7 @@ export class BrandMemberGuard implements CanActivate {
     }
 
     request.fy = { keyId, business: client.business };
-    await this.prisma.businessSyncState.upsert({
-      where: { business: client.business },
-      create: {
-        business: client.business,
-        lastSeenAt: now,
-        lastPath: request.path
-      },
-      update: { lastSeenAt: now, lastPath: request.path }
-    });
+    await touchBusinessSyncState(this.prisma, client.business, request.path, now);
     return true;
   }
 }

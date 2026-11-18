@@ -681,12 +681,11 @@
       can('crm:report:view') ? safe(`/reports/monthly?month=${month}`, null) : Promise.resolve(null)
     ]);
     const pendingAdjust = adjustments.filter((row) => row.status === 'PENDING');
-    const maxLag = sync
-      ? Math.max(
-          0,
-          ...sync.businesses.filter((row) => row.lagSeconds !== null).map((row) => row.lagSeconds)
-        )
-      : null;
+    const lags = sync
+      ? sync.businesses.filter((row) => row.lagSeconds !== null).map((row) => row.lagSeconds)
+      : [];
+    const maxLag = sync ? (lags.length ? Math.max(...lags) : null) : null;
+    const deliveryDisabled = sync && sync.delivery && !sync.delivery.enabled;
     ctx.view.innerHTML = `
       <div class="grid cols-3">
         <div class="stat">
@@ -713,24 +712,25 @@
         ${
           sync
             ? `<div class="table-wrap"><table>
-                <thead><tr><th>业务端</th><th>最近调用</th><th>滞后</th><th>Webhook</th><th>待投递</th><th>失败</th><th>快照版本</th></tr></thead>
+                <thead><tr><th>业务端</th><th>最近调用</th><th>滞后</th><th>Webhook</th><th>待投递</th><th>失败</th><th>已投递</th></tr></thead>
                 <tbody>
                   ${sync.businesses
                     .map(
                       (row) => `<tr>
                         <td>${esc(biz(row.business))}</td>
-                        <td class="small">${esc(fmt(row.lastSeenAt))}</td>
+                        <td class="small">${row.lastSeenAt ? esc(fmt(row.lastSeenAt)) : pill('未接入', 'amber')}</td>
                         <td>${row.lagSeconds === null ? '—' : `${row.lagSeconds}s`}</td>
                         <td>${row.webhookConfigured ? pill('已配置', 'green') : pill('未配置', 'amber')}</td>
                         <td>${row.pending}</td>
                         <td>${row.failed ? pill(String(row.failed), 'red') : '0'}</td>
-                        <td class="mono small">${row.snapshotVersion}</td>
+                        <td class="mono small">${row.deliveredCount}</td>
                       </tr>`
                     )
                     .join('')}
                 </tbody>
               </table></div>
-              <p class="help" style="margin-top:10px">总滞后 ${maxLag === null ? '—' : `${maxLag} 秒`}；未配置 Webhook 时事件保留在待投递，不当作已同步。</p>`
+              ${deliveryDisabled ? `<p class="help" style="margin-top:10px">投递 worker 未启用（未设置 CRM_OUTBOX_INTERVAL_MS）：事件只会留在待投递，不会自动送达。</p>` : ''}
+              <p class="help" style="margin-top:10px">总滞后 ${maxLag === null ? '—' : `${maxLag} 秒`}；未接入的端不参与统计。未配置 Webhook 时事件保留在待投递，不当作已同步。</p>`
             : '<div class="empty">当前账号无同步查看权限</div>'
         }
       </div>
@@ -3128,19 +3128,19 @@
               .map(
                 (row) => `<tr>
                   <td>${esc(biz(row.business))}</td>
-                  <td class="small">${esc(fmt(row.lastSeenAt))}</td>
+                  <td class="small">${row.lastSeenAt ? esc(fmt(row.lastSeenAt)) : pill('未接入', 'amber')}</td>
                   <td class="mono small">${esc(row.lastPath)}</td>
                   <td>${row.lagSeconds === null ? '—' : `${row.lagSeconds}s`}</td>
                   <td>${row.webhookConfigured ? pill('已配置', 'green') : pill('未配置', 'amber')}</td>
                   <td>${row.pending}</td>
                   <td>${row.failed ? pill(String(row.failed), 'red') : '0'}</td>
-                  <td>${row.snapshotVersion}</td>
+                  <td>${row.deliveredCount}</td>
                 </tr>`
               )
               .join('')}
           </tbody>
         </table></div>
-        <p class="help" style="margin-top:10px">总计待投递 ${sync.pending} · 失败 ${sync.failed}。未配置 Webhook 的端不会自动投递，事件保持待处理。</p>
+        <p class="help" style="margin-top:10px">总计待投递 ${sync.pending} · 失败 ${sync.failed}。未配置 Webhook 的端不会自动投递，事件保持待处理。${sync.delivery && !sync.delivery.enabled ? '当前未启用自动投递（CRM_OUTBOX_INTERVAL_MS 未设置），只能手动触发。' : ''}</p>
       </div>
       <div class="panel">
         <div class="panel-head"><h2>事件</h2>

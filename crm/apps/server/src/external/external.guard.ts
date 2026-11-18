@@ -4,6 +4,8 @@ import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 import type { Business } from '@fullyu/crm-shared';
 import { externalClients, type ExternalClient } from './external.clients';
+import { PrismaService } from '../common/prisma.service';
+import { touchBusinessSyncState } from '../common/sync-state';
 import { unauthorized } from '../common/errors';
 
 export const MAX_SKEW_SECONDS = 300;
@@ -31,7 +33,9 @@ export const signPayload = (
  */
 @Injectable()
 export class ExternalGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<ExternalRequest>();
     const keyId = String(request.headers['x-crm-key'] || '');
     const timestamp = String(request.headers['x-crm-timestamp'] || '');
@@ -62,6 +66,8 @@ export class ExternalGuard implements CanActivate {
     }
 
     request.external = { keyId, business: client.business };
+    // 会员/积分调用同样是「端还活着」的证据；不写这张表，首页的滞后只统计品牌卡接口。
+    await touchBusinessSyncState(this.prisma, client.business, request.path);
     return true;
   }
 }

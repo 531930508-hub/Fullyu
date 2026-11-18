@@ -102,7 +102,7 @@ pnpm --filter @fullyu/crm-server build:mysql   # = schema:mysql → prisma gener
 | `POST /rules/:key/versions/:version/cancel` | `crm:config:edit` | 仅可撤销待生效版本 |
 | `GET /game/prizes?status=` | `crm:member:view` | 礼物列表（含会员号/姓名） |
 | `POST /game/prizes/:id/collect` | `crm:member:edit` | 人工交付；重复/过期 409，写审计 |
-| `GET /sync/status` | `crm:sync:view` | 三端最近调用、滞后、webhook、待投递/失败/快照 |
+| `GET /sync/status` | `crm:sync:view` | 三端最近调用、滞后、webhook、待投递/失败/已投递事件数、投递 worker 状态 |
 | `GET /sync/events?status=&business=&limit=` | `crm:sync:view` | outbox 事件 |
 | `POST /sync/run` | `crm:sync:retry` | 立即投递到期事件 |
 | `POST /sync/events/:id/retry` | `crm:sync:retry` | 重置为待投递 |
@@ -159,6 +159,13 @@ timestamp\nnonce\nMETHOD\n/api/v1/brand-member/...（含查询串）\nsha256hex(
 品牌会员不变量：卡期与成交价按开卡时的产品版本快照；权益、积分口径、特权与游戏开关实时读卡产品当前生效版本（赠送/附赠卡读年卡当前版本），后台保存后业务端下次刷新生效；报价一次性使用；同 `orderRef` 不重复开卡；游戏票据不暴露会员号/手机号。
 
 **环境策略**：现在只运行一套准生产 CRM（S1），轻疗测试、时叙、在场都连它；轻疗用户是身份母集。开业前另建生产实例 P，只迁真实用户，S1 留作测试。详见设计文档 §18。
+
+**同步状态口径**（`/sync/status` 与概览「三端同步」卡片）：
+
+- 最近调用/滞后：任一签名入口通过校验（`/external/*` 与 `/v1/brand-member/*`）都会刷新该端 `last_seen_at`。从未调用过为 `null`，页面显示「未接入」且不参与总滞后，避免误报「滞后 0 秒」。
+- 滞后阈值 12 小时黄、48 小时红；它衡量「上次调用离现在多久」，不是数据版本差。
+- `deliveredCount` 是累计成功投递事件数，不是快照版本号；`delivery.enabled` 表示 `CRM_OUTBOX_INTERVAL_MS > 0` 的自动投递 worker 是否开启，关闭时只能手动 `POST /sync/run`。
+- 未配置 Webhook 的端事件保持 `PENDING` 是设计行为，不代表事件丢失。
 
 ## 不变量与安全决策
 
@@ -321,4 +328,4 @@ E2 证据（测试环境，2026-11-08）：
 - 测试在场/时叙：`presence-test`、`teahour-test` 打开 `CRM_ENABLED` / `BRAND_CRM_ENABLED`，指向 `https://test-crm.fullyu.cn`，密钥用 crm_test 的 `zc-presence` / `sx-teahour`。
 - 测试 CRM：`CRM_EXT_WEBHOOKS` 只配 `ql` / `sx` / `zc` 三个 test 域名，`CRM_OUTBOX_INTERVAL_MS=15000`。
 - 生产 CRM：移除 `retreat` webhook 与 `ql-mall-test` 密钥，仅保留 `presence` / `teahour`；轻疗批次 1 前不要加回。
-- 小程序：`presence` / `qingliao` 支持 `VITE_API_BASE` 编译期注入。测试构建 `build:mp-weixin:test`（在场/时叙）、`build:mp:test`（轻疗）；默认 mp 构建走生产，在场 H5 走同源，轻疗 H5 部署脚本默认注入测试地址（生产需显式覆盖）。测试域名仍需在三个 appid 后台加入 request 合法域名。
+- 小程序：三端（在场/时叙/轻疗）统一按微信 `envVersion` **运行时**选后端——`release` 走生产、`trial`/`develop` 走测试，H5 走同源相对路径；测试构建不再需要单独脚本（原 `build:mp-weixin:test` / `build:mp:test` 已删除）。`VITE_API_BASE` 只在开发构建与 H5 特殊部署时生效，小程序生产构建会忽略它，避免体验版被钉死在某一环境。测试域名仍需在三个 appid 后台加入 request 合法域名。
