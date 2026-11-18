@@ -92,12 +92,14 @@ STEP_NO=0
 step() { STEP_NO=$((STEP_NO + 1)); echo "== $STEP_NO/$STEP_TOTAL $1 =="; }
 
 # 远端公共片段：只挑 java 进程，避免匹配到 shell 自身
+# 注意：本片段经 "$RC" 注入未加引号的 heredoc，参数展开的结果不会被再次转义；
+# 故这里的 $ 必须写成裸 $（由远端 shell 展开），写成 \$ 会变成字面量、has_unit 永远为假。
 RC='APP_DIR="$1"; JAR_REMOTE="$2"; START_SH="$3"
-UNIT="\${MALL_UNIT:-mall-test}"
+UNIT="${MALL_UNIT:-mall-test}"
 pids() { ps -C java -o pid=,args= | awk "/mall-admin-1\\.0-SNAPSHOT\\.jar/ {print \$1}"; }
 # 测试机由 systemd 托管：有 unit 就别再手工起第二个 JVM
-has_unit() { [ -n "\$UNIT" ] && systemctl cat "\$UNIT" >/dev/null 2>&1; }
-unit_main_pid() { systemctl show -p MainPID --value "\$UNIT" 2>/dev/null | tr -d "[:space:]"; }'
+has_unit() { [ -n "$UNIT" ] && systemctl cat "$UNIT" >/dev/null 2>&1; }
+unit_main_pid() { systemctl show -p MainPID --value "$UNIT" 2>/dev/null | tr -d "[:space:]"; }'
 
 # 解析「应用实际连哪个库」：start-backend.sh 的 profile → config/application-<profile>.yml
 # （Spring 优先级最高）→ config/application.yml → $APP_DIR/application*.yml → jar 内 application*.yml
