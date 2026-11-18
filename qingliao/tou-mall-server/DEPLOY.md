@@ -5,9 +5,15 @@
 > 全部改成环境变量注入（`${VAR:}` 或 `Env.get(...)`）。**部署前必须先注入环境变量，否则支付、短信、
 > OSS 上传、微信登录会因空密钥失效**——不会报配置错误，只会在调用第三方时才失败。
 >
-> 变量清单以 `tou-mall-server/.env.example` 为准；真实值在：
+> 变量清单以 `tou-mall-server/scripts/env-keys.txt` 为准（只列代码真的会读、缺了会静默降级的键）；
+> 真实值在：
 > - 本机：`~/.fullyu-secrets/qingliao-tou-mall-server.env`（600）
-> - 服务器：`/etc/fullyu/qingliao-mall.env`（600，`chown root`）
+> - 服务器：`/etc/fullyu/qingliao.env`（600，`chown root`）——文件名以 `start-120.sh` 里 `.` 的那份为准
+ 
+> **2026-11-19 事故复盘**：换上的 jar 把 `PayCert` 从硬编码改成 `Env.get()`，但生产 `/etc/fullyu/qingliao.env`
+> 只有 OSS/JWT/微信 7 个键，`PAY_*` 一个没有。`Env.get()` 缺省返回空串，初始化不报错，
+> 直到用户点支付才在签名阶段抛 `Sign error. Please check your privateKey.`，又被 `PayService`
+> 包装成"支付失败: 支付平台异常"。**这类缺口不会在启动日志里露头，只能靠发布前的键校验拦住。**
 
 ## 组成
 
@@ -33,11 +39,12 @@ BASE_API=https://manage.fullytherapy.com/api npm run build   # 产物：dist/
 ```bash
 # 1. 上传 jar 与前端 dist 到服务器
 # 2. 服务器上准备环境变量文件（首次或变更时）
-sudo install -m 600 -o root -g root /dev/null /etc/fullyu/qingliao-mall.env
-sudo vi /etc/fullyu/qingliao-mall.env        # 按 .env.example 填
+sudo install -m 600 -o root -g root /dev/null /etc/fullyu/qingliao.env
+sudo vi /etc/fullyu/qingliao.env            # 按 scripts/env-keys.txt 的键逐个填
+sudo bash scripts/check-env-keys.sh scripts/env-keys.txt /etc/fullyu/qingliao.env   # 必须 ok
 
 # 3. 启动（环境变量必须显式加载，缺少会静默降级）
-set -a; . /etc/fullyu/qingliao-mall.env; set +a
+set -a; . /etc/fullyu/qingliao.env; set +a
 java -jar mall-admin-1.0-SNAPSHOT.jar  --spring.profiles.active=prod
 java -jar mall-portal-1.0-SNAPSHOT.jar --spring.profiles.active=prod
 ```
@@ -47,13 +54,23 @@ PM2 / systemd 托管时，把 `EnvironmentFile=/etc/fullyu/qingliao-mall.env` �
 
 ## 自检（部署后必做）
 
+`scripts/deploy-prod.sh` 已内置两处硬门禁：发布前校验服务器 env 文件、启动后校验进程 environ。
+手工部署时照做：
+
 ```bash
-# 进程里是否真的拿到变量（不打印值，只看是否存在）
-tr '\0' '\n' < /proc/$(pgrep -f mall-admin | head -1)/environ | cut -d= -f1 | grep -E 'DB_PASSWORD|PAY_SECRET|WX_|ALIYUN_' | sort
+# 进程里是否真的拿到变量（不打印值，只看缺哪个键）
+bash scripts/check-env-keys.sh scripts/env-keys.txt --pid $(pgrep -f mall-admin-1.0-SNAPSHOT.jar | head -1)
+
+# 排查细项（可选，只看键名）
+tr '\0' '\n' < /proc/$(pgrep -f mall-admin-1.0-SNAPSHOT.jar | head -1)/environ | cut -d= -f1 | grep -E 'PAY_|WX_|ALIYUN_' | sort
 ```
 
 依次验四条链路：后台登录 → 上传一张图（OSS）→ 触发一条短信 → 发起一笔小额支付（汇付）。
 任一失败先查环境变量，而不是查代码。
+
+> `.env.example` 里的 `RABBITMQ_PASSWORD`、`MINIO_*`、`PRINT_*`、`BAIDU_VOICE_*` 目前没有代码读取
+> （MQ 密码写在 `application-prod.yml`，打印 appid/secret 在 `PrintUtilNew`，MinIO/百度语音未接入），
+> 不要拿它们当"缺配置"的依据。
 
 ## 安全约定
 

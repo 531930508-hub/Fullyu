@@ -57,6 +57,25 @@ else
   die "远端 $PROD 不像生产（缺 $START_SCRIPT 或存在测试机目录 /opt/fullyu-mall-test）——检查 PROD，8.133.6.18 是测试机"
 fi
 
+# ---------- 0.5 生产 env 键校验（发布前） ----------
+# 2026-11-19 事故：jar 从"密钥写死"改成 Env.get()，生产 env 只注入了 OSS/WX，
+# PAY_* 全空，收款签名报 Sign error、被包装成"支付平台异常"，2 小时后才由用户撞出来。
+# 所以"env 键齐不齐"必须成为发版的硬门禁，而不是 deploy 完成后再想起来查。
+ENV_FILE=${ENV_FILE:-/etc/fullyu/qingliao.env}
+say "0.5/6 校验生产 env 键（$ENV_FILE）"
+if DRY_RUN; then
+  echo "    [dry-run] scp scripts/check-env-keys.sh scripts/env-keys.txt → $PROD:/root/bin/ 后校验 $ENV_FILE"
+else
+  "${SSH_PROD[@]}" "mkdir -p /root/bin" || die "建 /root/bin 失败"
+  scp -o ConnectTimeout=15 -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -q \
+    "$REPO/scripts/check-env-keys.sh" "$REPO/scripts/env-keys.txt" "$PROD:/root/bin/" || die "上传 env 校验脚本失败"
+  if ! ENVCHK=$("${SSH_PROD[@]}" "bash /root/bin/check-env-keys.sh /root/bin/env-keys.txt $ENV_FILE" 2>&1); then
+    echo "$ENVCHK" | sed 's/^/    /'
+    die "生产 env 键不全——先补 $ENV_FILE（值见 ~/.fullyu-secrets/qingliao-tou-mall-server.env），否则支付/短信会在调用第三方时才失败"
+  fi
+  echo "$ENVCHK" | sed 's/^/    /'
+fi
+
 # ---------- 1 前置检查 ----------
 if [ "$SKIP_PF" = 0 ] && ! DRY_RUN; then
   say "1/6 前置检查"
@@ -211,6 +230,14 @@ check_fingerprints() {   # 手册 §10.6：这三类错误必须为 0
 
 if wait_health 180; then
   echo "HEALTH_OK"
+  # 启动后再查一次，这次查的是进程 environ：env 文件里有、Java 里没有（start 脚本漏 source/set -a）
+  # 属于同一类事故，必须在冒烟阶段就暴露，别等用户点支付。
+  if ! bash /root/bin/check-env-keys.sh /root/bin/env-keys.txt --pid "$NEWPID" > /tmp/envchk.$$ 2>&1; then
+    sed 's/^/    /' /tmp/envchk.$$; rm -f /tmp/envchk.$$
+    echo "ENV_MISSING_IN_PROCESS 进程里缺必需键（jar 正常，不要回滚；补齐 env 后按 start 脚本重启）"
+    exit 40
+  fi
+  sed 's/^/    /' /tmp/envchk.$$; rm -f /tmp/envchk.$$
   check_fingerprints || { echo "FINGERPRINTS_BAD 起了但日志有已知致命错误，按失败处理"; exit 30; }
 else
   echo "HEALTH_FAIL 180s 内没起来，开始回滚"
@@ -230,6 +257,7 @@ if [ $RC -ne 0 ]; then
   10|11|12|13) die "在“换”之前就停了，线上仍是原 jar（无需回滚）" ;;
   20) die "新 jar 起不来，已尝试自动回滚（看上面 ROLLBACK_OK/FAIL）" ;;
   30) die "新 jar 起了但日志出现已知致命错误（见 FINGERPRINT），需人工判断是否回滚 backup/ 下最新目录" ;;
+  40) die "新 jar 起来了、但进程环境缺必需键——jar 不回滚，补 /etc/fullyu/qingliao.env 后重启" ;;
   *) die "远端退出码 $RC" ;;
   esac
 fi

@@ -1,0 +1,46 @@
+# 轻疗生产必需环境变量清单（check-env-keys.sh 读取）
+# 只列代码里真的会读、且缺了会静默降级的键；键名与 Env.get()/yml 占位一致。
+# 2026-11-19 pay 事故后建立：旧 jar 把密钥写死在常量里，换成 Env.get() 后生产没补键，
+# 结果收款签不出名、只报"支付平台异常"。
+
+# 对象存储（上传图片；缺了启动即 InvalidCredentialsException）
+ALIYUN_OSS_ACCESS_KEY_ID
+ALIYUN_OSS_ACCESS_KEY_SECRET
+
+# 阿里云短信（后台订单页"发短信"）
+ALIYUN_SMS_ACCESS_KEY_ID
+ALIYUN_SMS_ACCESS_KEY_SECRET
+
+# 后台登录 JWT
+JWT_SECRET
+
+# 微信（小程序登录 / 公众号）
+WX_MINIAPP_SECRET
+WX_MP_SECRET
+WX_MP_TOKEN
+WX_MP_AES_KEY
+
+# 汇付商户：总店 / 来福士 / 世纪汇 / 兜底
+PAY_SYS_ID
+PAY_SECRET
+PAY_SYS_ID_1
+PAY_SECRET_1
+PAY_SYS_ID_2
+PAY_SECRET_2
+PAY_SYS_ID_3
+PAY_SECRET_3
+# 退款/回调验签
+PAY_SIGN_SECRET
+
+# ---- 条件组：只有当 WHEN 条件成立时才校验 ----
+# 品牌会员（CRM）半开会导致 BrandMemberProperties 构造器抛异常、整个应用起不来，
+# 所以一旦 BRAND_CRM_ENABLED=1，其余三项必须同时配齐。关闭状态下不校验。
+WHEN=BRAND_CRM_ENABLED=1
+BRAND_CRM_BASE_URL
+BRAND_CRM_KEY_ID
+BRAND_CRM_SECRET
+WHEN=
+
+# 说明：.env.example 里的 RABBITMQ_PASSWORD、MINIO_*、PRINT_*、BAIDU_VOICE_* 目前
+# 没有任何代码读取（MQ 密码在 application-prod.yml，打印 appid/secret 在 PrintUtilNew，
+# MinIO/百度语音未接入），不在必需清单内，排查时不要误判为"缺配置"。
