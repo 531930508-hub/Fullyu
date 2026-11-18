@@ -179,6 +179,13 @@ export default {
 			params: {orderId}
 		})
 	},
+	// 0 元单结清：券/折扣把单抵成 0 元时没有微信收银台可拉起，必须让服务端确认结清
+	settleZero(orderId){
+		return http.post({
+			url: '/order/settleZero',
+			params: {orderId}
+		})
+	},
 	newCustomerZheKou(shopId){
 		return http.get({
 			url: '/order/newCustomerZheKou',

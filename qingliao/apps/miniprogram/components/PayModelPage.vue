@@ -78,7 +78,14 @@
 						<text v-if="renewEnabled && renewOption" class="text-[#d2956e]">{{ t(' + 会员卡 ') }}{{renewCardAmount}}{{ t('元') }}</text>
 					</view>
 					<view v-else class="text-[20rpx] pt-1 text-[#8A6A40]">
-						{{ t('新客享受') }}<text class="text-[red]">{{newCustomerZheKou}}{{ t('折') }}</text>{{ t('优惠，优惠价格') }}<text class="text-[red]">{{productPrice}}{{ t('元') }} </text>
+						<template v-if="newCustomerZheKou">
+							{{ t('新客享受') }}<text class="text-[red]">{{newCustomerZheKou}}{{ t('折') }}</text>{{ t('优惠，优惠价格') }}<text class="text-[red]">{{productPrice}}{{ t('元') }} </text>
+						</template>
+						<template v-else>
+							<text v-if="productRealPrice!=productPrice"
+								style="text-decoration-line: line-through;">{{productRealPrice}}{{ t('元') }}</text>{{ t('&nbsp;&nbsp;支付') }}<text
+								class="text-[red]">{{productPrice}}{{ t('元') }}</text>
+						</template>
 						<text v-if="renewEnabled && renewOption" class="text-[#d2956e]">{{ t(' + 会员卡 ') }}{{renewCardAmount}}{{ t('元') }}</text>
 					</view>
 				</view>
@@ -816,9 +823,6 @@
 				// 先扣积分：有抵扣时会拉低应付，全额抵扣则订单在这步直接结清
 				if (!orderSettled) {
 					await orderApi.jifenPayOrder(order.id)
-					if (realPayMoney.value == 0) {
-						orderSettledCash.value = true
-					}
 				}
 				if (hasRenewToPay.value) {
 					// 勾选了顺手续会员：订单微信部分（可能为 0，已被积分结清）+ 会员卡费合并成一笔收款
@@ -827,8 +831,15 @@
 					return
 				}
 				if (realPayMoney.value == 0) {
-					//积分已全额抵扣订单
+					// 0 元不等于已支付：金额可能是券/折扣抵掉的，微信收银台根本拉不起来。
+					// 必须让服务端按优惠来源结清（积分全额抵扣已在 jifenPayOrder 里结清），
+					// 结不清就不能报「支付成功」，否则小程序显示成功、后台订单仍是未支付。
 					await orderApi.OrderSplit(order.id);
+					const settled = await orderApi.settleZero(order.id);
+					if (!settled) {
+						throw new Error('order not settled')
+					}
+					orderSettledCash.value = true
 					uni.hideLoading()
 					emit('confirm', order.id);
 					emit('update:visible', false);
@@ -1044,7 +1055,7 @@
 	const alljifen = ref(0)
 	const useIntegrationStateReal=ref(true)
 	const useIntegrationState=ref(true)
-	const newCustomerZheKou=ref(0)
+	const newCustomerZheKou=ref(null)
 	const fetchData = async (orderId) => {
 		payOrderId.value = orderId
 		// 重新拉结算数据时以服务端订单状态为准
@@ -1101,7 +1112,7 @@
 				cardDisplayStatus.value = !!(couponOpt && couponOpt.available === false)
 				// 积分刷新与新客折扣互不依赖，并发请求，支付弹层少等一个 RTT
 				const [zheKou] = await Promise.all([
-					order.shopId ? orderApi.newCustomerZheKou(order.shopId).catch(() => 0) : Promise.resolve(0),
+					order.shopId ? orderApi.newCustomerZheKou(order.shopId).catch(() => null) : Promise.resolve(null),
 					cookie.updIntegration()
 				])
 				alljifen.value = cookie.getIntegration() || 0
@@ -1111,7 +1122,8 @@
 						Math.min(alljifen.value, Math.ceil(Number(data.baseAmount || order.totalAmount || 0)))
 				}
 				isCustomerNew.value = order.discountType == 1
-				newCustomerZheKou.value = zheKou
+				// 后端未配置时返回 null：不要渲染成「新客享受 0 折」
+				newCustomerZheKou.value = zheKou || null
 				return
 			}
 
@@ -1176,9 +1188,10 @@
 			}
 			//获取新客折扣
 			try {
-				newCustomerZheKou.value = order.shopId ? await orderApi.newCustomerZheKou(order.shopId) : 0
+				const zheKou = order.shopId ? await orderApi.newCustomerZheKou(order.shopId) : null
+				newCustomerZheKou.value = zheKou || null
 			} catch (e) {
-				newCustomerZheKou.value = 0
+				newCustomerZheKou.value = null
 			}
 		} finally {
 			uni.hideLoading()

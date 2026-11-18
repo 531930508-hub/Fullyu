@@ -352,17 +352,28 @@ public class OrderService extends BaseService<OrderMapper, Order> {
      * @return
      */
     private BigDecimal calculateDiscountPayAmount(Integer type, Integer discount, BigDecimal totalAmount, Integer personCount) {
+        if (totalAmount == null) {
+            return BigDecimal.ZERO;
+        }
+        // 折扣按百分比存（67 = 6.7 折）。缺失或非正数一律按原价，
+        // 避免「门店没配折扣 = 0 折 = 整单 0 元」直接白送。
+        if (discount == null || discount <= 0) {
+            return totalAmount;
+        }
         BigDecimal orderDiscount = BigDecimal.valueOf(discount).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-        if (type == 1) {
-            return orderDiscount.multiply(totalAmount);
-        } else {
-            BigDecimal bigDecimal=orderDiscount.multiply(BigDecimal.valueOf(personCount));
-            if(bigDecimal.compareTo(totalAmount)<0){
-                return bigDecimal;
-            }else {
+        if (Integer.valueOf(1).equals(type)) {
+            // 100 折及以上不是优惠，按原价处理，防止配错反而涨价
+            if (discount >= 100) {
                 return totalAmount;
             }
+            return orderDiscount.multiply(totalAmount);
         }
+        int persons = (personCount == null || personCount <= 0) ? 1 : personCount;
+        BigDecimal bigDecimal = orderDiscount.multiply(BigDecimal.valueOf(persons));
+        if (bigDecimal.compareTo(totalAmount) < 0) {
+            return bigDecimal;
+        }
+        return totalAmount;
     }
 
     /**
@@ -652,7 +663,20 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         String lockKey = getOrderLockKey(orderId);
         synchronized (orderLock(orderId)) {
             Order order = getById(orderId);
+            if (order == null) {
+                throw new BusinessException("订单不存在");
+            }
             if (payAmount != null) {
+                // 人工确认收款允许改价（招待、抹零），但必须落在 [0, 原价] 区间，并留痕
+                if (payAmount.compareTo(BigDecimal.ZERO) < 0) {
+                    throw new BusinessException("实付金额不能为负数");
+                }
+                if (order.getTotalAmount() != null && payAmount.compareTo(order.getTotalAmount()) > 0) {
+                    throw new BusinessException("实付金额不能超过订单原价");
+                }
+                if (order.getPayAmount() != null && payAmount.compareTo(order.getPayAmount()) != 0) {
+                    log.warn("确认收款改价: orderId={}, 系统应付={}, 实收={}", orderId, order.getPayAmount(), payAmount);
+                }
                 order.setPayAmount(payAmount);
             }
             if (couponCode != null) {
@@ -2948,6 +2972,59 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         }
     }
 
+    /**
+     * 0 元单结清。
+     *
+     * <p>被 Full愈券 / 积分 / 折扣抵到 0 元的订单拉不起微信收银台。小程序以前付这类单只调
+     * OrderSplit，而拆分逻辑只处理多明细订单，单明细订单服务端什么都没做：前端提示「支付成功」，
+     * 后台订单却一直停在未支付，直到超时被自动取消。这里按优惠来源补上服务端结清，并做成幂等。</p>
+     *
+     * @return true 订单已结清；false 订单还有现金要走微信支付，不能在这里结清
+     */
+    public boolean settleZeroOrder(Long customerId, Long orderId) {
+        if (orderId == null) {
+            throw new ApiException("订单不存在");
+        }
+        synchronized (orderLock(orderId)) {
+            Order order = getById(orderId);
+            if (order == null) {
+                throw new ApiException("订单不存在");
+            }
+            if (!Objects.equals(order.getCustomerId(), customerId)) {
+                throw new ApiException("订单不属于当前用户");
+            }
+            if (OrderState.PAID_NOT_COMMENT.getValue().equals(order.getState())
+                    || OrderState.PAID_COMMENTED.getValue().equals(order.getState())) {
+                // 幂等：积分全额抵扣时 jifenPayOrder 已经结清，重复调用不能再扣一次
+                return true;
+            }
+            if (!OrderState.NOT_PAY.getValue().equals(order.getState())) {
+                throw new ApiException("订单状态已不可支付");
+            }
+            BigDecimal payAmount = order.getPayAmount() == null ? BigDecimal.ZERO : order.getPayAmount();
+            if (payAmount.compareTo(BigDecimal.ZERO) > 0) {
+                // 还有现金要收，必须走微信支付，不在结清接口里放行
+                return false;
+            }
+            if (Integer.valueOf(MemberCardPriceEngine.SOURCE_COUPON).equals(order.getPriceSource())) {
+                // 券在支付时才核销：结清用的是券支付那一套（按券数扣券 + 置为已支付 + 通知）
+                payCheckout(customerId, orderId, OrderPayType.COUPON.getValue());
+                return true;
+            }
+            // 折扣 / 会员价 / 免费项目把单抵成 0 元：金额本来就该是 0，直接结清。
+            // 但先校验优惠真的覆盖了原价，金额算错时宁可报错也不能白送一单。
+            BigDecimal totalAmount = order.getTotalAmount() == null ? BigDecimal.ZERO : order.getTotalAmount();
+            BigDecimal benefitAmount = order.getBenefitAmount() == null ? BigDecimal.ZERO : order.getBenefitAmount();
+            if (totalAmount.subtract(benefitAmount).compareTo(BigDecimal.ZERO) > 0) {
+                throw new ApiException("订单金额异常，请重新下单");
+            }
+            log.info("settle zero order: orderId={}, priceSource={}, totalAmount={}, benefitAmount={}",
+                    orderId, order.getPriceSource(), totalAmount, benefitAmount);
+            finishPay(order);
+            return true;
+        }
+    }
+
     public List<OperatingRevenueDto> operatingRevenue(OperatingRevenueDto operatingRevenueDto) {
         applyRevenueShopScope(operatingRevenueDto);
         return baseMapper.operatingRevenue(operatingRevenueDto);
@@ -4875,6 +4952,14 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 }
             }
         }
+        // 兼容还没升级的小程序：0 元单结清时旧版客户端只调本接口，单明细订单原来在这里什么都不做，
+        // 订单就一直停在未支付。顺手按优惠来源结清，新客户端再调 settleZeroOrder 也是幂等的。
+        if (orderDetails.size() <= 1
+                && OrderState.NOT_PAY.getValue().equals(order.getState())
+                && order.getPayAmount() != null
+                && order.getPayAmount().compareTo(BigDecimal.ZERO) == 0) {
+            settleZeroOrder(customerId, orderId);
+        }
     }
 
     public List<Order> infoWithDetailNew(Long id) {
@@ -5277,16 +5362,20 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     }
 
     public Integer newCustomerZheKou(Long shopId) {
-        Integer zheKou=0;
-        List<OrderDiscount> list= orderDiscountService.list();
-        //获取新客折扣数据
-        for (OrderDiscount orderDiscount : list) {
-            if (orderDiscount.getShopId().equals(shopId)&&orderDiscount.getType().equals(1)) {
-                zheKou = orderDiscount.getDiscount();
-                break;
-            }
+        LambdaQueryWrapper<OrderDiscount> lqw = new LambdaQueryWrapper<>();
+        lqw.eq(OrderDiscount::getState, NormalState.EFFECTIVE.getValue());
+        lqw.eq(OrderDiscount::getType, 1);
+        // 只认有效折扣：0 / 负数属于脏配置或未配置，不能拿去展示
+        lqw.gt(OrderDiscount::getDiscount, 0);
+        LocalDateTime now = LocalDateTime.now();
+        lqw.le(OrderDiscount::getStartTime, now);
+        lqw.gt(OrderDiscount::getEndTime, now);
+        if (shopId != null) {
+            lqw.eq(OrderDiscount::getShopId, shopId);
         }
-
-        return  zheKou;
+        lqw.last("limit 1");
+        OrderDiscount orderDiscount = orderDiscountService.getOne(lqw, false);
+        // 未配置返回 null：前端据此隐藏「新客 X 折」，返回 0 会被渲染成「新客享受 0 折」
+        return orderDiscount == null ? null : orderDiscount.getDiscount();
     }
 }

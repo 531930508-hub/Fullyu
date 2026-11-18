@@ -154,6 +154,15 @@ public class PayGroupService {
         BigDecimal orderAmount = order.getPayAmount() == null ? BigDecimal.ZERO : order.getPayAmount();
         boolean orderUnpaid = OrderState.NOT_PAY.getValue().equals(order.getState());
         boolean cardOnly = false;
+        if (orderUnpaid && orderAmount.compareTo(BigDecimal.ZERO) == 0) {
+            // 0 元单没有现金要收，但也不能默认「已结清」：先按优惠来源结清（券在这一步核销），
+            // 否则合并单只收卡费开卡，预约单会一直停在未支付
+            if (!orderService.settleZeroOrder(customerId, orderId)) {
+                throw new BusinessException("订单金额已变化，请刷新后重试");
+            }
+            order = orderService.getById(orderId);
+            orderUnpaid = OrderState.NOT_PAY.getValue().equals(order.getState());
+        }
         if (!orderUnpaid) {
             // 订单已被券 / 积分在别处结清：会员卡是现金商品，券和积分都不能抵卡费，
             // 所以这里允许再建一张「只收卡费」的合并单（订单部分金额记 0，不再结算订单）。

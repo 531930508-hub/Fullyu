@@ -332,6 +332,13 @@ public class OrderController implements ContextMixin {
         return CommonResult.success();
     }
 
+    @PostMapping("/settleZero")
+    @ApiOperation("0 元单结清：券/积分/折扣抵到 0 元时由服务端确认结清")
+    public CommonResult settleZeroOrder(@RequestParam Long orderId) {
+        Long customerId = curCustomerId();
+        return CommonResult.success(service.settleZeroOrder(customerId, orderId));
+    }
+
     @GetMapping("/check/paid")
     public CommonResult checkOrderPaid(@RequestParam String orderSn) {
         Long customerId = curCustomerId();
