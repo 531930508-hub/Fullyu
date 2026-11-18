@@ -292,7 +292,7 @@ class AddServicePriceInheritTest {
         return order;
     }
 
-    private Order originOrder(int priceSource) {
+    private Order originOrder(Integer priceSource) {
         Order origin = order(priceSource, OrderState.PAID_NOT_COMMENT.getValue());
         origin.setId(ORIGIN_ORDER_ID);
         return origin;
