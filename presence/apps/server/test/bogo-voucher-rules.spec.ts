@@ -86,7 +86,10 @@ describe('买一赠一券：报名校验', () => {
   it('邀请人未报名时，券列表里不展示这张券；报名后恢复展示', async () => {
     const prisma: any = {
       voucher: {
-        findMany: async () => [bogo(), { ...bogo(), id: 'v-plain', hostUserId: null }],
+        findMany: async () => [
+          bogo(),
+          { ...bogo(), id: 'v-plain', mode: 'REDUCE_BY', amount: 50, hostUserId: null },
+        ],
       },
       order: { findMany: async () => [] },
     }

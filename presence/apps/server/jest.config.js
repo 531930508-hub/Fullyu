@@ -27,6 +27,11 @@ module.exports = {
     '^ali-oss$': '<rootDir>/test/mocks/ali-oss.ts',
     '^@prisma/client$': prismaClientEntry,
     '^@prisma/client/(.*)$': path.join(prismaClientDir, '$1'),
+    // ioredis 依赖的 uuid@11 带 exports.browser 条件，Jest 会解析到 ESM 版的
+    // dist/esm-browser/index.js 而报 "Unexpected token 'export'"，钉到 CJS 入口。
+    '^uuid$': require.resolve('uuid', {
+      paths: [path.dirname(require.resolve('ioredis'))],
+    }),
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   testTimeout: 60000,

@@ -428,7 +428,7 @@ export class BrandMemberClient {
     }
   }
 
-  /** 好友领取邀请：CRM 只记关系与归因，体验课券由在场本地发放。 */
+  /** 好友领取邀请：CRM 只记关系与归因，券由在场本地发放（有邀请人 → 买一赠一，旧 CRM → 体验课）。 */
   async claimInvite(localUserId: string, code: string): Promise<BrandInviteClaim> {
     try {
       const body = await this.request<BrandInviteClaim>(
@@ -437,7 +437,14 @@ export class BrandMemberClient {
         { localUserId, code },
       )
       if (!body || body.claimed !== true) throw unavailable()
-      return { claimed: true, replayed: Boolean(body.replayed), voucher: body.voucher }
+      return {
+        claimed: true,
+        replayed: Boolean(body.replayed),
+        voucher: body.voucher,
+        // 必须透传：控制器靠 inviter.localUserId 决定发买一赠一券还是退化到体验课券，
+        // 漏掉这一步会让 BOGO 静默降级成老流程（2026-11 买一赠一上线时踩过）。
+        inviter: body.inviter,
+      }
     } catch (error) {
       throw this.mapError(error)
     }
