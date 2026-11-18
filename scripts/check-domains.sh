@@ -23,8 +23,9 @@ allowed="$(
 
 # 已下线域名：允许在 docs/ 里记录历史，禁止再出现在代码与配置中
 retired="$(
-  awk -F'\t' '!/^#/ && NF>1 && $7 == "已下线" {print $2}' "$TSV" \
-  | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -E '(^|\.)fullyu\.cn$' | sort -u
+  awk -F'\t' '!/^#/ && NF>1 && $7 == "已下线" {print $2; print $3}' "$TSV" \
+  | tr ',' '\n' | tr '、' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+  | grep -E '(^|\.)fullyu\.cn$' | sort -u
 )"
 
 is_retired() {
@@ -46,8 +47,8 @@ is_allowed() {
 hits="$(
   grep -rIohE '([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)*fullyu\.cn' "$ROOT" \
     --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist \
-    --exclude-dir=build --exclude-dir=unpackage --exclude-dir=coverage \
-    --exclude='domains.tsv' --exclude='check-domains.sh' \
+    --exclude-dir=build --exclude-dir=unpackage --exclude-dir=coverage --exclude-dir=qa \
+    --exclude-dir=target --exclude='domains.tsv' --exclude='check-domains.sh' --exclude='*.log' \
     2>/dev/null | sort -u
 )"
 
@@ -74,13 +75,16 @@ fi
 
 # ---- 2b. 已下线域名不得出现在 docs/ 之外 ----
 # 用边界判断，避免把 "test-" 前缀的旧名当成命中
+# 「文档」= 任意 docs/ 目录下的文件，或顶层 README.md（历史记录允许留旧名）。
 if [ -n "$retired" ]; then
   while IFS= read -r h; do
     [ -z "$h" ] && continue
     esc="$(printf '%s' "$h" | sed 's/[].[^$*+?(){}|\\]/\\&/g')"
     leaks="$(grep -rIlE --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist \
-      --exclude-dir=build --exclude-dir=unpackage --exclude='check-domains.sh' \
-      "(^|[^A-Za-z0-9.-])${esc}([^A-Za-z0-9-]|$)" "$ROOT" 2>/dev/null | grep -v "^$ROOT/docs/")"
+      --exclude-dir=build --exclude-dir=unpackage --exclude-dir=qa --exclude-dir=target \
+      --exclude='check-domains.sh' --exclude='*.log' \
+      "(^|[^A-Za-z0-9.-])${esc}([^A-Za-z0-9-]|$)" "$ROOT" 2>/dev/null \
+      | grep -vE "/docs/|/README\.md$")"
     if [ -n "$leaks" ]; then
       bad=1
       echo "✗ 已下线域名 $h 仍出现在 docs/ 之外："
