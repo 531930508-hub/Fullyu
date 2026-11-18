@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen" style="min-height: 1600rpx;padding-bottom: calc(240rpx + 40rpx + env(safe-area-inset-bottom));">
+	<view class="min-h-screen booking-page" :class="localeClass()" style="min-height: 1600rpx;padding-bottom: calc(240rpx + 40rpx + env(safe-area-inset-bottom));">
 		<!-- 轮播图区域 -->
 		<view  class="relative">
 			<view v-if="bannerList.length==0" class="w-full h-[340rpx]" style="position: relative;z-index: 1000;">
@@ -25,31 +25,19 @@
 			</view> -->
 		</view>
 		<view  class="relative w-full h-[80rpx] bg-[#CEC2B3] rounded-t-xl " style="margin-top: -50rpx;z-index: 1000; ">
-			<view v-if="bannerList.length==0" class="bg-[#CEC2B3] h-[100rpx] flex justify-center items-center rounded-t-xl">
+			<view v-if="bannerList.length==0" class="booking-service-tabs bg-[#CEC2B3] h-[100rpx] flex justify-center items-center rounded-t-xl">
 				<view class="w-1/3 h-[100rpx] rounded-t-xl  " :class="{selectstyle:selectedProject==2}"
 					@click="selectProject(2)">
-					<view class="w-full h-[60rpx] text-center text-[28rpx] text-[#584219] flex flex-col justify-end">
-						{{ t('全感舒筋') }}</view>
-					<view class="w-full h-[40rpx] text-center text-[20rpx] text-[#584219] ">Full Senses Massage
-					</view>
+					<view class="booking-service-name">{{ t('全感舒筋') }}</view>
 				</view>
 				<view class="w-1/3 h-[100rpx]  rounded-t-xl"
 					:class="{selectstyle:selectedProject==1,twoProjectStyleRight:selectedProject==2,twoProjectStyleLeft:selectedProject==3}"
 					@click="selectProject(1)">
-					<view class="w-full h-[60rpx] text-center text-[28rpx] text-[#584219] flex flex-col justify-end">
-						{{ t('头部水疗') }}
-					</view>
-					<view class="w-full h-[40rpx] text-center text-[20rpx] text-[#584219] ">Full Head Spa
-					</view>
+					<view class="booking-service-name">{{ t('头部水疗') }}</view>
 				</view>
 				<view class="w-1/3 h-[100rpx] rounded-t-xl " :class="{selectstyle:selectedProject==3}"
 					@click="selectProject(3)">
-					<view class="w-full h-[60rpx] text-center text-[28rpx] text-[#584219] flex flex-col justify-end">
-						{{ t('全感悦耳') }}
-					</view>
-					<view class="w-full h-[40rpx] text-center text-[20rpx] text-[#584219] ">Full Ear Spa
-
-					</view>
+					<view class="booking-service-name">{{ t('全感悦耳') }}</view>
 				</view>
 			</view>
 			<view class="px-5 mt-4 text-[#584219]">
@@ -57,9 +45,7 @@
 				<view v-if="bannerList.length!=0" style="height: 2px;">&nbsp;</view>
 				<view v-if="optionsMassagist==null||optionsMassagist==0" class="h-[60rpx] flex items-center justify-center mt-2">
 					<view class="w-2/3">
-						<text class="text-[28rpx] font-semibold">{{ t('预约人数 &nbsp;') }} </text>
-						<text class="text-[22rpx]">(Number of Guests)</text>
-					</view>
+						<text class="text-[28rpx] font-semibold">{{ t('预约人数 &nbsp;') }} </text>					</view>
 					<view class="w-1/3 flex justify-end">
 						<view class="w-1/3 flex flex justify-center">
 							<image src="/static/icons/minus-circle-contained.png" mode="widthFix"
@@ -75,9 +61,7 @@
 					</view>
 				</view>
 				<view v-if="bannerList.length==0" class="h-[60rpx] flex items-center ">
-					<text class="text-[28rpx] font-semibold">{{ t('放松时长 &nbsp;') }} </text>
-					<text class="text-[22rpx]">(Duration)</text>
-				</view>
+					<text class="text-[28rpx] font-semibold">{{ t('放松时长 &nbsp;') }} </text>				</view>
 				<view v-if="bannerList.length==0" class="treatment-types">
 					<view v-for="(item,index) in ArrDuration" :key="index" class="treatment-type "
 						:class="{active:selectedDuration === item}" @click="selectDuration(item)">
@@ -86,21 +70,17 @@
 				</view>
 				<view v-if="bannerList.length==0" class="text-[24rpx] mt-2">{{ t(ArrDurationminDesr) }}</view>
 				<view class="h-[60rpx] flex items-center mt-2">
-					<text class="text-[28rpx] font-semibold">{{ t('到店日期 &nbsp;') }} </text>
-					<text class="text-[22rpx]">(Date)</text>
-				</view>
+					<text class="text-[28rpx] font-semibold">{{ t('到店日期 &nbsp;') }} </text>				</view>
 				<view class="time-grid">
 					<template>
 						<view v-for="(item,index) in ArrShopDate" :key="index" class="time-option"
 							:class="{ active: selectedDate ===item.value }" @click="selectedDateEvent(item)">
-							<text>{{ item.label }}</text>
+							<text>{{ bookingDate(item.value, item.label) }}</text>
 						</view>
 					</template>
 				</view>
 				<view class="h-[60rpx] flex items-center mt-1">
-					<text class="text-[28rpx] font-semibold">{{ t('到店时间 &nbsp;') }} </text>
-					<text class="text-[22rpx]">(Time)</text>
-				</view>
+					<text class="text-[28rpx] font-semibold">{{ t('到店时间 &nbsp;') }} </text>				</view>
 				<view class="time-grid" :class="{ loading: isLoading }">
 					<view v-if="isLoading" class="loading-container">
 						<view class="loading-spinner"></view>
@@ -120,7 +100,7 @@
 				</view>
 			</view>
 		</view>
-		<view class="shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] px-5"
+		<view class="booking-footer shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] px-5"
 			style="min-height: 240rpx;box-sizing: border-box;padding-bottom: calc(16rpx + env(safe-area-inset-bottom));position: fixed; bottom: 0;left: 0;width: 100%;background-color: #FFFFFF;z-index: 1000;">
 			<view class="flex  items-center mt-3 ">
 				<view class="w-3/5">
@@ -140,7 +120,7 @@
 			</view>
 			<view class="flex items-center  h-[70rpx] text-[23rpx] text-[#584219] " style="margin-top: -10rpx;">
 				<view class=" w-4/5">{{ optionsMassagistName ? t('疗愈师：') + optionsMassagistName : '' }}
-					{{ t(selectedProjectName) }}{{ tt('，', ', ') }}{{selectedDuration}}mins{{ tt('，', ', ') }}{{ t(selectedDuanDate) }}
+					{{ t(selectedProjectName) }}{{ tt('，', ', ') }}{{selectedDuration}}mins{{ tt('，', ', ') }}{{ bookingDate(selectedDate, selectedDuanDate) }}
 					{{selectedTime}}
 				</view>
 				<view class="w-1/5 flex justify-end font-semibold">{{ t('人数：') }}{{selectPeopleCount}}</view>
@@ -208,7 +188,7 @@
 </template>
 
 <script setup>
-	import { t, useLocale } from '../../utils/locale'
+	import { t, useLocale, bookingDate } from '../../utils/locale'
 	import { img } from '../../utils/image'
 	import {
 		onLoad,
@@ -797,6 +777,17 @@
 </script>
 
 <style lang="less" scoped>
+	.booking-service-name {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 100rpx;
+		padding: 10rpx 14rpx;
+		font-size: 28rpx;
+		line-height: 1.4;
+		text-align: center;
+		color: #584219;
+	}
 	.selectstyle {
 		background-color: white;
 	}

@@ -1,12 +1,11 @@
 <template>
 	<!-- 预约弹框 -->
-	<view class="modal-overlay" v-if="visible" @click="handleCancel">
+	<view class="modal-overlay" :class="localeClass()" v-if="visible" @click="handleCancel">
 		<view class="appointment-modal" @click.stop>
 			<view class="modal-header">
         <text class="modal-title">{{ t(title) }}</text>
         <view v-if="(!order.id || order.state == 0) && multiple" class="form-label" @click.stop>
           <text>{{ t('多人同行') }}</text>
-          <text class="label-note">(Book Together)</text>
           <switch :checked="multipleGuests" @change="onMultipleGuestsChange" color="#584219" style="transform:scale(0.7)"/>
         </view>
         <view v-if="!multiple && therapist" class="therapist-info">
@@ -23,9 +22,7 @@
 				<view class="form-item mb-4" v-if="multipleGuests && (!order.id || order.state == 0)">
 					<view class="flex items-center justify-between">
 						<view class="form-label mb-0">
-							<text>{{ t('同行人数') }}</text>
-							<text class="label-note">(Number of Guests)</text>
-						</view>
+							<text>{{ t('同行人数') }}</text>						</view>
 						<view class="guest-count-selector flex items-center">
 							<button class="count-btn" @click="decreasePersonCount()" :disabled="personCount <= 1">-</button>
 							<text class="count-display mx-2">{{ personCount }}</text>
@@ -37,23 +34,18 @@
 				<!-- 项目类型 -->
 				<view class="form-item" v-if="!order.id || order.state == 0">
 					<view class="form-label">
-						<text>{{ t('项目类型') }}</text>
-						<text class="label-note">(Treatment Type)</text>
-					</view>
+						<text>{{ t('项目类型') }}</text>					</view>
 					<view class="treatment-types">
 						<view v-for="(item,index) in projectList" :key="index" class="treatment-type"
                   :class="{ active: productId === item.id }" @click="selectTreatment(item.id,item.type)">
-                <text class="treatment-name">{{ item.title }}</text>
-                <text class="treatment-name-en">{{ item.comment }}</text>
+                <text class="treatment-name">{{ t(item.title) }}</text>
 						</view>
 					</view>
 				</view>
 				<!-- 放松时长 -->
 				<view class="form-item" v-if="!order.id || order.state == 0">
 					<view class="form-label">
-						<text>{{ t('放松时长') }}</text>
-						<text class="label-note">(Duration)</text>
-					</view>
+						<text>{{ t('放松时长') }}</text>					</view>
           <view v-if="order.duration == 15" class="duration-options">
 						<view v-for="duration in durations" :key="duration" class="duration-option"
                   :class="{ active: selectedDuration === duration }" @click="selectDuration(duration)">
@@ -68,16 +60,14 @@
           </view>
 					<!-- 描述文字 -->
 					<view class="duration-description" v-if="durationDescription">
-						<text>{{ durationDescription }}</text>
+						<text>{{ t(durationDescription) }}</text>
 					</view>
 				</view>
 
 				<!-- 到店日期 -->
 				<view class="form-item">
 					<view class="form-label">
-						<text>{{ t('到店日期') }}</text>
-						<text class="label-note">(Date)</text>
-					</view>
+						<text>{{ t('到店日期') }}</text>					</view>
 					<view class="date-options">
 						<view
 							v-for="date in dates"
@@ -85,8 +75,7 @@
 							class="date-option"
 							:class="{ active: selectedDate === date.value, disabled: isDateDisabled(date.value) }"
 							@click="onDateClick(date.value)">
-              <text class="date-name">{{ date.label }}</text>
-              <text v-if="date.englishLabel" class="date-name-en">{{ date.englishLabel }}</text>
+              <text class="date-name">{{ bookingDate(date.value, date.label) }}</text>
 						</view>
 					</view>
 					<!-- 早鸟价单的原预约日期是下限：改早等于缩短提前期白拿提前价，后端会拦，这里先讲清楚 -->
@@ -96,9 +85,7 @@
 				<!-- 到店时间 -->
 				<view class="form-item">
 					<view class="form-label">
-						<text>{{ t('到店时间') }}</text>
-						<text class="label-note">(Time)</text>
-					</view>
+						<text>{{ t('到店时间') }}</text>					</view>
 					<view class="time-grid" :class="{ loading: isLoading }">
 						<view v-if="isLoading" class="loading-container">
 							<view class="loading-spinner"></view>
@@ -127,7 +114,7 @@
 
 
 <script setup>
-	import { t, useLocale } from '../utils/locale'
+	import { t, useLocale, bookingDate } from '../utils/locale'
 	import { img } from '../utils/image'
 import {computed, onMounted, ref, watch, getCurrentInstance} from 'vue';
 import {onShow} from "@dcloudio/uni-app"

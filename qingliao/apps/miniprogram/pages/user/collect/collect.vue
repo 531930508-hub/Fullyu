@@ -1,5 +1,5 @@
 <template>
-	<view style="background-color:#F6F4F2 ;">
+	<view :class="localeClass()" style="background-color:#F6F4F2 ;">
 		<TopTitle></TopTitle>
 		<view :style="{position: '-webkit-sticky',position:'sticky',top:customBar+'px','z-index':'99'}">
 			<view class="treatment-record">

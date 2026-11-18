@@ -1,10 +1,10 @@
 <template>
-	<view class="min-h-screen bg-[#F6F4F2] text-[#8A6A40] ">
+	<view class="min-h-screen bg-[#F6F4F2] text-[#8A6A40] " :class="localeClass()">
 		<TopTitleNotBack></TopTitleNotBack>
 		<view class="tab-nav" :style="{position: '-webkit-sticky',position:'sticky',top:customBar+'px','z-index':'99'}">
 			<view v-for="(tab, index) in tabs" :key="index" :class="['tab-item', { active: activeTab === index }]"
 				@click="switchTab(index)">
-				{{ tab.name }}
+				{{ t(tab.name) }}
 			</view>
 		</view>
 		<view :style="{marginTop:customBar+'px'}">
@@ -288,7 +288,7 @@
 
 <script setup>
 	import { t } from '../../../utils/locale'
-	import { img } from '../../../utils/image'
+	import { img } from '../../../utils/imageLocale'
 	import {
 		onLoad,
 		onShareAppMessage,
@@ -1071,21 +1071,23 @@
 			})
 		}
 	}
+	// name 存中文原文，渲染时用 t() 取词：切语言后已挂载的页面才能跟着变，
+	// 若在这里预先 t() 成字符串，页面缓存住的就是挂载时的语言（英文切回中文会卡在英文）。
 	const tabs = ref([{
-			name: t('全部'),
+			name: '全部',
 			status: ''
 		},
 		{
-			name: t('已完成'),
+			name: '已完成',
 			status: '2'
 		},
 		{
-			name: t('已取消'),
+			name: '已取消',
 			status: '3'
 		},
 		{
 			// 购买记录：卡券订单与品牌会员卡订单合并展示，不按预约状态过滤
-			name: t('卡券与会员'),
+			name: '卡券与会员',
 			status: ''
 		}
 	]);

@@ -1,5 +1,5 @@
 <template>
-  <view class="banner-detail">
+  <view class="banner-detail" :class="localeClass()">
     <image :src="img(src, 750)" :webp="true" mode="widthFix"></image>
   </view>
 </template>
@@ -7,7 +7,7 @@
 <script setup>
 import {ref} from 'vue'
 import {onShow, onLoad} from '@dcloudio/uni-app'
-import { img } from '../../utils/image'
+import { img } from '../../utils/imageLocale'
 
 const src = ref('https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/icon/header-bg.png')
 

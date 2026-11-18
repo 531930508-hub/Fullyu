@@ -1,5 +1,5 @@
 <template>
-  <view class="invitation-container safe-bottom" >
+  <view class="invitation-container safe-bottom" :class="localeClass()">
     <!-- 顶部背景图片 -->
     <view class="header-bg" :style="{ height: headerHeight + 'px' }">
       <image class="bg-image" :src="img('https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/icon/icon0703/shareBg.jpg', 750)" :webp="true" mode="aspectFill"></image>

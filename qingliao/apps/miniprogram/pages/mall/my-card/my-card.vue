@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen  bg-[#F6F4F2] pb-[200rpx]">
+	<view class="min-h-screen  bg-[#F6F4F2] pb-[200rpx]" :class="localeClass()">
 		<TopTitleNotBack></TopTitleNotBack>
 		<view class="tab-nav" :style="{position: '-webkit-sticky',position:'sticky',top:customBar+'px','z-index':'99'}">
 			<view v-for="(tab, index) in tabs" :key="index" :class="['tab-item', { active1: activeTab === index }]"
@@ -287,7 +287,7 @@
 
 <script setup>
 	import { t } from '../../../utils/locale'
-	import { img } from '../../../utils/image'
+	import { img } from '../../../utils/imageLocale'
 	import {
 		onLoad,
 		onShareAppMessage,

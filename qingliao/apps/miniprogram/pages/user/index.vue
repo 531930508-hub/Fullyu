@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen  bg-[#EAE0D7] text-[#584219] pb-[140rpx]">
+	<view class="min-h-screen  bg-[#EAE0D7] text-[#584219] pb-[140rpx]" :class="localeClass()">
 		<view class="w-full h-[600rpx]">
 			<image
 				:src="img('https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/file/miniImage/20260111/2fbd6f02-dbf0-4bd9-adef-05913d2816f2(._.)userinfo.png', 750)"

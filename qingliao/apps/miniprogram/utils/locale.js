@@ -33,6 +33,57 @@ export function setLocale(next) {
 }
 
 /**
+ * 英文值的排版清理：中文原文里的 &nbsp; 只用来撑开字距、图标间距，
+ * 英文里既不该回显实体名，也不该带成串空白，统一收成一个半角空格。
+ * 词典 value 本身禁止出现实体（tests/englishUi.test.mjs 会校验），这里是兜底。
+ */
+function cleanCopy(text) {
+	if (typeof text !== 'string') {
+		return text
+	}
+	return text.replace(/&nbsp;|\u00a0/g, ' ').replace(/ {2,}/g, ' ')
+}
+
+/**
+ * 词典 key 归一化。
+ * 模板里写的是 `t('预约人数 &nbsp;')`，但很多模板编译器会把 `&nbsp;` 还原成
+ * NBSP 字符（U+00A0）再交给 JS，运行时 key 就变成了「预约人数 \u00a0」，
+ * 和词典里字面量 "&nbsp;" 对不上 → 查词 miss，英文页面漏出中文标题。
+ * 这里把实体、NBSP、连续空白折叠成单个半角空格，词典与入参用同一把尺子。
+ */
+function normalizeKey(text) {
+	return String(text)
+		.replace(/&nbsp;/gi, ' ')
+		.replace(/\u00a0/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim()
+}
+
+/**
+ * 归一化索引。只收录「归一化后不会撞车」的 key：
+ * 词典里有 '张'(→'coupons') 和 ' 张'(→' coupons') 这种只差空白的条目，
+ * 英文值并不相同，强行合并会把空格吃掉，所以这类有歧义的 key 不建索引，
+ * 宁可 miss 回退中文，也不给出错的英文。
+ */
+const normalizedDict = (() => {
+	const grouped = new Map()
+	for (const key of Object.keys(dict)) {
+		const nk = normalizeKey(key)
+		if (!grouped.has(nk)) {
+			grouped.set(nk, [])
+		}
+		grouped.get(nk).push(dict[key])
+	}
+	const index = new Map()
+	for (const [nk, values] of grouped) {
+		if (values.every((value) => value === values[0])) {
+			index.set(nk, values[0])
+		}
+	}
+	return index
+})()
+
+/**
  * 词典翻译：中文原文 → 英文。
  * 词典缺失时原样返回中文，保证英文模式下不漏字、不出现空文案。
  */
@@ -44,7 +95,16 @@ export function t(zh) {
 	 * 用 hasOwnProperty 判断而不是 `dict[zh] || zh`：价格片段、单位这类 key
 	 * 的英文就是空串（「元」在英文里不该出现），用 || 会被当成缺失回退中文。
 	 */
-	return Object.prototype.hasOwnProperty.call(dict, zh) ? dict[zh] : zh
+	if (Object.prototype.hasOwnProperty.call(dict, zh)) {
+		return cleanCopy(dict[zh])
+	}
+	const key = normalizeKey(zh)
+	// 归一化后若正好是词典里的「干净写法」，直接用它的译文（'微信支付\u00a0' → '微信支付'）
+	if (Object.prototype.hasOwnProperty.call(dict, key)) {
+		return cleanCopy(dict[key])
+	}
+	const normalized = normalizedDict.get(key)
+	return normalized === undefined ? zh : cleanCopy(normalized)
 }
 
 /**
@@ -93,7 +153,25 @@ export function syncNavTitle() {
 	}
 }
 
+export function bookingDate(value, label) {
+	if (locale.value !== 'en') return label
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '')
+	if (!match) return label
+	const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+	const month = months[Number(match[2]) - 1]
+	return month ? `${month} ${Number(match[3])}` : label
+}
+
+export function localeClass() {
+	return locale.value === 'en' ? 'locale-en' : ''
+}
+
 export function useLocale() {
+	/**
+	 * tt(zh, en)：同一句双语文案就地写在模板/脚本里。
+	 * en 为空会回退中文，所以「英文就该是空串」的场合（例如中文句尾的「到期」）
+	 * 必须走 t() + 词典里的空串译文，否则英文界面会漏出中文。
+	 */
 	const tt = (zh, en) => (locale.value === 'en' ? (en || zh) : zh)
 	/**
 	 * lang 必须是同一个 locale ref 的别名：页面按 `const { lang } = useLocale()`

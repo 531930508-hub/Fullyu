@@ -1,5 +1,5 @@
 <template>
-  <view class="login">
+  <view class="login" :class="localeClass()">
     <view class="logo">
       <image src="/static/Logo.png" mode="aspectFit"></image>
     </view>

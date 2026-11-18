@@ -9,7 +9,7 @@ import Vue from 'vue'
 
 Vue.use(globalComponents)
 import './uni.promisify.adaptor'
-import { img } from './utils/image'
+import { img } from './utils/imageLocale'
 Vue.mixin({ methods: { img }, onShow() { trackPageEnter() }, onHide() { trackPageLeave() } })
 Vue.config.productionTip = false
 App.mpType = 'app'
@@ -23,8 +23,8 @@ app.$mount()
 // #ifdef VUE3
 import {createSSRApp} from 'vue'
 import installFilter from '@/filters'
-import { t, syncNavTitle } from './utils/locale'
-import { img } from './utils/image'
+import { t, syncNavTitle, localeClass } from './utils/locale'
+import { img } from './utils/imageLocale'
 
 export function createApp() {
     const app = createSSRApp(App)
@@ -37,7 +37,7 @@ export function createApp() {
     app.config.globalProperties.img = img
     // 全局 mixin：导航标题跟随语言；页面停留时长埋点（静默、不阻塞）
     app.mixin({
-        methods: { t, img },
+        methods: { t, img, localeClass },
         onShow() { syncNavTitle(); trackPageEnter() },
         onHide() { trackPageLeave() },
         onUnload() { trackPageLeave() }

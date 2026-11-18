@@ -1,5 +1,5 @@
 <template>
-	<view class="min-h-screen  bg-[#F6F4F2] ">
+	<view class="min-h-screen  bg-[#F6F4F2] " :class="localeClass()">
 		<view class="px-5 pt-5">
 			<view class="bg-white rounded-lg p-2">
 				<view class="h-full">
@@ -10,8 +10,8 @@
 				<view class="text-[#584219] text-[32rpx] pl-1  pt-4 pb-4">{{ t('您的好友「小毛」邀请您一起享受Full愈时刻') }}</view>
 				<view class="px-2 pt-4 pb-4 text-[#584219] font-semibold"
 					style="border-bottom:1rpx dashed lightgray;border-top:1rpx dashed lightgray;">
-					<view class="text-center pb-1">{{ t('头部水疗 30mins') }}</view>
-					<view class="text-center pb-1">{{ t('10月9日，星期四，下午16:30') }}</view>
+					<view class="text-center pb-1">{{ tt('头部水疗 30mins', 'Full Hair Spa · 30 min') }}</view>
+					<view class="text-center pb-1">{{ tt('10月9日，星期四，下午16:30', 'Thu, Oct 9 · 4:30 PM') }}</view>
 					<view class="text-center">{{ t('Full愈 上海静安大悦城店') }}</view>
 				</view>
 
@@ -38,7 +38,8 @@
 
 
 <script setup>
-	import { t } from '../../../utils/locale'
+	import { t, useLocale } from '../../../utils/locale'
+	const { tt } = useLocale()
 	import { img } from '../../../utils/image'
 	import {
 		onLoad,
