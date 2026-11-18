@@ -237,9 +237,11 @@
 
 `POST /v1/brand-member/gift/claim`：`{ localUserId, code }`（4–16 位大写字母或数字，忽略空格）。
 
-- 成功发一张 `FY_GIFT` 卡（权益取年卡现行版本，接在已有卡期之后），返回 `{ card, days, replayed }`；同一会员重复领取返回原卡。
-- 失败：`GIFT_CODE_INVALID`（不存在/待审批/已驳回）、`GIFT_CODE_PAUSED`、`GIFT_CODE_EXPIRED`、`GIFT_CODE_FULL`（界面显示「已满」）。
-- 码由后台「会员码」创建：名称、渠道标签、推荐人（STAFF / THERAPIST / PARTNER）、天数（默认 30，>30 天进入待审批且发起人不能自审）、名额（留空不限）、领取截止日。
+- 成功发一张 `FY_GIFT` 卡（权益取年卡现行版本，接在已有卡期之后），返回 `{ card, days }`。
+- 同一会员重复领取同一活动返回 `409 GIFT_ALREADY_CLAIMED`，`message` 为「本活动已领取过（会员有效期至 YYYY-MM-DD），不能重复领取」。
+- 失败：`GIFT_CODE_INVALID`（不存在/待审批/已驳回）、`GIFT_CODE_PAUSED`、`GIFT_CODE_EXPIRED`、`GIFT_CODE_FULL`（界面显示「已满」）、`GIFT_ALREADY_CLAIMED`、`GIFT_NEW_MEMBER_ONLY`。
+- 码由后台「会员码」创建：名称、渠道标签、推荐人（STAFF / THERAPIST / PARTNER）、天数（默认 30，>30 天进入待审批且发起人不能自审）、名额（留空不限）、领取截止日、领取对象。
+- `newMemberOnly=true`：仅限从未持有付费卡的会员领取。付费卡指线上实付 `PAID` 或线下实收 `MANUAL`（`paidCents > 0`）；已退款、已过期也算买过；赠送卡 `GIFT` 与畅练卡附赠 `BUNDLE` 不算购买。不满足返回 `409 GIFT_NEW_MEMBER_ONLY`。
 
 ### 9.4 意见反馈与会员故事（仅有效品牌会员）
 

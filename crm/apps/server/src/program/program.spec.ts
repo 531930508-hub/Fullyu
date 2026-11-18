@@ -160,7 +160,7 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     expect(asFinance.body.refundQuotes.length).toBeGreaterThan(0);
   });
 
-  it('会员码：默认 30 天直接生效；超过 30 天需他人审批；名额已满、暂停、截止均拒绝；同人重领幂等', async () => {
+  it('会员码：默认 30 天直接生效；超过 30 天需他人审批；名额已满、暂停、截止均拒绝；重复领取明确报错', async () => {
     const denied = await h.api('post', '/gift-campaigns', cs, { name: '无权限' });
     expect(denied.status).toBe(403);
 
@@ -205,8 +205,11 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     const again = await signed('post', '/v1/brand-member/gift/claim', {
       body: { localUserId: 'local-m-sx-new', code: 'GYM2026' }
     });
-    expect(again.status).toBe(201);
-    expect(again.body.replayed).toBe(true);
+    // 已领过：不再静默成功，而是明确告知原因（含已有权益的到期日）。
+    expect(again.status).toBe(409);
+    expect(again.body.error).toBe('GIFT_ALREADY_CLAIMED');
+    expect(again.body.message).toContain('本活动已领取过');
+    expect(await h.prisma.giftClaim.count({ where: { campaignId: basic.body.id } })).toBe(1);
 
     const full = await signed('post', '/v1/brand-member/gift/claim', {
       body: { localUserId: 'local-m-sx-new2', code: 'GYM2026' }
@@ -218,6 +221,51 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     const me = await signed('get', '/v1/brand-member/me?business=teahour&localUserId=local-m-sx-new');
     expect(['ACTIVE', 'EXPIRING']).toContain(me.body.card.state);
     expect(me.body.game.enabled).toBe(true);
+
+    // 仅限新会员：买过会员的老客不能领体验码，避免「老客重复薅 30 天」。
+    const newOnly = await h.api('post', '/gift-campaigns', ops, {
+      name: '新客专享',
+      code: 'NEWB01',
+      newMemberOnly: true
+    });
+    expect(newOnly.status).toBe(201);
+    expect(newOnly.body.newMemberOnly).toBe(true);
+    const badFlag = await h.api('post', '/gift-campaigns', ops, {
+      name: '错误标记',
+      code: 'BADN01',
+      newMemberOnly: 'yes'
+    });
+    expect(badFlag.status).toBe(400);
+
+    // 种子里的 m-lin 持有生效中的年卡（PAID），按老会员拒绝。
+    const oldMember = await signed('post', '/v1/brand-member/gift/claim', {
+      body: { localUserId: 'local-m-lin', code: 'NEWB01' }
+    });
+    expect(oldMember.status).toBe(409);
+    expect(oldMember.body.error).toBe('GIFT_NEW_MEMBER_ONLY');
+    expect(oldMember.body.message).toContain('仅限新会员');
+    expect(await h.prisma.giftClaim.count({ where: { campaignId: newOnly.body.id } })).toBe(0);
+
+    // 已退款的付费卡也算「买过」，退款不能把老客洗回新客。
+    await h.prisma.memberBrandCard.update({
+      where: { id: 'mbc-seed-lin' },
+      data: { state: 'REFUNDED' }
+    });
+    const refunded = await signed('post', '/v1/brand-member/gift/claim', {
+      body: { localUserId: 'local-m-lin', code: 'NEWB01' }
+    });
+    expect(refunded.body.error).toBe('GIFT_NEW_MEMBER_ONLY');
+    await h.prisma.memberBrandCard.update({
+      where: { id: 'mbc-seed-lin' },
+      data: { state: 'ACTIVE' }
+    });
+
+    // 从未买过卡的新用户可以正常领取。
+    const newbie = await signed('post', '/v1/brand-member/gift/claim', {
+      body: { localUserId: 'local-m-sx-new2', code: 'NEWB01' }
+    });
+    expect(newbie.status).toBe(201);
+    expect(newbie.body.card).toMatchObject({ source: 'GIFT', state: 'ACTIVE' });
 
     const long = await h.api('post', '/gift-campaigns', ops, {
       name: '渠道大客户',
