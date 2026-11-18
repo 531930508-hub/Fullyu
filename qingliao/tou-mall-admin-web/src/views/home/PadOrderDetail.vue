@@ -101,7 +101,7 @@
             <div class="flex align-center justify-end">
               <el-avatar :src="orderDetail.customer.avatar"
                          style="width: 24px;height: 24px;margin-right: 8px"></el-avatar>
-              {{ (orderDetail.customer.nickname | maskNicknameFilter) || '-' }}
+              {{ displayNickname(orderDetail.customer.nickname, '-') }}
             </div>
           </el-descriptions-item>
           <el-descriptions-item label="手机号码 Phone">

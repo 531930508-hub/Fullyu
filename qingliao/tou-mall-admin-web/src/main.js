@@ -112,5 +112,13 @@ Vue.mixin({
       }
       return !!obj // 如果obj为数值型且值为0, 返回false
     },
+    /**
+     * 昵称展示：脱敏后为空时回落到占位文案。
+     * 不要写成 {{ (row.nickname | maskNicknameFilter) || '未设置昵称' }}：
+     * Vue2 编译时括号内的 | 会被当成位或运算，取值恒为 0，永远显示占位文案。
+     */
+    displayNickname(nickname, fallback = '') {
+      return filters.maskNicknameFilter(nickname) || fallback
+    },
   }
 })

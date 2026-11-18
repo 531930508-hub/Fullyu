@@ -7,7 +7,7 @@
         <h1 class="dash-hero__title">{{ greeting }}，今天也轻盈一点。</h1>
         <p class="dash-hero__sub">
           <template v-if="nextSession">
-            下一场 {{ nextSession.time }} · {{ (nextSession.customerName | maskNicknameFilter) || '客户' }} ·
+            下一场 {{ nextSession.time }} · {{ displayNickname(nextSession.customerName, '客户') }} ·
             {{ nextSession.projectTitle || '疗愈项目' }}
             <span class="dash-hero__gap">{{ countdownLabel }}</span>
           </template>
@@ -84,7 +84,7 @@
               </span>
               <div class="schedule-row__body">
                 <div class="schedule-row__title">
-                  <strong>{{ (item.customerName | maskNicknameFilter) || '匿名客户' }}</strong>
+                  <strong>{{ displayNickname(item.customerName, '匿名客户') }}</strong>
                   <span v-if="item.isBirthday" class="birthday-badge" title="今天是该客户生日">生日</span>
                   <span class="schedule-row__project">{{ item.projectTitle || '疗愈项目' }}</span>
                 </div>

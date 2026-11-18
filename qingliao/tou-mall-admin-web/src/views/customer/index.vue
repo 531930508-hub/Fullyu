@@ -63,7 +63,7 @@
                 {{ (scope.row.nickname || '客')[0] }}
               </span>
               <div class="customer-cell__main">
-                <span class="ellipsis">{{ (scope.row.nickname | maskNicknameFilter) || '未设置昵称' }}</span>
+                <span class="ellipsis">{{ displayNickname(scope.row.nickname, '未设置昵称') }}</span>
                 <i v-if="scope.row.gender == 1" class="el-icon-male c-blue" title="男"></i>
                 <i v-else-if="scope.row.gender == 2" class="el-icon-female c-danger" title="女"></i>
               </div>
