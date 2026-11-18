@@ -12,7 +12,7 @@
 set -uo pipefail
 
 PROD=root@8.133.6.18
-TEST=mall-test
+TEST=test-cityretreat
 APP_DIR=/server/java/fully
 JAR_NAME=mall-admin-1.0-SNAPSHOT.jar
 JAVA_CMD='java -Xms2048m -Xmx4096m -Dspring.profiles.active=prod'

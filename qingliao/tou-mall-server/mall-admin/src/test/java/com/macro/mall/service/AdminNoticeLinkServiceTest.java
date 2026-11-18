@@ -14,7 +14,7 @@ class AdminNoticeLinkServiceTest {
 
     AdminNoticeLinkService service(String secret, long ttlHours) {
         AdminNoticeLinkService service = new AdminNoticeLinkService();
-        ReflectionTestUtils.setField(service, "adminWebUrl", "https://mall-test.fullyu.cn/mall-admin/");
+        ReflectionTestUtils.setField(service, "adminWebUrl", "https://test-cityretreat.fullyu.cn/");
         ReflectionTestUtils.setField(service, "linkSecret", secret);
         ReflectionTestUtils.setField(service, "linkTtlHours", ttlHours);
         return service;
@@ -41,8 +41,8 @@ class AdminNoticeLinkServiceTest {
         AdminNoticeLinkService service = service("synthetic-link-secret", 168);
         String url = service.approvalUrl(job());
         assertNotNull(url);
-        // 深链页在管理端子路径下；站点根会被前台 H5 兜底成首页
-        assertTrue(url.startsWith("https://mall-test.fullyu.cn/mall-admin/static/notice-approval.html?"));
+        // 深链页随管理端发布在站点根下的 /static/（H5 商城已移到 /h5/）
+        assertTrue(url.startsWith("https://test-cityretreat.fullyu.cn/static/notice-approval.html?"));
         Map<String, String> q = query(url);
         assertEquals("100", q.get("approvalId"));
         assertEquals("200", q.get("detailId"));

@@ -8,7 +8,7 @@
     "dev": "webpack-dev-server --inline --progress --config build/webpack.dev.conf.js",
     "start": "npm run dev",
     "build": "node build/build.js",
-    "build:test": "BASE_API=https://mall-test.fullyu.cn/api node build/build.js",
+    "build:test": "BASE_API=/api node build/build.js",
     "deploy": "node versionUpdate.js && node build/build.js && scp -r dist/ root@8.133.6.18:/server/www/fully"
   },
   "dependencies": {

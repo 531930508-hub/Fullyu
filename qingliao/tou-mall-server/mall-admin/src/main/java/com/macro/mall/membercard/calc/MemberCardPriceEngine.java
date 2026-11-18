@@ -15,7 +15,8 @@ import java.util.List;
  * <p>四种优惠互斥、不叠加；默认选中现金最低的一种，同价按
  * 年卡提前价 → 通用折扣 → 积分 → 券 的顺序，避免无谓消耗积分和券。</p>
  *
- * <p>会员价只保留提前价：服务日期晚于今天才产生年卡选项，当日预约按原价结算。</p>
+ * <p>会员价只保留提前价：服务日期晚于今天才产生年卡选项，当日预约按原价结算；
+ * 唯一例外是加钟（{@link Input#getInheritCardRate()}），它是原单同一次服务的延续。</p>
  *
  * @date 2026/11/07
  */
@@ -42,6 +43,11 @@ public final class MemberCardPriceEngine {
         private LocalDate today = LocalDate.now();
         private boolean hasActiveCard;
         private BigDecimal advanceRate;
+        /**
+         * 加钟沿用原单会员价：不为空时不再判断是否提前预约，直接按该费率出会员价方案。
+         * 加钟是原单同一次服务的延续，原单当天享了会员价，加钟当天也要能享。
+         */
+        private BigDecimal inheritCardRate;
         /** 通用折扣（含新客折扣）应付金额；无折扣传 null */
         private BigDecimal discountPayAmount;
         private String discountLabel;
@@ -77,7 +83,11 @@ public final class MemberCardPriceEngine {
 
         List<MemberCardPriceOption> options = new ArrayList<>();
 
-        if (input.isHasActiveCard() && advance && input.getAdvanceRate() != null) {
+        if (input.getInheritCardRate() != null) {
+            // 加钟沿用原单费率：不看提前/当日，和券、积分一起参与比价
+            options.add(cardOption(SOURCE_CARD_ADVANCE, base, input.getInheritCardRate(),
+                    "沿用原单会员价（" + discountText(input.getInheritCardRate()) + "）"));
+        } else if (input.isHasActiveCard() && advance && input.getAdvanceRate() != null) {
             options.add(cardOption(SOURCE_CARD_ADVANCE, base, input.getAdvanceRate(),
                     "大会员提前价（" + discountText(input.getAdvanceRate()) + "）"));
         }

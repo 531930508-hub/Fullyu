@@ -17,7 +17,7 @@
 退出码：缺表/缺列 → 1；排序规则漂移 → 默认只告警，加 --strict-collations 才返回 1。
 
 用法：
-  ./scripts/sql-audit.py                      # 默认查 mall-test:tou_mall_test
+  ./scripts/sql-audit.py                      # 默认查 test-cityretreat:tou_mall_test
   ./scripts/sql-audit.py --db other_db
   ./scripts/sql-audit.py --host 8.133.6.18 --db tou_mall_current
   ./scripts/sql-audit.py --sql-dir ../sql     # 换脚本目录
@@ -163,7 +163,7 @@ def collation_drift(collations, our_tables):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument('--host', default=os.environ.get('DEPLOY_HOST', 'mall-test'))
+    ap.add_argument('--host', default=os.environ.get('DEPLOY_HOST', 'test-cityretreat'))
     ap.add_argument('--db', default='tou_mall_test')
     ap.add_argument('--sql-dir', default=None)
     ap.add_argument('--mysql-opts', default='',

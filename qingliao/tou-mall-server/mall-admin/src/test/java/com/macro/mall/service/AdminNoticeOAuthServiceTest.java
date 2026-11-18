@@ -36,7 +36,7 @@ class AdminNoticeOAuthServiceTest {
         ReflectionTestUtils.setField(service,"wxService",wx);
         ReflectionTestUtils.setField(service,"enabled",true);
         ReflectionTestUtils.setField(service,"appId","synthetic-app");
-        ReflectionTestUtils.setField(service,"callbackUrl","https://mall-test.fullyu.cn/api/admin/open/admin-notice/oauth/callback");
+        ReflectionTestUtils.setField(service,"callbackUrl","https://test-cityretreat.fullyu.cn/api/admin/open/admin-notice/oauth/callback");
         ReflectionTestUtils.setField(service,"clock",Clock.fixed(now.atZone(ZoneId.of("Asia/Shanghai")).toInstant(),ZoneId.of("Asia/Shanghai")));
         when(wx.switchover(anyString())).thenReturn(true);
         when(wx.getOAuth2Service()).thenReturn(oauth);
@@ -68,7 +68,7 @@ class AdminNoticeOAuthServiceTest {
     @Test void authorizeNeedsCallbackAndStoresOnlyHash(){
         setup();ReflectionTestUtils.setField(service,"callbackUrl","");
         assertThrows(RuntimeException.class,()->service.authorize(7L));
-        ReflectionTestUtils.setField(service,"callbackUrl","https://mall-test.fullyu.cn/api/admin/open/admin-notice/oauth/callback");
+        ReflectionTestUtils.setField(service,"callbackUrl","https://test-cityretreat.fullyu.cn/api/admin/open/admin-notice/oauth/callback");
         when(oauth.buildAuthorizationUrl(anyString(),anyString(),anyString())).thenReturn("https://open.weixin.qq.com/connect/oauth2/authorize?appid=synthetic-app");
         Map<String,Object> result=service.authorize(7L);
         assertTrue(result.get("url").toString().startsWith("https://open.weixin.qq.com/"));

@@ -4,7 +4,7 @@
 #   2) 可选：把前端 dist 换回备份目录
 #   3) 冒烟
 #
-# 库的回滚用 ssh mall-test /root/bin/night2-rollback.sh db（那边有 RDS 凭据）。
+# 库的回滚用 ssh test-cityretreat /root/bin/night2-rollback.sh db（那边有 RDS 凭据）。
 #
 # 用法:
 #   rollback-prod-code.sh --jar-dir 20261115-230731 [--restore-dist dist.bak-night2-20261115-230341] [--dry-run]

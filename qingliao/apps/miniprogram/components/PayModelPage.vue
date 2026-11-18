@@ -51,7 +51,7 @@
 					</view>
 					<view class="text-[20rpx] pt-1 text-[#8A6A40]">
 						<text v-if="couponEnough">{{ t('本次预约消耗 ') }}{{(checkoutData.costCouponCount*30)}}{{ t(' 分钟Full愈时刻') }}</text>
-						<text v-else>{{ t('券还差 ') }}{{couponShortCount}}{{ t(' 张，本单已按微信支付最低价结算') }}</text>
+						<text v-else>{{ t('券还差 ') }}{{couponShortCount}}{{ t(' 张，本单按微信支付结算') }}</text>
 					</view>
 				</view>
 

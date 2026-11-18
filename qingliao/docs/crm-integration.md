@@ -1,6 +1,7 @@
 # 轻疗 × 会员中心（CRM）接入说明
 
-> 状态：**测试环境（mall-test）已切换，真实用户导入与积分迁移完成（2026-11-08）**；生产环境未部署、开关默认关闭。
+> 状态：**测试环境已切换，真实用户导入与积分迁移完成（2026-11-08）**；生产环境未部署、开关默认关闭。
+> 2026-11-17：轻疗测试环境域名由 `mall-test.fullyu.cn` 改为 **`test-cityretreat.fullyu.cn`**（`CRM_BASE_URL`/`BRAND_CRM_BASE_URL` 已同步改；CRM 侧 `retreat` 回调目标也一起改），下文历史记录里的 mall-test 一律读作 test-cityretreat。
 > 未配置 `CRM_ENABLED/CRM_BASE_URL` 时轻疗行为与改造前完全一致。
 
 ## 1. 这一版做了什么
@@ -156,14 +157,14 @@ mvn -pl mall-admin -am -DskipTests package                               # 全�
 拓扑：
 
 - CRM 服务部署在在场服务器 `47.111.136.49`，systemd 单元 `fullyu-crm`，只监听私网 `172.19.180.137:8898`，公网不可达；数据 `/opt/fullyu-crm/data/crm.db`，配置 `/etc/fullyu-crm/crm.env`（600）。
-- 轻疗测试域名 `https://mall-test.fullyu.cn/crm-api/` → nginx `location ^~ /crm-api/`（去掉前缀）→ `127.0.0.1:8899` → 受限 SSH 隧道 `crm-tunnel.service`（密钥只允许转发到 CRM 8898）→ CRM。签名路径保持 `/api/external/...`，与 1C 契约一致。
+- 轻疗测试域名 `https://test-cityretreat.fullyu.cn/crm-api/`（11-17 前为 `mall-test.fullyu.cn`） → nginx `location ^~ /crm-api/`（去掉前缀）→ `127.0.0.1:8899` → 受限 SSH 隧道 `crm-tunnel.service`（密钥只允许转发到 CRM 8898）→ CRM。签名路径保持 `/api/external/...`，与 1C 契约一致。
 - 轻疗后端 19929：`start-backend.sh` 启动前 source `/opt/fullyu-mall-test/crm.env`（600，含 `CRM_ENABLED/CRM_BASE_URL/CRM_KEY_ID/CRM_SECRET/CRM_TIMEOUT_MS=5000`），密钥不出现在命令行与日志中。
 
 结果（测试环境实测，非 E1 本地）：
 
 | 项 | 结果 |
 |---|---|
-| `/customer/crm/status` | `enabled=true`、`baseUrl=https://mall-test.fullyu.cn/crm-api` |
+| `/customer/crm/status` | `enabled=true`、`baseUrl=https://test-cityretreat.fullyu.cn/crm-api` |
 | 客户导入 | 9904 名客户全部导入，0 失败；CRM 侧 ql 身份 9905 条、去重后 9862 个会员（created 9362 / bound 42 同手机号 / unchanged 1） |
 | 本地有效积分（type=ADD、state=EFFECTIVE、未过期） | 1601 行 / 78334 分 / 1253 人 |
 | 积分迁移 | 迁移 1253 人 / 78334 分，0 失败；CRM 抽检 `8928=346`、`6847=201`、`7018=165`，与本地 SQL 完全一致 |
@@ -218,8 +219,8 @@ mvn -pl mall-admin -am -DskipTests package                               # 全�
 | 项 | 状态 |
 |---|---|
 | 代码 | `crm/brand/BrandMemberProperties` + `crm/brand/BrandMemberClient` + `controller/BrandMemberController`；运行 jar 已包含 |
-| 路由 | `/brandMember/{me,products,game/ticket,purchase}`；公网入口 `https://mall-test.fullyu.cn/api/brandMember/*` |
-| 配置 | `/opt/fullyu-mall-test/crm.env` 的 `BRAND_CRM_ENABLED=1` / `BRAND_CRM_BASE_URL=https://mall-test.fullyu.cn/crm-api` / `BRAND_CRM_KEY_ID` / `BRAND_CRM_SECRET`（600，密钥未打印） |
+| 路由 | `/brandMember/{me,products,game/ticket,purchase}`；公网入口 `https://test-cityretreat.fullyu.cn/api/brandMember/*` |
+| 配置 | `/opt/fullyu-mall-test/crm.env` 的 `BRAND_CRM_ENABLED=1` / `BRAND_CRM_BASE_URL=https://test-cityretreat.fullyu.cn/crm-api` / `BRAND_CRM_KEY_ID` / `BRAND_CRM_SECRET`（600，密钥未打印） |
 | 实测 | `GET /api/brandMember/products` → `200`，返回 CRM 定价 `FY_MONTH`（¥45/30 天）与 `FY_ANNUAL`；未登录 `GET /brandMember/me`、`POST /brandMember/purchase` → “请先登录”（HTTP 200 + body `code:500`，异常被全局包装，业务码不可依赖） |
 | 单元测试 | `BrandMemberClientTest` 5 + `BrandMemberControllerTest` 3，**8/8 通过**（Maven，Corretto 11） |
 | 支付 | `POST /brandMember/purchase` 现为“创建品牌卡支付单 + 发起汇付小程序支付”；开卡只在汇付签名回调校验通过后执行。测试环境（`-Dfullyu.test-mode=true`）不调汇付，下单返回 `testMode=true`，由 `/brandMember/purchase/mock` 模拟结算。详见第 12 节 |

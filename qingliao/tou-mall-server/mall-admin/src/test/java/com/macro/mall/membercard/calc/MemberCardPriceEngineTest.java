@@ -134,6 +134,35 @@ class MemberCardPriceEngineTest {
     }
 
     @Test
+    void addServiceInheritsCardRateEvenWhenBookedSameDay() {
+        //加钟是原单同一次服务的延续：当天加钟不按「必须提前预约」拦，直接沿用原单费率
+        MemberCardPriceEngine.Input input = input(new BigDecimal("900"), TODAY);
+        input.setInheritCardRate(new BigDecimal("0.7800"));
+
+        MemberCardPriceEngine.Result result = MemberCardPriceEngine.compute(input);
+
+        assertFalse(result.isAdvance());
+        assertMoney("702.00", option(result, 1).getPayAmount());
+        assertMoney("198.00", option(result, 1).getBenefitAmount());
+        assertEquals("沿用原单会员价（7.8折）", option(result, 1).getLabel());
+        assertEquals(1, result.getSelectedSource());
+    }
+
+    @Test
+    void addServiceInheritedRateStillCompetesWithCoupon() {
+        //沿用会员价但不锁死方案：券更便宜时仍选券
+        MemberCardPriceEngine.Input input = input(new BigDecimal("600"), TODAY);
+        input.setInheritCardRate(new BigDecimal("0.7800"));
+        input.setCanUseCouponCount(2);
+        input.setCouponCostCount(2);
+
+        MemberCardPriceEngine.Result result = MemberCardPriceEngine.compute(input);
+
+        assertMoney("468.00", option(result, 1).getPayAmount());
+        assertEquals(5, result.getSelectedSource());
+    }
+
+    @Test
     void expiredCardDoesNotContributeOptions() {
         MemberCardPriceEngine.Input input = input(new BigDecimal("500"), TODAY);
         input.setHasActiveCard(false);

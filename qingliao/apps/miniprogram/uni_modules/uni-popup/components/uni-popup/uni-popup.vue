@@ -20,6 +20,8 @@
 	// #ifdef H5
 	import keypress from './keypress.js'
 	// #endif
+	// 显式引入，避免 CLI 构建下 easycom 未解析 uni-transition（小程序端 usingComponents 为空）
+	import uniTransition from '../../../uni-transition/components/uni-transition/uni-transition.vue'
 
 	/**
 	 * PopUp 弹出层
@@ -49,8 +51,9 @@
 		name: 'uniPopup',
 		components: {
 			// #ifdef H5
-			keypress
+			keypress,
 			// #endif
+			uniTransition
 		},
 		emits: ['change', 'maskClick'],
 		props: {

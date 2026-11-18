@@ -37,7 +37,7 @@ RDS_CNF="${RDS_CNF:-$APP_DIR/.rds.cnf}"
 SQL_DIR="${SQL_DIR:-$APP_DIR/src/tou-mall-server/sql}"
 BK_ROOT="${BK_ROOT:-$APP_DIR/backup/db-rehearsal}"
 START_SH="${START_SH:-$APP_DIR/start-backend.sh}"
-HEALTH_URL="${HEALTH_URL:-https://mall-test.fullyu.cn/api/shop/authorized}"
+HEALTH_URL="${HEALTH_URL:-https://test-cityretreat.fullyu.cn/api/shop/authorized}"
 LOG_FILE="${LOG_FILE:-$APP_DIR/logs/app.log}"
 
 MODE="plan"      # plan | confirm | rollback | verify

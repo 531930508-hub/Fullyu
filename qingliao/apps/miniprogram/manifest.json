@@ -70,6 +70,13 @@
     "mp-alipay" : {
         "usingComponents" : true
     },
+    "h5" : {
+        "router" : {
+            "mode" : "hash",
+            "base" : "/h5/"
+        },
+        "title" : "Full愈"
+    },
     "mp-baidu" : {
         "usingComponents" : true
     },

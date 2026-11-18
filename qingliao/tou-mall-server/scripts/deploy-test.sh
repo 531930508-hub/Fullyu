@@ -35,8 +35,8 @@
 #   ./scripts/deploy-test.sh --allow-collation-drift  # 排序规则漂移只告警不拦截
 #   ./scripts/deploy-test.sh --skip-sql-audit         # 跳过库对账（确认过才用）
 #
-# --with-web：本机 `npm run build:test`（BASE_API=https://mall-test.fullyu.cn/api），
-#   产物先备份远端 admin-dist，再 rsync 覆盖 `/mall-admin/`，并校验首页引用新 app.js。
+# --with-web：本机 `npm run build:test`（BASE_API=/api，同源），
+#   产物先备份远端 admin-dist，再 rsync 覆盖站点根 `/`，并校验首页引用新 app.js。
 #
 #   7) 「停完没起来」：20:54 那次中断把应用停了 40 分钟、全站 502，只有一小时一次的
 #      巡检报警（2026-11-13 实测）⇒ 本脚本装了 EXIT trap：只要进入「已停服」阶段后
@@ -44,11 +44,11 @@
 #      admin-dist。发布期间写 $APP_DIR/.deploy.lock，避免和 bin/backend-guard.sh 抢。
 set -euo pipefail
 
-HOST="${DEPLOY_HOST:-mall-test}"
+HOST="${DEPLOY_HOST:-test-cityretreat}"
 APP_DIR="${APP_DIR:-/opt/fullyu-mall-test}"
 SRC_REMOTE="$APP_DIR/src/tou-mall-server"
 JAR_REMOTE="$SRC_REMOTE/mall-admin/target/mall-admin-1.0-SNAPSHOT.jar"
-HEALTH_URL="${HEALTH_URL:-https://mall-test.fullyu.cn/api/shop/authorized}"
+HEALTH_URL="${HEALTH_URL:-https://test-cityretreat.fullyu.cn/api/shop/authorized}"
 START_SH="$APP_DIR/start-backend.sh"
 
 cd "$(dirname "$0")/.."
@@ -56,7 +56,7 @@ SRV="$(cd .. && pwd)"
 
 WEB_DIR="${WEB_DIR:-$SRV/tou-mall-admin-web}"
 WEB_REMOTE="$APP_DIR/admin-dist"
-WEB_HEALTH_URL="${WEB_HEALTH_URL:-https://mall-test.fullyu.cn/mall-admin/}"
+WEB_HEALTH_URL="${WEB_HEALTH_URL:-https://test-cityretreat.fullyu.cn/}"
 
 SYNC=1; STATUS_ONLY=0; WEB=0; SKIP_AUDIT=0; STRICT="--strict-collations"
 for a in "$@"; do

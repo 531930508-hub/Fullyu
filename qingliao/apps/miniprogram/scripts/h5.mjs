@@ -11,9 +11,12 @@
  *   2. pages.json 里每个页面都产出了 chunk（防止页面漏编译）
  *   3. 线上 mall-test 的资产指纹与本地产物是否一致（防止 H5 不是最新）
  *
- * 部署目标：mall-test = root@121.40.119.57:/opt/fullyu-mall-test/web
- *   （nginx `sites-available/mall-test.fullyu.cn.conf` 的 root；可用 H5_DEPLOY_HOST 覆盖）
- * 优先级：build/check 只读；deploy 会先备份到 backups/web-<时间戳>.tgz 再原子切换目录。
+ * 部署目标：test-cityretreat = root@8.133.6.18:/opt/fullyu-mall-test/h5
+ *   （nginx `sites-enabled/test-cityretreat.fullyu.cn.conf` 的 `location /h5/`；可用 H5_DEPLOY_HOST 覆盖）
+ * 2026-11-17 起 H5 站点在 `https://test-cityretreat.fullyu.cn/h5/`（manifest 的 h5.router.base 已改为 /h5/）。
+ * 注意：线上那份产物是改名当天把旧构建（base=/）就地改前缀得到的，指纹与本地新构建不可比；
+ *      下次 `npm run h5:build && npm run h5:deploy` 正式重建覆盖后即恢复可比。
+ * 优先级：build/check 只读；deploy 会先备份到 backups/h5-<时间戳>.tgz 再原子切换目录。
  *
  * 注意（2026-11 踩过的坑）：vite-plugin-uni 只加载 package.json 里声明过的平台包，
  * 且识别的是带 `uni-app.apply` 字段的那个——H5 必须声明 `@dcloudio/uni-h5`，
@@ -27,9 +30,9 @@ import path from 'node:path';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const OUT = path.join(ROOT, 'unpackage/dist/build/h5');
 const ASSETS = path.join(OUT, 'assets');
-const LIVE = process.env.H5_LIVE_URL || 'https://mall-test.fullyu.cn/';
-const DEPLOY_HOST = process.env.H5_DEPLOY_HOST || 'root@121.40.119.57';
-const DEPLOY_DIR = process.env.H5_DEPLOY_DIR || '/opt/fullyu-mall-test/web';
+const LIVE = process.env.H5_LIVE_URL || 'https://test-cityretreat.fullyu.cn/h5/';
+const DEPLOY_HOST = process.env.H5_DEPLOY_HOST || 'root@8.133.6.18';
+const DEPLOY_DIR = process.env.H5_DEPLOY_DIR || '/opt/fullyu-mall-test/h5';
 const MIN_MAIN_KB = 200;
 const MIN_ASSETS = 80;
 

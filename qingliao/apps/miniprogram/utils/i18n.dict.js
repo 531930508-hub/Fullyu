@@ -321,7 +321,7 @@ const dict = {
 	'本单不支持Full愈券支付': 'This order cannot be paid with Full Yu passes',
 	'券已用完，可选择微信支付或购买卡券': 'Passes used up — pay with WeChat Pay or buy more',
 	'券还差 ': ' passes short — ',
-	'张，本单已按微信支付最低价结算': ' short, charged at the lowest WeChat Pay price',
+	'张，本单按微信支付结算': ' short, charged via WeChat Pay',
 	'合单支付': 'Combined payment',
 	'可叠加使用': 'Stackable',
 	'*可叠加使用': '*Stackable',
@@ -564,7 +564,7 @@ const dict = {
 	'倒计时 ': 'Time left ',
 	'张券 一共可享受 ': ' passes — a total of ',
 	' 张券 一共可享受 ': ' passes — a total of ',
-	' 张，本单已按微信支付最低价结算': ' short, charged at the lowest WeChat Pay price',
+	' 张，本单按微信支付结算': ' short, charged via WeChat Pay',
 	// 结算弹框：顺手续会员（合并支付）
 	'顺手续会员': 'Add membership renewal',
 	'当前会员至': 'Member until',
