@@ -124,6 +124,8 @@ public class UmsAdminController {
         UmsAdmin umsAdmin = adminService.getAdminByUsername(username);
         Map<String, Object> data = new HashMap<>();
         data.put("username", umsAdmin.getUsername());
+        // 员工姓名（昵称）：前端展示用，username 仍保留给登录名相关逻辑
+        data.put("nickName", umsAdmin.getNickName());
         data.put("userId", umsAdmin.getId());
         data.put("shopId", umsAdmin.getShopId());
         data.put("menus", roleService.getMenuList(umsAdmin.getId()));
@@ -154,6 +156,8 @@ public class UmsAdminController {
         UmsAdmin umsAdmin = adminService.getAdminByUsernameNew(username);
         Map<String, Object> data = new HashMap<>();
         data.put("username", umsAdmin.getUsername());
+        // 员工姓名（昵称）：前端展示用，username 仍保留给登录名相关逻辑
+        data.put("nickName", umsAdmin.getNickName());
         data.put("userId", umsAdmin.getId());
         data.put("shopId", umsAdmin.getShopId());
         data.put("menus", roleService.getMenuList(umsAdmin.getId()));

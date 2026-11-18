@@ -3,6 +3,7 @@ package com.macro.mall.service;
 import cn.hutool.core.date.DateTime;
 import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.entity.*;
+import com.macro.mall.model.UmsAdmin;
 import com.macro.mall.utils.DateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -10,6 +11,7 @@ import com.macro.mall.enums.FlowState;
 import com.macro.mall.enums.FlowUserType;
 import com.macro.mall.enums.approval.FlowCategoryCode;
 import com.macro.mall.mapper.MassagistLeaveMapper;
+import com.macro.mall.mapper.UmsAdminMapper;
 import com.macro.mall.service.base.BaseService;
 import com.macro.mall.service.base.WrapperBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +46,8 @@ public class MassagistLeaveService extends BaseService<MassagistLeaveMapper, Mas
     MassagistService massagistService;
     @Autowired
     ApprovalService approvalService;
+    @Autowired
+    UmsAdminMapper umsAdminMapper;
 
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -284,9 +288,23 @@ public class MassagistLeaveService extends BaseService<MassagistLeaveMapper, Mas
         detail.put("endTime", timePoint(massagistLeave.getEndTime(), massagistLeave.getEndDatetime()));
         detail.put("massagistName", personName);
         detail.put("createUser", massagistLeave.getCreateUser());
+        //提交人姓名取用户账号上的员工姓名（昵称），不用户档案里的疗愈师姓名
+        detail.put("createUserName", applicantName(massagistLeave.getCreateUser()));
         //当天请假：审批链路已提到店长及以上，详情页打标提醒
         detail.put("sameDay", isSameDayLeave(massagistLeave));
         return detail;
+    }
+
+    /** 请假申请提交人姓名：取用户账号上的员工姓名（nickName），没有再退登录账号 */
+    private String applicantName(Long createUser) {
+        if (createUser != null && createUser > 0) {
+            UmsAdmin admin = umsAdminMapper.selectById(createUser);
+            if (admin != null) {
+                if (StringUtils.isNotBlank(admin.getNickName())) return admin.getNickName();
+                if (StringUtils.isNotBlank(admin.getUsername())) return admin.getUsername();
+            }
+        }
+        return "";
     }
 
     /** 请假日期：优先取申请时勾选的日期，历史数据退回起止日期区间。排班周视图与列表复用。 */

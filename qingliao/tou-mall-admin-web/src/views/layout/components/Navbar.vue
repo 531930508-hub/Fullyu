@@ -60,10 +60,10 @@
 
       <el-dropdown trigger="click" placement="bottom-end" @command="handleCommand">
         <button type="button" class="user-chip">
-          <img v-if="avatar" class="user-chip__avatar" :src="avatar" :alt="name">
+          <img v-if="avatar" class="user-chip__avatar" :src="avatar" :alt="displayName">
           <span v-else class="user-chip__avatar user-chip__avatar--text" aria-hidden="true">{{ initial }}</span>
           <span class="user-chip__meta">
-            <span class="user-chip__name">{{ name || '未命名账号' }}</span>
+            <span class="user-chip__name">{{ displayName }}</span>
             <span class="user-chip__role">{{ roleLabel }}</span>
           </span>
           <i class="el-icon-arrow-down user-chip__caret" aria-hidden="true"></i>
@@ -131,11 +131,16 @@ export default {
       'device',
       'avatar',
       'name',
+      'nickName',
       'roles',
       'todoCount',
       'massagistId',
       'trainer'
     ]),
+    // 顶栏展示员工姓名（账号昵称），没有设置时退回登录名
+    displayName() {
+      return this.nickName || this.name || '未命名账号'
+    },
     drawerVisible() {
       return this.sidebar.opened
     },
@@ -146,7 +151,7 @@ export default {
       return this.sidebar.opened ? '收起为图标栏' : '展开导航'
     },
     initial() {
-      const text = (this.name || '愈').trim()
+      const text = (this.displayName || '愈').trim()
       return text.charAt(0).toUpperCase()
     },
     roleLabel() {
