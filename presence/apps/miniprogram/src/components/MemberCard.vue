@@ -23,8 +23,8 @@
     <view class="bmc-foot" :class="{ 'is-warn': expiring }">
       <view class="bmc-cell bmc-saved">
         <text class="bmc-lab">{{ active ? tr('本年已省', 'Saved this year') : tr('开卡', 'Join') }}</text>
-        <text class="bmc-amt serif">{{ active || annualPrice !== null ? '¥' + formatYuan(active ? savedCents : annualPrice ?? 0) : '—' }}</text>
-        <text v-if="!active && annualPrice !== null" class="bmc-more">{{ tr('起', 'from') }}</text>
+        <text class="bmc-amt serif">{{ active ? '¥' + formatYuan(savedCents) : entry ? '¥' + formatYuan(entry.amountCents) : '—' }}</text>
+        <text v-if="!active && entry && entry.from" class="bmc-more">{{ tr('起', 'from') }}</text>
       </view>
       <view class="bmc-cell bmc-toggle" role="button" @tap="open = !open">
         <text>{{ footText }}</text>
@@ -127,12 +127,17 @@ const renewalText = computed(() => {
   }
   return ''
 })
-/** 卡脚起价只从 CRM 目录取最低一档；目录没拿到就显示占位符，不写死价格。 */
-const annualPrice = computed<number | null>(() => {
-  const rows = props.products
+/**
+ * 卡脚入口价：只从 CRM 目录取最低一档（90 天 ¥99 与 365 天 ¥365 并存时报 ¥99），
+ * 「起」只在多档时标；目录没拿到就显示占位符，不写死价格。
+ */
+const entry = computed<{ amountCents: number; from: boolean } | null>(() => {
+  const rows = (props.products || []).filter(
+    (item) => item && item.priceCents != null && Number.isFinite(Number(item.priceCents))
+  )
   if (!rows.length) return null
-  const hit = rows.find((item) => item.code === 'FY_ANNUAL') || rows[0]
-  return hit && hit.priceCents != null ? hit.priceCents : null
+  const cheapest = rows.reduce((low, item) => (Number(item.priceCents) < Number(low.priceCents) ? item : low))
+  return { amountCents: Number(cheapest.priceCents), from: rows.length > 1 }
 })
 const footText = computed(() =>
   props.active ? tr('权益与续费', 'Benefits & renewal') : tr('查看权益', 'See benefits')
