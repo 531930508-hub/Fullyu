@@ -11,7 +11,7 @@
 |---|---|---|
 | `8.133.6.18`（`test-cityretreat.fullyu.cn`） | **轻疗测试环境**（2026-11-17 从 121.40 整栈搬来，域名同日由 `mall-test` 改名） | `/opt/fullyu-mall-test`：后端 19929、管理后台 `admin-dist` 占站点根、H5 在 `/h5/` |
 | `47.111.136.49`（私网 `172.19.180.137`） | Redis + RabbitMQ；同机跑 CRM | `application-prod.yml`、`docs/crm-integration.md` |
-| `8.133.6.18` | **生产应用机**，jar 在 `/server/java/fully/`，端口 9929，nginx 在 `/etc/nginx/conf.d/fully.conf` | 2026-11-13 已登录核实（4 核/7G/99G，无 crontab、无自动备份）；**不要当测试机用**。上线流程见 [生产上线手册](生产上线手册.md) |
+| `120.55.36.3` | **生产应用机**，jar 在 `/server/java/fully/`，端口 9929，nginx 在 `/etc/nginx/conf.d/fully.conf`；启动只走 `start-120.sh`（JDK8 + `/etc/fullyu/qingliao.env` + redis 密码） | 2026-11-17 00:22 由 8.133.6.18 迁入；11-19 实测主机名 `iZbp177ate42gwpx7r8zczZ`，站点根 `/server/www/fully/dist`。**8.133.6.18 现在是纯测试机，别再把生产发到它上面**（`deploy-prod.sh` 已默认 120.55.36.3 并带身份校验） |
 
 本机已配 `~/.ssh/config` 的 `Host test-cityretreat` → `8.133.6.18`（原 `Host mall-test` 指 121.40，11-17 随环境搬迁改名）。
 
@@ -22,6 +22,7 @@
 | 源码（rsync 自本机） | `/opt/fullyu-mall-test/src/tou-mall-server` |
 | jar | `src/tou-mall-server/mall-admin/target/mall-admin-1.0-SNAPSHOT.jar` |
 | 启动脚本 | `/opt/fullyu-mall-test/start-backend.sh`（`--spring.profiles.active=test`，端口 **19929**） |
+| 端口守卫 | 启动前结束占着 19929 的野进程：`/opt/fullyu-mall-test/free-port.sh`（源 `scripts/systemd/free-port.sh`）+ systemd drop-in `mall-test.service.d/10-free-port.conf`。没有它时手工 setsid 起的旧进程会让 `systemctl restart` 静默失败、服务一直跑旧包（2026-11-18 事故） |
 | 服务器 JDK/Maven | `/usr/bin/java` 17.0.12、`/usr/bin/mvn` |
 | 环境变量 | `crm.env`(600)、`.env`、`.rds.cnf`；启动脚本里 `INCENTIVE_TEAM_CERT_ENABLED=true`、`-Duser.timezone=Asia/Shanghai`（2026-11-13 补，之前每次巡检都在报缺这个参数） |
 | 看护 | `bin/backend-guard.sh`，root crontab `*/2 * * * *`：进程没了就拉起，日志 `logs/backend-guard.log`；发布期间靠 `$APP_DIR/.deploy.lock` 避让 |

@@ -9,7 +9,7 @@
     "start": "npm run dev",
     "build": "node build/build.js",
     "build:test": "BASE_API=/api node build/build.js",
-    "deploy": "node versionUpdate.js && node build/build.js && scp -r dist/ root@8.133.6.18:/server/www/fully"
+    "deploy": "node -e \"console.error('deploy 已停用：生产机是 120.55.36.3（8.133.6.18 是测试机），站点根 /server/www/fully/dist。按 qingliao/docs/ops/生产上线手册.md §7.9 手工发布：先传新目录，再 mv 切换，保留 dist.bak-<TS> 回滚。'); process.exit(1)\""
   },
   "dependencies": {
     "axios": "^0.18.0",
