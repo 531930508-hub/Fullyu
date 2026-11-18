@@ -66,12 +66,27 @@ p=$(envkey "$PROD" DATABASE_URL /etc/fullyu-crm/crm.env | sed -E 's#://[^@]+@#@#
 s=$(envkey "$STBY" DATABASE_URL /etc/fullyu-crm/crm.env | sed -E 's#://[^@]+@#@#')
 chk "crm 主备同库" "$s" "$p"
 
+# 在场方向与上面相反：生产在 120.55，温备在 121.40
+PRES_PROD=$STBY; PRES_STBY=$PROD
+penv() { envkey "$1" "$2" /root/fullyu/apps/server/.env.local; }
+chk "presence NODE_ENV 主备一致" "$(penv "$PRES_STBY" NODE_ENV)" "$(penv "$PRES_PROD" NODE_ENV)"
+chk "presence REDIS_HOST 一致"    "$(penv "$PRES_STBY" REDIS_HOST)" "$(penv "$PRES_PROD" REDIS_HOST)"
+chk "presence REDIS_DB 一致"      "$(penv "$PRES_STBY" REDIS_DB)"   "$(penv "$PRES_PROD" REDIS_DB)"
+chk "presence 生产定时任务开"      "$(penv "$PRES_PROD" TASKS_ENABLED)" true
+chk "presence 温备定时任务关"      "$(penv "$PRES_STBY" TASKS_ENABLED)" false
+
 say ""
 say "[3] 构建指纹（主备必须同源产物）"
 for f in /opt/teahour/app/apps/server/dist/main.js /opt/teahour/app/apps/admin/dist/index.html /opt/fullyu-crm/apps/server/dist/main.js; do
   chk "md5 $(basename "$f") @$(dirname "$f")" \
       "$(sshx "$STBY" "md5sum $f 2>/dev/null | cut -d' ' -f1")" \
       "$(sshx "$PROD" "md5sum $f 2>/dev/null | cut -d' ' -f1")"
+done
+# 在场：生产 120.55 由 CI 发，温备 121.40 靠 deploy-presence-standby.sh，容易落后
+for f in /root/fullyu/apps/server/dist/main.js /opt/fullyu/apps/admin/dist/index.html; do
+  chk "presence md5 $(basename "$f") @$(dirname "$f")" \
+      "$(sshx "$PRES_STBY" "md5sum $f 2>/dev/null | cut -d' ' -f1")" \
+      "$(sshx "$PRES_PROD" "md5sum $f 2>/dev/null | cut -d' ' -f1")"
 done
 
 say ""
@@ -120,6 +135,13 @@ for h in "$PROD" "$STBY"; do
       mysql -h\"\$H\" -u\"\$U\" -p\"\$P\" -D\"\$D\" -N -e 'select 1' 2>/dev/null")
     chk "$h $svc DB" "$out" 1
   done
+done
+
+say ""
+say "[7b] 在场 Redis（47.111 db0，只读 PING）"
+for h in "$PRES_PROD" "$PRES_STBY"; do
+  out=$(sshx "$h" 'f=/root/fullyu/apps/server/.env.local; H=$(grep -E "^REDIS_HOST=" $f | cut -d= -f2- | tr -d "\""); P=$(grep -E "^REDIS_PASSWORD=" $f | cut -d= -f2- | tr -d "\""); D=$(grep -E "^REDIS_DB=" $f | cut -d= -f2- | tr -d "\""); redis-cli -h "$H" -a "$P" -n "${D:-0}" --no-auth-warning ping 2>/dev/null')
+  chk "$h presence Redis PING" "$out" PONG
 done
 
 say ""
