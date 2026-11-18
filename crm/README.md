@@ -276,6 +276,27 @@ E2 证据（测试环境，2026-11-08）：
 - `apps/console` 只随代码同步，`main.ts` 仍只挂 `/admin`（`apps/admin/public`），console 构建产物未部署。
 - 生产机无全局 `pnpm`，本次用 `npx -y pnpm@10.34.4 install --frozen-lockfile`；`dist` 为清空后重建，避免旧模块残留。
 
+## 发布记录：三端同步看板口径修复（2026-11-19 03:47）
+
+| 项 | 值 |
+|---|---|
+| commit | `928a029`（CRM 代码；发布时工作树 HEAD `15dec8a`，其后提交均不涉及 `crm/`） |
+| 变更 | 外部接口签名通过也刷新业务端最近调用；未接入不再显示「滞后 0 秒」；滞后 12h 黄 / 48h 红；`snapshotVersion` 正名 `deliveredCount`；`/sync/status` 增加 `delivery` |
+| 测试 | `test-crm.fullyu.cn`（8.133.6.18，unit `fullyu-crm-test`，库 `crm_test`） |
+| 生产 | `crm.fullyu.cn`（121.40.119.57，unit `fullyu-crm`，RDS `crm`） |
+| 产物 | `build:mysql` 的 `apps/server/dist`、`apps/admin/public`、`packages/shared/dist`；`apps/console` 未部署 |
+| 备份 | 测试 `/root/backups/test-crm-20261119-034515.tar.gz`；生产 `/root/backups/crm-all-20261119-034706.tar.gz` |
+| 探针 | 两端 `/api/health` 200、`/admin/` 200、`/game/` 200、`/` 302、`/api/sync/status` 401；公网 `app.js` md5 `4b2961fb…` = 本地产物 |
+| 生效验证 | 两端用各自 `CRM_EXT_KEYS` 向 `/api/external/members/__sync_probe__` 发签名请求（404），`business_sync_states` 的 `last_path` / `last_seen_at` 均刷新（age 72ms / 127ms） |
+| 回滚 | 测试：解 `test-crm-20261119-034515.tar.gz` 回 `apps/server/dist` → `systemctl restart fullyu-crm-test`；生产：解 `crm-all-20261119-034706.tar.gz` 回 `apps/server/dist`、`apps/admin/public`、`packages/shared/dist` → `systemctl restart fullyu-crm` |
+
+注意事项：
+
+- 本次无 schema 变更，未跑 `migrate` / `db:push`。
+- `apps/console` 仍只随代码同步，线上只挂 `/admin`（`apps/admin/public`）。
+- 两端 `CRM_OUTBOX_INTERVAL_MS` 均已配置，概览不会出现「投递 worker 未启用」告警；若某环境为空，看板会显式提示。
+- 本地分支 `fix/runtime-env-and-services-20261118` 未推送（ahead 37 / behind 6，且含其他系统未发布提交）；本次发布直接取本地已提交的 CRM 产物。
+
 ### 业务会员卡清表（2026-11-18 12:35）
 
 - 线上库核查：两端 MySQL（生产 RDS `crm`、测试 `crm_test`）表数与 `schema.mysql.prisma` 一一对应（各 32 张），**不存在 `business_card_catalog`**，无需 DROP；RDS 全实例搜 `%business_card%` 为空。
