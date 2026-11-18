@@ -231,7 +231,8 @@
 			</view>
 
 		</view>
-		<view v-if="isShowText" style="margin-top: -40rpx;">
+		<!-- 介绍图区块常驻渲染：原先靠 onPageScroll 首次滚动才置 true，页面内容不够高时永远滚不动，整块图文会消失 -->
+		<view style="margin-top: -40rpx;">
 			<view v-if="bannerListNew.length==0" class="flex justify-center items-center  h-[90rpx]">
 				<!-- <image mode="aspectFit" class="w-[480rpx] h-[100rpx]"
 					src="https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/icon/v2.0/Frame%20280%20%282%29.png">
@@ -501,7 +502,6 @@
 	const customBar = ref(0)
 	const statusBar = ref(0)
 	const isShow = ref(true)
-	const isShowText = ref(false)
 	const bannerImageStr = ref('')
 
 	function selectCard(idx) {
@@ -1253,7 +1253,6 @@
 
 		if (e.scrollTop > 0.3) {
 			isShow.value = false;
-			isShowText.value = true;
 		}
 
 		// 当滚动距离大于等于786rpx时，显示背景

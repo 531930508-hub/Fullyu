@@ -90,12 +90,10 @@
 					<text class="text-[22rpx]">(Date)</text>
 				</view>
 				<view class="time-grid">
-					<template>
-						<view v-for="(item,index) in ArrShopDate" :key="index" class="time-option"
-							:class="{ active: selectedDate ===item.value }" @click="selectedDateEvent(item)">
-							<text>{{ item.label }}</text>
-						</view>
-					</template>
+					<view v-for="(item,index) in ArrShopDate" :key="index" class="time-option"
+						:class="{ active: selectedDate ===item.value }" @click="selectedDateEvent(item)">
+						<text>{{ item.label }}</text>
+					</view>
 				</view>
 				<view class="h-[60rpx] flex items-center mt-1">
 					<text class="text-[28rpx] font-semibold">{{ t('到店时间 &nbsp;') }} </text>
@@ -105,13 +103,13 @@
 					<view v-if="isLoading" class="loading-container">
 						<view class="loading-spinner"></view>
 					</view>
-					<template v-else>
+					<block v-else>
 						<view v-for="item in ArrShopTime" :key="item.time" class="time-option"
 							:class="{ active: selectedTime === item.time&&item.state != 0, disabled: item.state === 0 }"
 							@click="selectedTimeEvent(item)">
 							<text>{{ item.time }}</text>
 						</view>
-					</template>
+					</block>
 				</view>
 
 				<view class="flex justify-center items-center mt-1 text-[26rpx] pb-4">
