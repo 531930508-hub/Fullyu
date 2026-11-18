@@ -54,6 +54,7 @@ secure:
       - /admin/open/**
       - /wx/**
       - /customer/login
+      - /customer/page-event/createList #小程序页面埋点（未登录也要上报，异常在接口内吞掉）
       - /crm/brand-card #CRM 品牌卡事件推送（验签在接口内完成）
       - /miniImage/splashScreenImageList #开屏图列表接口
       - /miniImage/bannerList #banner图片列表
