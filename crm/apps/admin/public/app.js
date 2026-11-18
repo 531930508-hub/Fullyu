@@ -2414,12 +2414,12 @@
         .tools { padding: 12px; font-size: 13px; }
         @media print { .tools { display: none; } }
       </style></head><body>
-      <div class="tools"><button onclick="window.print()">打印</button> 名片尺寸 90×54mm；微信扫右侧小程序码，登录后自动领取。${campaign.quota ? `本码限 ${campaign.quota} 人领取` : '本码不限名额'}，可按需打印多张。</div>
+      <div class="tools"><button onclick="window.print()">打印</button> 名片尺寸 90×54mm；微信扫右侧小程序码，登录后自动领取。${campaign.newMemberOnly ? '本码仅限从未买过会员的新客领取；' : ''}${campaign.quota ? `本码限 ${campaign.quota} 人领取` : '本码不限名额'}，可按需打印多张。</div>
       <div class="card">
         <div class="copy">
           <div><div class="brand">FULLYU · 城市微度假</div><h1>${esc(print.title)}</h1></div>
           <div class="code">${esc(print.code)}</div>
-          <div class="line">微信扫右侧小程序码 · 登录后自动领取</div>
+          <div class="line">微信扫右侧小程序码 · 登录后自动领取${campaign.newMemberOnly ? '（仅限新会员）' : ''}</div>
           <div class="foot"><span>${print.deadline ? `领取截止 ${esc(print.deadline)}` : '领取不设截止日'}</span><span>每人限领一次</span></div>
         </div>
         <img class="qr" src="${qrDataUrl}" alt="小程序码" />
@@ -2429,7 +2429,7 @@
   }
 
   async function pageGifts(ctx) {
-    ctx.setTitle('会员码', '赠送品牌会员体验：渠道、推荐人、天数、名额与截止；超过 30 天需另一人审批');
+    ctx.setTitle('会员码', '赠送品牌会员体验：渠道、推荐人、天数、名额、领取对象与截止；超过 30 天需另一人审批');
     const params = new URLSearchParams(location.hash.split('?')[1] || '');
     const status = params.get('status') || '';
     const data = await api(`/gift-campaigns${query({ status })}`);
@@ -2445,6 +2445,7 @@
                 <div class="field"><label>赠送天数</label><input name="days" type="number" min="1" max="365" value="30" required /></div>
                 <div class="field"><label>名额（留空不限）</label><input name="quota" type="number" min="1" max="100000" placeholder="不限" /></div>
                 <div class="field"><label>扫码打开</label><select name="appTarget">${options([['sx', '时叙小程序'], ['zc', '在场小程序'], ['ql', '轻疗小程序']], 'sx')}</select></div>
+                <div class="field"><label>领取对象</label><label class="check"><input type="checkbox" name="newMemberOnly" /> 仅限新会员（从未买过会员）</label><div class="help">线上实付或线下收款的付费卡都算买过；已退款、已过期也算。</div></div>
                 <div class="field"><label>领取截止日（可空）</label><input name="claimDeadline" type="date" /></div>
                 <div class="field"><label>渠道标签</label><input name="channelTag" maxlength="30" placeholder="例：茶会 / 企业团建 / 小红书" /></div>
                 <div class="field"><label>推荐人类型（可空）</label><select name="referrerType">${options([['', '无'], ['STAFF', '员工'], ['THERAPIST', '疗愈师'], ['PARTNER', '合作方']], '')}</select></div>
@@ -2470,7 +2471,7 @@
                     (row) => `<tr>
                       <td class="mono"><a href="#/gifts/${esc(row.id)}" data-gift-detail="${esc(row.id)}">${esc(row.code)}</a><div class="help">${esc(row.appName || '时叙')}小程序码</div></td>
                       <td>${esc(row.name)}${row.note ? `<div class="help">${esc(row.note)}</div>` : ''}</td>
-                      <td>${row.days} 天${row.needsApproval ? `<div class="help">${row.status === 'PENDING_APPROVAL' ? '超 30 天 · 待审批' : '超 30 天 · 经审批'}</div>` : ''}</td>
+                      <td>${row.days} 天${row.needsApproval ? `<div class="help">${row.status === 'PENDING_APPROVAL' ? '超 30 天 · 待审批' : '超 30 天 · 经审批'}</div>` : ''}${row.newMemberOnly ? '<div class="help">仅限新会员</div>' : ''}</td>
                       <td>${row.claimed} / ${row.quota ?? '不限'}</td>
                       <td class="small">${esc(row.claimDeadline || '—')}</td>
                       <td class="small">${esc(row.channelTag || '—')}${row.referrerName ? `<div class="help">${esc(REFERRER_LABEL[row.referrerType] || '')} ${esc(row.referrerName)}</div>` : ''}</td>
@@ -2513,6 +2514,7 @@
                 referrerType: values.referrerType || undefined,
                 referrerName: values.referrerName,
                 appTarget: values.appTarget || 'sx',
+                newMemberOnly: values.newMemberOnly === 'on',
                 note: values.note
               }
             });
@@ -2564,7 +2566,7 @@
       const campaign = detail.campaign;
       const box = document.getElementById('gift-detail');
       box.innerHTML = `<div class="panel">
-        <div class="panel-head"><h2>${esc(campaign.name)} · <span class="mono">${esc(campaign.code)}</span></h2><span class="help">${esc(campaign.appName || '时叙')}小程序 · 共 ${detail.claims.length} 人领取（最多显示 500）</span></div>
+        <div class="panel-head"><h2>${esc(campaign.name)} · <span class="mono">${esc(campaign.code)}</span></h2><span class="help">${esc(campaign.appName || '时叙')}小程序${campaign.newMemberOnly ? ' · 仅限新会员' : ''} · 共 ${detail.claims.length} 人领取（最多显示 500）</span></div>
         ${
           can('crm:gift:edit') && campaign.status !== 'REJECTED'
             ? `<div class="row-actions">
@@ -2611,7 +2613,7 @@
       const campaign = detail.campaign;
       const box = document.getElementById('gift-qr');
       box.innerHTML = `<div class="panel">
-        <div class="panel-head"><h2>会员码二维码 · <span class="mono">${esc(campaign.code)}</span></h2><span class="help">微信扫一扫直接打开${esc(campaign.appName || '时叙')}会员页，登录后自动领取 ${campaign.days} 天</span></div>
+        <div class="panel-head"><h2>会员码二维码 · <span class="mono">${esc(campaign.code)}</span></h2><span class="help">微信扫一扫直接打开${esc(campaign.appName || '时叙')}会员页，登录后自动领取 ${campaign.days} 天${campaign.newMemberOnly ? '；仅限新会员（从未买过会员）' : ''}</span></div>
         <div class="row-actions">
           <select id="gift-qr-env">
             <option value="trial">体验版</option>

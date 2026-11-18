@@ -1,0 +1,22 @@
+[Unit]
+Description=fullyu host port guard (9929/8080 loopback-only)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/fu-port-guard.sh
+# ExecStop 顺序要紧：先删 DROP、再删 ACCEPT。
+# 旧版（现网 120.55 上那份）只删 9929 的三条且是「ACCEPT 先删、DROP 后删」，
+# stop/restart 的瞬间会短暂出现「ACCEPT 已删、DROP 还在」→ 127.0.0.1:9929 被拦、轻疗 502。
+# 本文件为修正版（含 8080 的对称删除）；下次维护窗口连同 unit 一起安装，装完只需 daemon-reload。
+ExecStop=-/usr/sbin/iptables -D INPUT -p tcp --dport 9929 -j DROP
+ExecStop=-/usr/sbin/iptables -D INPUT -p tcp --dport 8080 -j DROP
+ExecStop=-/usr/sbin/iptables -D INPUT -i lo -p tcp --dport 9929 -j ACCEPT
+ExecStop=-/usr/sbin/iptables -D INPUT -i lo -p tcp --dport 8080 -j ACCEPT
+ExecStop=-/usr/sbin/iptables -D INPUT -s 172.16.0.0/12 -p tcp --dport 9929 -j ACCEPT
+ExecStop=-/usr/sbin/iptables -D INPUT -s 172.16.0.0/12 -p tcp --dport 8080 -j ACCEPT
+
+[Install]
+WantedBy=multi-user.target

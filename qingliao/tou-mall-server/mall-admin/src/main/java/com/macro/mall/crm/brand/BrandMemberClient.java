@@ -327,6 +327,7 @@ public class BrandMemberClient {
      */
     private static final java.util.Set<String> PASSTHROUGH = new java.util.HashSet<>(java.util.Arrays.asList(
             "GIFT_CODE_INVALID", "GIFT_CODE_PAUSED", "GIFT_CODE_EXPIRED", "GIFT_CODE_FULL",
+            "GIFT_ALREADY_CLAIMED", "GIFT_NEW_MEMBER_ONLY",
             "MEMBERS_ONLY", "FEEDBACK_RATE_LIMIT", "REFUND_NOT_ALLOWED", "BAD_REQUEST"));
 
     /** 只透出顾客可理解、可行动的情况；内部错误统一按服务不可用处理。 */

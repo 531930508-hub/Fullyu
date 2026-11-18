@@ -182,7 +182,15 @@ describe('顾客品牌会员代理', () => {
     expect(sent).toEqual({ localUserId: customer.id, code: 'WELCOME30' });
 
     const again = await h.api('post', '/customer/brand-member/gift/claim', customer.token, { code: 'WELCOME30' });
-    expect(again.body.replayed).toBe(true);
+    expect(again.status).toBe(409);
+    expect(again.body.error).toBe('GIFT_ALREADY_CLAIMED');
+    expect(again.body.message).toContain('已领取过');
+
+    // 仅限新会员的码：CRM 拒绝时透出原因，不能当成服务不可用。
+    const restricted = await h.api('post', '/customer/brand-member/gift/claim', customer.token, { code: 'NEWBIE30' });
+    expect(restricted.status).toBe(409);
+    expect(restricted.body.error).toBe('GIFT_NEW_MEMBER_ONLY');
+    expect(restricted.body.message).toContain('仅限新会员');
 
     const full = await h.api('post', '/customer/brand-member/gift/claim', customer.token, { code: 'FULL0001' });
     expect(full.status).toBe(409);

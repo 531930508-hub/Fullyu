@@ -9,7 +9,8 @@
     "h5:check": "node scripts/h5.mjs check",
     "build:h5": "UNI_INPUT_DIR=\"$PWD\" UNI_OUTPUT_DIR=\"$PWD/unpackage/dist/build/h5\" uni build -p h5",
     "build:mp": "UNI_INPUT_DIR=\"$PWD\" UNI_OUTPUT_DIR=\"$PWD/unpackage/dist/build/mp-weixin\" uni build -p mp-weixin",
-    "h5:deploy": "node scripts/h5.mjs deploy"
+    "h5:deploy": "node scripts/h5.mjs deploy",
+    "build:mp:test": "VITE_API_BASE=https://test-cityretreat.fullyu.cn/api UNI_INPUT_DIR=\"$PWD\" UNI_OUTPUT_DIR=\"$PWD/unpackage/dist/build/mp-weixin\" uni build -p mp-weixin"
   },
   "devDependencies": {
     "@dcloudio/uni-h5": "3.0.0-alpha-5010220260604001",

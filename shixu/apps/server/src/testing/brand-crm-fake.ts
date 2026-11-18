@@ -314,14 +314,23 @@ export async function startFakeBrandCrm(options: {
         reply(res, 409, { error: 'GIFT_CODE_FULL', message: '该会员码名额已满' });
         return;
       }
-      if (input.code !== 'WELCOME30') {
+      if (input.code === 'NEWBIE30') {
+        if (state.cardState === 'ACTIVE') {
+          reply(res, 409, { error: 'GIFT_NEW_MEMBER_ONLY', message: '该会员码仅限新会员领取；你已购买过会员，不能领取' });
+          return;
+        }
+      }
+      if (input.code !== 'WELCOME30' && input.code !== 'NEWBIE30') {
         reply(res, 404, { error: 'GIFT_CODE_INVALID', message: '会员码不存在，请核对后再试' });
         return;
       }
-      const replayed = state.giftClaims.has(input.localUserId);
+      if (state.giftClaims.has(input.localUserId)) {
+        reply(res, 409, { error: 'GIFT_ALREADY_CLAIMED', message: '本活动已领取过，不能重复领取' });
+        return;
+      }
       state.giftClaims.add(input.localUserId);
       state.cardState = 'ACTIVE';
-      reply(res, 201, { card: cardPayload('ACTIVE'), days: 30, replayed });
+      reply(res, 201, { card: cardPayload('ACTIVE'), days: 30 });
       return;
     }
 

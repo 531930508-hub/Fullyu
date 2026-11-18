@@ -1,0 +1,29 @@
+{
+  "name": "@fullyu/crm-console",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Full愈 中后台平台（Vue 3 壳 + 按模块注册）；CRM 只是其中 modules/crm",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@ant-design/icons-vue": "^7.0.0",
+    "ant-design-vue": "^4.1.0",
+    "axios": "^1.6.0",
+    "pinia": "^2.1.7",
+    "vue": "^3.4.0",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "less": "^4.2.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0",
+    "vue-tsc": "^2.0.0"
+  }
+}

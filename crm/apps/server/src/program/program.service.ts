@@ -959,7 +959,7 @@ export class ProgramService {
         title: 'Full愈 品牌会员体验',
         appTarget: this.safeAppTarget(row.appTarget),
         appName: GIFT_APP_LABEL[this.safeAppTarget(row.appTarget)],
-        line: `微信扫小程序码打开${GIFT_APP_LABEL[this.safeAppTarget(row.appTarget)]}会员页，登录后自动领取 ${row.days} 天品牌会员`,
+        line: `微信扫小程序码打开${GIFT_APP_LABEL[this.safeAppTarget(row.appTarget)]}会员页，登录后自动领取 ${row.days} 天品牌会员${row.newMemberOnly ? '（仅限新会员）' : ''}`,
         deadline: row.claimDeadline ? formatDate(row.claimDeadline) : null
       }
     };
@@ -983,6 +983,10 @@ export class ProgramService {
         throw badRequest('名额需为 1–100000 的整数；不限名额请留空');
       }
     }
+    if (input.newMemberOnly !== undefined && typeof input.newMemberOnly !== 'boolean') {
+      throw badRequest('仅限新会员需为布尔值');
+    }
+    const newMemberOnly = input.newMemberOnly === true;
     let claimDeadline: Date | null = null;
     if (input.claimDeadline) {
       claimDeadline = new Date(dayOf(input.claimDeadline, 'claimDeadline').getTime() + DAY_MS - 1);
@@ -1018,6 +1022,7 @@ export class ProgramService {
           referrerName: referrerType ? optText(input.referrerName, 30) : '',
           days,
           quota,
+          newMemberOnly,
           appTarget,
           claimDeadline,
           status: needsApproval ? 'PENDING_APPROVAL' : 'ACTIVE',
@@ -1030,7 +1035,7 @@ export class ProgramService {
         actor: actorOf(staff),
         action: '创建会员码',
         target: code,
-        detail: `${name} · ${days} 天 · ${GIFT_APP_LABEL[appTarget]}小程序 · 名额 ${quota ?? '不限'}${needsApproval ? ' · 待审批' : ''}`
+        detail: `${name} · ${days} 天 · ${GIFT_APP_LABEL[appTarget]}小程序 · 名额 ${quota ?? '不限'}${newMemberOnly ? ' · 仅限新会员' : ''}${needsApproval ? ' · 待审批' : ''}`
       });
       return this.campaignView(row, new Date());
     });
@@ -1129,13 +1134,23 @@ export class ProgramService {
       });
       if (existing) {
         const card = await tx.memberBrandCard.findUnique({ where: { id: existing.cardId } });
-        return { card: card ? cardBrief(card) : null, days: campaign.days, replayed: true };
+        throw conflict(
+          card
+            ? `本活动已领取过（会员有效期至 ${formatDate(card.validUntil)}），不能重复领取`
+            : '本活动已领取过，不能重复领取',
+          { code: 'GIFT_ALREADY_CLAIMED' }
+        );
       }
       if (campaign.status === 'PAUSED') {
         throw new ApiError(409, '该会员码暂停领取', { code: 'GIFT_CODE_PAUSED' });
       }
       if (campaign.claimDeadline && campaign.claimDeadline.getTime() < now.getTime()) {
         throw new ApiError(409, '该会员码已过领取截止日', { code: 'GIFT_CODE_EXPIRED' });
+      }
+      if (campaign.newMemberOnly && !(await this.isNewMember(tx, member.id))) {
+        throw conflict('该会员码仅限新会员领取；你已购买过会员，不能领取', {
+          code: 'GIFT_NEW_MEMBER_ONLY'
+        });
       }
       const bumped = await tx.giftCampaign.updateMany({
         where: {
@@ -1176,15 +1191,23 @@ export class ProgramService {
           giftCampaignId: campaign.id
         }
       });
-      await tx.giftClaim.create({
-        data: {
-          id: newId('GCL'),
-          campaignId: campaign.id,
-          memberId: member.id,
-          business: ctx.business,
-          cardId: card.id
+      try {
+        await tx.giftClaim.create({
+          data: {
+            id: newId('GCL'),
+            campaignId: campaign.id,
+            memberId: member.id,
+            business: ctx.business,
+            cardId: card.id
+          }
+        });
+      } catch (error) {
+        // 并发双击/重放时唯一键兜底：整单回滚（含名额 +1 与新建卡），明确告知不能重复领取。
+        if ((error as { code?: string } | null)?.code === 'P2002') {
+          throw conflict('本活动已领取过，不能重复领取', { code: 'GIFT_ALREADY_CLAIMED' });
         }
-      });
+        throw error;
+      }
       await audit(tx, {
         actor: extActor(ctx),
         action: '领取会员码',
@@ -1198,6 +1221,21 @@ export class ProgramService {
       });
       return { card: cardBrief(card), days: campaign.days, replayed: false };
     });
+  }
+
+  /**
+   * 新会员 = 从未持有付费卡：线上实付 PAID、线下实收 MANUAL（paidCents > 0）。
+   * 已退款、已过期的付费卡也算「买过」；赠送卡（GIFT）与畅练卡附赠（BUNDLE）不算购买。
+   */
+  private async isNewMember(tx: Prisma.TransactionClient, memberId: string) {
+    const paid = await tx.memberBrandCard.findFirst({
+      where: {
+        memberId,
+        OR: [{ source: 'PAID' }, { source: 'MANUAL', paidCents: { gt: 0 } }]
+      },
+      select: { id: true }
+    });
+    return !paid;
   }
 
   private campaignView(
@@ -1217,6 +1255,7 @@ export class ProgramService {
       days: row.days,
       quota: row.quota,
       claimed: row.claimed,
+      newMemberOnly: row.newMemberOnly,
       appTarget,
       appName: GIFT_APP_LABEL[appTarget],
       claimDeadline: row.claimDeadline ? formatDate(row.claimDeadline) : null,

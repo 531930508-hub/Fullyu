@@ -514,6 +514,8 @@ model GiftCampaign {
   days           Int       @default(30)
   quota          Int?
   claimed        Int       @default(0)
+  // 仅限新会员：从未持有付费卡（PAID / 线下实收 MANUAL）的会员才能领。
+  newMemberOnly  Boolean   @default(false) @map("new_member_only")
   // 扫码打开的小程序会员页：sx=时叙 / zc=在场 / ql=轻疗
   appTarget      String    @default("sx") @map("app_target")
   claimDeadline  DateTime? @map("claim_deadline")

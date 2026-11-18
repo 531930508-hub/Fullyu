@@ -17,7 +17,7 @@ pnpm db:seed                                   # 6 角色 / 5 账号 / 3 位合�
 pnpm test                                      # Jest + supertest，独立临时库
 pnpm lint
 pnpm build:server                              # 先编 shared，再编 server
-pnpm dev:server                                # 先编 shared，再 tsx watch
+pnpm dev:server                                # 先编 shared，再 nest start --watch
 ```
 
 生产启动：`node apps/server/dist/main.js`（先 `pnpm build`）。生产必须显式设置 32 位以上、非示例值的 `JWT_SECRET`，否则拒绝启动。
@@ -228,7 +228,7 @@ E2 证据（测试环境，2026-11-08）：
 - 账号约束：账号 3–32 位、去首尾空白、唯一；初始密码与重置密码至少 8 位；至少一个角色，角色不存在 400。停用自己、移除自己的 CRM 管理员角色、以及让系统失去最后一名启用管理员都会被 409 拒绝（`STAFF_SELF_DEACTIVATE` / `STAFF_SELF_DEMOTE` / `LAST_ADMIN`）。
 - 会话失效：重置密码与停用会递增 `tokenVersion`，旧 JWT 下一次请求即 401；改派角色不需要作废令牌，权限按请求重新读取。
 - 管理后台（`node dist/main.js` + 合成账号，Playwright 无头实测）：左侧导航默认只展开当前页所在分组，点击可展开/收起并记到 `localStorage`，路由切页自动展开当前组，390px 窄屏回到平铺；用户页完成新增、改名改派、停用、重置密码；角色页显示 20 个权限点、可新建与删除自定义角色；仅 `crm:staff:edit` 只看到「后台用户」，仅 `crm:role:edit` 只看到「角色权限」。控制台无报错。
-- 已知：`pnpm dev:server`（tsx）下 Nest 拿不到构造器 `design:paramtypes`，登录会 500；本机联调请用 `pnpm build:server && node dist/main.js`。这是既有脚本问题，与本批改动无关。角色目前只能改权限，改名/改说明未做。
+- 本机联调：`pnpm dev:server`（`nest start --watch`，tsc 编译保留 `emitDecoratorMetadata`）或 `pnpm build:server && node dist/main.js`。此前用 `tsx` 启动会丢构造器 `design:paramtypes`、登录 500，2026-11-18 已把 `dev` 脚本改为 Nest CLI 并实测登录成功。角色目前只能改权限，改名/改说明未做。
 
 > 2026-11-17 起测试环境迁到上海 `8.133.6.18`：`https://test-crm.fullyu.cn/`（`/api/` → `127.0.0.1:8897`，库 `crm_test`），下面 47.111 + SSH 隧道的写法仅作历史记录。以下「用户与角色」发布沿用新环境。
 
@@ -249,6 +249,38 @@ E2 证据（测试环境，2026-11-08）：
 
 - 生产除 CRM 管理员外没有角色带 `crm:staff:edit`；要让运营或 HR 维护后台账号，需在「用户与角色 → 角色权限」里给对应角色勾上该项。
 - 本次只发布 CRM 产物，**未并入 `main`**：`feat/crm-admin-cleanup-20261122` 上还混着轻疗/在场/时叙/部署脚本的未完成提交，`main` 也落后于该分支若干 CRM 提交（含业务卡下线）。合并进 `main` 需要单独一次带冲突处理的收口。
+
+## 发布记录：业务会员卡下线 + dev 脚本修复（2026-11-18 12:26）
+
+| 项 | 值 |
+|---|---|
+| commit | `05be16d`（分支 `feat/crm-console-shell-20261123`；含业务会员卡下线、`dev` 改 `nest start --watch`） |
+| 测试 | `test-crm.fullyu.cn`（8.133.6.18 `/opt/fullyu-crm-test`，unit `fullyu-crm-test`，库 `crm_test`） |
+| 生产 | `crm.fullyu.cn`（121.40.119.57 `/opt/fullyu-crm`，unit `fullyu-crm`，库 RDS `crm`） |
+| 产物 | `apps/server/dist`（`build:mysql`）、`packages/shared/dist`；`apps/admin/public` 内容未变（`app.js` md5 `9a6c9abc…`） |
+| 探针后 | 两端 `/api/health` 200、`/admin/` 200、`/game/` 200、`/` 302、`/api/issued-cards` 401、`/api/business-cards` 404 |
+| 数据 | 发布前后 `schema.mysql.prisma` 逐字节一致（637 行 / 32 model），**未跑 `db:push`**，未删表 |
+| 备份 | 生产 `/root/backups/crm-all-20261118-122111.tar.gz` + `rds-crm-20261118-122245.sql.gz`（1.3 MB）；测试 `/root/backups/test-crm-20261118-121827.tar.gz` + `crm_test-20261118-121845.sql.gz` |
+| 回滚 | 解包 tar 回对应目录 → `systemctl restart fullyu-crm`（测试为 `fullyu-crm-test`） |
+
+注意事项：
+
+- 业务会员卡源码 `src/cards/business-cards.*` 已随分支删除，接口 404；本地与两端 dist 已清空重建，无残留 .js。
+- `apps/console` 只随代码同步，`main.ts` 仍只挂 `/admin`（`apps/admin/public`），console 构建产物未部署。
+- 生产机无全局 `pnpm`，本次用 `npx -y pnpm@10.34.4 install --frozen-lockfile`；`dist` 为清空后重建，避免旧模块残留。
+
+### 业务会员卡清表（2026-11-18 12:35）
+
+- 线上库核查：两端 MySQL（生产 RDS `crm`、测试 `crm_test`）表数与 `schema.mysql.prisma` 一一对应（各 32 张），**不存在 `business_card_catalog`**，无需 DROP；RDS 全实例搜 `%business_card%` 为空。
+- 唯一残留：生产回滚用 SQLite 快照 `/opt/fullyu-crm/data/crm.db`（MySQL 迁移前，33 表）里有该表 2 行（在场畅练卡、轻疗历史年卡）。已导出 `/root/backups/business_card_catalog-20261118-123556.csv` 后 `DROP TABLE` + `VACUUM`，现 32 表、`integrity_check=ok`。`crm.db.bak-*` 历史快照未动。
+- 本地 `prisma/dev.db` 与两端 dist 产物同样无该表/该文件。
+
+### 整体复验（测试环境，真实账号，2026-11-18 12:4x）
+
+- 账号：`13800001001`（周岚，CRM 管理员）。为登录临时替换过一次口令 hash，复验后已恢复原 hash（与备份逐字节一致，临时口令现返回 401）。
+- 浏览器（Playwright + 本机 Chromium，1440×900）：登录后逐页走查 16 个菜单页——概览 / 会员 / 积分流水 / 调整审批 / 品牌会员 / 会员卡台账 / 规则配置 / 游戏礼物 / 会员码 / 提货核销 / 反馈与故事 / 三端同步 / 异常队列 / 月度对账 / 审计日志 / 用户与角色，全部渲染出数据，**控制台 0 报错、0 个 5xx**。
+- 接口：带 token 抽查 `/api/staff`、`/api/roles`、`/api/members`、`/api/issued-cards`、`/api/reports/monthly`、`/api/queue`、`/api/rules`、`/api/sync/status`、`/api/notices`、`/api/stories`、`/api/points/ledger`、`/api/audit` 均 200；未登录访问 `/api/issued-cards` 401、`/api/business-cards` 404。
+- 生产按授权只做未登录探针与日志检查，未用真实账号登录复验（口令不在仓库/环境变量里）。
 
 ## 测试环境部署（2026-11-08）
 
@@ -282,3 +314,11 @@ E2 证据（测试环境，2026-11-08）：
 - **管理后台**：静态资源与 API 基址改造见“测试环境部署”；`/crm-admin/` 加载 `config.js`（`/crm-api/api`）、登录表单渲染正常，错误口令请求命中 `/crm-api/api/auth/login` 并返回 401；服务端用真实账号验证 `/auth/me`、`/members`、`/adjustments`、`/brand-cards`、`/rules`、`/game/prizes`、`/sync/status`、`/queue`、`/reports/monthly`、`/audit`、`/roles` 均 `200`。登录后的页面渲染未在浏览器内复验（避免在日志中传递口令），此前本机已完成同版本 UI 走查。
 
 已知缺口：真实支付未接，三端购卡返回“支付通道尚未接入”；身份合并后台操作未做；三端小程序已上传开发版，体验版切换与提审待公众平台操作；时叙/在场积分仍只读 CRM，写入权威未切换（本批只完成轻疗写入切换）；CRM 不再计算积分过期（`getInvalidIntegration` 恒为 0），过期规则需随写入切换单独实现；CRM 写入成功但本地事务回滚的崩溃窗口只能靠稳定 ref 重放核对，尚无自动巡检。
+
+## 环境对接调整（2026-11-18）
+
+- 测试轻疗：`test-cityretreat.fullyu.cn` 的 `/crm-api/` 与 `/crm-admin/` 由生产 CRM 改为本机 `127.0.0.1:8897`（`fullyu-crm-test`，库 `crm_test`）；`/opt/fullyu-mall-test/crm.env` 的 `CRM_SECRET` 同步为 crm_test 的 `ql-mall-test`。
+- 测试在场/时叙：`presence-test`、`teahour-test` 打开 `CRM_ENABLED` / `BRAND_CRM_ENABLED`，指向 `https://test-crm.fullyu.cn`，密钥用 crm_test 的 `zc-presence` / `sx-teahour`。
+- 测试 CRM：`CRM_EXT_WEBHOOKS` 只配 `ql` / `sx` / `zc` 三个 test 域名，`CRM_OUTBOX_INTERVAL_MS=15000`。
+- 生产 CRM：移除 `retreat` webhook 与 `ql-mall-test` 密钥，仅保留 `presence` / `teahour`；轻疗批次 1 前不要加回。
+- 小程序：`presence` / `qingliao` 支持 `VITE_API_BASE` 编译期注入。测试构建 `build:mp-weixin:test`（在场/时叙）、`build:mp:test`（轻疗）；默认 mp 构建走生产，在场 H5 走同源，轻疗 H5 部署脚本默认注入测试地址（生产需显式覆盖）。测试域名仍需在三个 appid 后台加入 request 合法域名。

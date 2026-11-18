@@ -14,7 +14,7 @@
 | CRM 明文资料、净消费、轨迹、生日 | 会员 360、`members/:id/program`（净消费 = 实付 − 退款） | — |
 | 续费提醒展示「已省 ¥X」 | 三端会员页 EXPIRING 态；节省来自订单上报 `savedCents` | — |
 | 邀请好友改为「买一赠一」：好友领券后与邀请人同上一节课（2026-11 补充） | 名额按自然季 1 张；好友领 `PRESENCE_BOGO_CLASS` 券（3 个月）；在场报名校验邀请人已付同课，邀请人退课级联取消好友席并提醒 | 卡版本 `perks.presence.invitesPerQuarter` |
-| 赠送会员码：渠道、推荐人、天数（默认 30）、名额（满了显示「已满」）、领取截止；>30 天需审批 | `gift-campaigns*`、`POST /v1/brand-member/gift/claim`；发起人不能自审 | 后台「会员码」 |
+| 赠送会员码：渠道、推荐人、天数（默认 30）、名额（满了显示「已满」）、领取截止、仅限新会员（可锁老客）；>30 天需审批 | `gift-campaigns*`、`POST /v1/brand-member/gift/claim`；发起人不能自审；重复领取 409 `GIFT_ALREADY_CLAIMED` | 后台「会员码」 |
 | 意见反馈 + 会员故事（仅会员可见） | `POST feedback`、`GET stories`；摘录原话需会员勾选同意 | 后台「反馈与故事」 |
 | 退款：7 天内退实付 − 已领实物礼；7 天后退实付 − 已享优惠 − 实物礼；≤0 不能退；赠送/附赠不退 | `refundQuote`（CRM 唯一口径）；三端只展示试算结果 | 后台可「协商退款」并留痕 |
 | 实物礼改提货码 | `PickupVoucher`，任意门店核销一次，条件更新防重复 | 卡版本 `gifts` |
