@@ -1,6 +1,6 @@
 # Full愈 CRM 中台（服务端 + 管理后台）
 
-会员与积分的唯一账本，独立于三端业务系统运行。当前为**一期第一批 + 1B + 1C + 1D + 1E + 1F**：登录与权限、会员查询/档案/资料修改、积分批次与流水、单笔/批量调整与第二人审批、只追加审计；大会员卡产品与不可变版本；三端签名接口（身份解析/批量导入/积分入账与扣减、品牌会员身份/产品/报价/开卡、愈行之旅骰子与礼物）；规则版本、月度对账、outbox/webhook/异常队列、角色权限在线调整；同源零构建管理后台；三端服务端品牌会员代理。
+会员与积分的唯一账本，独立于三端业务系统运行。当前为**一期第一批 + 1B + 1C + 1D + 1E + 1F**：登录与权限、会员查询/档案/资料修改、积分批次与流水、单笔/批量调整与第二人审批、只追加审计；大会员卡产品与不可变版本；三端签名接口（身份解析/批量导入/积分入账与扣减、品牌会员身份/产品/报价/开卡、愈行之旅骰子与礼物）；规则版本、月度对账、outbox/webhook/异常队列、用户与角色管理（账号新增/停用/改派/重置密码、角色权限与自定义角色删除）；同源零构建管理后台；三端服务端品牌会员代理。
 
 **边界**：已在测试环境部署（SQLite、合成/迁移数据），不是生产上线；真实支付仍未接入，三端购卡统一返回“支付通道尚未接入”。构建、测试通过不等于生产批准；生产部署、真实扣款与小程序发布仍需分别授权。
 
@@ -47,7 +47,7 @@ pnpm --filter @fullyu/crm-server build:mysql   # = schema:mysql → prisma gener
 
 | 路径 | 职责 |
 |---|---|
-| `packages/shared/src/index.ts` | 业务枚举与对外键映射、19 个权限点、六角色模板、500 分免审阈值、积分为期 |
+| `packages/shared/src/index.ts` | 业务枚举与对外键映射、20 个权限点、六角色模板、500 分免审阈值、积分为期 |
 | `apps/server/prisma/schema.prisma` | 员工与角色、会员与身份、积分批次/流水、调整单、审计、幂等键、大会员卡产品/版本、会员卡期/报价、nonce、游戏状态/票据/骰子账本/礼物、规则版本、outbox、业务同步状态 |
 | `apps/server/prisma/seed.ts` | 合成账号与会员；年卡/月卡；林小满生效年卡与骰子；积分与骰子 CURRENT 规则；`SEED_PASSWORD` 仅用于本地/测试 |
 | `apps/server/src/auth` | 登录（bcrypt + JWT）、`/auth/me`、员工守卫、权限守卫 |
@@ -57,11 +57,12 @@ pnpm --filter @fullyu/crm-server build:mysql   # = schema:mysql → prisma gener
 | `apps/server/src/game` | 愈行之旅：骰子领取/退款、掷骰与礼物、规则版本（未来生效、撤销） |
 | `apps/server/src/reports` | 月度对账：年卡售卖/退款、积分发行/消耗、骰子发放/消耗，只出事实数据 |
 | `apps/server/src/sync` | outbox 投递、HMAC webhook、重试退避、同步滞后、异常队列 |
-| `apps/server/src/roles` | 角色权限读取、在线调整与自定义角色创建；CRM 管理员受保护 |
+| `apps/server/src/roles` | 角色权限读取、在线调整、自定义角色创建与删除；有用户的角色不可删，CRM 管理员受保护 |
+| `apps/server/src/staff` | 后台用户：列表、新增、改名/改派/启停、重置密码；本人与「最后一名管理员」保护 |
 | `apps/server/src/audit` | 审计查询（`crm:audit:view`） |
 | `apps/server/src/external` | 三端身份/积分签名接口（`x-crm-*`）：身份解析、批量导入、积分入账/扣减 |
 | `apps/server/src/brand-member` | 三端品牌会员契约（`X-Fy-*`）：身份页、产品目录、报价/开卡、游戏票据；nonce 防重放 |
-| `apps/admin/public` | 零构建管理后台：概览、会员、调整、卡、规则、礼物、同步、队列、对账、审计、角色 |
+| `apps/admin/public` | 零构建管理后台：概览、会员、调整、卡、规则、礼物、同步、队列、对账、审计、用户与角色（两个标签页）；左侧导航按分组折叠 |
 | `apps/server/src/common` | 错误语义、异常过滤器、Prisma、幂等、审计写入 |
 | `apps/server/src/testing/harness.ts` | 集成测试脚手架：复制模板库、起 Nest、发请求 |
 | `apps/server/src/crm.spec.ts` | 会员/积分/审计集成用例（含品牌卡与骰子摘要） |
@@ -72,6 +73,7 @@ pnpm --filter @fullyu/crm-server build:mysql   # = schema:mysql → prisma gener
 | `apps/server/src/reports/reports.spec.ts` | 月度事实报表、跨月与权限 |
 | `apps/server/src/sync/sync.spec.ts` | outbox、HMAC 投递、失败重试与权限 |
 | `apps/server/src/roles/roles.spec.ts` | 内置角色保护、自定义角色创建、非法权限、即时生效与审计 |
+| `apps/server/src/staff/staff.spec.ts` | 用户列表与权限、账号校验、本人/最后管理员保护、重置密码失效旧令牌、角色删除 |
 
 ## 接口（前缀 `/api`）
 
@@ -107,9 +109,14 @@ pnpm --filter @fullyu/crm-server build:mysql   # = schema:mysql → prisma gener
 | `GET /queue` | `crm:queue:handle` | 投递失败与过期报价 |
 | `POST /queue/:id/retry` | `crm:queue:handle` | 异常队列重投 |
 | `GET /reports/monthly?month=YYYY-MM` | `crm:report:view` | 月度事实数据，不生成结算凭证 |
-| `GET /roles` | `crm:role:edit` | 全部角色、人员数量、创建时间与权限点 |
+| `GET /roles` | `crm:role:edit` 或 `crm:staff:edit` | 全部角色、人员数量、创建时间与权限点 |
 | `POST /roles` | `crm:role:edit` | 创建自定义角色；名称唯一，至少一个权限点 |
 | `PATCH /roles/:id` | `crm:role:edit` | 在线改权限；CRM 管理员受保护，下一请求即生效 |
+| `DELETE /roles/:id` | `crm:role:edit` | 删除自定义角色；内置角色与仍有用户的角色 409 |
+| `GET /staff` | `crm:staff:edit` | 后台用户列表（姓名/账号/角色/状态/创建时间） |
+| `POST /staff` | `crm:staff:edit` | 新增用户；账号 3–32 位唯一、初始密码 ≥8 位、至少一个角色 |
+| `PATCH /staff/:id` | `crm:staff:edit` | 改名、改派角色、启停；不能停用自己或移除自己的管理员角色，系统至少保留一名启用管理员 |
+| `POST /staff/:id/password` | `crm:staff:edit` | 重置密码并递增 tokenVersion，旧登录立即失效 |
 
 ## 三端签名接口（1C）
 

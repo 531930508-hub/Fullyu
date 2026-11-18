@@ -65,13 +65,24 @@
     { id: 'queue', label: '异常队列', group: '同步与对账', perm: 'crm:queue:handle' },
     { id: 'reports', label: '月度对账', group: '同步与对账', perm: 'crm:report:view' },
     { id: 'audit', label: '审计日志', group: '治理', perm: 'crm:audit:view' },
-    { id: 'roles', label: '角色权限', group: '治理', perm: 'crm:role:edit' }
+    { id: 'staff', label: '用户与角色', group: '治理', any: ['crm:staff:edit', 'crm:role:edit'] }
   ];
+
+  const NAV_GROUP_KEY = 'fullyu.crm.navGroup';
 
   let session = loadSession();
   let badges = { adjustments: 0, prizes: 0, queue: 0 };
   let currentPage = '';
+  let openGroup = readNavGroup();
   let toastTimer = null;
+
+  function readNavGroup() {
+    try {
+      return localStorage.getItem(NAV_GROUP_KEY) || '';
+    } catch {
+      return '';
+    }
+  }
 
   const appEl = document.getElementById('app');
   const toastEl = document.getElementById('toast');
@@ -458,21 +469,26 @@
       <div class="shell">
         <aside class="sidebar">
           <div class="logo">Full愈<small>MEMBERSHIP LEDGER</small></div>
-          <div>
+          <div class="nav-groups">
             ${groups
               .map(
-                (group) => `
-              <div class="nav-group">
-                <span>${esc(group.name)}</span>
-                ${group.items
-                  .map(
-                    (item) => `
-                  <a class="nav-item" href="#/${item.id}" data-nav="${item.id}">
-                    <span>${esc(item.label)}</span>
-                    <span class="badge" data-badge="${item.id}" hidden></span>
-                  </a>`
-                  )
-                  .join('')}
+                (group, index) => `
+              <div class="nav-group" data-group="${esc(group.name)}" aria-expanded="false">
+                <button class="nav-group-toggle" type="button" data-group-toggle="${esc(group.name)}" aria-expanded="false" aria-controls="nav-items-${index}">
+                  <span>${esc(group.name)}</span>
+                  <span class="chev" aria-hidden="true">▾</span>
+                </button>
+                <div class="nav-items" id="nav-items-${index}">
+                  ${group.items
+                    .map(
+                      (item) => `
+                    <a class="nav-item" href="#/${item.id}" data-nav="${item.id}">
+                      <span>${esc(item.label)}</span>
+                      <span class="badge" data-badge="${item.id}" hidden></span>
+                    </a>`
+                    )
+                    .join('')}
+                </div>
               </div>`
               )
               .join('')}
@@ -494,9 +510,34 @@
           <section id="view"></section>
         </main>
       </div>`;
+    document.querySelectorAll('[data-group-toggle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const name = button.dataset.groupToggle;
+        setNavGroup(openGroup === name ? '' : name);
+      });
+    });
+    setNavGroup(openGroup);
     document.getElementById('logout').addEventListener('click', () => {
       saveSession(null);
       renderLogin('已退出登录');
+    });
+  }
+
+  /** 手风琴：同一时间只展开一个分组；传空串表示全部收起。 */
+  function setNavGroup(name) {
+    openGroup = name || '';
+    try {
+      if (openGroup) localStorage.setItem(NAV_GROUP_KEY, openGroup);
+      else localStorage.removeItem(NAV_GROUP_KEY);
+    } catch {
+      // 隐私模式下写不进去就只在本次会话里记住
+    }
+    document.querySelectorAll('[data-group]').forEach((groupEl) => {
+      const open = groupEl.dataset.group === openGroup;
+      groupEl.setAttribute('aria-expanded', open ? 'true' : 'false');
+      groupEl.classList.toggle('open', open);
+      const toggle = groupEl.querySelector('[data-group-toggle]');
+      if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
   }
 
@@ -565,8 +606,14 @@
     const raw = location.hash.replace(/^#\/?/, '').split('?')[0];
     if (!raw) return { page: 'overview', param: '' };
     const parts = raw.split('/').filter(Boolean);
-    const page = parts[0] || 'overview';
-    return { page, param: parts.slice(1).join('/') };
+    let page = parts[0] || 'overview';
+    let param = parts.slice(1).join('/');
+    // 旧链接 #/roles 收敛到「用户与角色」的角色标签页
+    if (page === 'roles') {
+      page = 'staff';
+      param = param || 'roles';
+    }
+    return { page, param };
   }
 
   async function route() {
@@ -583,6 +630,7 @@
     }
     currentPage = page;
     markNav(page);
+    if (openGroup !== item.group) setNavGroup(item.group);
     const view = document.getElementById('view');
     const actions = document.getElementById('page-actions');
     const title = document.getElementById('page-title');
@@ -3291,17 +3339,268 @@
     });
   }
 
-  /* ---------------------------------------------------------------- 角色权限 */
+  /* ---------------------------------------------------------------- 用户与角色 */
 
-  async function pageRoles(ctx) {
-    ctx.setTitle('角色权限', '修改按请求即时生效；CRM 管理员固定全部权限，不能修改');
+  async function pageStaff(ctx) {
+    const tabs = [];
+    if (can('crm:staff:edit')) tabs.push(['users', '后台用户']);
+    if (can('crm:role:edit')) tabs.push(['roles', '角色权限']);
+    if (!tabs.length) {
+      ctx.setTitle('用户与角色', '当前账号没有用户或角色管理权限');
+      ctx.view.innerHTML = `<div class="panel"><div class="empty">请联系 CRM 管理员授予「维护后台用户」或「维护角色权限」。</div></div>`;
+      return;
+    }
+    const active = tabs.some(([id]) => id === ctx.param) ? ctx.param : tabs[0][0];
+    ctx.setTitle('用户与角色', '新增与停用后台账号、维护角色权限；写操作全部记入审计日志');
+    ctx.view.innerHTML = `
+      <div class="tabs">
+        ${tabs
+          .map(
+            ([id, label]) =>
+              `<a class="tab ${id === active ? 'active' : ''}" href="#/staff/${id}">${esc(label)}</a>`
+          )
+          .join('')}
+      </div>
+      <div id="staff-tab"></div>`;
+    const body = document.getElementById('staff-tab');
+    body.innerHTML = '<div class="panel"><div class="empty">加载中…</div></div>';
+    if (active === 'users') await renderUsersTab(body);
+    else await renderRolesTab(body);
+  }
+
+  /* ------------------------------------------------ 标签页：后台用户 */
+
+  async function renderUsersTab(root) {
+    const [staffData, roleData] = await Promise.all([api('/staff'), api('/roles')]);
+    const roles = roleData.roles;
+    let rows = staffData.staff;
+    let editId = '';
+
+    const roleNames = (row) => row.roles.map((role) => role.name).join('、') || '—';
+    const roleCheckboxes = (selected) =>
+      roles
+        .map(
+          (role) => `<label class="check"><input type="checkbox" name="staff-role" value="${esc(role.id)}" ${
+            selected.includes(role.id) ? 'checked' : ''
+          } />${esc(role.name)} <span class="help mono">${esc(role.id)}</span></label>`
+        )
+        .join('');
+
+    function drawEdit() {
+      const panel = document.getElementById('staff-edit-panel');
+      const row = rows.find((item) => item.id === editId);
+      if (!row) {
+        panel.hidden = true;
+        panel.innerHTML = '';
+        return;
+      }
+      const self = row.id === session.staff.id;
+      panel.hidden = false;
+      panel.innerHTML = `
+        <div class="panel-head"><h2>编辑 ${esc(row.name)}</h2><span class="help mono">${esc(row.username)}</span></div>
+        <form id="staff-edit-form">
+          <div class="form-grid">
+            <div class="field"><label>姓名</label><input name="name" required maxlength="20" value="${esc(row.name)}" /></div>
+            <div class="field"><label>状态</label><select name="active" ${self ? 'disabled' : ''}>${options(
+              [
+                ['true', '启用'],
+                ['false', '停用']
+              ],
+              row.active ? 'true' : 'false'
+            )}</select></div>
+            <div class="field full"><label>角色</label>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${roleCheckboxes(
+                row.roles.map((role) => role.id)
+              )}</div>
+              ${self ? '<div class="help">不能停用自己，也不能移除自己的 CRM 管理员角色。</div>' : ''}
+            </div>
+          </div>
+          <div class="row-actions" style="margin-top:14px">
+            <button class="btn" type="submit">保存</button>
+            <button class="btn ghost" type="button" data-edit-cancel>取消</button>
+          </div>
+        </form>`;
+      panel.querySelector('[data-edit-cancel]').addEventListener('click', () => {
+        editId = '';
+        drawEdit();
+      });
+      panel.querySelector('#staff-edit-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.target;
+        const values = formValues(form);
+        const roleIds = [...form.querySelectorAll('input[name="staff-role"]:checked')].map(
+          (input) => input.value
+        );
+        await guard(event.submitter, async () => {
+          try {
+            await api(`/staff/${row.id}`, {
+              method: 'PATCH',
+              body: {
+                name: values.name,
+                ...(self ? {} : { active: values.active === 'true' }),
+                roleIds
+              }
+            });
+            toast('用户已更新');
+            editId = '';
+            await load();
+          } catch (error) {
+            reportError(error);
+          }
+        });
+      });
+    }
+
+    function draw() {
+      root.innerHTML = `
+        <div class="panel">
+          <div class="panel-head"><h2>后台用户</h2><span class="help">共 ${rows.length} 个账号</span></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>姓名</th><th>账号</th><th>角色</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+            <tbody>
+              ${rows
+                .map(
+                  (row) => `<tr>
+                    <td>${esc(row.name)}${row.id === session.staff.id ? ' <span class="help">（本人）</span>' : ''}</td>
+                    <td class="mono small">${esc(row.username)}</td>
+                    <td class="small">${esc(roleNames(row))}</td>
+                    <td>${row.active ? pill('启用', 'green') : pill('停用', 'amber')}</td>
+                    <td class="small">${fmt(row.createdAt)}</td>
+                    <td><div class="row-actions">
+                      <button class="btn ghost small" data-edit-staff="${esc(row.id)}">编辑</button>
+                      <button class="btn ghost small" data-toggle-staff="${esc(row.id)}" ${
+                        row.id === session.staff.id ? 'disabled' : ''
+                      }>${row.active ? '停用' : '启用'}</button>
+                      <button class="btn ghost small" data-reset-staff="${esc(row.id)}">重置密码</button>
+                    </div></td>
+                  </tr>`
+                )
+                .join('')}
+            </tbody>
+          </table></div>
+        </div>
+        <div class="panel" id="staff-edit-panel" hidden></div>
+        <div class="panel">
+          <div class="panel-head"><h2>新增用户</h2><span class="help">账号 3–32 位且不能重复；初始密码至少 8 位</span></div>
+          <form id="staff-create">
+            <div class="form-grid">
+              <div class="field"><label>姓名</label><input name="name" required maxlength="20" /></div>
+              <div class="field"><label>登录账号</label><input name="username" required minlength="3" maxlength="32" autocomplete="off" placeholder="例如 13900000001" /></div>
+              <div class="field"><label>初始密码</label><input name="password" type="password" required minlength="8" autocomplete="new-password" /></div>
+              <div class="field"><label>状态</label><select name="active">${options(
+                [
+                  ['true', '启用'],
+                  ['false', '停用']
+                ],
+                'true'
+              )}</select></div>
+              <div class="field full"><label>角色</label>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${roleCheckboxes([])}</div>
+              </div>
+            </div>
+            <div class="row-actions" style="margin-top:14px"><button class="btn" type="submit">创建用户</button></div>
+          </form>
+        </div>`;
+      bind();
+      drawEdit();
+    }
+
+    function bind() {
+      root.querySelectorAll('[data-edit-staff]').forEach((button) => {
+        button.addEventListener('click', () => {
+          editId = button.dataset.editStaff;
+          drawEdit();
+          document
+            .getElementById('staff-edit-panel')
+            .scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+      });
+      root.querySelectorAll('[data-toggle-staff]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const row = rows.find((item) => item.id === button.dataset.toggleStaff);
+          if (
+            row.active &&
+            !window.confirm(`停用 ${row.name}（${row.username}）？停用后该账号的登录会立即失效。`)
+          ) {
+            return;
+          }
+          await guard(button, async () => {
+            try {
+              await api(`/staff/${row.id}`, { method: 'PATCH', body: { active: !row.active } });
+              toast(row.active ? '用户已停用' : '用户已启用');
+              await load();
+            } catch (error) {
+              reportError(error);
+            }
+          });
+        });
+      });
+      root.querySelectorAll('[data-reset-staff]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const row = rows.find((item) => item.id === button.dataset.resetStaff);
+          const next = window.prompt(`为 ${row.name}（${row.username}）设置新密码（至少 8 位）`, '');
+          if (!next) return;
+          await guard(button, async () => {
+            try {
+              await api(`/staff/${row.id}/password`, { method: 'POST', body: { password: next } });
+              if (row.id === session.staff.id) {
+                saveSession(null);
+                renderLogin('密码已重置，请用新密码重新登录');
+                return;
+              }
+              toast('密码已重置，该账号旧登录已失效');
+            } catch (error) {
+              reportError(error);
+            }
+          });
+        });
+      });
+      const form = document.getElementById('staff-create');
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const values = formValues(form);
+        const roleIds = [...form.querySelectorAll('input[name="staff-role"]:checked')].map(
+          (input) => input.value
+        );
+        await guard(event.submitter, async () => {
+          try {
+            await api('/staff', {
+              method: 'POST',
+              body: {
+                name: values.name,
+                username: values.username,
+                password: values.password,
+                active: values.active === 'true',
+                roleIds
+              }
+            });
+            toast('用户已创建');
+            await load();
+          } catch (error) {
+            reportError(error);
+          }
+        });
+      });
+    }
+
+    async function load() {
+      rows = (await api('/staff')).staff;
+      draw();
+    }
+
+    draw();
+  }
+
+  /* ------------------------------------------------ 标签页：角色权限 */
+
+  async function renderRolesTab(root) {
     const data = await api('/roles');
     const perms = data.permissions;
-    ctx.view.innerHTML = `
+    root.innerHTML = `
       <div class="panel">
         <div class="panel-head"><h2>角色概览</h2><span class="help">共 ${data.roles.length} 个角色，按创建时间排列</span></div>
         <div class="table-wrap"><table>
-          <thead><tr><th>角色</th><th>说明</th><th>人员数量</th><th>创建时间</th><th>类型</th></tr></thead>
+          <thead><tr><th>角色</th><th>说明</th><th>人员数量</th><th>创建时间</th><th>类型</th><th></th></tr></thead>
           <tbody>
             ${data.roles
               .map(
@@ -3311,6 +3610,11 @@
                   <td>${role.staffCount} 人</td>
                   <td class="small">${fmt(role.createdAt)}</td>
                   <td>${role.builtin ? pill('内置') : pill('自定义', 'green')}</td>
+                  <td>${
+                    role.builtin || role.perms.includes('*')
+                      ? ''
+                      : `<button class="btn ghost small" data-del-role="${esc(role.id)}" data-role-name="${esc(role.name)}">删除</button>`
+                  }</td>
                 </tr>`
               )
               .join('')}
@@ -3371,10 +3675,10 @@
         </div>
         <div class="note" style="margin-top:14px">内置角色除 CRM 管理员外可直接调整。若把当前账号所在角色的权限改掉，刷新后导航会按新权限收拢。</div>
       </div>`;
-    ctx.view.querySelectorAll('[data-save-role]').forEach((button) => {
+    root.querySelectorAll('[data-save-role]').forEach((button) => {
       button.addEventListener('click', async () => {
         const roleId = button.dataset.saveRole;
-        const perms = [...ctx.view.querySelectorAll(`input[data-role="${roleId}"]:checked`)].map(
+        const perms = [...root.querySelectorAll(`input[data-role="${roleId}"]:checked`)].map(
           (input) => input.dataset.perm
         );
         await guard(button, async () => {
@@ -3384,6 +3688,22 @@
             const me = await api('/auth/me');
             saveSession({ token: session.token, staff: me.staff });
             renderShell();
+            route();
+          } catch (error) {
+            reportError(error);
+          }
+        });
+      });
+    });
+    root.querySelectorAll('[data-del-role]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const roleId = button.dataset.delRole;
+        const roleName = button.dataset.roleName;
+        if (!window.confirm(`删除角色「${roleName}」？已分配给用户的角色不能删除。`)) return;
+        await guard(button, async () => {
+          try {
+            await api(`/roles/${roleId}`, { method: 'DELETE' });
+            toast('角色已删除');
             route();
           } catch (error) {
             reportError(error);
@@ -3431,7 +3751,7 @@
     queue: pageQueue,
     reports: pageReports,
     audit: pageAudit,
-    roles: pageRoles
+    staff: pageStaff
   };
 
   if (!session?.token || !session.staff) renderLogin();

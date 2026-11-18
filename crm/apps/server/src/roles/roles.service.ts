@@ -90,6 +90,29 @@ export class RolesService {
     return { role: this.toView(updated, staffCount) };
   }
 
+  async remove(id: string, staff: StaffContext) {
+    const role = await this.prisma.crmRole.findUnique({
+      where: { id },
+      include: { _count: { select: { staff: true } } }
+    });
+    if (!role) throw new ApiError(404, '角色不存在', { code: 'ROLE_NOT_FOUND' });
+    if (role.builtin) {
+      throw conflict('内置角色不能删除', { code: 'ROLE_PROTECTED' });
+    }
+    if (role._count.staff > 0) {
+      throw conflict(`该角色还有 ${role._count.staff} 名用户，请先改派后再删除`, {
+        code: 'ROLE_IN_USE'
+      });
+    }
+    await this.prisma.crmRole.delete({ where: { id } });
+    await audit(this.prisma, {
+      actor: staff,
+      action: '删除角色',
+      target: `${role.name}（${role.id}）`
+    });
+    return { ok: true, roleId: id };
+  }
+
   private normalizePerms(input: PermissionInput): string[] {
     if (!Array.isArray(input)) throw badRequest('perms 必须是权限点数组');
     const unique = [...new Set(input.map((perm) => String(perm)))];

@@ -52,6 +52,7 @@ export const CRM_PERMISSIONS = [
   { code: 'crm:sync:view', name: '查看三端同步' },
   { code: 'crm:sync:retry', name: '重投同步事件' },
   { code: 'crm:role:edit', name: '维护角色权限' },
+  { code: 'crm:staff:edit', name: '维护后台用户' },
   { code: 'crm:gift:edit', name: '维护赠送会员码' },
   { code: 'crm:gift:approve', name: '审批超默认天数的会员码' },
   { code: 'crm:voucher:redeem', name: '核销年卡实物礼券' },
