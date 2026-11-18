@@ -246,7 +246,11 @@ async function main() {
             gameEnabled: p.gameEnabled,
             giftsJson: JSON.stringify(p.gifts),
             perksJson: JSON.stringify({
-              presence: { prioritySeat: true, tierPrice: true, invitesPerQuarter: 1 }
+              presence: { prioritySeat: true, tierPrice: true, invitesPerQuarter: 1 },
+              // 轻疗会员价按原价 75.5% 下发（与轻疗 CRM 读取侧口径一致）；
+              // 时叙每杯立减尚未经营拍板，先按 0 下发（不参与），拍板后在后台改版本。
+              lightcare: { advancePercent: 75.5 },
+              teahour: { perCupCents: 0 }
             }),
             note: '初始化版本',
             createdBy: 'u-admin',

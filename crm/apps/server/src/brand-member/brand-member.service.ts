@@ -391,6 +391,8 @@ export class BrandMemberService {
         priceCents: version.priceCents,
         validDays: version.validDays,
         benefits: benefitsOf(version.benefitsJson),
+        // 各业态权益参数（在场 presence / 轻疗 lightcare / 时叙 teahour），三端按业务各读一段
+        perks: perksOf(version.perksJson),
         pointsSpend: spendOf(version.pointsSpendJson),
         gameEnabled: version.gameEnabled
       });

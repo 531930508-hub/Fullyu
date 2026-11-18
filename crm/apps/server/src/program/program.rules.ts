@@ -25,7 +25,17 @@ export type PresencePerks = {
   /** 每季邀请好友名额（2026-11 由每月改为每季，旧卡快照里的 invitesPerMonth 仍按每季读） */
   invitesPerQuarter: number;
 };
-export type CardPerks = { presence: PresencePerks };
+/** 轻疗会员价：提前价按原价打的百分比（75.5 = 75.5%，与轻疗 CrmCardDiscountSource 同口径）。 */
+export type LightcarePerks = { advancePercent: number };
+/** 时叙会员每杯立减（分，0 = 不参与）。 */
+export type TeahourPerks = { perCupCents: number };
+export type CardPerks = { presence: PresencePerks; lightcare: LightcarePerks; teahour: TeahourPerks };
+
+/** 轻疗提前价允许区间：50%–99.9%（低于五折或高于原价视为配置错误）。 */
+export const LIGHTCARE_MIN_PERCENT = 50;
+export const LIGHTCARE_MAX_PERCENT = 99.9;
+/** 时叙每杯立减上限 ¥10，与三端读取侧一致。 */
+export const TEACHOUR_MAX_PER_CUP_CENTS = 1000;
 
 export const randomCode = (length = 8): string => {
   let out = '';
@@ -112,13 +122,33 @@ export const perksOf = (raw: string | null | undefined): CardPerks => {
       ? (source.presence as Record<string, unknown>)
       : {};
   const invites = Number(presence.invitesPerQuarter ?? presence.invitesPerMonth);
+  const section = (key: string): Record<string, unknown> => {
+    const value = source[key];
+    return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  };
   return {
     presence: {
       prioritySeat: presence.prioritySeat === true,
       tierPrice: presence.tierPrice === true,
       invitesPerQuarter: Number.isInteger(invites) && invites >= 0 && invites <= 20 ? invites : 0
-    }
+    },
+    // 越界或缺失一律按 0：三端据此视为「不参与/不减免」，宁可少给不能多给
+    lightcare: { advancePercent: readPercent(section('lightcare').advancePercent) },
+    teahour: { perCupCents: readPerCupCents(section('teahour').perCupCents) }
   };
+};
+
+const readPercent = (raw: unknown): number => {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < LIGHTCARE_MIN_PERCENT || value > LIGHTCARE_MAX_PERCENT) {
+    return 0;
+  }
+  return Math.round(value * 10) / 10;
+};
+
+const readPerCupCents = (raw: unknown): number => {
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 0 && value <= TEACHOUR_MAX_PER_CUP_CENTS ? value : 0;
 };
 
 /** 后台维护卡版本时校验实物礼与业态权益，返回规范化 JSON。 */
@@ -149,12 +179,30 @@ export const validatePerks = (value: unknown): string => {
   if (!Number.isInteger(invites) || invites < 0 || invites > 20) {
     throw badRequest('每季邀请名额需为 0–20 的整数');
   }
+  const lightcare = ((value as Record<string, unknown>).lightcare || {}) as Record<string, unknown>;
+  const percent = Number(lightcare.advancePercent ?? 0);
+  if (
+    !Number.isFinite(percent) ||
+    percent < 0 ||
+    (percent > 0 && (percent < LIGHTCARE_MIN_PERCENT || percent > LIGHTCARE_MAX_PERCENT))
+  ) {
+    throw badRequest(
+      `轻疗会员价需为原价的 ${LIGHTCARE_MIN_PERCENT}%–${LIGHTCARE_MAX_PERCENT}%，0 表示不参与`
+    );
+  }
+  const teahour = ((value as Record<string, unknown>).teahour || {}) as Record<string, unknown>;
+  const perCupCents = Number(teahour.perCupCents ?? 0);
+  if (!Number.isInteger(perCupCents) || perCupCents < 0 || perCupCents > TEACHOUR_MAX_PER_CUP_CENTS) {
+    throw badRequest(`时叙每杯立减需为 0–${TEACHOUR_MAX_PER_CUP_CENTS} 分的整数`);
+  }
   return JSON.stringify({
     presence: {
       prioritySeat: presence.prioritySeat === true,
       tierPrice: presence.tierPrice === true,
       invitesPerQuarter: invites
-    }
+    },
+    lightcare: { advancePercent: percent ? Math.round(percent * 10) / 10 : 0 },
+    teahour: { perCupCents }
   });
 };
 

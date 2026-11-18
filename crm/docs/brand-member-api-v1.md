@@ -100,7 +100,15 @@
 
 `GET /v1/brand-member/products`
 
-返回当前生效的产品与版本：`{ products: [{ code, name, priceCents, validDays, benefits, pointsSpend, gameEnabled }] }`。前端只展示，价格以下单时的报价为准；新版本激活后目录立即变化，已购卡期不受影响。
+返回当前生效的产品与版本：`{ products: [{ code, name, priceCents, validDays, benefits, pointsSpend, gameEnabled, perks }] }`。前端只展示，价格以下单时的报价为准；新版本激活后目录立即变化，已购卡期不受影响。
+
+`perks` 按业态分段下发，各端只读自己那一段（缺失或越界一律按 0，视为不参与）：
+
+| 段 | 字段 | 说明 |
+| --- | --- | --- |
+| `presence` | `prioritySeat` / `tierPrice` / `invitesPerQuarter` | 在场优先排位、阶梯价、每季邀请名额（旧快照 `invitesPerMonth` 按每季读） |
+| `lightcare` | `advancePercent` | 轻疗会员提前价，原价的百分比（75.5 = 75.5%，允许 50–99.9） |
+| `teahour` | `perCupCents` | 时叙会员每杯立减（分，0–1000） |
 
 ## 3.2 会员公告（业务端黑板报）
 

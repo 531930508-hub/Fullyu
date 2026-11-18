@@ -111,6 +111,17 @@ describe('CRM 1B：品牌卡产品与版本', () => {
       pointsSpend: { ql: '2_points_1_yuan' }
     });
     expect(badSpend.status).toBe(400);
+    // 轻疗提前价与时叙立减越界一律拒绝，避免三端拿到无法解释的金额
+    const badPercent = await h.api('post', '/brand-cards/FY_ANNUAL/versions', ops, {
+      ...base,
+      perks: { lightcare: { advancePercent: 120 } }
+    });
+    expect(badPercent.status).toBe(400);
+    const badCup = await h.api('post', '/brand-cards/FY_ANNUAL/versions', ops, {
+      ...base,
+      perks: { teahour: { perCupCents: 1001 } }
+    });
+    expect(badCup.status).toBe(400);
     const denied = await h.api('post', '/brand-cards/FY_ANNUAL/versions', cs, base);
     expect(denied.status).toBe(403);
     const deniedFin = await h.api('post', '/brand-cards/FY_ANNUAL/versions/1/activate', fin);
@@ -181,7 +192,11 @@ describe('CRM 1B：品牌卡产品与版本', () => {
         { code: 'FY_ANNUAL', priceCents: 36500 }
       ],
       benefits: BENEFITS,
-      perks: { presence: { prioritySeat: true, tierPrice: true, invitesPerMonth: 2 } },
+      perks: {
+        presence: { prioritySeat: true, tierPrice: true, invitesPerMonth: 2 },
+        lightcare: { advancePercent: 75.5 },
+        teahour: { perCupCents: 100 }
+      },
       gifts: [{ title: 'Full愈 香薰礼盒', desc: '到店凭提货码领取', valueCents: 12800 }],
       gameEnabled: true,
       note: '统一会员上线'
@@ -191,6 +206,9 @@ describe('CRM 1B：品牌卡产品与版本', () => {
     expect(saved.body.benefits[0]).toMatchObject({ business: 'ql', title: BENEFITS[0].title });
     // 旧字段 invitesPerMonth 仍可写入，读出统一为 invitesPerQuarter（名额口径已由月改季）
     expect(saved.body.perks.presence.invitesPerQuarter).toBe(2);
+    // 轻疗提前价与时叙每杯立减随版本下发，三端各读一段
+    expect(saved.body.perks.lightcare.advancePercent).toBe(75.5);
+    expect(saved.body.perks.teahour.perCupCents).toBe(100);
     expect(saved.body.gifts[0].valueCents).toBe(12800);
     expect(saved.body.updatedBy).toBeTruthy();
 
@@ -222,6 +240,9 @@ describe('CRM 1B：品牌卡产品与版本', () => {
     // 没传礼/特权时按「清空」处理，不继承上一版。
     expect(again.body.gifts).toEqual([]);
     expect(again.body.perks.presence.invitesPerQuarter).toBe(0);
+    // 轻疗/时叙参数同样按清空处理（0 = 不参与）
+    expect(again.body.perks.lightcare).toEqual({ advancePercent: 0 });
+    expect(again.body.perks.teahour).toEqual({ perCupCents: 0 });
 
     const audit = await h.api(
       'get',

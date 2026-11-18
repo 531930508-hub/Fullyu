@@ -68,6 +68,8 @@ export type BrandProduct = {
   name: string
   priceCents: number
   validDays: number
+  /** 各业态权益参数（presence / lightcare / teahour），在场只读 presence 段。 */
+  perks?: Record<string, unknown>
   benefits: Array<{ business: string; title: string; desc: string }>
   pointsSpend: Record<string, string>
   gameEnabled: boolean

@@ -170,6 +170,9 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     expect(res.body.renewal).toEqual({ show: false });
     expect(res.body.vouchers.map((v: { code: string }) => v.code)).toContain('FYG8K2QM');
     expect(res.body.perks.presence.prioritySeat).toBe(true);
+    // 轻疗与时叙按各自字段下发，三端各取一段（时叙种子值为 0 = 暂不参与）
+    expect(res.body.perks.lightcare.advancePercent).toBe(75.5);
+    expect(res.body.perks.teahour.perCupCents).toBe(0);
     expect(res.body.benefits).toHaveLength(3);
     expect(res.body.benefits.map((b: { business: string }) => b.business).sort()).toEqual([
       'presence',
@@ -281,6 +284,9 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     expect(annual.benefits).toHaveLength(3);
     expect(annual.pointsSpend.presence).toBe('display_only');
     expect(annual.gameEnabled).toBe(true);
+    // 时叙 / 轻疗读取侧依赖 /products 下发 perks（此前被 perksOf 丢弃）
+    expect(annual.perks.lightcare.advancePercent).toBe(75.5);
+    expect(annual.perks.teahour.perCupCents).toBe(0);
   });
 
   it('报价校验：未知会员、未知产品与非法业务均拒绝', async () => {
