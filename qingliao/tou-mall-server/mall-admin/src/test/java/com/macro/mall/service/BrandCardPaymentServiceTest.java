@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.crm.brand.BrandMemberClient;
+import com.macro.mall.crm.brand.BrandMemberProperties;
 import com.macro.mall.crm.brand.BrandMemberException;
 import com.macro.mall.entity.Customer;
 import com.macro.mall.entity.CustomerMemberCard;
@@ -94,6 +95,7 @@ class BrandCardPaymentServiceTest {
         ReflectionTestUtils.setField(service, "brandMemberClient", brandMemberClient);
         ReflectionTestUtils.setField(service, "payService", payService);
         ReflectionTestUtils.setField(service, "transactionManager", txManager);
+        ReflectionTestUtils.setField(service, "brandMemberProperties", saleOpen());
 
         when(memberCardService.isTestMode()).thenReturn(true);
         when(memberCardService.getConfigByType(anyString())).thenReturn(config(7L, 1));
@@ -107,6 +109,28 @@ class BrandCardPaymentServiceTest {
         when(mallOrderMapper.selectMaps(any())).thenReturn(Collections.emptyList());
         // 默认 CRM 试算：7 天内全额可退；个别用例覆盖
         stubQuote(true, ANNUAL_CENTS, "WITHIN_7D", 0, 0, "7 天内无理由全额退款，可退 ¥299.00");
+    }
+
+    private static BrandMemberProperties saleProperties(String purchaseEnabled) {
+        BrandMemberProperties properties = new BrandMemberProperties(
+                "1", "https://crm.example.com", "retreat-test", "test-secret-0123456789",
+                purchaseEnabled, 3000);
+        properties.init();
+        return properties;
+    }
+
+    private static BrandMemberProperties saleOpen() {
+        return saleProperties("1");
+    }
+
+    /** 入口藏起来不等于接口买不到：未开售时下单必须直接 503。 */
+    @Test
+    void purchaseRejectedWhenSaleClosed() {
+        ReflectionTestUtils.setField(service, "brandMemberProperties", saleProperties("0"));
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.createPendingOrder(CUSTOMER_ID, new HashMap<>(), false));
+        assertEquals(503, ex.getStatus());
+        verify(customerService, never()).getById(anyLong());
     }
 
     /** CRM 退款试算是唯一口径；本地不再自行计算 7 天后倒扣金额。 */
@@ -267,15 +291,16 @@ class BrandCardPaymentServiceTest {
     }
 
     @Test
-    void realModeRequiresOpenIdBeforePersistingOrder() {
+    void realModeRequiresOpenIdBeforePersistingOrder() throws Exception {
         when(memberCardService.isTestMode()).thenReturn(false);
         when(customerService.getById(CUSTOMER_ID)).thenReturn(customer(0));
+        when(brandMemberClient.quote(anyString(), anyString())).thenReturn(quote(ANNUAL_CENTS, "Q-1"));
 
         BusinessException error = assertThrows(BusinessException.class,
                 () -> service.createOrder(CUSTOMER_ID, purchaseParams(true, "FY_ANNUAL", null)));
         assertTrue(error.getMessage().contains("微信支付参数"));
-        verify(orderMapper, never()).insert(any());
-        verify(brandMemberClient, never()).quote(anyString(), anyString());
+        // 现流程：先落待支付单、再校验 openId，缺参时单子留在 PENDING（由超时关单清理）
+        verify(orderMapper, times(1)).insert(any());
     }
 
     @Test

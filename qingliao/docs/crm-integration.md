@@ -220,7 +220,8 @@ mvn -pl mall-admin -am -DskipTests package                               # 全�
 |---|---|
 | 代码 | `crm/brand/BrandMemberProperties` + `crm/brand/BrandMemberClient` + `controller/BrandMemberController`；运行 jar 已包含 |
 | 路由 | `/brandMember/{me,products,game/ticket,purchase}`；公网入口 `https://test-cityretreat.fullyu.cn/api/brandMember/*` |
-| 配置 | `/opt/fullyu-mall-test/crm.env` 的 `BRAND_CRM_ENABLED=1` / `BRAND_CRM_BASE_URL=https://test-cityretreat.fullyu.cn/crm-api` / `BRAND_CRM_KEY_ID` / `BRAND_CRM_SECRET`（600，密钥未打印） |
+| 配置 | `/opt/fullyu-mall-test/crm.env` 的 `BRAND_CRM_ENABLED=1` / `BRAND_CRM_BASE_URL=https://test-cityretreat.fullyu.cn/crm-api` / `BRAND_CRM_KEY_ID` / `BRAND_CRM_SECRET` / `BRAND_CRM_PURCHASE_ENABLED=1` / `BRAND_ORDER_REPORT_ENABLED=1`（600，密钥未打印） |
+| 开售开关 | `brand-crm.purchase-enabled` 默认关，关闭时 `/brandMember/purchase` 与合并支付里的卡单返回 503「暂未开售」。**测试环境两个开关都开**（2026-11-19 已配并重启 `mall-test`，上报日志见"新增 1、失败 0"），生产 `qingliao.env` 在正式开售前两个都不配 |
 | 实测 | `GET /api/brandMember/products` → `200`，返回 CRM 定价 `FY_MONTH`（¥45/30 天）与 `FY_ANNUAL`；未登录 `GET /brandMember/me`、`POST /brandMember/purchase` → “请先登录”（HTTP 200 + body `code:500`，异常被全局包装，业务码不可依赖） |
 | 单元测试 | `BrandMemberClientTest` 5 + `BrandMemberControllerTest` 3，**8/8 通过**（Maven，Corretto 11） |
 | 支付 | `POST /brandMember/purchase` 现为“创建品牌卡支付单 + 发起汇付小程序支付”；开卡只在汇付签名回调校验通过后执行。测试环境（`-Dfullyu.test-mode=true`）不调汇付，下单返回 `testMode=true`，由 `/brandMember/purchase/mock` 模拟结算。详见第 12 节 |

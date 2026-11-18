@@ -8,6 +8,7 @@ import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.crm.brand.BrandMemberClient;
 import com.macro.mall.crm.brand.BrandMemberException;
 import com.macro.mall.crm.brand.BrandMemberNaming;
+import com.macro.mall.crm.brand.BrandMemberProperties;
 import com.macro.mall.crm.brand.BrandMemberProfileSync;
 import com.macro.mall.entity.Customer;
 import com.macro.mall.entity.CustomerMemberCard;
@@ -102,6 +103,8 @@ public class BrandCardPaymentService {
     @Autowired
     private BrandMemberClient brandMemberClient;
     @Autowired
+    private BrandMemberProperties brandMemberProperties;
+    @Autowired
     private PayService payService;
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -168,6 +171,10 @@ public class BrandCardPaymentService {
     public MemberCardOrder createPendingOrder(Long customerId, Map<String, Object> params, boolean dedupCheck) {
         if (customerId == null) {
             throw new BusinessException("请先登录", 401);
+        }
+        // 开售开关：入口藏起来不等于接口买不到，未开售时直接拒绝下单（含合并支付里的卡单）
+        if (!brandMemberProperties.isPurchaseEnabled()) {
+            throw new BusinessException("品牌会员卡暂未开售，敬请期待", 503);
         }
         Customer customer = customerService.getById(customerId);
         if (customer == null) {

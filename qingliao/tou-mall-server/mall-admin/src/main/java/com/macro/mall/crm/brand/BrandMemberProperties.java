@@ -24,6 +24,7 @@ public class BrandMemberProperties {
     private final String baseUrl;
     private final String keyId;
     private final String secret;
+    private final String purchaseEnabled;
     private int timeoutMs;
 
     private boolean active;
@@ -33,11 +34,13 @@ public class BrandMemberProperties {
             @Value("${brand-crm.base-url:}") String baseUrl,
             @Value("${brand-crm.key-id:}") String keyId,
             @Value("${brand-crm.secret:}") String secret,
+            @Value("${brand-crm.purchase-enabled:}") String purchaseEnabled,
             @Value("${brand-crm.timeout-ms:3000}") int timeoutMs) {
         this.enabled = enabled;
         this.baseUrl = baseUrl;
         this.keyId = keyId;
         this.secret = secret;
+        this.purchaseEnabled = purchaseEnabled;
         this.timeoutMs = timeoutMs;
     }
 
@@ -110,6 +113,16 @@ public class BrandMemberProperties {
 
     public boolean isActive() {
         return active;
+    }
+
+    /**
+     * 是否开放购买。默认关闭——CRM 接通不等于开售，前端藏入口也不等于接口买不到，
+     * 所以用独立开关卡住 {@code /brandMember/purchase} 与合并支付里的卡单。
+     * 后台手工发卡（issuePaidCard）不受影响。
+     */
+    public boolean isPurchaseEnabled() {
+        String v = purchaseEnabled == null ? "" : purchaseEnabled.trim().toLowerCase(Locale.ROOT);
+        return "1".equals(v) || "true".equals(v) || "on".equals(v) || "yes".equals(v);
     }
 
     public String getBaseUrl() {

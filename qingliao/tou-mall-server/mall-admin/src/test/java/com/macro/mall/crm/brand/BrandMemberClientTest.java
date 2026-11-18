@@ -99,6 +99,7 @@ class BrandMemberClientTest {
                 "http://127.0.0.1:" + server.getAddress().getPort(),
                 KEY_ID,
                 SECRET,
+                "",
                 3000);
         properties.init();
         return properties;
@@ -115,24 +116,30 @@ class BrandMemberClientTest {
 
     @Test
     void disabledByDefaultAndRejectsIncompleteConfig() {
-        assertFalse(new BrandMemberProperties("", "", "", "", 3000).isActive());
+        assertFalse(new BrandMemberProperties("", "", "", "", "", 3000).isActive());
         BrandMemberProperties off = new BrandMemberProperties(
-                "0", "https://crm.example.com", KEY_ID, SECRET, 3000);
+                "0", "https://crm.example.com", KEY_ID, SECRET, "", 3000);
         off.init();
         assertFalse(off.isActive());
         assertThrows(IllegalStateException.class,
-                () -> new BrandMemberProperties("1", "", KEY_ID, SECRET, 3000).init());
+                () -> new BrandMemberProperties("1", "", KEY_ID, SECRET, "", 3000).init());
         assertThrows(IllegalStateException.class,
-                () -> new BrandMemberProperties("1", "http://crm.example.com", KEY_ID, SECRET, 3000).init());
+                () -> new BrandMemberProperties("1", "http://crm.example.com", KEY_ID, SECRET, "", 3000).init());
         assertThrows(IllegalStateException.class,
-                () -> new BrandMemberProperties("1", "https://crm.example.com", KEY_ID, "short", 3000).init());
+                () -> new BrandMemberProperties("1", "https://crm.example.com", KEY_ID, "short", "", 3000).init());
 
         BrandMemberProperties enabled = new BrandMemberProperties(
-                "1", "https://crm.example.com/", KEY_ID, SECRET, 50);
+                "1", "https://crm.example.com/", KEY_ID, SECRET, "", 50);
         enabled.init();
         assertTrue(enabled.isActive());
         assertEquals("https://crm.example.com", enabled.getBaseUrl());
         assertEquals(300, enabled.getTimeoutMs());
+        assertFalse(enabled.isPurchaseEnabled());
+
+        BrandMemberProperties onSale = new BrandMemberProperties(
+                "1", "https://crm.example.com/", KEY_ID, SECRET, "1", 3000);
+        onSale.init();
+        assertTrue(onSale.isPurchaseEnabled());
     }
 
     @Test

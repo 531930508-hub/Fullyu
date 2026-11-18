@@ -114,6 +114,9 @@ brand-crm:
   key-id: "${BRAND_CRM_KEY_ID:}"
   secret: "${BRAND_CRM_SECRET:}"
   timeout-ms: ${BRAND_CRM_TIMEOUT_MS:3000}
+  # 开售开关，默认关闭。关闭时 /brandMember/purchase 与合并支付里的卡单直接返回 503；
+  # 与 enabled 分开：CRM 接通（能看到卡、能算会员价）不等于对外卖卡。
+  purchase-enabled: ${BRAND_CRM_PURCHASE_ENABLED:}
   # CRM 推送验签使用的外网路径（nginx 会去掉 /api 前缀，签名按外网地址计算）。
   webhook-path: ${BRAND_CRM_WEBHOOK_PATH:/api/crm/brand-card}
   # 消费订单上报（每满 ¥300 得一颗骰子、累计会员已享优惠，影响 7 天后退款金额），默认关闭。

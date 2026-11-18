@@ -68,13 +68,37 @@ tr '\0' '\n' < /proc/$(pgrep -f mall-admin-1.0-SNAPSHOT.jar | head -1)/environ |
 依次验四条链路：后台登录 → 上传一张图（OSS）→ 触发一条短信 → 发起一笔小额支付（汇付）。
 任一失败先查环境变量，而不是查代码。
 
-> `.env.example` 里的 `RABBITMQ_PASSWORD`、`MINIO_*`、`PRINT_*`、`BAIDU_VOICE_*` 目前没有代码读取
-> （MQ 密码写在 `application-prod.yml`，打印 appid/secret 在 `PrintUtilNew`，MinIO/百度语音未接入），
-> 不要拿它们当"缺配置"的依据。
+## 品牌会员卡（CRM）开通
+
+两步走，**接通 ≠ 开售**：
+
+1. 接通（客户能看到卡、会员价按 CRM 下发）：
+   服务器 env 把 `BRAND_CRM_ENABLED` 改为 `1`（`BASE_URL/KEY_ID/SECRET` 已在 env 里），重启 mall。
+   CRM 侧客户端 `ql-mall` 已配置在 `/etc/fullyu-crm/crm.env` 的 `CRM_EXT_KEYS`。
+2. 开售（用户能真的下单买卡）：
+   `BRAND_CRM_PURCHASE_ENABLED=1`，**同时**把 `BRAND_ORDER_REPORT_ENABLED=1`
+   （否则 CRM 退款试算缺轻疗优惠记录），重启 mall。
+
+   两个环境的口径不同，别把测试的开售开关抄到生产：
+
+   - 测试（`/opt/fullyu-mall-test/crm.env`）：`BRAND_CRM_PURCHASE_ENABLED=1` +
+     `BRAND_ORDER_REPORT_ENABLED=1` 常开，下单/退款（含退款试算的已享优惠）都要能测；
+     2026-11-19 已配好并重启 `mall-test`，日志可见"品牌会员订单上报：新增 N"。
+   - 生产（`/etc/fullyu/qingliao.env`）：正式开售前**不配**这两个键，接口保持 503「暂未开售」；
+     开售当天再一起加并重启，生产不要默认打开。
+
+未开售时 `/brandMember/purchase` 与合并支付里的卡单返回 503——前端藏入口不等于接口买不到，
+所以不要靠"页面没有按钮"来当作关闭开关。
+
+> `.env.example` 里的 `RABBITMQ_PASSWORD`、`MINIO_*` 目前没有代码读取（MQ 密码写在
+> `application-prod.yml`，MinIO 未接入）。`PRINT_*`、`BAIDU_VOICE_*` 已改为读环境变量，
+> 与 `application-prod.yml` 的 `print.*`、`baidu.voice.*` 对应，缺了打印/语音会不可用。
 
 ## 安全约定
 
 - 任何新加的密钥只进 `.env.example` 的占位与服务器 env 文件，**不进 yml、不进 Java 常量**。
+- `application-prod.yml` 里仍有两处未迁移：`spring.datasource.password`、`spring.rabbitmq.password`
+  （迁移要与两台机器的启动 env 同步改，单独安排；轮换密码时一并处理）。
 - 本地真实值统一放 `~/.fullyu-secrets/`（已 600，仓库已忽略）。
 - 桌面 `~/Desktop/Full愈-轻疗/` 下的 `nXmkoES7gb.txt`、`汇付天下账号对应级秘钥.txt`、
   `副本full愈三方账号密码.xlsx` 属于未纳管的历史密钥文件，不要复制回仓库。

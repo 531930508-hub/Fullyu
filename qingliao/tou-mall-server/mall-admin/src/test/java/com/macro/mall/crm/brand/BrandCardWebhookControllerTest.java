@@ -29,6 +29,7 @@ class BrandCardWebhookControllerTest {
                 "https://crm.example.com",
                 KEY_ID,
                 SECRET,
+                "",
                 3000);
         properties.init();
         return new BrandCardWebhookController(properties, PATH, new ObjectMapper());
