@@ -8,16 +8,46 @@
 
 // 后端基础地址：mp-weixin 需完整域名并在小程序后台配置合法域名；H5 可走相对路径
 // 正式域名以 docs/deploy/domains.tsv 为准：在场 = presence.fullyu.cn（不是"去掉 test- 前缀"）。
-// 发布前必须在小程序后台（appid wxa7572dea26f5f4e4）把 presence.fullyu.cn 加入 request 合法域名；
-// 测试构建还需把 test-presence.fullyu.cn 加入合法域名。
-// 环境由编译期注入：VITE_API_BASE=https://test-presence.fullyu.cn/api/v1 即测试构建；
-// 未注入时 mp-weixin 走生产、H5 走同源（pnpm build:mp-weixin:test / build:mp-weixin）。
-const injectedBase = ((import.meta as any).env?.VITE_API_BASE as string | undefined) || ''
-let baseUrl = injectedBase || 'https://presence.fullyu.cn/api/v1'
-// #ifdef H5
-baseUrl = injectedBase || '/api/v1'
-// #endif
-export const BASE_URL = baseUrl
+// 小程序后台（appid wxa7572dea26f5f4e4）两个域名都必须加进 request / uploadFile 合法域名：
+//   presence.fullyu.cn（生产）+ test-presence.fullyu.cn（测试）——域名白名单不分版本，一份配置对所有版本生效。
+//
+// 环境判定（运行时，不是编译期）：同一份代码包按微信用途自动选后端
+//   release（正式版 / 提审中的版本）  → 生产 presence.fullyu.cn
+//   trial（体验版） / develop（开发者工具·预览）→ 测试 test-presence.fullyu.cn
+// 判定依据 wx.getAccountInfoSync().miniProgram.envVersion。
+// VITE_API_BASE 仍是最高优先级的显式注入（本地联调、临时指向某环境），
+// 因此 pnpm build:mp-weixin 一份产物即可：选为体验版走测试，提交审核/发布走生产。
+const PROD_API_BASE = 'https://presence.fullyu.cn/api/v1'
+const TEST_API_BASE = 'https://test-presence.fullyu.cn/api/v1'
+
+/** 微信运行环境：release | trial | develop；取不到时按 develop（测试）处理，避免误写生产数据 */
+export const ENV_VERSION: string = (() => {
+  try {
+    // #ifdef MP
+    return (uni.getAccountInfoSync() as any)?.miniProgram?.envVersion || 'develop'
+    // #endif
+  } catch (e) {
+    /* 忽略，走下面的兜底 */
+  }
+  return 'develop'
+})()
+
+function resolveBaseUrl(): string {
+  const injected = ((import.meta as any).env?.VITE_API_BASE as string | undefined) || ''
+  if (injected) return injected
+
+  // #ifdef H5
+  // H5 同源，由 nginx 反代 /api
+  return '/api/v1'
+  // #endif
+
+  // #ifndef H5
+  return ENV_VERSION === 'release' ? PROD_API_BASE : TEST_API_BASE
+  // #endif
+}
+
+export const BASE_URL = resolveBaseUrl()
+console.info(`[env] envVersion=${ENV_VERSION} api=${BASE_URL}`)
 
 /** 请求层通用提示：直接读本地语言，避免与 store / locale 形成循环依赖 */
 function uiText(zh: string, en: string): string {
