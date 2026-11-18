@@ -79,6 +79,14 @@ jobs:
           cache-dependency-path: shixu/pnpm-lock.yaml
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm --filter @teahour/server db:generate
+      # server 依赖 @teahour/shared / @teahour/integrations 的 dist；
+      # 干净环境不先构建会报 TS2307 Cannot find module '@teahour/integrations'
+      - name: Build workspace packages
+        run: |
+          pnpm --filter @teahour/shared build
+          pnpm --filter @teahour/integrations build
       - name: Build server
         run: pnpm --filter @teahour/server build
       - name: Build admin
