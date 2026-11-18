@@ -17,7 +17,7 @@ pnpm db:seed                                   # 6 角色 / 5 账号 / 3 位合�
 pnpm test                                      # Jest + supertest，独立临时库
 pnpm lint
 pnpm build:server                              # 先编 shared，再编 server
-pnpm dev:server                                # 先编 shared，再 tsx watch
+pnpm dev:server                                # 先编 shared，再 nest start --watch
 ```
 
 生产启动：`node apps/server/dist/main.js`（先 `pnpm build`）。生产必须显式设置 32 位以上、非示例值的 `JWT_SECRET`，否则拒绝启动。
@@ -228,7 +228,7 @@ E2 证据（测试环境，2026-11-08）：
 - 账号约束：账号 3–32 位、去首尾空白、唯一；初始密码与重置密码至少 8 位；至少一个角色，角色不存在 400。停用自己、移除自己的 CRM 管理员角色、以及让系统失去最后一名启用管理员都会被 409 拒绝（`STAFF_SELF_DEACTIVATE` / `STAFF_SELF_DEMOTE` / `LAST_ADMIN`）。
 - 会话失效：重置密码与停用会递增 `tokenVersion`，旧 JWT 下一次请求即 401；改派角色不需要作废令牌，权限按请求重新读取。
 - 管理后台（`node dist/main.js` + 合成账号，Playwright 无头实测）：左侧导航默认只展开当前页所在分组，点击可展开/收起并记到 `localStorage`，路由切页自动展开当前组，390px 窄屏回到平铺；用户页完成新增、改名改派、停用、重置密码；角色页显示 20 个权限点、可新建与删除自定义角色；仅 `crm:staff:edit` 只看到「后台用户」，仅 `crm:role:edit` 只看到「角色权限」。控制台无报错。
-- 已知：`pnpm dev:server`（tsx）下 Nest 拿不到构造器 `design:paramtypes`，登录会 500；本机联调请用 `pnpm build:server && node dist/main.js`。这是既有脚本问题，与本批改动无关。角色目前只能改权限，改名/改说明未做。
+- 本机联调：`pnpm dev:server`（`nest start --watch`，tsc 编译保留 `emitDecoratorMetadata`）或 `pnpm build:server && node dist/main.js`。此前用 `tsx` 启动会丢构造器 `design:paramtypes`、登录 500，2026-11-18 已把 `dev` 脚本改为 Nest CLI 并实测登录成功。角色目前只能改权限，改名/改说明未做。
 
 > 2026-11-17 起测试环境迁到上海 `8.133.6.18`：`https://test-crm.fullyu.cn/`（`/api/` → `127.0.0.1:8897`，库 `crm_test`），下面 47.111 + SSH 隧道的写法仅作历史记录。以下「用户与角色」发布沿用新环境。
 
