@@ -55,12 +55,20 @@ AVAIL=$(df --output=avail -BG / | tail -1 | tr -dc '0-9')
 BEFORE_MISSING=$(q "select count(*) from information_schema.tables where table_schema='$DB'") && log "库表数=$BEFORE_MISSING"
 log "前置全部通过：sha/size/脚本数/进程/磁盘"
 
-# ---------- M0.2 逻辑备份（不等 02:20） ----------
+# ---------- M0.2 逻辑备份 + binlog 位点（RDS 快照不可用时的一等替代） ----------
+# 该库实际不在 presence-app 所属账号（API NotFound），拿不到手动快照；
+# 用 fully 账号做一致性导出（--single-transaction）并记录 binlog 位点，可恢复 + 可 PITR。
+TS=$(date +%Y%m%d-%H%M%S)
+run "mysqldump --defaults-extra-file=$CNF --single-transaction --master-data=2 --set-gtid-purged=OFF --routines --triggers --events --hex-blob $DB | gzip > /root/backups/pre-jar-$TS.sql.gz"
+run "mysql --defaults-extra-file=$CNF -e 'show master status' | tee /root/backups/pre-jar-$TS.binlog"
 run "BACKUP_LOG=/var/log/fu-backup-qingliao.log /usr/local/bin/fu-backup-qingliao.sh"
-run "tail -3 /var/log/fu-backup-qingliao.log"
+if [ "$APPLY" = 1 ]; then
+  ls -lh /root/backups/pre-jar-$TS.sql.gz || die "dump 未生成"
+  gzip -t /root/backups/pre-jar-$TS.sql.gz || die "dump 压缩包损坏"
+  grep -m1 "CHANGE MASTER" <(zcat /root/backups/pre-jar-$TS.sql.gz | head -100) || die "dump 内无 binlog 位点"
+fi
 
 # ---------- M0.3 旧 jar 回滚包 ----------
-TS=$(date +%Y%m%d-%H%M%S)
 run "mkdir -p $BASE/backup/$TS && cp -p $BASE/$JAR $BASE/backup/$TS/ && sha256sum $BASE/backup/$TS/$JAR > $BASE/backup/$TS/SHA256"
 
 # ---------- M2 挂维护页 ----------
