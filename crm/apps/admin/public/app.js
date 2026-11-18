@@ -1303,7 +1303,11 @@
                     <td>${version.validDays} 天</td>
                     <td class="small">${version.benefits.map((benefit) => `${esc(biz(benefit.business))}：${esc(benefit.title)}`).join('<br>') || '—'}</td>
                     <td class="small">${(version.gifts || []).map((gift) => `${esc(gift.title)}（${money(gift.valueCents)}）`).join('<br>') || '无实物礼'}
-                      <div class="help">${version.perks ? `在场：${version.perks.presence.prioritySeat ? '优先排位' : '—'} · ${version.perks.presence.tierPrice ? '阶梯价' : '—'} · 每季邀请 ${version.perks.presence.invitesPerQuarter ?? version.perks.presence.invitesPerMonth ?? 0} 人` : ''}</div></td>
+                      <div class="help">${[
+                        version.perks ? `在场：${version.perks.presence.prioritySeat ? '优先排位' : '—'} · ${version.perks.presence.tierPrice ? '阶梯价' : '—'} · 每季邀请 ${version.perks.presence.invitesPerQuarter ?? version.perks.presence.invitesPerMonth ?? 0} 人` : '',
+                        version.perks && version.perks.lightcare && version.perks.lightcare.advancePercent ? `轻疗提前价 ${version.perks.lightcare.advancePercent}%` : '',
+                        version.perks && version.perks.teahour && version.perks.teahour.perCupCents ? `时叙每杯立减 ${money(version.perks.teahour.perCupCents)}` : ''
+                      ].filter(Boolean).join(' · ')}</div></td>
                     <td>${version.gameEnabled ? pill('开启', 'green') : '关闭'}</td>
                     <td class="small">${esc(version.createdByName)}<div class="help">${fmt(version.createdAt)}</div></td>
                     <td>${
@@ -1357,6 +1361,8 @@
                 <div class="field"><label class="check"><input type="checkbox" name="prioritySeat" checked /> 在场优先排位</label></div>
                 <div class="field"><label class="check"><input type="checkbox" name="tierPrice" checked /> 在场阶梯价</label></div>
                 <div class="field"><label>在场每季邀请好友名额（1 张 = 1 位好友免费同行一节课）</label><input name="invitesPerQuarter" type="number" min="0" max="20" value="1" /></div>
+                <div class="field"><label>轻疗会员价（原价的百分比，50–99.9；0 = 不参与）</label><input name="lightcarePercent" type="number" min="0" max="99.9" step="0.1" value="0" /></div>
+                <div class="field"><label>时叙每杯立减（元，0–10；0 = 不参与）</label><input name="teahourPerCupYuan" type="number" min="0" max="10" step="0.01" value="0" /></div>
                 <div class="field full"><label>积分消耗模式（JSON，可留空）</label><textarea name="pointsSpend" rows="2" placeholder='{"sx":"BRAND"}'></textarea></div>
                 <div class="field full"><label class="check"><input type="checkbox" name="gameEnabled" checked /> 购买后开启愈行之旅</label></div>
                 <div class="field full"><label>版本备注</label><input name="note" maxlength="200" /></div>
@@ -1407,6 +1413,10 @@
       form.prioritySeat.checked = presence.prioritySeat !== false;
       form.tierPrice.checked = presence.tierPrice !== false;
       form.invitesPerQuarter.value = presence.invitesPerQuarter ?? presence.invitesPerMonth ?? 1;
+      const lightcare = (base.perks && base.perks.lightcare) || {};
+      form.lightcarePercent.value = Number(lightcare.advancePercent) || 0;
+      const teahour = (base.perks && base.perks.teahour) || {};
+      form.teahourPerCupYuan.value = ((Number(teahour.perCupCents) || 0) / 100).toFixed(2);
       if (base.pointsSpend && Object.keys(base.pointsSpend).length) {
         form.pointsSpend.value = JSON.stringify(base.pointsSpend);
       }
@@ -1444,12 +1454,22 @@
           }
           gifts.push({ title, desc, valueCents });
         }
+        const percent = Number(values.lightcarePercent) || 0;
+        if (percent !== 0 && (percent < 50 || percent > 99.9)) {
+          return toast('轻疗会员价需在 50%–99.9% 之间，0 表示不参与', 'error');
+        }
+        const perCupCents = Math.round((Number(values.teahourPerCupYuan) || 0) * 100);
+        if (!Number.isInteger(perCupCents) || perCupCents < 0 || perCupCents > 1000) {
+          return toast('时叙每杯立减需在 0–10 元之间', 'error');
+        }
         const perks = {
           presence: {
             prioritySeat: values.prioritySeat === 'on',
             tierPrice: values.tierPrice === 'on',
             invitesPerQuarter: Number(values.invitesPerQuarter) || 0
-          }
+          },
+          lightcare: { advancePercent: percent ? Math.round(percent * 10) / 10 : 0 },
+          teahour: { perCupCents }
         };
         let pointsSpend = {};
         if ((values.pointsSpend || '').trim()) {
@@ -1992,7 +2012,7 @@
                 <div class="field"><label>售出归属</label><select name="soldBy">${options(BUSINESS_OPTIONS, 'ql')}</select></div>
                 <div class="field"><label>订单号（可空）</label><input name="orderRef" maxlength="80" placeholder="线下单号；留空自动生成 CRM-*" /></div>
                 <div class="field"><label>备注（可空）</label><input name="note" maxlength="200" placeholder="例：门店收银台线下购买" /></div>
-                <div class="full row-actions"><button class="btn small" type="submit">确认发卡</button><span class="help">${data.products.length ? '提交后立即生效并写入 CRM 操作日志与三端同步队列。' : '没有在售卡产品，请先在「品牌会员卡」配置版本。'}</span></div>
+                <div class="full row-actions"><button class="btn small" type="submit" disabled>确认发卡</button><span class="help" id="issue-submit-hint">${data.products.length ? '请先在上方搜索并选择会员' : '没有在售卡产品，请先在「品牌会员卡」配置版本。'}</span></div>
               </form>
             </details>`
           : ''
@@ -2042,12 +2062,24 @@
     const picked = document.getElementById('issue-member-picked');
     const results = document.getElementById('issue-member-results');
     const paidField = document.getElementById('issue-paid-field');
+    const submitButton = issueForm.querySelector('button[type="submit"]');
+    const submitHint = document.getElementById('issue-submit-hint');
+    const hasProducts = data.products.length > 0;
     const paintPicked = (member) => {
       issueForm.elements.memberId.value = member ? member.id : '';
       picked.innerHTML = member
         ? `已选：<b>${esc(member.name)}</b> · <span class="mono">${esc(member.memberNo)}</span> · ${esc(member.phone || '无手机号')}`
         : '<span class="help">尚未选择会员</span>';
+      picked.style.background = member ? '#eef6f0' : '';
+      picked.style.borderColor = member ? '#c7dacd' : '';
+      submitButton.disabled = !member || !hasProducts;
+      submitHint.textContent = !hasProducts
+        ? '没有在售卡产品，请先在「品牌会员卡」配置版本。'
+        : member
+          ? '提交后立即生效并写入 CRM 操作日志与三端同步队列。'
+          : '请先在上方搜索并选择会员';
     };
+    paintPicked(null);
     if (presetMemberId) {
       try {
         const detail = await api(`/members/${encodeURIComponent(presetMemberId)}`);
@@ -2056,6 +2088,19 @@
         reportError(error);
       }
     }
+    results.addEventListener('click', (event) => {
+      const row = event.target.closest('tr[data-pick-row]');
+      if (!row) return;
+      paintPicked({
+        id: row.dataset.pickRow,
+        memberNo: row.dataset.memberNo,
+        name: row.dataset.memberName,
+        phone: row.dataset.memberPhone
+      });
+      results.innerHTML = '';
+      toast('已选择会员');
+      issueForm.elements.productCode.focus();
+    });
     document.getElementById('issue-member-search').addEventListener('submit', async (event) => {
       event.preventDefault();
       const button = event.submitter;
@@ -2068,43 +2113,38 @@
                 <thead><tr><th>会员号</th><th>姓名</th><th>手机号</th><th>状态</th><th></th></tr></thead>
                 <tbody>${found.members
                   .map(
-                    (member) => `<tr>
+                    (member) => `<tr class="pickable" data-pick-row="${esc(member.id)}" data-member-no="${esc(member.memberNo)}" data-member-name="${esc(member.name)}" data-member-phone="${esc(member.phone || '')}" title="点击整行选择该会员">
                       <td class="mono small">${esc(member.memberNo)}</td>
                       <td>${esc(member.name)}</td>
                       <td class="mono small">${esc(member.phone)}</td>
                       <td>${statusPill(member.status)}</td>
-                      <td><button class="btn ghost small" type="button" data-pick-member="${esc(member.id)}" data-member-no="${esc(member.memberNo)}" data-member-name="${esc(member.name)}" data-member-phone="${esc(member.phone || '')}">选择</button></td>
+                      <td><button class="btn ghost small" type="button" data-pick-member="${esc(member.id)}">选择</button></td>
                     </tr>`
                   )
                   .join('')}</tbody>
               </table></div>`
             : '<div class="empty">没有匹配的会员</div>';
-          results.querySelectorAll('[data-pick-member]').forEach((pick) => {
-            pick.addEventListener('click', () => {
-              paintPicked({
-                id: pick.dataset.pickMember,
-                memberNo: pick.dataset.memberNo,
-                name: pick.dataset.memberName,
-                phone: pick.dataset.memberPhone
-              });
-              results.innerHTML = '';
-              toast('已选择会员');
-            });
-          });
         } catch (error) {
           reportError(error);
         }
       });
     });
     const syncPaidField = () => {
-      paidField.style.display = issueForm.elements.mode.value === 'MANUAL' ? '' : 'none';
+      const manual = issueForm.elements.mode.value === 'MANUAL';
+      paidField.style.display = manual ? '' : 'none';
+      issueForm.elements.paidYuan.required = manual;
     };
     issueForm.elements.mode.addEventListener('change', syncPaidField);
     syncPaidField();
     issueForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       const values = formValues(issueForm);
-      if (!values.memberId) return toast('请先搜索并选择会员', 'error');
+      if (!values.memberId) {
+        const search = document.getElementById('issue-member-search');
+        search.elements.q.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        search.elements.q.focus();
+        return toast('请先在上方搜索并选择会员', 'error');
+      }
       if (!values.productCode) return toast('请选择卡产品', 'error');
       const body = {
         memberId: values.memberId,
@@ -2227,12 +2267,20 @@
 
     const benefits = Array.isArray(card.benefits) ? card.benefits : [];
     const presence = (card.perks && card.perks.presence) || null;
+    const lightcare = (card.perks && card.perks.lightcare) || null;
+    const teahour = (card.perks && card.perks.teahour) || null;
     const perkLines = [];
     if (benefits.length) perkLines.push(benefits.map((row) => `${esc(biz(row.business))}：${esc(row.title)}`).join('<br>'));
     if (presence) {
       perkLines.push(
-        `在场：${presence.prioritySeat ? '优先排位' : '—'} · ${presence.tierPrice ? '阶梯价' : '—'} · 每月邀请 ${Number(presence.invitesPerMonth) || 0} 人`
+        `在场：${presence.prioritySeat ? '优先排位' : '—'} · ${presence.tierPrice ? '阶梯价' : '—'} · 每季邀请 ${Number(presence.invitesPerQuarter ?? presence.invitesPerMonth) || 0} 人`
       );
+    }
+    if (lightcare && lightcare.advancePercent) {
+      perkLines.push(`轻疗：会员价按原价 ${lightcare.advancePercent}%`);
+    }
+    if (teahour && teahour.perCupCents) {
+      perkLines.push(`时叙：每杯立减 ${money(teahour.perCupCents)}`);
     }
     if (card.pointsSpend && Object.keys(card.pointsSpend).length) {
       perkLines.push(`积分消耗：${esc(JSON.stringify(card.pointsSpend))}`);
