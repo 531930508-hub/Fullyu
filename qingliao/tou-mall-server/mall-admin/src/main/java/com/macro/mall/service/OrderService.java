@@ -28,6 +28,7 @@ import com.macro.mall.mapper.OrderMapper;
 import com.macro.mall.membercard.calc.MemberCardPriceEngine;
 import com.macro.mall.membercard.dto.MemberCardPriceOption;
 import com.macro.mall.pay.PayService;
+import com.macro.mall.pay.RefundPayResult;
 import com.macro.mall.service.approval.RefundApplyService;
 import com.macro.mall.service.base.BaseService;
 import com.macro.mall.service.base.ShopScope;
@@ -79,6 +80,21 @@ public class OrderService extends BaseService<OrderMapper, Order> {
      * 预约时间窗口未命中任何订单时的兜底 id：必须让 id 条件存在，否则查询会退化成「最新 N 条」全量订单
      */
     private static final String NO_MATCH_ORDER_ID = "-1";
+    /**
+     * 订单级互斥锁：固定 256 把，按订单 id 取模。
+     * 之前用 String.intern()，每笔下单都会往常量池塞一个新字符串，进程跑久了 Metaspace 只增不减；
+     * 固定分段锁没有这个问题（同段不同单会互相等一下，代价可忽略）。
+     */
+    private static final Object[] ORDER_LOCKS = new Object[256];
+    static {
+        for (int i = 0; i < ORDER_LOCKS.length; i++) {
+            ORDER_LOCKS[i] = new Object();
+        }
+    }
+
+    private static Object orderLock(Long orderId) {
+        return ORDER_LOCKS[(int) Math.floorMod(orderId == null ? 0L : orderId, ORDER_LOCKS.length)];
+    }
     @Autowired
     @Lazy
     CustomerCouponService customerCouponService;
@@ -590,7 +606,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             throw new BusinessException("订单不存在");
         }
         String lockKey = getOrderLockKey(order.getId());
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(order.getId())) {
             if (!OrderState.NOT_PAY.getValue().equals(order.getState())) {
                 switch (order.getState()) {
                     case 1:
@@ -634,7 +650,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
      */
     public void confirmPay(Long orderId, BigDecimal payAmount, String couponCode) {
         String lockKey = getOrderLockKey(orderId);
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(orderId)) {
             Order order = getById(orderId);
             if (payAmount != null) {
                 order.setPayAmount(payAmount);
@@ -653,7 +669,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
      */
     public void changeOrderCommentedState(Long id) {
         String lockKey = getOrderLockKey(id);
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(id)) {
             Order order = getById(id);
             if (order == null) {
                 throw new BusinessException("订单不存在");
@@ -1028,7 +1044,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         Long orderId = dto.getOrderId();
         String lockKey = getOrderLockKey(orderId);
         Map<Long, List<OrderDetail>> oldOrderDetailMap = new HashMap<>();
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(orderId)) {
             Order order = getById(orderId);
             if (AppointmentState.FINISHED.getValue().equals(order.getAppointmentState())) {
                 throw new BusinessException("订单已完成，不允许修改");
@@ -1117,7 +1133,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         Long orderId = dto.getOrderId();
         String lockKey = getOrderLockKey(orderId);
         Map<Long, List<OrderDetail>> oldOrderDetailMap = new HashMap<>();
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(orderId)) {
             Order order = getById(orderId);
 
             if (AppointmentState.FINISHED.getValue().equals(order.getAppointmentState())) {
@@ -1184,7 +1200,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     @Transactional(rollbackFor = Exception.class)
     public void cancelOrder(Long id, String cancelReason) {
         String lockKey = getOrderLockKey(id);
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(id)) {
             Order order = getById(id);
             if (order == null) {
                 throw new BusinessException("订单不存在");
@@ -1234,7 +1250,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     @Transactional(rollbackFor = Exception.class)
     public void cancelRefundOrder(Long id, String cancelReason) {
         String lockKey = getOrderLockKey(id);
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(id)) {
             Order order = getById(id);
             if (order == null) {
                 throw new BusinessException("订单不存在");
@@ -1787,7 +1803,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
 
         String lockKey = getOrderLockKey(orderId);
 
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(orderId)) {
             order = getById(orderId);
 
             Integer type = order.getType();
@@ -2048,7 +2064,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     public Map<String, String> generatePayInfo(Long curCustomerId, Long orderId, String openId) {
         String lockKey = getOrderLockKey(orderId);
         // TODO redis锁
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(orderId)) {
             Order order = getById(orderId);
             if (order == null) {
                 throw new ApiException("订单不存在");
@@ -2090,7 +2106,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
      */
     public void handleTimeout(Long orderId) {
         String lockKey = getOrderLockKey(orderId);
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(orderId)) {
             Order order = getById(orderId);
             if (order == null) {
                 return;
@@ -2122,7 +2138,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
      */
 /*    public void handleRefundNotify(Long orderId) {
         String lockKey = getOrderLockKey(orderId);
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(orderId)) {
             Order order = getById(orderId);
             if (order == null) {
                 log.warn("订单不存在");
@@ -2177,10 +2193,14 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             return;
         }
         String lockKey = getOrderLockKey(orderId);
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(orderId)) {
 
             try {
-                self.doRefundOrder(orderId, refundAmount, type);
+                String error = self.doRefundOrder(orderId, refundAmount, type);
+                // 失败原因已在事务里落库，事务提交后再抛给前端，避免回滚把原因冲掉
+                if (error != null) {
+                    throw new BusinessException(error);
+                }
             } catch (MyOptimisticLockException e) {
                 throw new ApiException("后台数据已更新, 重新操作");
             }
@@ -2192,17 +2212,24 @@ public class OrderService extends BaseService<OrderMapper, Order> {
      *
      * @param orderId
      */
-    @Transactional(rollbackFor = Exception.class)
     public void errorRefundOrder(Long orderId) {
-        String lockKey = getOrderLockKey(orderId);
-        synchronized (lockKey.intern()) {
+        String error = self.doErrorRefundOrder(orderId);
+        // 失败记录已在事务里落库，这里再抛给运营看
+        if (error != null) {
+            throw new BusinessException(error);
+        }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public String doErrorRefundOrder(Long orderId) {
+        synchronized (orderLock(orderId)) {
             Order order = getById(orderId);
             if (order == null) {
                 throw new BusinessException("无订单，错误参数");
             }
             Integer refundState = order.getRefundState();
             if (refundState == null) {
-                return;
+                return null;
             }
             if (!RefundState.ERROR.getValue().equals(refundState)) {
                 throw new BusinessException("退款已发起，无需再次提交退款");
@@ -2213,11 +2240,26 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             if (refundApply != null) {
                 refundAmount = refundApply.getRefundAmount();
             }
-            String hfSeqId = payService.refundPay(order, refundAmount);
-            //order.setRefundHfSeqId(hfSeqId);
+            RefundPayResult result = payService.refundPay(order, refundAmount);
+            if (result.isFailed()) {
+                order.setRefundState(RefundState.ERROR.getValue());
+                order.setRefundErrMsg(result.getMessage());
+                updateById(order);
+                return "退款失败：" + result.getMessage();
+            }
+            if (result.isUnknown()) {
+                // 渠道可能已受理：保持退款中，等回调/对账收敛，不能当失败再点一次
+                order.setRefundErrMsg("退款结果待确认：" + result.getMessage());
+            } else {
+                order.setRefundErrMsg(null);
+            }
+            if (StringUtils.hasText(result.getHfSeqId())) {
+                order.setRefundHfSeqId(result.getHfSeqId());
+            }
             order.setState(OrderState.REFUNDING.getValue());
             order.setRefundState(RefundState.DOING.getValue());
             updateById(order);
+            return null;
         }
     }
 
@@ -2229,7 +2271,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
      * @param type
      */
     @Transactional(rollbackFor = Exception.class)
-    public void doRefundOrder(Long orderId, BigDecimal refundAmount, Integer type) {
+    public String doRefundOrder(Long orderId, BigDecimal refundAmount, Integer type) {
         Order order = getById(orderId);
         if (order == null) {
             throw new ApiException("订单不存在");
@@ -2257,52 +2299,64 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         if (refundAmount.add(hasRefundAmount).compareTo(payAmount) > 0) {
             throw new ApiException("已退款金额与待退款金额合计值不能大于支付金额");
         }
-        if (RefundType.CANCEL.getValue().equals(type)) {
-            order.setAppointmentState(AppointmentState.CANCELED.getValue());
-        }
+        boolean cancelType = RefundType.CANCEL.getValue().equals(type);
+        boolean zeroAmount = refundAmount.compareTo(BigDecimal.ZERO) == 0;
+        // 资金已确认到账（或本来就不走资金）才能落「已退款」并做撤销积分/释放预约等副作用
+        boolean moneySettled = false;
+
         if (OrderPayType.COUPON.getValue().equals(order.getPayType())) {
             customerCouponService.handleRefund(order);
-            order.setState(OrderState.REFUNDED.getValue());
-            order.setRefundState(RefundState.SUCCESS.getValue());
-        } else if (OrderPayType.WECHAT.getValue().equals(order.getPayType())) {
-            BigDecimal zeroAmount = new BigDecimal("0.00");
-            if (BigDecimal.ZERO.equals(refundAmount)||refundAmount.equals(zeroAmount)) {
-                order.setState(OrderState.REFUNDED.getValue());
-                order.setRefundState(RefundState.SUCCESS.getValue());
+            moneySettled = true;
+        } else if (OrderPayType.WECHAT.getValue().equals(order.getPayType())
+                || OrderPayType.QR_CODE.getValue().equals(order.getPayType())) {
+            if (zeroAmount) {
+                moneySettled = true;
             } else {
-                String hfSeqId = payService.refundPay(order, refundAmount);
-                //order.setRefundHfSeqId(hfSeqId);
+                RefundPayResult result = payService.refundPay(order, refundAmount);
+                if (result.isFailed()) {
+                    // 渠道明确拒绝：记失败原因，运营可修数据后重试；不要把订单挂成退款中
+                    order.setRefundState(RefundState.ERROR.getValue());
+                    order.setRefundErrMsg(result.getMessage());
+                    updateById(order);
+                    return "退款失败：" + result.getMessage();
+                }
+                if (result.isUnknown()) {
+                    order.setRefundErrMsg("退款结果待确认：" + result.getMessage());
+                } else {
+                    order.setRefundErrMsg(null);
+                }
+                if (StringUtils.hasText(result.getHfSeqId())) {
+                    order.setRefundHfSeqId(result.getHfSeqId());
+                }
                 order.setState(OrderState.REFUNDING.getValue());
                 order.setRefundState(RefundState.DOING.getValue());
+                updateById(order);
+                // 渠道没确认到账前，不撤销积分、不释放预约，等 handleRefundNotify2 收敛
+                return null;
             }
-        } else if (OrderPayType.QR_CODE.getValue().equals(order.getPayType())) {
-            if (BigDecimal.ZERO.equals(refundAmount)) {
-                order.setState(OrderState.REFUNDED.getValue());
-                order.setRefundState(RefundState.SUCCESS.getValue());
-            } else {
-                String hfSeqId = payService.refundPay(order, refundAmount);
-                //order.setRefundHfSeqId(hfSeqId);
-                order.setState(OrderState.REFUNDING.getValue());
-                order.setRefundState(RefundState.DOING.getValue());
-            }
-        } else if (OrderPayType.MEITUAN.getValue().equals(order.getPayType())) {
-            order.setState(OrderState.REFUNDED.getValue());
-            order.setRefundState(RefundState.SUCCESS.getValue());
-        } else if (OrderPayType.CASH.getValue().equals(order.getPayType())) {
-            order.setState(OrderState.REFUNDED.getValue());
-            order.setRefundState(RefundState.SUCCESS.getValue());
-        }
-        updateById(order);
-        if (!BigDecimal.ZERO.equals(order.getIntegrationAmount())) {
-            integrationService.revocationIntegration(orderId, order.getCustomerId());
-        }
-        if (RefundType.CANCEL.getValue().equals(type)) {
-            orderDetailService.refundOrder(order.getId(), true);
-            //取消型退款：这一天可能被退空，重排到店编号
-            refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(orderId));
-            handleBookingCancelNotice(orderId);
+        } else if (OrderPayType.MEITUAN.getValue().equals(order.getPayType())
+                || OrderPayType.CASH.getValue().equals(order.getPayType())) {
+            moneySettled = true;
         }
 
+        if (moneySettled) {
+            if (cancelType) {
+                order.setAppointmentState(AppointmentState.CANCELED.getValue());
+            }
+            order.setState(OrderState.REFUNDED.getValue());
+            order.setRefundState(RefundState.SUCCESS.getValue());
+            updateById(order);
+            if (!BigDecimal.ZERO.equals(order.getIntegrationAmount())) {
+                integrationService.revocationIntegration(orderId, order.getCustomerId());
+            }
+            if (cancelType) {
+                orderDetailService.refundOrder(order.getId(), true);
+                //取消型退款：这一天可能被退空，重排到店编号
+                refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(orderId));
+                handleBookingCancelNotice(orderId);
+            }
+        }
+        return null;
     }
 
     /**
@@ -2314,6 +2368,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
      * @param transStat     交易状态
      * @param respDesc      异常信息
      */
+    @Transactional(rollbackFor = Exception.class)
     public void handleRefundNotify2(String refundOrderSn,
                                     String hfSeqId,
                                     BigDecimal refundAmount,
@@ -2327,25 +2382,24 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         }
 
         String lockKey = getOrderLockKey(order.getId());
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(order.getId())) {
             order = getById(order.getId());
-            RefundApply refundApply = refundApplyService.getByOrderId(order.getId());
-            boolean refundOrder = refundApply != null && RefundType.REFUND.getValue().equals(refundApply.getType());
-
             if (order == null) {
                 log.warn("订单不存在, orderSn={}", refundOrderSn);
                 return;
             }
+            RefundApply refundApply = refundApplyService.getByOrderId(order.getId());
+            boolean refundOrder = refundApply != null && RefundType.REFUND.getValue().equals(refundApply.getType());
+            if (refundAmount == null) {
+                // 回调没带金额时按申请单/支付金额补齐，不能拿 null 去加，否则 has_refund_amount 直接 0
+                refundAmount = refundApply != null ? refundApply.getRefundAmount() : order.getPayAmount();
+            }
+            if (refundAmount == null) {
+                refundAmount = BigDecimal.ZERO;
+            }
 
-            Integer state = order.getState();
-//            if (!OrderState.REFUNDING.getValue().equals(state)) {
-//                //
-//                log.warn("退款订单状态异常");
-//                return;
-//            }
-
-            Integer refundState = order.getRefundState();
-            if (refundState != 0) {
+            // 只有「已退款成功」的同流水重复回调才跳过；退款中(DOING)的同流水回调必须继续处理
+            if (RefundState.SUCCESS.getValue().equals(order.getRefundState())) {
                 String refundHfSeqId = order.getRefundHfSeqId();
                 if (!StringUtils.isEmpty(refundHfSeqId) && refundHfSeqId.equals(hfSeqId)) {
                     log.warn("退款回调重复接收：refundOrderSn={}", refundOrderSn);
@@ -2385,7 +2439,13 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(order.getId()));
 
             } else if ("P".equals(transStat)) {
-                log.warn("进行中");
+                log.warn("退款进行中, orderSn={}", refundOrderSn);
+                // 渠道明确在处理：落回退款中，避免此前误判失败后运营再点一次重复退款
+                order.setRefundState(RefundState.DOING.getValue());
+                if (StringUtils.hasText(hfSeqId)) {
+                    order.setRefundHfSeqId(hfSeqId);
+                }
+                updateById(order);
             } else {
                 order.setRefundState(RefundState.ERROR.getValue());
                 //order.setHfSeqId(hfSeqId);
@@ -2837,7 +2897,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     public void payCheckout(Long customerId, Long orderId, Integer payType) {
         String lockKey = getOrderLockKey(orderId);
 
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(orderId)) {
             Order order = getById(orderId);
             if (order == null) {
                 throw new ApiException("订单不存在");
@@ -3110,7 +3170,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     @Transactional(rollbackFor = Exception.class)
     public void finish(Long orderId) {
         String lockKey = getOrderLockKey(orderId);
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(orderId)) {
             Order order = getById(orderId);
             if (order == null) {
                 throw new BusinessException("订单不存在");
@@ -3569,7 +3629,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
 
     public void updatePayAmount(Long id, BigDecimal payAmount) {
         String lockKey = getOrderLockKey(id);
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(id)) {
             Order order = getById(id);
             if (order == null) {
                 throw new BusinessException("订单不存在");
@@ -3915,7 +3975,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     public void addLabel(AddOrderLabelDto addOrderLabelDto) {
         Long orderId = addOrderLabelDto.getOrderId();
         String lockKey = getOrderLockKey(orderId);
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(orderId)) {
             Order order = getById(orderId);
             if (order == null) {
                 throw new BusinessException("订单不存在");
@@ -4563,7 +4623,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     public void jifenPayOrder(Long curCustomerId, long orderId) {
         String lockKey = getOrderLockKey(orderId);
         // TODO redis锁
-        synchronized (lockKey.intern()) {
+        synchronized (orderLock(orderId)) {
             Order order = getById(orderId);
             order.setPayType(1);
             if (order == null) {

@@ -549,11 +549,13 @@ public class DouGongPayClient implements IPayClient {
      * @param refundAmount
      * @return hf_seq_id 退款全局流水号
      */
-    public String refundPay(Order order, BigDecimal refundAmount,String PayCertsysId3) {
+    public RefundPayResult refundPay(Order order, BigDecimal refundAmount, String PayCertsysId3, String reqSeqId) {
         String reqDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
 
-        String reqNo = snowflake.nextIdStr();
-        refundAmount = refundAmount.setScale(2, RoundingMode.UP);
+        // 重试必须复用同一 req_seq_id：渠道按它做幂等，换号重发就是第二笔退款
+        String reqNo = reqSeqId;
+        // 向下取整：宁可少退一分，也不能把金额凑高
+        refundAmount = refundAmount.setScale(2, RoundingMode.DOWN);
 
         Map<String, Object> dataMap = new HashMap<String, Object>();
         // 请求流水号，需保证当天商户下唯一，推荐采用日期时间+几位流水号的形式
@@ -589,35 +591,29 @@ public class DouGongPayClient implements IPayClient {
 
         Map<String, Object> transRefundInfo = new HashMap<>();
         try {
-            System.out.println("线上交易退款请求参数：" + JSON.toJSONString(dataMap));
+            log.info("退款请求 orderId={} reqSeqId={} amount={}", order.getId(), reqNo, refundAmount);
             // 单商户模式可不指定merchantKey，会自动套用default配置
-            transRefundInfo = BasePayClient.request(dataMap, "v2/trade/payment/scanpay/refund","default", false);
-            // 多商户模式需指定merchantKey
-            // transRefundInfo = BasePayClient.request(dataMap, "top-online-ser.refund", "merchantKey1");
-            System.out.println("线上交易查询返回参数：" + JSON.toJSONString(transRefundInfo));
-        } catch (BasePayException e) {
-            e.printStackTrace();
+            transRefundInfo = BasePayClient.request(dataMap, "v2/trade/payment/scanpay/refund", "default", false);
+        } catch (Exception e) {
+            // 请求已发出但没拿到应答：渠道可能已经受理，交给回调/查询收敛，不能判失败
+            log.error("退款请求结果未知 orderId={} reqSeqId={} error={}", order.getId(), reqNo, e.getMessage(), e);
+            return RefundPayResult.unknown("REQUEST_UNKNOWN", e.getMessage());
         }
 
         String subRespCode = (String) transRefundInfo.get("resp_code");
+        String hfSeqId = (String) transRefundInfo.get("hf_seq_id");
         if ("00000000".equals(subRespCode)) {
-            // 业务处理成功
-            System.out.println("处理成功");
-            // 获取退款交易的状态
-            String transStat = (String) transRefundInfo.get("trans_stat");
-            System.out.println("交易状态trans_stat=" + transStat);
-            return (String) transRefundInfo.get("hf_seq_id");
+            log.info("退款受理成功 orderId={} reqSeqId={} hfSeqId={}", order.getId(), reqNo, hfSeqId);
+            return RefundPayResult.accepted(hfSeqId, reqNo, subRespCode);
         } else if ("00000100".equals(subRespCode)) {
-            // 退款返回业务处理中后续可通过退款查询接口查询退款具体状态
-            // 获取退款交易的状态
-            String transStat = (String) transRefundInfo.get("trans_stat");
-            System.out.println("交易状态trans_stat=" + transStat);
-            return (String) transRefundInfo.get("hf_seq_id");
+            // 渠道明确受理、处理中，后续靠回调或查询收敛
+            log.info("退款处理中 orderId={} reqSeqId={} hfSeqId={}", order.getId(), reqNo, hfSeqId);
+            return RefundPayResult.processing(hfSeqId, reqNo, subRespCode);
         } else {
             String subRespDesc = (String) transRefundInfo.get("resp_desc");
-            // 业务处理失败
-            System.out.println("处理失败，失败信息："  + subRespDesc);
-            return null;
+            log.error("退款被渠道拒绝 orderId={} reqSeqId={} code={} desc={}",
+                    order.getId(), reqNo, subRespCode, subRespDesc);
+            return RefundPayResult.failed(subRespCode, subRespDesc);
         }
     }
 
@@ -627,19 +623,40 @@ public class DouGongPayClient implements IPayClient {
      * @return state 1 成功  -1失败  0 进行中
      */
     public JSONObject queryRefundState(Order order) {
-        LocalDateTime payTime = order.getPayTime();
-        String payTimeStr = payTime.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-
+        if (order.getPayTime() == null || order.getHfSeqId() == null) {
+            throw new ApiException("缺少支付流水信息，无法查询退款");
+        }
+        String payTimeStr = order.getPayTime().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String huifuId = initCertForShop(order);
+        // 按「原支付交易的全局流水号」查退款，不是退款流水号
         V2TradePaymentScanpayRefundqueryRequest request = new V2TradePaymentScanpayRefundqueryRequest();
-        request.setHuifuId(PayCert.sysId);
+        request.setHuifuId(huifuId);
         request.setOrgReqDate(payTimeStr);
-        request.setOrgHfSeqId(order.getRefundHfSeqId());
+        request.setOrgHfSeqId(order.getHfSeqId());
 
         try {
             Map<String, Object> resp = BasePayClient.request(request, request.getFunctionCode().getCode(), "default", false);
             return JSON.parseObject(JSON.toJSONString(resp));
         } catch (Exception e) {
             throw new ApiException("查询退款失败");
+        }
+    }
+
+    /** 与退款发起保持同一个商户号，否则查不到别的商户下的交易 */
+    private String initCertForShop(Order order) {
+        try {
+            if (order.getShopId() != null && order.getShopId() == 8) {
+                doInit3();
+                return PayCert.sysId3;
+            }
+            if (order.getShopId() != null && order.getShopId() == 1) {
+                doInit2();
+                return PayCert.sysId2;
+            }
+            doInit1();
+            return PayCert.sysId1;
+        } catch (Exception e) {
+            throw new ApiException("初始化支付证书失败");
         }
     }
 

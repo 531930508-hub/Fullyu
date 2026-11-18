@@ -133,7 +133,7 @@ public class PayService {
      * @param order        订单
      * @param refundAmount 退款金额
      */
-    public String refundPay(Order order, BigDecimal refundAmount) {
+    public RefundPayResult refundPay(Order order, BigDecimal refundAmount) {
         // 测试环境严禁调用真实退款通道
         if (Boolean.parseBoolean(System.getProperty("fullyu.test-mode", "false"))) {
             throw new ApiException("当前为测试环境，不发起真实退款");
@@ -162,32 +162,38 @@ public class PayService {
             throw new ApiException("退款中订单不可重复操作退款");
         }
 
+        DouGongPayClient douGongPayClient = new DouGongPayClient();
+        String PayCertsysId3 = "";
         try {
-            DouGongPayClient douGongPayClient=new DouGongPayClient();
-            String PayCertsysId3="";
-            try{
-                //正式上线需要添加以前的订单使用之前的商户号-------------------------------------------------------luxin---------支付退款
-                if(order.getShopId()!=null&&order.getShopId()==8){
-                    douGongPayClient.doInit3();
-                    PayCertsysId3=PayCert.sysId3;
-                }
-                else if(order.getShopId()!=null&&order.getShopId()==1){
-                    douGongPayClient.doInit2();
-                    PayCertsysId3=PayCert.sysId2;
-                }else{
-                    douGongPayClient.doInit1();
-                    PayCertsysId3=PayCert.sysId1;
-                }
-                //PayCertsysId3=PayCert.sysId3;
-            }catch (Exception e){
-                throw new ApiException("支付失败: 系统异常");
+            //正式上线需要添加以前的订单使用之前的商户号-------------------------------------------------------luxin---------支付退款
+            if (order.getShopId() != null && order.getShopId() == 8) {
+                douGongPayClient.doInit3();
+                PayCertsysId3 = PayCert.sysId3;
+            } else if (order.getShopId() != null && order.getShopId() == 1) {
+                douGongPayClient.doInit2();
+                PayCertsysId3 = PayCert.sysId2;
+            } else {
+                douGongPayClient.doInit1();
+                PayCertsysId3 = PayCert.sysId1;
             }
-            return douGongPayClient.refundPay(order, refundAmount,PayCertsysId3);
         } catch (Exception e) {
-            e.printStackTrace();
-            log.error("退款失败: {}", e.getMessage());
-            throw new ApiException("退款失败:" + e.getMessage());
+            throw new ApiException("支付失败: 系统异常");
         }
+        // 网关调用本身的异常由 client 落成 UNKNOWN；这里只透传结果，不再把未知吞成 null
+        return douGongPayClient.refundPay(order, refundAmount, PayCertsysId3, buildRefundReqSeqId(order, refundAmount));
+    }
+
+    /**
+     * 退款请求流水号：按「订单号 + 退款金额」确定性生成。
+     *
+     * <p>渠道按 req_seq_id 幂等，重试必须复用同一个号。用随机号/雪花号时，
+     * 「请求已受理但本地没收到应答」的重试会变成第二笔退款。
+     * 同单同金额重复发起会被渠道按重复交易拒绝——失败也比多退一次安全。</p>
+     */
+    public static String buildRefundReqSeqId(Order order, BigDecimal refundAmount) {
+        String amount = refundAmount.setScale(2, java.math.RoundingMode.DOWN)
+                .toPlainString().replace(".", "");
+        return order.getCode() + "-R" + amount;
     }
 
     public JSONObject queryRefundState(Order order) {

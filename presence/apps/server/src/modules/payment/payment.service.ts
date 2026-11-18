@@ -512,23 +512,26 @@ export class PaymentService {
 
     if (refundFen <= 0) {
       // 无可退金额，仅置状态；但取消仍必须释放名额并触发候补递补
-      // 条件更新：并发重复取消时只有一个请求能完成权益回补与名额释放
-      const closed = await this.prisma.order.updateMany({
-        where: { id: orderId, status: 'PAID' },
-        data: {
-          status: 'REFUNDED',
-          refundAmount: 0,
-          refundTime: new Date(),
-          cancelReason: operatorReason,
-        },
+      // 状态变更与权益返还放在同一事务里：0 元单不能出现「已退款但积分/券没回来」
+      await this.prisma.$transaction(async (tx) => {
+        // 条件更新：并发重复取消时只有一个请求能完成状态变更与权益回补
+        const closed = await tx.order.updateMany({
+          where: { id: orderId, status: 'PAID' },
+          data: {
+            status: 'REFUNDED',
+            refundAmount: 0,
+            refundTime: new Date(),
+            cancelReason: operatorReason,
+          },
+        })
+        if (!closed.count) {
+          throw new BusinessException('订单状态已变化，请刷新后重试', 4007)
+        }
+        // 0 元订单（积分/券全额抵扣）视为整单退款，权益需返还
+        if (totalFen <= 0) {
+          await this.restoreBenefits(order, tx)
+        }
       })
-      if (!closed.count) {
-        throw new BusinessException('订单状态已变化，请刷新后重试', 4007)
-      }
-      // 0 元订单（积分/券全额抵扣）视为整单退款，权益需返还
-      if (totalFen <= 0) {
-        await this.restoreBenefits(order)
-      }
       if (order.orderType === 'COURSE' && order.courseId) {
         await this.releaseSeatAndPromote(order.courseId)
         // 邀请人 0 元退款：好友同席一并取消
@@ -572,11 +575,8 @@ export class PaymentService {
       attemptId: attempt.id,
     })
 
-    // 现金全额退回时，积分与代金券一并返还；部分退款不返还（按实际支付比例结算）
-    if (refundFen >= totalFen) {
-      await this.restoreBenefits(order)
-    }
-
+    // 积分与代金券的返还统一在退款到账结算（settleRefundFromGateway）里做：
+    // 网关只是「已受理」时提前返还，一旦退款失败就会钱没退、权益先回来。
     return { refundAmount }
   }
 
@@ -641,13 +641,17 @@ export class PaymentService {
         attemptId: attempt.id,
       })
     } else {
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: { status: 'REFUNDED', refundTime: new Date() },
+      // 0 元单没有网关可回调：状态与权益返还同一事务完成
+      await this.prisma.$transaction(async (tx) => {
+        const closed = await tx.order.updateMany({
+          where: { id: orderId, status: 'REFUNDING' },
+          data: { status: 'REFUNDED', refundTime: new Date() },
+        })
+        if (!closed.count) return
+        await this.restoreBenefits(order, tx)
       })
     }
-    // 全额退款：积分与代金券一并返还，避免用户权益随订单一起消失
-    await this.restoreBenefits(order)
+    // 现金退款：积分与代金券等退款到账后由 settleRefundFromGateway 返还
     return { refundAmount: Number(order.actualPaid) }
   }
 
@@ -655,39 +659,50 @@ export class PaymentService {
    * 整单退款后返还积分与代金券：
    * - 积分按预扣的负向流水等额回补
    * - 代金券未过期则恢复 UNUSED，已过期则置 EXPIRED
-   * 仅在订单状态只允许进入退款一次的前提下调用，保证不重复返还。
+   * 只能在「退款已到账」的结算事务里调用：订单只允许结清一次，
+   * 配合积分返还记录去重，重复回调不会重复返还。
    */
-  private async restoreBenefits(order: {
-    id: string
-    userId: string
-    pointsDeduction: Prisma.Decimal | number
-    voucherId: string | null
-  }) {
+  private async restoreBenefits(
+    order: {
+      id: string
+      userId: string
+      pointsDeduction: Prisma.Decimal | number
+      voucherId: string | null
+    },
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
     const points = Math.round(Number(order.pointsDeduction) / POINTS_TO_FEN_RATIO)
     if (points > 0) {
-      const last = await this.prisma.pointsRecord.findFirst({
-        where: { userId: order.userId },
-        orderBy: { createdAt: 'desc' },
+      // 幂等兜底：同一订单的积分只返还一次（历史数据兼容：按 relatedId 查不到也不阻碍首次返还）
+      const restored = await db.pointsRecord.findFirst({
+        where: { relatedId: order.id, reason: '订单退款，积分返还' },
+        select: { id: true },
       })
-      const balance = last?.balance ?? 0
-      await this.prisma.pointsRecord.create({
-        data: {
-          userId: order.userId,
-          amount: points,
-          balance: balance + points,
-          type: 'OTHER',
-          reason: '订单退款，积分返还',
-          relatedId: order.id,
-        },
-      })
+      if (!restored) {
+        const last = await db.pointsRecord.findFirst({
+          where: { userId: order.userId },
+          orderBy: { createdAt: 'desc' },
+        })
+        const balance = last?.balance ?? 0
+        await db.pointsRecord.create({
+          data: {
+            userId: order.userId,
+            amount: points,
+            balance: balance + points,
+            type: 'OTHER',
+            reason: '订单退款，积分返还',
+            relatedId: order.id,
+          },
+        })
+      }
     }
 
     if (order.voucherId) {
-      const voucher = await this.prisma.voucher.findUnique({
+      const voucher = await db.voucher.findUnique({
         where: { id: order.voucherId },
       })
       if (voucher) {
-        await this.prisma.voucher.update({
+        await db.voucher.update({
           where: { id: voucher.id },
           data: {
             status: voucher.expiresAt.getTime() > Date.now() ? 'UNUSED' : 'EXPIRED',
@@ -740,19 +755,21 @@ export class PaymentService {
 
     // 0 元订单（全积分/全券抵扣、免年费）：无可退现金，但权益仍需完整撤销
     if (totalFen <= 0) {
-      const closed = await this.prisma.order.updateMany({
-        where: { id: orderId, status: { in: ['PAID', 'COMPLETED'] } },
-        data: {
-          status: 'REFUNDED',
-          refundAmount: 0,
-          refundTime: new Date(),
-          cancelReason: reason ?? '强制退款',
-        },
+      await this.prisma.$transaction(async (tx) => {
+        const closed = await tx.order.updateMany({
+          where: { id: orderId, status: { in: ['PAID', 'COMPLETED'] } },
+          data: {
+            status: 'REFUNDED',
+            refundAmount: 0,
+            refundTime: new Date(),
+            cancelReason: reason ?? '强制退款',
+          },
+        })
+        if (!closed.count) {
+          throw new BusinessException('订单状态已变化，请刷新后重试', 4007)
+        }
+        await this.restoreBenefits(order, tx)
       })
-      if (!closed.count) {
-        throw new BusinessException('订单状态已变化，请刷新后重试', 4007)
-      }
-      await this.restoreBenefits(order)
       if (order.orderType === 'COURSE' && order.courseId) {
         await this.releaseSeatAndPromote(order.courseId)
         await this.cancelInviteCompanions(order.id, { releaseSeat: true }).catch((error) =>
@@ -859,10 +876,7 @@ export class PaymentService {
       )
     }
 
-    // 累计退满实付时，预扣的积分与代金券一并返还；部分退款不返还
-    if (cumulativeFen >= totalFen) {
-      await this.restoreBenefits(order)
-    }
+    // 累计退满实付时的积分/券返还，由退款到账结算统一处理（见 settleRefundFromGateway）
 
     return { refundAmount: amount }
   }
@@ -1019,6 +1033,7 @@ export class PaymentService {
         outRefundNo,
         gatewayRef: gateway.gatewayRef,
         refundStatus: gateway.status === 'SUCCESS' ? 'SUCCESS' : 'FAIL',
+        refundFen: gateway.amountFen,
       })
     } else if (gateway.status === 'PROCESSING') {
       await this.ensureLegacyRefundAttempt(order, attempt, outRefundNo, amountFen)
@@ -1310,10 +1325,14 @@ export class PaymentService {
   async handleRefundNotify(rawBody: string): Promise<string> {
     const result = this.huifuPay.decryptNotify(rawBody)
     const ack = this.huifuPay.buildNotifyAck(result.req_seq_id)
+    // 回调里的退款金额必须与申请流水一致：不一致时不自动结算，留给人工核对，
+    // 避免被伪造/串号的「成功」回调把订单置为已退款。
+    const notifyFen = Math.round(Number(result.trans_amt ?? 0) * 100)
     await this.settleRefundFromGateway(result.out_trade_no, {
       outRefundNo: result.req_seq_id || undefined,
       gatewayRef: result.transaction_id,
       refundStatus: result.refund_status as 'SUCCESS' | 'PROCESSING' | 'FAIL',
+      refundFen: notifyFen > 0 ? notifyFen : undefined,
     })
     return ack
   }
@@ -1328,6 +1347,8 @@ export class PaymentService {
       outRefundNo?: string
       gatewayRef?: string
       refundStatus: 'SUCCESS' | 'PROCESSING' | 'FAIL'
+      /** 网关回报的退款金额（分）：与申请流水不一致时拒绝自动结算 */
+      refundFen?: number
     },
   ): Promise<{ settled: boolean; reason?: string }> {
     const order = await this.prisma.order.findUnique({
@@ -1340,6 +1361,15 @@ export class PaymentService {
     const attempt = params.outRefundNo
       ? (order.refunds.find((r) => r.outRefundNo === params.outRefundNo) ?? null)
       : null
+
+    // 金额校验：网关回报金额与申请金额不一致（串号、部分退款口径错误、伪造回调）
+    // 时不自动结清，订单保持现状并由告警转人工核对，避免多退/少退被静默吞掉。
+    if (attempt && params.refundFen != null && params.refundFen !== attempt.amountFen) {
+      const detail = `订单 ${orderId} 退款流水 ${attempt.outRefundNo}：网关回报 ¥${(params.refundFen / 100).toFixed(2)}，申请 ¥${(attempt.amountFen / 100).toFixed(2)}`
+      this.logger.error(`退款金额不符，拒绝自动结算：${detail}`)
+      await this.alert.notify('退款金额不符，待人工核对', detail).catch(() => undefined)
+      return { settled: false, reason: 'amount-mismatch' }
+    }
 
     if (attempt && ['FAILED', 'CANCELLED'].includes(attempt.status)) {
       // 已判失败的流水不允许被迟到回调重新结算
@@ -1464,6 +1494,11 @@ export class PaymentService {
           where: { communityId: order.communityId, userId: order.userId },
           data: { paidUntil },
         })
+      }
+      // 积分/代金券只在整单退款里返还，且必须与订单结清同一事务：
+      // 提前返还（网关仅受理时）会在退款失败时变成钱没退、权益先回来。
+      if (fullRefund) {
+        await this.restoreBenefits(order, tx)
       }
     })
 
