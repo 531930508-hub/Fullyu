@@ -265,9 +265,22 @@ E2 证据（测试环境，2026-11-08）：
 
 注意事项：
 
-- 业务会员卡源码 `src/cards/business-cards.*` 已随分支删除，接口 404；相关表与历史数据仍在，未 DROP。
+- 业务会员卡源码 `src/cards/business-cards.*` 已随分支删除，接口 404；本地与两端 dist 已清空重建，无残留 .js。
 - `apps/console` 只随代码同步，`main.ts` 仍只挂 `/admin`（`apps/admin/public`），console 构建产物未部署。
 - 生产机无全局 `pnpm`，本次用 `npx -y pnpm@10.34.4 install --frozen-lockfile`；`dist` 为清空后重建，避免旧模块残留。
+
+### 业务会员卡清表（2026-11-18 12:35）
+
+- 线上库核查：两端 MySQL（生产 RDS `crm`、测试 `crm_test`）表数与 `schema.mysql.prisma` 一一对应（各 32 张），**不存在 `business_card_catalog`**，无需 DROP；RDS 全实例搜 `%business_card%` 为空。
+- 唯一残留：生产回滚用 SQLite 快照 `/opt/fullyu-crm/data/crm.db`（MySQL 迁移前，33 表）里有该表 2 行（在场畅练卡、轻疗历史年卡）。已导出 `/root/backups/business_card_catalog-20261118-123556.csv` 后 `DROP TABLE` + `VACUUM`，现 32 表、`integrity_check=ok`。`crm.db.bak-*` 历史快照未动。
+- 本地 `prisma/dev.db` 与两端 dist 产物同样无该表/该文件。
+
+### 整体复验（测试环境，真实账号，2026-11-18 12:4x）
+
+- 账号：`13800001001`（周岚，CRM 管理员）。为登录临时替换过一次口令 hash，复验后已恢复原 hash（与备份逐字节一致，临时口令现返回 401）。
+- 浏览器（Playwright + 本机 Chromium，1440×900）：登录后逐页走查 16 个菜单页——概览 / 会员 / 积分流水 / 调整审批 / 品牌会员 / 会员卡台账 / 规则配置 / 游戏礼物 / 会员码 / 提货核销 / 反馈与故事 / 三端同步 / 异常队列 / 月度对账 / 审计日志 / 用户与角色，全部渲染出数据，**控制台 0 报错、0 个 5xx**。
+- 接口：带 token 抽查 `/api/staff`、`/api/roles`、`/api/members`、`/api/issued-cards`、`/api/reports/monthly`、`/api/queue`、`/api/rules`、`/api/sync/status`、`/api/notices`、`/api/stories`、`/api/points/ledger`、`/api/audit` 均 200；未登录访问 `/api/issued-cards` 401、`/api/business-cards` 404。
+- 生产按授权只做未登录探针与日志检查，未用真实账号登录复验（口令不在仓库/环境变量里）。
 
 ## 测试环境部署（2026-11-08）
 
