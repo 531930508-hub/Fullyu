@@ -230,6 +230,26 @@ E2 证据（测试环境，2026-11-08）：
 - 管理后台（`node dist/main.js` + 合成账号，Playwright 无头实测）：左侧导航默认只展开当前页所在分组，点击可展开/收起并记到 `localStorage`，路由切页自动展开当前组，390px 窄屏回到平铺；用户页完成新增、改名改派、停用、重置密码；角色页显示 20 个权限点、可新建与删除自定义角色；仅 `crm:staff:edit` 只看到「后台用户」，仅 `crm:role:edit` 只看到「角色权限」。控制台无报错。
 - 已知：`pnpm dev:server`（tsx）下 Nest 拿不到构造器 `design:paramtypes`，登录会 500；本机联调请用 `pnpm build:server && node dist/main.js`。这是既有脚本问题，与本批改动无关。角色目前只能改权限，改名/改说明未做。
 
+> 2026-11-17 起测试环境迁到上海 `8.133.6.18`：`https://test-crm.fullyu.cn/`（`/api/` → `127.0.0.1:8897`，库 `crm_test`），下面 47.111 + SSH 隧道的写法仅作历史记录。以下「用户与角色」发布沿用新环境。
+
+## 发布记录：用户与角色管理（2026-11-18）
+
+| 项 | 值 |
+|---|---|
+| commit | `a7a0fb8`（tag `prod-crm-20261118-0938`） |
+| 测试 | `test-crm.fullyu.cn`（8.133.6.18 `/opt/fullyu-crm-test`，unit `fullyu-crm-test`，库 `crm_test`） |
+| 生产 | `crm.fullyu.cn`（121.40.119.57 `/opt/fullyu-crm`，unit `fullyu-crm`，库 RDS `crm`） |
+| 产物 | `apps/server/dist`（`build:mysql`：`schema:mysql` + `prisma generate` + `tsc`）、`apps/admin/public`、`packages/shared/dist` |
+| 探针前 | `crm.fullyu.cn/api/staff` 404（路由不存在） |
+| 探针后 | `crm.fullyu.cn/api/staff` 401、`/api/health` 200、`/admin/` 200、`/game/` 200、`/` 302；公网 `app.js` md5 `9a6c9abc…` = 本地产物 |
+| 数据 | 本次无 schema 变更，未跑 migrate；生产 4 个账号、4 个角色，`crm-admin` 为 `*` 自动获得 `crm:staff:edit` |
+| 回滚 | `/root/backups/crm-{server-dist,admin,shared-dist}-20261118-093712.tar.gz` → 解回对应目录 → `systemctl restart fullyu-crm` |
+
+手工项与注意事项：
+
+- 生产除 CRM 管理员外没有角色带 `crm:staff:edit`；要让运营或 HR 维护后台账号，需在「用户与角色 → 角色权限」里给对应角色勾上该项。
+- 本次只发布 CRM 产物，**未并入 `main`**：`feat/crm-admin-cleanup-20261122` 上还混着轻疗/在场/时叙/部署脚本的未完成提交，`main` 也落后于该分支若干 CRM 提交（含业务卡下线）。合并进 `main` 需要单独一次带冲突处理的收口。
+
 ## 测试环境部署（2026-11-08）
 
 部署在在场服务器 `47.111.136.49`（私网 `172.19.180.137`），只作测试环境使用，生产未动。
