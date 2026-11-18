@@ -250,6 +250,25 @@ E2 证据（测试环境，2026-11-08）：
 - 生产除 CRM 管理员外没有角色带 `crm:staff:edit`；要让运营或 HR 维护后台账号，需在「用户与角色 → 角色权限」里给对应角色勾上该项。
 - 本次只发布 CRM 产物，**未并入 `main`**：`feat/crm-admin-cleanup-20261122` 上还混着轻疗/在场/时叙/部署脚本的未完成提交，`main` 也落后于该分支若干 CRM 提交（含业务卡下线）。合并进 `main` 需要单独一次带冲突处理的收口。
 
+## 发布记录：业务会员卡下线 + dev 脚本修复（2026-11-18 12:26）
+
+| 项 | 值 |
+|---|---|
+| commit | `05be16d`（分支 `feat/crm-console-shell-20261123`；含业务会员卡下线、`dev` 改 `nest start --watch`） |
+| 测试 | `test-crm.fullyu.cn`（8.133.6.18 `/opt/fullyu-crm-test`，unit `fullyu-crm-test`，库 `crm_test`） |
+| 生产 | `crm.fullyu.cn`（121.40.119.57 `/opt/fullyu-crm`，unit `fullyu-crm`，库 RDS `crm`） |
+| 产物 | `apps/server/dist`（`build:mysql`）、`packages/shared/dist`；`apps/admin/public` 内容未变（`app.js` md5 `9a6c9abc…`） |
+| 探针后 | 两端 `/api/health` 200、`/admin/` 200、`/game/` 200、`/` 302、`/api/issued-cards` 401、`/api/business-cards` 404 |
+| 数据 | 发布前后 `schema.mysql.prisma` 逐字节一致（637 行 / 32 model），**未跑 `db:push`**，未删表 |
+| 备份 | 生产 `/root/backups/crm-all-20261118-122111.tar.gz` + `rds-crm-20261118-122245.sql.gz`（1.3 MB）；测试 `/root/backups/test-crm-20261118-121827.tar.gz` + `crm_test-20261118-121845.sql.gz` |
+| 回滚 | 解包 tar 回对应目录 → `systemctl restart fullyu-crm`（测试为 `fullyu-crm-test`） |
+
+注意事项：
+
+- 业务会员卡源码 `src/cards/business-cards.*` 已随分支删除，接口 404；相关表与历史数据仍在，未 DROP。
+- `apps/console` 只随代码同步，`main.ts` 仍只挂 `/admin`（`apps/admin/public`），console 构建产物未部署。
+- 生产机无全局 `pnpm`，本次用 `npx -y pnpm@10.34.4 install --frozen-lockfile`；`dist` 为清空后重建，避免旧模块残留。
+
 ## 测试环境部署（2026-11-08）
 
 部署在在场服务器 `47.111.136.49`（私网 `172.19.180.137`），只作测试环境使用，生产未动。
