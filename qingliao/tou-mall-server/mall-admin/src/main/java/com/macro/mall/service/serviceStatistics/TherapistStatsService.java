@@ -3,17 +3,21 @@ package com.macro.mall.service.serviceStatistics;
 import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.dto.TherapistStatsRow;
 import com.macro.mall.dto.TherapistStatsSource;
+import com.macro.mall.incentive.calc.IncentiveMath;
+import com.macro.mall.incentive.model.TrainingProjectRule;
+import com.macro.mall.incentive.service.IncentiveConfigService;
 import com.macro.mall.mapper.TherapistStatsMapper;
 import com.macro.mall.utils.ExcelUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.ResolverStyle;
 import java.util.*;
 
-/** 疗愈师统计：服务订单、支付方式、男女顾客、点钟/新增点钟、部位。 */
+/** 疗愈师统计：服务订单、支付方式、男女顾客、点钟/新增点钟、部位（与培训项目同一口径）。 */
 @Service
 public class TherapistStatsService {
     static final int EXPORT_LIMIT = 2000;
@@ -21,6 +25,9 @@ public class TherapistStatsService {
 
     @Autowired
     TherapistStatsMapper mapper;
+
+    @Autowired
+    IncentiveConfigService incentiveConfigService;
 
     public Map<String, Object> page(Long shopId, String startTime, String endTime, List<Long> ids, Integer status,
                                     int page, int size) {
@@ -69,7 +76,26 @@ public class TherapistStatsService {
             LocalDateTime t = toLocalDateTime(f.get("firstTime"));
             if (t != null) first.put(f.get("massagistId") + ":" + f.get("customerId"), t);
         }
-        return TherapistStatsAggregator.aggregate(pageIds, names, statuses, sources, first);
+        return TherapistStatsAggregator.aggregate(pageIds, names, statuses, sources, first,
+                partProjects(endTime));
+    }
+
+    /**
+     * 部位列取报表结束月份生效的培训项目（与培训看板同一份配置）。
+     * 2026-11 之前的月份在激励模块没有配置，统一回退到最早支持月份。
+     */
+    private List<TrainingProjectRule> partProjects(String endTime) {
+        String month = IncentiveMath.currentMonth();
+        if (endTime != null && endTime.length() >= 7) {
+            String candidate = endTime.substring(0, 7);
+            try {
+                YearMonth ym = YearMonth.parse(candidate);
+                if (!ym.isBefore(IncentiveMath.FIRST_SUPPORTED_MONTH)) month = candidate;
+            } catch (RuntimeException ignore) {
+                // 非法月份保持 currentMonth
+            }
+        }
+        return incentiveConfigService.bundleForMonth(month).getRule().getTrainingProjects();
     }
 
     static LocalDateTime toLocalDateTime(Object v) {

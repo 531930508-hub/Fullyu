@@ -32,11 +32,24 @@ public interface TherapistStatsMapper {
                                             @Param("status") Integer status,
                                             @Param("offset") int offset, @Param("size") int size);
 
+    /**
+     * 明细行：部位列与培训项目同口径，因此带上项目标题/时长，并用 {@code trainingPartEligible}
+     * 标出本条是否落在培训的订单范围里（客户单、已支付、预约正常、非内部账号）。
+     * 条件与 incentive/mapper/IncentiveQueryMapper.xml 的 validOrderWhere 保持一致，改动需两处同步。
+     */
     @Select("<script>SELECT d.id AS detailId, d.massagist_id AS massagistId, d.order_id AS orderId,"
             + " d.customer_id AS customerId, d.specify_type AS specifyType, d.start_time AS startTime,"
-            + " o.pay_type AS payType, o.parts AS parts, c.gender AS gender"
+            + " o.pay_type AS payType, o.parts AS parts, c.gender AS gender,"
+            + " d.project_id AS projectId, COALESCE(p.title, o.product_title) AS projectTitle, d.duration AS duration,"
+            + " CASE WHEN o.id IS NOT NULL AND o.state IN (1, 2) AND o.appointment_state IN (1, 2)"
+            + "   AND o.type = 0 AND o.pay_time IS NOT NULL AND c.id IS NOT NULL"
+            + "   AND c.phone IS NOT NULL AND TRIM(c.phone) &lt;&gt; ''"
+            + "   AND NOT EXISTS (SELECT 1 FROM s_stat_internal_account ia WHERE ia.enabled = 1"
+            + "       AND ia.phone = CONVERT(TRIM(c.phone) USING utf8mb4) COLLATE utf8mb4_general_ci)"
+            + "  THEN 1 ELSE 0 END AS trainingPartEligible"
             + " FROM oms_order_detail d JOIN s_massagist m ON m.id=d.massagist_id"
             + " LEFT JOIN s_order o ON o.id=d.order_id LEFT JOIN c_customer c ON c.id=d.customer_id"
+            + " LEFT JOIN s_project p ON p.id=d.project_id"
             + " WHERE d.state=2 AND d.end_time BETWEEN #{startTime} AND #{endTime} "
             + "<if test=\"shopId != null\"> AND d.shop_id=#{shopId} </if>"
             + "<if test=\"status != null and status >= 0\"> AND m.status=#{status} </if>"

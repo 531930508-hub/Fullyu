@@ -26,7 +26,7 @@
       </div>
     </div>
     <div class="stats-hint">
-      按完成时间统计已完成服务；订单、支付方式、部位按单计，顾客按人计，点钟按服务项目计；新增点钟为该顾客首次点该疗愈师。
+      按完成时间统计已完成服务；订单、支付方式按单计，顾客按人计，点钟按服务项目计；新增点钟为该顾客首次点该疗愈师。部位（单）与培训项目同口径：只统计客户单，按订单所属产品归类，头部水疗单不进部位列。
     </div>
     <div class="table-container">
       <el-table :data="dataList" style="width: 100%;" v-loading="listLoading" border

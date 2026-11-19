@@ -4,13 +4,16 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.macro.mall.dto.TherapistStatsRow;
 import com.macro.mall.dto.TherapistStatsSource;
+import com.macro.mall.incentive.calc.TrainingPartResolver;
+import com.macro.mall.incentive.model.TrainingProjectRule;
 
 import java.time.LocalDateTime;
 import java.util.*;
 
 /**
  * 疗愈师统计纯聚合（无 IO）：
- * 订单数/支付方式/部位按去重订单计；男女按去重顾客计；点钟按明细计（specify_type 1、2）；
+ * 订单数/支付方式按去重订单计；部位按去重订单计，且与培训项目同一口径（见 {@link TrainingPartResolver}）；
+ * 男女按去重顾客计；点钟按明细计（specify_type 1、2）；
  * 新增点钟 = 该顾客与该疗愈师历史上第一次点钟（firstSpecify 的 key 为 "疗愈师id:顾客id"）。
  */
 public final class TherapistStatsAggregator {
@@ -19,7 +22,8 @@ public final class TherapistStatsAggregator {
 
     public static List<TherapistStatsRow> aggregate(List<Long> massagistIds, Map<Long, String> names,
                                                     Map<Long, Integer> statuses, List<TherapistStatsSource> rows,
-                                                    Map<String, LocalDateTime> firstSpecify) {
+                                                    Map<String, LocalDateTime> firstSpecify,
+                                                    List<TrainingProjectRule> partProjects) {
         Map<Long, TherapistStatsRow> out = new LinkedHashMap<>();
         for (Long id : massagistIds) {
             TherapistStatsRow r = new TherapistStatsRow();
@@ -54,7 +58,14 @@ public final class TherapistStatsAggregator {
                     || !orders.computeIfAbsent(s.getMassagistId(), k -> new HashSet<>()).add(s.getOrderId())) continue;
             r.setOrderCount(r.getOrderCount() + 1);
             countPay(r, s.getPayType());
-            for (String part : parseParts(s.getParts())) countPart(r, part);
+            // 部位与培训项目同一口径：只有培训认的订单范围 + 项目大类匹配才计数
+            if (Boolean.TRUE.equals(s.getTrainingPartEligible())) {
+                Set<String> rawParts = parseParts(s.getParts());
+                for (String part : TrainingPartResolver.resolve(partProjects, s.getProjectId(), s.getProjectTitle(),
+                        s.getParts(), s.getDuration(), rawParts)) {
+                    countPart(r, part);
+                }
+            }
         }
         return new ArrayList<>(out.values());
     }
