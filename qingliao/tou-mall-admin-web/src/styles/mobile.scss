@@ -1,11 +1,12 @@
 // ---------------------------------------------------------------------------
 // Full愈 运营台 · 移动端适配层
 // ---------------------------------------------------------------------------
-// 只在窄屏生效，桌面（>= 992px）样式完全不受影响。
+// 窄屏（<= 1024px）与触屏设备生效；> 1024px 且带鼠标的桌面样式不受影响。
 // 这里兜住大量页面共用的骨架：页面留白、筛选/操作栏、表单、表格、分页、
 // 弹窗、抽屉、页签。页面级更细的定制仍写在自己组件的 media query 里。
 //
 // 断点：
+//   1024px 平板（iPad 横屏）/ 触屏弹窗控件
 //   991px  平板/窄窗口（侧栏已转抽屉）
 //   767px  手机（本文件主要战场）
 //   399px  小屏手机
@@ -33,6 +34,63 @@
   .el-tabs__item,
   .el-pager li {
     touch-action: manipulation;
+  }
+}
+
+// ===========================================================================
+// 弹窗 / 抽屉：容器宽度与触屏控件
+// ===========================================================================
+// 后台还有大量老表单用 width="30%"/"40%"、size="40%" 这类百分比尺寸：
+// 在 768~1024px 的平板上只剩 230~410px，label 一占，输入框就被压成一条缝。
+// 另外 Element 默认 14px / 40px 的控件在触屏上偏小，iOS 聚焦时还会自动放大。
+// 这里统一兜底，不用逐个页面改；宽表格弹窗仍由 max-width 收敛在视口内。
+// 1024 兜住 iPad 横屏（带触控板时 pointer 可能不算 coarse）。
+@media (max-width: 1024px), (hover: none) and (pointer: coarse) {
+  .el-dialog {
+    min-width: min(520px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+  }
+
+  .el-drawer {
+    min-width: min(480px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+  }
+
+  .el-dialog__body,
+  .el-drawer__body,
+  .el-message-box {
+    .el-input__inner,
+    .el-textarea__inner,
+    .el-range-input {
+      font-size: 16px;
+    }
+
+    .el-input__inner {
+      height: 44px;
+      line-height: 44px;
+    }
+
+    // 页面里显式写了 size="small"/"mini" 的控件也拉回触屏高度
+    .el-input--small .el-input__inner,
+    .el-input--mini .el-input__inner {
+      height: 44px;
+      line-height: 44px;
+    }
+
+    .el-input__icon {
+      line-height: 44px;
+    }
+
+    .el-textarea__inner {
+      min-height: 88px;
+    }
+  }
+
+  // 下拉是挂到 body 上的，不在弹窗节点里，需要单独放大选项
+  .el-select-dropdown__item {
+    height: 44px;
+    line-height: 44px;
+    font-size: 15px;
   }
 }
 
@@ -150,6 +208,18 @@
     .el-date-editor--datetimerange,
     .el-date-editor--monthrange {
       width: 100% !important;
+    }
+
+    // 表单项里写死 width: 250px 之类的中文老表单，手机上直接占满一行
+    .el-form-item__content {
+      > .el-input,
+      > .el-select,
+      > .el-autocomplete,
+      > .el-cascader,
+      > .el-date-editor,
+      > .el-textarea {
+        width: 100% !important;
+      }
     }
   }
 

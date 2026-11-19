@@ -146,6 +146,17 @@ export default {
   margin-bottom: 12px;
 }
 
+// 手机上筛选控件各占一行，避免 260 + 130 + 160 挤在一起
+@media (max-width: 767px) {
+  .ledger-filter {
+    > .el-date-editor,
+    > .el-select,
+    > .el-input {
+      width: 100% !important;
+    }
+  }
+}
+
 .ledger-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

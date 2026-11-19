@@ -83,6 +83,16 @@ public class RoundScheduleController {
         return CommonResult.success(null);
     }
 
+    @PostMapping("/queue/swap")
+    @ApiOperation("手工调序：交换两名疗愈师的顺序（拖拽/箭头调序都走这里）")
+    public CommonResult swap(@RequestParam Long shopId,
+                             @RequestParam String date,
+                             @RequestParam Long massagistIdA,
+                             @RequestParam Long massagistIdB) {
+        service.swapReceptionOrder(shopId, date, massagistIdA, massagistIdB, operator());
+        return CommonResult.success(null);
+    }
+
     @PostMapping("/queue/join")
     @ApiOperation("调店进店：插到队头")
     public CommonResult join(@RequestParam Long shopId,

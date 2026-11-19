@@ -23,6 +23,7 @@ public enum ReceptionQueueAction {
     FINISH("FINISH", "接待完成"),
     GRAB("GRAB", "抢单"),
     RENO("RENO", "重排编号"),
+    SWAP("SWAP", "交换顺序"),
     ;
     private final String value;
     private final String label;

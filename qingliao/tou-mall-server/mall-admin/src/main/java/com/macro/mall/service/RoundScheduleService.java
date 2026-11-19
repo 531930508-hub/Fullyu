@@ -554,6 +554,11 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
         receptionQueueService.joinFromOtherShop(date, shopId, massagistId, operator);
     }
 
+    /** 手工调序：交换两个人的顺序（只动位置，不动值班分组与结果编号） */
+    public void swapReceptionOrder(Long shopId, String date, Long massagistIdA, Long massagistIdB, String operator) {
+        receptionQueueService.swap(date, shopId, massagistIdA, massagistIdB, operator);
+    }
+
     /** 当天轮牌事项（值班意向/无值班可接待/超时未接待） */
     public List<ReceptionIssue> receptionIssues(Long shopId, String date) {
         return receptionIssueService.listByDay(date, shopId);

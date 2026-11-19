@@ -444,6 +444,66 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         }
     }
 
+    /**
+     * 交换顺序（手工调序）：把 a 放到 b 原来的位置、b 放到 a 原来的位置。
+     *
+     * <p>只交换 seq，不动值班分组、不动结果编号。不做「整轮重排」，其余人的相对顺序保持不变；
+     * 队列里没有的人按「补位」先补到队尾，再参与交换。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void swap(String day, Long shopId, Long massagistIdA, Long massagistIdB, String operator) {
+        if (day == null || shopId == null || massagistIdA == null || massagistIdB == null) {
+            throw new BusinessException("请选择两名疗愈师");
+        }
+        if (Objects.equals(massagistIdA, massagistIdB)) {
+            throw new BusinessException("不能和自己交换顺序");
+        }
+        synchronized (lockKey(day, shopId)) {
+            ensureDay(day, shopId, Arrays.asList(massagistIdA, massagistIdB));
+            ReceptionQueue a = find(day, shopId, massagistIdA);
+            ReceptionQueue b = find(day, shopId, massagistIdB);
+            if (a == null) {
+                a = addRowAtTail(day, shopId, massagistIdA, "调序补位", operator);
+            }
+            if (b == null) {
+                b = addRowAtTail(day, shopId, massagistIdB, "调序补位", operator);
+            }
+            if (Objects.equals(a.getValid(), INVALID) || Objects.equals(b.getValid(), INVALID)) {
+                throw new BusinessException("已退出轮牌的疗愈师不能参与调序");
+            }
+            long seqA = nvl(a.getSeq());
+            long seqB = nvl(b.getSeq());
+            if (seqA == seqB) {
+                // 老数据可能没有 seq：按当前展示顺序重新铺一遍，再交换
+                long seq = 0;
+                for (ReceptionQueue q : sorted(rows(day, shopId))) {
+                    seq += 10;
+                    q.setSeq(seq);
+                }
+                updateBatchById(rows(day, shopId));
+                a = find(day, shopId, massagistIdA);
+                b = find(day, shopId, massagistIdB);
+                if (a == null || b == null) {
+                    throw new BusinessException("调序失败，请刷新后重试");
+                }
+                seqA = nvl(a.getSeq());
+                seqB = nvl(b.getSeq());
+            }
+            a.setSeq(seqB);
+            b.setSeq(seqA);
+            updateBatchById(Arrays.asList(a, b));
+            saveLogs(Arrays.asList(
+                    newLog(day, shopId, massagistIdA, ReceptionQueueAction.SWAP, null,
+                            seqA, seqB, a.getOnDuty(), a.getOnDuty(), a.getReceiptNo(), a.getReceiptNo(),
+                            "与" + massagistName(massagistIdB) + "交换顺序", operator),
+                    newLog(day, shopId, massagistIdB, ReceptionQueueAction.SWAP, null,
+                            seqB, seqA, b.getOnDuty(), b.getOnDuty(), b.getReceiptNo(), b.getReceiptNo(),
+                            "与" + massagistName(massagistIdA) + "交换顺序", operator)));
+            log.info("轮牌调序 shop={} day={} {}<->{} seq {}<->{}", shopId, day,
+                    massagistIdA, massagistIdB, seqA, seqB);
+        }
+    }
+
     /** 调店进店：插到队头，优先接客（与原来「调店人员排最前面」的口径一致） */
     @Transactional(rollbackFor = Exception.class)
     public void joinFromOtherShop(String day, Long shopId, Long massagistId, String operator) {

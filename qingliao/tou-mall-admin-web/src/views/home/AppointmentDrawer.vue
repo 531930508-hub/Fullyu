@@ -97,7 +97,7 @@
           </div>
         </el-form-item>
         <el-form-item v-show="form.phone" label="客户信息">
-          <div class="flex">
+          <div class="flex customer-row">
             <el-form-item label="" label-width="0" prop="comment" style="margin-right: 6px">
               <el-input v-model="form.comment" placeholder="称呼 Name" style="width: 120px"></el-input>
             </el-form-item>
@@ -907,6 +907,23 @@ export default {
     color: #54515a;
     border-radius: 16px;
     margin-left: 0;
+  }
+
+  // 手机上「称呼 / 性别 / 备注」三列并排会挤成一条缝，改为竖排整行
+  @media (max-width: 767px) {
+    .customer-row {
+      flex-direction: column;
+      align-items: stretch;
+
+      /deep/ .el-form-item {
+        width: 100%;
+        margin-right: 0 !important;
+      }
+
+      /deep/ .el-input {
+        width: 100% !important;
+      }
+    }
   }
 }
 

@@ -304,5 +304,14 @@ export default {
     }
   }
 
+  // 手机上筛选行放不下 260 + 220 两个控件，改为各占一行
+  @media (max-width: 767px) {
+    > .el-date-editor,
+    > .el-input {
+      width: 100% !important;
+      margin-right: 0 !important;
+    }
+  }
+
 }
 </style>
