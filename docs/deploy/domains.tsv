@@ -19,6 +19,7 @@
 轻疗 测试	test-cityretreat.fullyu.cn		8.133.6.18	/etc/nginx/sites-enabled/test-cityretreat.fullyu.cn.conf	/api/→127.0.0.1:19929；/→/opt/fullyu-mall-test/admin-dist（管理后台，hash 路由）；/h5/→/opt/fullyu-mall-test/h5（H5 商城）；/game/→/opt/fullyu-mall-test/game	已上线	2026-11-17 统一到 test-cityretreat：管理后台移到站点根（/mall-admin/ 取消，H5 商城移到 /h5/）；旧名 mall-test 同日下线；库 tou_mall_test 在 8.133 本机
 会员卡	vip.fullyu.cn	test-vip.fullyu.cn	121.40.119.57（曾）	—（原 test-vip.conf 已删）	—	已下线	2026-11-17 下架：容器 vip-web-main-test-8101 停删，备份在 121.40 /root/backups/；vip.fullyu.cn 从未建	
 官网	fullyu.cn	www.fullyu.cn	120.55.36.3	/etc/nginx/conf.d/fullyu-cn-site.conf	静态站点	已上线	8.133 另有同 server_name（fullyu-cn.conf，微信短链），属遗留
+官网跳转（.com 旧域）	fullytherapy.com	www.fullytherapy.com	120.55.36.3	未归档（120.55 现场 conf，仓库无副本）	return 301 → https://fullyu.cn，整路径透传	已上线	纯品牌跳转，无业务路由：301 后 /admin/... 等业务路径在 fullyu.cn 是 404（2026-11-19 实测），故不得在本域挂回调/OAuth/支付页。证书 2026-10-09→2027-01-07（DigiCert 90 天 DV，每 3 个月需续，续费点即下线决策点）；域名注册 2025-04-09、2027-04-09 到期（阿里云万网，NS hichina，与 fullyu.cn 同一 aliyun dns profile）；无 MX 不承载邮箱；HSTS max-age=1y 且无 preload
 测试机	test-fully.fullyu.cn		8.133.6.18	/etc/nginx/conf.d/test-fully.conf	—	已下线	2026-11-17 14:29 复核：DNS 无 A 记录；8.133 vhost 仍在，可删
 待确认	test-fql.fullyu.cn		120.55.36.3	/etc/nginx/conf.d/test-fql.conf	—	待确认	来源不明，未动；2026-11-17 复核 DNS 无 A 记录
 待确认	jenkins.fullyu.cn		未建	—	—	待确认	仅出现在 docs/ops/servers.md（2026-11-11 核查返回 502）；DNS 无 A 记录，用途待你确认，暂不写入任何配置
