@@ -105,8 +105,12 @@
             </div>
           </el-descriptions-item>
           <el-descriptions-item label="手机号码 Phone">
-            <!-- 页面只展示脱敏号码，不提供一键拨号，避免号码被随手带走 -->
-            <span>{{ orderDetail.customer.phone | maskPhoneFilter }}</span>
+            <!-- 号码仍按角色脱敏展示；拨号链接使用真实号码，点击不会把星号拨出去 -->
+            <a v-if="orderDetail.customer.phone" :href="'tel:' + orderDetail.customer.phone">
+              <i class="el-icon-phone-outline phone-dial__icon"></i>
+              {{ orderDetail.customer.phone | maskPhoneFilter }}
+            </a>
+            <span v-else>-</span>
           </el-descriptions-item>
           <!--          <el-descriptions-item label="会员等级"> {{ orderDetail.customer.vipLevel || '无' }}</el-descriptions-item>
                     <el-descriptions-item label="已服务数"> {{ orderDetail.customer.orderCount }}次</el-descriptions-item>-->
@@ -639,6 +643,12 @@ export default {
     text-align: right;
     color: #49454f;
     font-size: 17px;
+  }
+
+  .phone-dial__icon {
+    margin-right: 4px;
+    font-size: 16px;
+    vertical-align: -1px;
   }
 
   .btn-A {
