@@ -4,9 +4,14 @@ import com.alibaba.fastjson2.JSONArray;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.github.pagehelper.PageInfo;
+import com.macro.mall.common.exception.BusinessException;
+import com.macro.mall.dto.ReceptionBoardItem;
 import com.macro.mall.entity.MassagistSchedules;
 import com.macro.mall.entity.OrderDetail;
+import com.macro.mall.entity.ReceptionIssue;
+import com.macro.mall.entity.ReceptionQueue;
 import com.macro.mall.entity.RoundSchedule;
+import com.macro.mall.enums.AppointmentState;
 import com.macro.mall.enums.RoundScheduleState;
 import com.macro.mall.mapper.RoundScheduleMapper;
 import com.macro.mall.service.base.BaseService;
@@ -19,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -43,6 +49,11 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
     @Autowired
     @Lazy
     MassagistService massagistService;
+    @Autowired
+    @Lazy
+    ReceptionQueueService receptionQueueService;
+    @Autowired
+    ReceptionIssueService receptionIssueService;
 
     @Override
     protected QueryWrapper<RoundSchedule> buildWrapper(Map<String, Object> params, QueryWrapper<RoundSchedule> queryWrapper) {
@@ -83,103 +94,52 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
      * @return
      */
     public List<RoundSchedule> findSortMassagistIdList(String day, Long shopId, Integer personCount, List<Long> availableMassagistIdList, Boolean save) {
-        LambdaQueryWrapper<RoundSchedule> lqw = new LambdaQueryWrapper<>();
-        lqw.eq(RoundSchedule::getAppointmentDate, day);
-        lqw.eq(RoundSchedule::getShopId, shopId);
-        lqw.notIn(RoundSchedule::getState, Arrays.asList(RoundScheduleState.SCHEDULED.getValue(), RoundScheduleState.CLOSED.getValue()));
-        lqw.orderByAsc(RoundSchedule::getRound);
-        List<RoundSchedule> list = list(lqw);
-        List<Long> massgistIdList = list.stream().map(RoundSchedule::getMassagistId).collect(Collectors.toList());
-        Long currentRound = findCurrentRound(day, shopId);
-        //检查当前排序是否起作用,没起作用，移除重新添加++++++++++++++++++++++++++++ start   2026-06-09
-        if (currentRound > 0) {
-            LambdaQueryWrapper<RoundSchedule> lqw2 = new LambdaQueryWrapper<>();
-            lqw2.eq(RoundSchedule::getAppointmentDate, day);
-            lqw2.eq(RoundSchedule::getShopId, shopId);
-            lqw2.eq(RoundSchedule::getRound, currentRound);
-            lqw2.orderByAsc(RoundSchedule::getRound);
-            List<RoundSchedule> listCheck = list(lqw2);
-            if(!listCheck.isEmpty()&&listCheck.stream().filter(t->t.getState()==1).collect(Collectors.toList()).size()==0) {
-                currentRound=currentRound-1;
-                listCheck.forEach(s -> {removeById(s.getId());});
-                list = list(lqw);
-                massgistIdList = list.stream().map(RoundSchedule::getMassagistId).collect(Collectors.toList());
-            }
+        boolean persist = Boolean.TRUE.equals(save);
+        // 顺序只认轮牌队列；队列还没生成就按班次顺序（调店置前、每日轮换）惰性生成
+        List<ReceptionQueue> queue = receptionQueueService.ensureDay(day, shopId, availableMassagistIdList);
+        if (CollectionUtils.isEmpty(queue)) {
+            log.info("轮牌队列为空，当天无人可排 shop={} day={}", shopId, day);
+            return Collections.emptyList();
         }
-        //+++++++++++++++++++++++++++++++++++++++++++++++++++  end
+        List<RoundSchedule> allRows = list(new LambdaQueryWrapper<RoundSchedule>()
+                .eq(RoundSchedule::getAppointmentDate, day)
+                .eq(RoundSchedule::getShopId, shopId)
+                .orderByAsc(RoundSchedule::getRound));
+        // 每人当前还能挂单的那一行：没上钟、没关闭
+        Map<Long, RoundSchedule> openRowMap = allRows.stream()
+                .filter(r -> !RoundScheduleState.SCHEDULED.getValue().equals(r.getState())
+                        && !RoundScheduleState.CLOSED.getValue().equals(r.getState()))
+                .collect(Collectors.toMap(RoundSchedule::getMassagistId, Function.identity(),
+                        BinaryOperator.minBy(Comparator.comparingLong((RoundSchedule a) -> a.getRound() == null ? 0L : a.getRound()))));
+        Map<Long, Long> maxRoundMap = new HashMap<>();
+        allRows.forEach(r -> maxRoundMap.merge(r.getMassagistId(), r.getRound() == null ? 0L : r.getRound(), Math::max));
+        Set<Long> mayAssign = CollectionUtils.isEmpty(availableMassagistIdList)
+                ? Collections.emptySet() : new HashSet<>(availableMassagistIdList);
 
-        if(currentRound>0){
-
-            //说明技师排班表里已经有值了，查看当前技师值日表里是否有调店人员的存在，不存在则加入进去。存在则跳过；
-            lqw = new LambdaQueryWrapper<>();
-            lqw.eq(RoundSchedule::getAppointmentDate, day);
-            lqw.eq(RoundSchedule::getShopId, shopId);
-            lqw.eq(RoundSchedule::getRound, currentRound);
-            lqw.orderByAsc(RoundSchedule::getRound);
-            List<RoundSchedule> listCheck = list(lqw);
-            List<Long> massgistIdListCheck = listCheck.stream().map(RoundSchedule::getMassagistId).collect(Collectors.toList());
-            final long num= currentRound;
-            List<RoundSchedule> finalList = list;
-            List<Long> finalMassgistIdList = massgistIdList;
-            availableMassagistIdList.forEach(s -> {
-                if (!massgistIdListCheck.contains(s)) {
-                    RoundSchedule obj= buildRoundSchedule(s, day, shopId, num);
-                    save(obj);
-                    finalList.add(obj);
-                    finalMassgistIdList.add(s);
-                }
-            });
-            list.addAll(finalList);
-            massgistIdList.addAll(finalMassgistIdList);
-        }
-
-        if (CollectionUtils.isEmpty(list) || (personCount != null && list.size() <= personCount) || (!CollectionUtils.isEmpty(availableMassagistIdList) && !massgistIdList.containsAll(availableMassagistIdList))) {
-            List<Long> massagistSchedulesList = massagistSchedulesService.getMassagistSchedulesList(day, shopId);
-            //添加调店人员Id;获取调店人员id
-            List<Long> massagistSchedulesListDiaoDian=massagistSchedulesService.getMassagistSchedulesListDiaoDian(day,shopId);
-            massagistSchedulesListDiaoDian.forEach(s->{
-                if(!massagistSchedulesList.contains(s)) {
-                    massagistSchedulesList.add(0, s);
-                }
-            });
-
-            currentRound += 1;
-            Long finalCurrentRound = currentRound;
-            List<RoundSchedule> roundScheduleList = massagistSchedulesList.stream().map(s -> buildRoundSchedule(s, day, shopId, finalCurrentRound)).collect(Collectors.toList());
-
-            //当初次添加时，有增加调店人员添加到轮值表中
-            /*if (currentRound == 1) {*/
-                final long num1= currentRound;
-                availableMassagistIdList.forEach(s -> {
-                    if (!massagistSchedulesList.contains(s)) {
-                        roundScheduleList.add(buildRoundSchedule(s, day, shopId, num1));
-                    }
-                });
-            //}
-
-            if (save) {
-                saveBatch(roundScheduleList);
-            }else {
-                //只对调用方法查询技师当前轮次有作用，方法名：getMassagistRound
-                if (currentRound != 1) {
-                    /*final long num1= currentRound;
-                    availableMassagistIdList.forEach(s -> {
-                        if (!massagistSchedulesList.contains(s)) {
-                            roundScheduleList.add(buildRoundSchedule(s, day, shopId, num1));
-                        }
-                    });*/
+        List<RoundSchedule> result = new ArrayList<>();
+        List<RoundSchedule> created = new ArrayList<>();
+        for (ReceptionQueue q : queue) {
+            Long massagistId = q.getMassagistId();
+            RoundSchedule row = openRowMap.get(massagistId);
+            if (row == null) {
+                row = buildRoundSchedule(massagistId, day, shopId, maxRoundMap.getOrDefault(massagistId, 0L) + 1);
+                if (persist && mayAssign.contains(massagistId)) {
+                    created.add(row);
                 }
             }
-            list.addAll(roundScheduleList);
+            // 队列口径随行带出去，看板直接显示，不再自己算序号
+            row.setQueueSeq(q.getSeq());
+            row.setSortNo(q.getReceiptNo());
+            row.setOnDuty(q.getOnDuty());
+            row.setRoundCount(q.getAssignCount() == null ? 0L : q.getAssignCount().longValue());
+            result.add(row);
         }
-        log.info("当前轮次：{}", currentRound);
-        Set<Long> transferred = new HashSet<>(massagistSchedulesService.getMassagistSchedulesListDiaoDian(day, shopId));
-        return list.stream().collect(Collectors.groupingBy(
-                RoundSchedule::getMassagistId,
-                LinkedHashMap::new,
-                Collectors.minBy(Comparator.comparingLong(RoundSchedule::getRound))
-        )).values().stream().map(Optional::get).sorted(Comparator.comparingLong(RoundSchedule::getRound)
-                .thenComparingInt(s -> transferred.contains(s.getMassagistId()) ? 0 : 1)).collect(Collectors.toList());
+        if (!created.isEmpty()) {
+            saveBatch(created);
+        }
+        log.info("轮牌顺序 shop={} day={} → {}", shopId, day, result.stream()
+                .map(r -> r.getMassagistId() + "#" + r.getSortNo()).collect(Collectors.joining(",")));
+        return result;
     }
 
     private RoundSchedule buildRoundSchedule(Long massagistId, String day, Long shopId, Long round) {
@@ -220,24 +180,39 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
      */
     @Transactional(rollbackFor = Exception.class)
     public void updateByDetailList(List<OrderDetail> detailList, String day, Long shopId) {
+        updateByDetailList(detailList, day, shopId, true);
+    }
+
+    /**
+     * @param advanceQueue 是否顺带把人排到队尾。抢单时位移由 grabAssign 落（要记成 GRAB），这里传 false，避免推两次
+     */
+    public void updateByDetailList(List<OrderDetail> detailList, String day, Long shopId, boolean advanceQueue) {
         if (CollectionUtils.isEmpty(detailList) || day == null || shopId == null) {
             return;
         }
-        List<Long> massagistIdList = detailList.stream().map(OrderDetail::getMassagistId).collect(Collectors.toList());
-        List<RoundSchedule> list = findSortMassagistIdList(day, shopId, detailList.size(), massagistIdList, true);
-        list = list.stream().filter(s -> massagistIdList.contains(s.getMassagistId())).collect(Collectors.toList());
-        Map<Long, Long> map = detailList.stream().collect(Collectors.toMap(OrderDetail::getMassagistId, OrderDetail::getId));
+        List<OrderDetail> assignList = detailList.stream()
+                .filter(d -> d.getMassagistId() != null && d.getId() != null)
+                .collect(Collectors.toList());
+        if (assignList.isEmpty()) {
+            return;
+        }
+        List<Long> massagistIdList = assignList.stream().map(OrderDetail::getMassagistId).distinct().collect(Collectors.toList());
+        List<RoundSchedule> list = findSortMassagistIdList(day, shopId, assignList.size(), massagistIdList, true);
+        Map<Long, Long> map = assignList.stream().collect(Collectors.toMap(OrderDetail::getMassagistId, OrderDetail::getId, (a, b) -> a));
         list = list.stream()
-                .collect(Collectors.toMap(RoundSchedule::getMassagistId, Function.identity(), BinaryOperator.minBy(Comparator.comparingLong(RoundSchedule::getRound))))
+                .filter(s -> s.getId() != null && massagistIdList.contains(s.getMassagistId()))
+                .collect(Collectors.toMap(RoundSchedule::getMassagistId, Function.identity(),
+                        BinaryOperator.minBy(Comparator.comparingLong((RoundSchedule a) -> a.getRound() == null ? 0L : a.getRound()))))
                 .values().stream().peek(s -> {
                     s.setState(RoundScheduleState.SCHEDULED.getValue());
                     s.setOrderDetailId(map.get(s.getMassagistId()));
                 }).collect(Collectors.toList());
-        updateBatchById(list);
-        Long lastRound = findCurrentRound(day, shopId);
-        Long minRound = list.stream().map(RoundSchedule::getRound).min(Long::compareTo).orElse(null);
-        if (minRound != null && !minRound.equals(lastRound)) {
-            closeRoundsWithAllMassagistsOffDuty(day, shopId, minRound);
+        if (!list.isEmpty()) {
+            updateBatchById(list);
+        }
+        // 上钟：队列把人移到队尾。按明细幂等，同一单重复调用不会把人往后推两次
+        if (advanceQueue) {
+            assignList.forEach(d -> receptionQueueService.assign(day, shopId, d.getMassagistId(), d.getId(), null));
         }
     }
 
@@ -258,6 +233,11 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
             return;
         }
         LocalDateTime now = LocalDateTime.now();
+        // 回位要用清空前拿到的明细id
+        String queueDay = DateUtil.toYYYYMMDD(list.get(0).getAppointmentDate());
+        Long queueShopId = list.get(0).getShopId();
+        List<Long> assignedDetailIds = list.stream().map(RoundSchedule::getOrderDetailId)
+                .filter(Objects::nonNull).distinct().collect(Collectors.toList());
         list.forEach(schedule -> {
             schedule.setState(roundScheduleState.getValue());
             String comment = schedule.getComment();
@@ -282,6 +262,8 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
             schedule.setUpdateTime(now);
         });
         updateBatchById(list);
+        // 取消/改期/换人：把人放回上钟前的位置，只回位置，不做别的变更
+        assignedDetailIds.forEach(detailId -> receptionQueueService.revert(queueDay, queueShopId, detailId, null));
     }
 
     /**
@@ -317,11 +299,13 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
             workMassagistIdList.addAll(skipMassagistList.stream().map(RoundSchedule::getMassagistId).collect(Collectors.toSet()));
         }
         LocalDateTime now = LocalDateTime.now();
-        //获取请假的列表
-        List<RoundSchedule> skipMassagistListNew = skipMassagistList.stream().filter(s -> !workMassagistIdList.contains(s.getMassagistId())).collect(Collectors.toList());
-        //移除请假的技师的当前轮次排序
-        removeBatchByIds(skipMassagistListNew.stream().map(RoundSchedule::getId).collect(Collectors.toList()));
-        skipMassagistList.forEach(s -> {
+        // 以前这里会「移除请假的技师的当前轮次排序」：位置一删，后面的人就顶上来了，取消之后也回不去，顺序就乱了。
+        // 现在顺序由轮牌队列负责，不在班的人在选人时按班次过滤，这里只留备注，不删行、不动位置。
+        List<RoundSchedule> commentList = skipMassagistList.stream().filter(s -> s.getId() != null).collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(commentList)) {
+            return;
+        }
+        commentList.forEach(s -> {
             String comment = s.getComment();
             JSONArray commentArray = new JSONArray();
             if (comment != null) {
@@ -334,7 +318,7 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
             s.setComment(commentArray.toJSONString());
             s.setUpdateTime(now);
         });
-        updateBatchById(skipMassagistList);
+        updateBatchById(commentList);
     }
 
     /**
@@ -507,6 +491,98 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
         lqw.eq(RoundSchedule::getState, RoundScheduleState.SCHEDULED.getValue());
         List<RoundSchedule> list = list(lqw);
         return list.stream().collect(Collectors.groupingBy(RoundSchedule::getMassagistId, Collectors.counting()));
+    }
+
+    // ==================== 轮牌（接待排队）对外的动作 ====================
+
+    /** 轮牌看板：顺序 + 谁在忙 + 谁能抢 */
+    public List<ReceptionBoardItem> receptionBoard(Long shopId, String date) {
+        return receptionQueueService.board(date, shopId);
+    }
+
+    /** 值班 / 下值班（只换分组，不动位置） */
+    public ReceptionQueue switchDuty(Long shopId, String date, Long massagistId, boolean onDuty, String operator) {
+        return receptionQueueService.switchDuty(date, shopId, massagistId, onDuty, operator);
+    }
+
+    /** 接待完成：回到休息区，位置保留 */
+    public void finishReception(Long shopId, String date, Long massagistId, String operator) {
+        receptionQueueService.finish(date, shopId, massagistId, operator);
+    }
+
+    /** 调店进店：插到队头 */
+    public void joinReceptionQueue(Long shopId, String date, Long massagistId, String operator) {
+        receptionQueueService.joinFromOtherShop(date, shopId, massagistId, operator);
+    }
+
+    /** 当天轮牌事项（值班意向/无值班可接待/超时未接待） */
+    public List<ReceptionIssue> receptionIssues(Long shopId, String date) {
+        return receptionIssueService.listByDay(date, shopId);
+    }
+
+    /** 一键安排预览：下一单该谁上 */
+    public ReceptionQueue nextMassagist(Long shopId, String date, LocalDateTime startTime, Integer durationMinutes) {
+        LocalDateTime end = startTime == null ? null : startTime.plusMinutes(durationMinutes == null ? 60 : durationMinutes);
+        return receptionQueueService.pickNext(date, shopId, startTime, end, null);
+    }
+
+    /**
+     * 抢单：客人还没被接待、原疗愈师超过接待确认时限也没点接待，其他人可以把这单接过去。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void grab(Long shopId, String date, Long massagistId, Long detailId, String operator) {
+        if (shopId == null || date == null || massagistId == null || detailId == null) {
+            throw new BusinessException("参数不完整");
+        }
+        synchronized (("receptionGrab:" + date + ":" + shopId).intern()) {
+            OrderDetail detail = orderDetailService.getById(detailId);
+            if (detail == null) {
+                throw new BusinessException("订单明细不存在");
+            }
+            if (!Objects.equals(detail.getShopId(), shopId)) {
+                throw new BusinessException("门店不一致，不能抢单");
+            }
+            if (!AppointmentState.WAITING.getValue().equals(detail.getState())) {
+                throw new BusinessException("客人已经被接待了，抢不了");
+            }
+            Long fromMassagistId = detail.getMassagistId();
+            if (Objects.equals(fromMassagistId, massagistId)) {
+                throw new BusinessException("这单本来就是你的");
+            }
+            if (receptionQueueService.find(date, shopId, massagistId) == null) {
+                throw new BusinessException("你不在今天的排班里");
+            }
+            // 接待确认时限没过，这单还轮不到别人抢
+            ReceptionQueue fromQueue = receptionQueueService.find(date, shopId, fromMassagistId);
+            int window = receptionQueueService.grabWindowMinutes(shopId);
+            if (fromQueue != null && fromQueue.getLastAssignTime() != null) {
+                LocalDateTime deadline = fromQueue.getLastAssignTime().plusMinutes(window);
+                if (LocalDateTime.now().isBefore(deadline)) {
+                    long left = Duration.between(LocalDateTime.now(), deadline).toMinutes() + 1;
+                    throw new BusinessException("对方还有" + left + "分钟接待确认时间，先等等");
+                }
+            }
+            // 自己这个时段不能有冲突（正在上钟的人抢不了，这也是店里反馈过的问题）
+            if (detail.getStartTime() != null && detail.getEndTime() != null
+                    && orderDetailService.count(new LambdaQueryWrapper<OrderDetail>()
+                    .eq(OrderDetail::getShopId, shopId)
+                    .eq(OrderDetail::getMassagistId, massagistId)
+                    .ne(OrderDetail::getState, AppointmentState.CANCELED.getValue())
+                    .lt(OrderDetail::getStartTime, detail.getEndTime())
+                    .gt(OrderDetail::getEndTime, detail.getStartTime())) > 0) {
+                throw new BusinessException("你这个时段正在上钟，抢不了");
+            }
+            detail.setMassagistId(massagistId);
+            orderDetailService.updateById(detail);
+            // 排班行：原疗愈师的行释放、新疗愈师的行挂上；队列：原疗愈师回原位，抢到的人排到队尾（由 grabAssign 落）
+            recoverByDetailList(Collections.singletonList(detailId), RoundScheduleState.UPDATE);
+            updateByDetailList(Collections.singletonList(detail), date, shopId, false);
+            receptionQueueService.grabAssign(date, shopId, massagistId, detailId, operator);
+            receptionIssueService.grabbed(date, shopId, detailId, fromMassagistId,
+                    "超过" + window + "分钟未接待，被" + massagistService.findNameById(massagistId) + "抢单",
+                    massagistService.findNameById(massagistId));
+            log.info("抢单成功 shop={} detail={} {}→{}", shopId, detailId, fromMassagistId, massagistId);
+        }
     }
 
     public void removeExistData(LocalDate day, Long shopId) {

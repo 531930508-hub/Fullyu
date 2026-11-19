@@ -1038,7 +1038,9 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
     public List<Long> sortMassagist(List<Long> availableMassagistIdList, LocalDateTime startTime, LocalDateTime endTime, Long shopId, Integer personCount) {
         String day = DateUtil.toYYYYMMDD(startTime);
         log.info("空闲的技师：{}", availableMassagistIdList.stream().map(s -> massagistService.findNameById(s)).collect(Collectors.toList()));
-        List<RoundSchedule> list = roundScheduleService.findSortMassagistIdList(day, shopId, personCount, availableMassagistIdList, true);
+        // 只读排序：真正「上钟移位」在明细落库后由 updateByDetailList 统一做，
+        // 这里再写库就会一次下单把所有人都往后推一轮（历史 bug）
+        List<RoundSchedule> list = roundScheduleService.findSortMassagistIdList(day, shopId, personCount, availableMassagistIdList, false);
         if (CollectionUtils.isEmpty(list)) {
             throw new BusinessException("获取技师轮次列表失败");
         }
@@ -2094,8 +2096,13 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     orderDetailDto.getDurationMinutes(),
                     orderDetailDto.getMassagistIdList(), orderDetailDto.getOrderId(), orderDetailDto.getIsUpdateSort());
             saveBatch(detailList);
-            if (orderDetailDto.getIsUpdateSort()) {
-                updateMassagistSort(detailList, DateUtil.toYYYYMMDD(startTime), shopId);
+            // 接待单也要占轮牌：挂排班行 + 把人排到队尾（口径与 updateMassagistSort 一致：只算计入轮次的明细）
+            List<OrderDetail> assignedList = detailList.stream()
+                    .filter(d -> Boolean.TRUE.equals(d.getIsUpdateSort()))
+                    .filter(d -> d.getMassagistId() != null && d.getId() != null)
+                    .collect(Collectors.toList());
+            if (!CollectionUtils.isEmpty(assignedList)) {
+                roundScheduleService.updateByDetailList(assignedList, DateUtil.toYYYYMMDD(startTime), shopId);
             }
         }
     }

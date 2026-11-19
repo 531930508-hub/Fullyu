@@ -68,4 +68,25 @@ public class RoundSchedule extends BaseEntity {
     @TableField(exist = false)
     private Long roundCount;
 
+    @ApiModelProperty("结果编号（轮牌队列，给人看的号码）")
+    @TableField(exist = false)
+    private Integer sortNo;
+
+    @ApiModelProperty("值班状态 1值班 0休息/未值班")
+    @TableField(exist = false)
+    private Integer onDuty;
+
+    @ApiModelProperty("队列排序键")
+    @TableField(exist = false)
+    private Long queueSeq;
+
+    @ApiModelProperty("是否在服务中")
+    @TableField(exist = false)
+    private Boolean busy;
+
+    @ApiModelProperty("当前服务预计结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(exist = false)
+    private LocalDateTime busyUntil;
+
 }
