@@ -1011,6 +1011,11 @@ export default {
       if (!nickname || /^用户\d{11}$/.test(nickname) || /^1\d{10}$/.test(nickname)) {
         return null
       }
+      //系统默认昵称是「两位中文词+4位数字」（如 青竹4821），和右侧的手机尾号并排时
+      //看起来像两个号码，卡片上不展示
+      if (/^[\u4e00-\u9fa5]{2}\d{4}$/.test(nickname)) {
+        return null
+      }
       return nickname
     },
     getOrderLabelStyle(order) {
