@@ -76,9 +76,10 @@ public class OrderDetailController {
     @ApiOperation("拖到修改订单")
     @FullLog(saveLogField = "oldData")
     public CommonResult updateOrderDetail(@RequestParam Long id, @RequestParam(required = false) Long bedId,
-                                          @RequestParam(required = false) Long massagistId, @RequestParam String startTime) {
+                                          @RequestParam(required = false) Long massagistId, @RequestParam String startTime,
+                                          @RequestParam(required = false) Long swapWithId) {
         JSONObject jsonObject = new JSONObject();
-        jsonObject.put("oldData", service.updateDetail(id, bedId, massagistId, startTime));
+        jsonObject.put("oldData", service.updateDetail(id, bedId, massagistId, startTime, swapWithId));
         return CommonResult.success(jsonObject);
     }
 

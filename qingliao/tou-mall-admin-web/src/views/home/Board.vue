@@ -878,27 +878,32 @@ export default {
         this.updateData()
         return
       }
-      let confirmMessage = `确认将订单调整到 ${targetBed ? targetBed.name : '目标床位'} 的 ${newTime} 时间段吗？`;
       const oldItemTime = dayjs(sourceItem.startTime).format('HH:mm:ss')
       const newItemTime = dayjs(newTime, 'HH:mm').format('HH:mm:ss');
       const changeTime = oldItemTime != newItemTime
       const changeBed = (this.searchForm.type === 1 && newBedId != sourceItem.bedId) || (this.searchForm.type === 2 && newBedId != sourceItem.massagistId)
+      if (!changeTime && !changeBed) {
+        this.isDragging = false;
+        return
+      }
+      // 落点时段已被别的单占用时，改成两单互换档期，而不是要求运营先把目标时段空出来
+      const swapTarget = this.findSwapTarget(targetBed, sourceItem, newTime)
+      let confirmMessage = `确认将订单调整到 ${targetBed ? targetBed.name : '目标床位'} 的 ${newTime} 时间段吗？`;
       let message = ''
       if (sourceItem.specifyType == 1 && targetBed.phone) {
         // 调整疗愈师
         message = '本单已指定疗愈师，'
       }
-      if (changeBed && changeTime) {
+      if (swapTarget) {
+        confirmMessage = message + this.buildSwapMessage(sourceItem, swapTarget)
+      } else if (changeBed && changeTime) {
         confirmMessage = message + `确认将订单调整到 ${targetBed ? targetBed.name : '目标床位'} 的 ${newTime} 时间段吗？`;
       } else if (changeBed) {
         confirmMessage = message + `确认将订单调整到 ${targetBed ? targetBed.name : '目标床位'} 吗？`;
-      } else if (changeTime) {
-        confirmMessage = `确认将订单调整到 ${newTime} 时间段吗？`;
       } else {
-        this.isDragging = false;
-        return
+        confirmMessage = `确认将订单调整到 ${newTime} 时间段吗？`;
       }
-      this.$confirm(confirmMessage, '确认调整', {
+      this.$confirm(confirmMessage, swapTarget ? '确认互换排期' : '确认调整', {
         confirmButtonText: '确认',
         cancelButtonText: '取消',
         type: 'warning'
@@ -908,10 +913,12 @@ export default {
             id: sourceItem.id,
             bedId: this.searchForm.type === 1 ? newBedId : null,
             massagistId: this.searchForm.type === 1 ? null : newBedId,
-            startTime: `${this.searchForm.date} ${newTime}:00`
+            startTime: `${this.searchForm.date} ${newTime}:00`,
+            // 落点已有别的单：把那条单的 id 带过去，后端才知道该和谁互换
+            swapWithId: swapTarget ? swapTarget.id : null
           });
           await this.updateData();
-          this.$message.success('调整成功');
+          this.$message.success(swapTarget ? '互换成功' : '调整成功');
         } catch (error) {
           // 落点被占用等业务失败：后端已弹出具体原因，这里只把看板刷回原位
           if (error !== 'error') {
@@ -925,6 +932,31 @@ export default {
       });
 
       this.isDragging = false;
+    },
+    // 落点时段已被别的单占用时，找出那条单：同一条时段只可能压着一单，压着多单就交回后端按撞单处理
+    findSwapTarget(targetBed, sourceItem, newTime) {
+      if (!targetBed || !Array.isArray(targetBed.orderDetailList)) return null
+      // 已完成/已取消的单只做事后挪动，不参与互换
+      if (sourceItem.state === 2 || sourceItem.state === 3) return null
+      const start = dayjs(`${this.searchForm.date} ${newTime}`)
+      const end = start.add(sourceItem.duration || 0, 'minute')
+      const candidates = targetBed.orderDetailList.filter(detail => {
+        if (!detail || detail.id === sourceItem.id) return false
+        if (detail.state === 2 || detail.state === 3) return false
+        const detailStart = dayjs(detail.startTime)
+        const detailEnd = detailStart.add(detail.duration || 0, 'minute')
+        return start.isBefore(detailEnd) && end.isAfter(detailStart)
+      })
+      return candidates.length === 1 ? candidates[0] : null
+    },
+    // 互换确认文案：把两单各自的新档期都写清楚，避免换完才发现换错人
+    buildSwapMessage(sourceItem, swapTarget) {
+      const rangeText = (start, duration) => `${dayjs(start).format('HH:mm')}~${dayjs(start).add(duration || 0, 'minute').format('HH:mm')}`
+      const customer = swapTarget.customer && swapTarget.customer.phone ? `尾号${swapTarget.customer.phone.substr(-4)}` : '另一单'
+      const action = this.searchForm.type === 2 ? '互换疗愈师和时段' : '互换床位和时段'
+      return `该时段已有【${swapTarget.projectTitle || '订单'} ${customer}】的预约，确认${action}吗？` +
+        `本单 ${rangeText(sourceItem.startTime, sourceItem.duration)}→${rangeText(swapTarget.startTime, sourceItem.duration)}，` +
+        `对方 ${rangeText(swapTarget.startTime, swapTarget.duration)}→${rangeText(sourceItem.startTime, swapTarget.duration)}。`
     },
     trackPosition(e) {
       // 优先使用触摸事件的坐标

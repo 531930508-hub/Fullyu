@@ -31,7 +31,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 看板拖动排期：落点被占用时本次拖动直接失败，不允许把原来那单盖掉或互换；
+ * 看板拖动排期：落点被占用时默认让本次拖动失败，不允许把原来那单盖掉；
+ * 只有运营确认了互换（带 swapWithId）才两单对调档期，且任何一方撞到第三单都整体失败；
  * 已完成/已取消的明细按运营动作挪动，不校验冲突也不去动别人的排期。
  */
 class DragScheduleConflictTest {
@@ -44,6 +45,7 @@ class DragScheduleConflictTest {
     private MassagistService massagistService;
     private ProjectService projectService;
     private RoundScheduleService roundScheduleService;
+    private OrderService orderService;
 
     @BeforeEach
     void setup() {
@@ -53,11 +55,13 @@ class DragScheduleConflictTest {
         massagistService = mock(MassagistService.class);
         projectService = mock(ProjectService.class);
         roundScheduleService = mock(RoundScheduleService.class);
+        orderService = mock(OrderService.class);
         ReflectionTestUtils.setField(service, "baseMapper", mapper);
         ReflectionTestUtils.setField(service, "bedService", bedService);
         ReflectionTestUtils.setField(service, "massagistService", massagistService);
         ReflectionTestUtils.setField(service, "projectService", projectService);
         ReflectionTestUtils.setField(service, "roundScheduleService", roundScheduleService);
+        ReflectionTestUtils.setField(service, "orderService", orderService);
         when(projectService.isReceptionOrder(anyLong())).thenReturn(false);
         when(mapper.updateById(any(OrderDetail.class))).thenReturn(1);
     }
@@ -119,6 +123,64 @@ class DragScheduleConflictTest {
                 () -> service.updateDetail(1L, 7L, null, at(14, 30)));
 
         assertTrue(e.getMessage().contains("床7"), e.getMessage());
+        verify(mapper, never()).updateById(any(OrderDetail.class));
+    }
+
+    @Test
+    void confirmedSwapExchangesBothBedAndTime() {
+        OrderDetail dragged = detail(1L, AppointmentState.WAITING.getValue(), 11L, 5L, 14, 0, 60);
+        OrderDetail occupied = detail(2L, AppointmentState.WAITING.getValue(), 12L, 7L, 14, 30, 60);
+        givenOccupiedBy(dragged, occupied);
+        Bed target = new Bed();
+        target.setId(7L);
+        target.setName("床7");
+        target.setStatus(NormalState.EFFECTIVE.getValue());
+        when(bedService.getById(7L)).thenReturn(target);
+
+        service.updateDetail(1L, 7L, null, at(14, 30), 2L);
+
+        // 本单去对方的床位和时段，对方回到本单原来的床位和时段，时长各归各
+        assertEquals(Long.valueOf(7L), dragged.getBedId());
+        assertEquals(DAY.atTime(14, 30), dragged.getStartTime());
+        assertEquals(DAY.atTime(15, 30), dragged.getEndTime());
+        assertEquals(Long.valueOf(5L), occupied.getBedId());
+        assertEquals(DAY.atTime(14, 0), occupied.getStartTime());
+        assertEquals(DAY.atTime(15, 0), occupied.getEndTime());
+        verify(mapper, times(2)).updateById(any(OrderDetail.class));
+    }
+
+    @Test
+    void confirmedSwapExchangesTherapists() {
+        OrderDetail dragged = detail(1L, AppointmentState.WAITING.getValue(), 11L, 5L, 14, 0, 60);
+        OrderDetail occupied = detail(2L, AppointmentState.WAITING.getValue(), 12L, 6L, 14, 30, 60);
+        givenOccupiedBy(dragged, occupied);
+
+        service.updateDetail(1L, null, 12L, at(14, 30), 2L);
+
+        assertEquals(Long.valueOf(12L), dragged.getMassagistId());
+        assertEquals(DAY.atTime(14, 30), dragged.getStartTime());
+        assertEquals(Long.valueOf(11L), occupied.getMassagistId());
+        assertEquals(DAY.atTime(14, 0), occupied.getStartTime());
+        assertEquals(Long.valueOf(5L), dragged.getBedId());
+        assertEquals(Long.valueOf(6L), occupied.getBedId());
+        verify(mapper, times(2)).updateById(any(OrderDetail.class));
+    }
+
+    @Test
+    void swapWithFinishedOrderIsRejected() {
+        OrderDetail dragged = detail(1L, AppointmentState.WAITING.getValue(), 11L, 5L, 14, 0, 60);
+        OrderDetail occupied = detail(2L, AppointmentState.FINISHED.getValue(), 12L, 7L, 14, 30, 60);
+        givenOccupiedBy(dragged, occupied);
+        Bed target = new Bed();
+        target.setId(7L);
+        target.setName("床7");
+        target.setStatus(NormalState.EFFECTIVE.getValue());
+        when(bedService.getById(7L)).thenReturn(target);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.updateDetail(1L, 7L, null, at(14, 30), 2L));
+
+        assertTrue(e.getMessage().contains("已完成"), e.getMessage());
         verify(mapper, never()).updateById(any(OrderDetail.class));
     }
 
