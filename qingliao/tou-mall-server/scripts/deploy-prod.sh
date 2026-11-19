@@ -79,7 +79,10 @@ fi
 # ---------- 1 前置检查 ----------
 if [ "$SKIP_PF" = 0 ] && ! DRY_RUN; then
   say "1/6 前置检查"
-  "$REPO/scripts/preflight.sh" --jar "$JAR" || die "preflight 有 FAIL 项"
+  # preflight.sh 没有 --jar 选项（只有 --expect-jar-sha，校验的是 staging 里已上传的包），
+  # 这里传了会让预检直接 exit 2、发版永远停在第一步（2026-11-19 实测）。
+  # jar 指纹由第 3 步上传后校验；带 --with-sql 时库结构对账本来就落后，需配合 --skip-preflight 或先跑 DDL。
+  "$REPO/scripts/preflight.sh" || die "preflight 有 FAIL 项"
 elif [ "$SKIP_PF" = 1 ]; then
   say "1/6 前置检查（已跳过）"
 fi
@@ -190,7 +193,15 @@ start_app() {   # 只走 start-120.sh：jar 名固定，JDK8/env/redis 密码都
   cd "$APP_DIR"
   mkdir -p logs
   bash "$START_SCRIPT" >/dev/null 2>&1 || return 1
-  pgrep -f 'mall-admin-1.0-SNAPSHOT.jar' | head -1
+  # start-120.sh 是后台起 JVM 后立刻返回，紧接着 pgrep 会扑空（2026-11-19 实测拿到空 PID，
+  # 后面的进程 environ 校验因此误报 ENV_MISSING_IN_PROCESS 并中止发布）。轮询等进程出现。
+  local i=0 p=""
+  while [ $i -lt 30 ]; do
+    p=$(ps -C java -o pid=,args= --no-headers | awk -v j="$JAR_NAME" 'index($0, j) {print $1; exit}')
+    if [ -n "$p" ]; then echo "$p"; return 0; fi
+    sleep 1; i=$((i+1))
+  done
+  return 1
 }
 wait_health() { # $1=秒上限
   local i=0
