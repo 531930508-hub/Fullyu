@@ -21,26 +21,30 @@ requestInstance.validateStatus = (statusCode) => {
     return statusCode === 200
 }
 
-let showError = false
-
-function closeError() {
-    showError = false
-}
+// 提示节流：一次连发多个失败只提示一条
+let lastToastAt = 0
 
 // 默认文案在调用时取词，保证切语言后的提示是当前语言
 function notify(msg = t('操作失败'), type = 'error', duration = 3000) {
-    if (!showError) {
+    const now = Date.now()
+    if (now - lastToastAt < duration) {
         return
     }
-    showError = true
+    lastToastAt = now
     uni.showToast({
         title: msg,
         icon: type === 'error' ? 'none' : 'success',
         duration: duration
     })
-    setTimeout(() => {
-        showError = false
-    }, duration)
+}
+
+/**
+ * 是否允许弹提示：看这次请求自己的 showErrorMessage（默认弹，显式传 false 才静默）。
+ * 不能用全局开关：首屏十几个请求并发，后发的请求会覆盖先发请求的设置，
+ * 结果是本该静默的接口失败被隔壁请求「点亮」，冒出一条莫名其妙的「请求异常」。
+ */
+function shouldNotify(config) {
+    return !(config && config.showErrorMessage === false)
 }
 
 // 请求拦截器
@@ -59,12 +63,7 @@ requestInstance.interceptor.request((config, cancel) => {
         }
     }
 
-    const {params,showErrorMessage} = config
-    if (showErrorMessage == null || showErrorMessage == undefined) {
-        showError = true
-    } else {
-        showError = false
-    }
+    const {params} = config
     const _params = {}
     for (const key in params) {
         const value = params[key]
@@ -118,18 +117,27 @@ requestInstance.interceptor.response((response) => {
             },500)
         }
         // 服务端文案可能是本端词典里的界面语，命不中时 t 原样返回；缺文案时落回默认提示
-        notify((res.message && t(res.message)) || undefined, 'error')
+        if (shouldNotify(response.config)) {
+            notify((res.message && t(res.message)) || undefined, 'error')
+        }
         return Promise.reject(res.message)
     } else {
         return res.data
     }
 }, (response) => {
-    if (response.errno == 600001){
-        notify(t('网络异常，请检查网络'), 'error')
-    } else if (response.errMsg == 'request:fail timeout'){
-        notify(t('请求超时，请检查网络'), 'error')
-    } else {
-        notify(t('请求异常'), 'error')
+    const err = response || {}
+    const config = err.config || {}
+    // 服务端返回非 200 时 luch-request 也走这个分支（validateStatus 只认 200），
+    // 用户侧统一一句「请求异常」分不出是谁，这里留一条带状态码的日志给真机排查用。
+    console.warn('[request-fail]', config.url, err.statusCode, err.errMsg, err.errno)
+    if (shouldNotify(config)) {
+        if (err.errno == 600001){
+            notify(t('网络异常，请检查网络'), 'error')
+        } else if (err.errMsg == 'request:fail timeout'){
+            notify(t('请求超时，请检查网络'), 'error')
+        } else {
+            notify(t('请求异常'), 'error')
+        }
     }
     return Promise.reject(response)
 })
