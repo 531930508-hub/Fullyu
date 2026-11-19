@@ -55,5 +55,10 @@ public class MassagistTrainingAssessment {
 
     private String voidReason;
 
+    /**
+     * 在岗证明照片 OSS key，逗号分隔。
+     */
+    private String proofPhotos;
+
     private LocalDateTime createTime;
 }

@@ -10,6 +10,7 @@ import com.macro.mall.incentive.entity.MassagistTrainingAssessment;
 import com.macro.mall.incentive.entity.TrainingProjectConfig;
 import com.macro.mall.incentive.mapper.MassagistTrainingAssessmentMapper;
 import com.macro.mall.service.MassagistService;
+import com.macro.mall.service.impl.OssServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,13 +18,18 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 内训师提交考核。认证判断与写入串行化到被考核疗愈师行，避免两位内训师同时提交时重复认证。
  */
 @Service
 public class TrainingAssessmentService {
+
+    /** 单次考核最多附带的在岗证明照片数量。 */
+    public static final int MAX_PROOF_PHOTOS = 6;
 
     @Autowired
     private TrainingTeamCertProperties properties;
@@ -42,6 +48,9 @@ public class TrainingAssessmentService {
 
     @Autowired
     private TrainingCertificationService certificationService;
+
+    @Autowired
+    private OssServiceImpl ossService;
 
     @Transactional(rollbackFor = Exception.class)
     public AssessmentSubmitResult submit(AssessmentSubmitRequest request) {
@@ -69,6 +78,7 @@ public class TrainingAssessmentService {
         if (remark != null && remark.length() > 500) {
             throw new BusinessException("备注不能超过500个字符");
         }
+        String proofPhotos = normalizeProofPhotos(request.getProofPhotos());
 
         Massagist target = massagistService.getById(request.getMassagistId());
         if (target == null) {
@@ -111,6 +121,7 @@ public class TrainingAssessmentService {
         row.setTrainerShopId(trainer.getShopId());
         row.setTrainerAdminId(accessService.currentAdmin().getId());
         row.setRemark(remark);
+        row.setProofPhotos(proofPhotos);
         row.setSubmittedAt(LocalDateTime.now());
         row.setVoided(0);
         row.setCreateTime(LocalDateTime.now());
@@ -135,5 +146,31 @@ public class TrainingAssessmentService {
             result.setMessage("已记录本次考核");
         }
         return result;
+    }
+
+    /**
+     * 在岗证明照片只接受本系统 OSS 预签名返回的 key（不含协议头），最多 {@link #MAX_PROOF_PHOTOS} 张，逗号拼接存储。
+     * 建议每票必带一张，便于前台据此核对在岗身份；不强制是因为历史流水没有照片。
+     */
+    private String normalizeProofPhotos(List<String> photos) {
+        if (photos == null || photos.isEmpty()) {
+            return null;
+        }
+        Set<String> keys = new LinkedHashSet<>();
+        for (String photo : photos) {
+            String key = photo == null ? null : photo.trim();
+            if (key == null || key.isEmpty()) {
+                continue;
+            }
+            // 只落 OSS key：既挡掉外链图片，也避免把临时签名 URL 存进库。
+            if (!ossService.isManagedKey(key)) {
+                throw new BusinessException("在岗证明照片地址不正确，请重新上传");
+            }
+            keys.add(key);
+        }
+        if (keys.size() > MAX_PROOF_PHOTOS) {
+            throw new BusinessException("在岗证明照片最多" + MAX_PROOF_PHOTOS + "张");
+        }
+        return keys.isEmpty() ? null : String.join(",", keys);
     }
 }

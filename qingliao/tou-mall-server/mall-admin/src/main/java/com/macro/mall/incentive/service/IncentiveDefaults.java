@@ -60,7 +60,8 @@ public final class IncentiveDefaults {
     }
 
     /**
-     * 6 个全感舒筋部位 + 头部水疗 60/90 分钟，共 8 个独立项目。
+     * 6 个全感舒筋部位 + 头部水疗 60/90 分钟 + 全感悦耳，共 9 个独立项目。
+     * 全感悦耳达标门槛为 30 单（耳部疗程单次短、单量高），金额同其他项目 500 元。
      * projectId 需在设置页绑定线上真实项目后再用于严格匹配。
      */
     public static List<TrainingProjectConfig> trainingProjects() {
@@ -73,6 +74,7 @@ public final class IncentiveDefaults {
         list.add(project("sujin_leg", "全感舒筋", "腿部", "腿,腿部,腿疗", null, 6));
         list.add(project("head_spa_60", "头部水疗", "60 分钟", "水疗,头部水疗", 60, 7));
         list.add(project("head_spa_90", "头部水疗", "90 分钟", "水疗,头部水疗", 90, 8));
+        list.add(project("ear", "全感悦耳", "耳部", "耳,耳部,采耳", null, 9, 30));
         return list;
     }
 
@@ -98,6 +100,16 @@ public final class IncentiveDefaults {
                                                  String aliases,
                                                  Integer durationMinutes,
                                                  int sort) {
+        return project(key, group, name, aliases, durationMinutes, sort, 5);
+    }
+
+    private static TrainingProjectConfig project(String key,
+                                                 String group,
+                                                 String name,
+                                                 String aliases,
+                                                 Integer durationMinutes,
+                                                 int sort,
+                                                 int targetCount) {
         TrainingProjectConfig entity = new TrainingProjectConfig();
         entity.setProjectKey(key);
         entity.setProjectGroup(group);
@@ -105,7 +117,7 @@ public final class IncentiveDefaults {
         entity.setPartName("头部水疗".equals(group) ? "头部水疗" : name);
         entity.setAliases(aliases);
         entity.setDurationMinutes(durationMinutes);
-        entity.setTargetCount(5);
+        entity.setTargetCount(targetCount);
         entity.setAmount(new BigDecimal("500"));
         entity.setEnabled(1);
         entity.setSort(sort);

@@ -30,7 +30,7 @@ public class TrainingProgress {
     private LocalDate startDate;
 
     /**
-     * uncertified / upcoming / active / completed-this-month / completed
+     * uncertified / upcoming / active / completed-this-month / completed / paid
      */
     private String status;
 
@@ -59,4 +59,14 @@ public class TrainingProgress {
     private BigDecimal earnedAmount;
 
     private BigDecimal configuredAmount;
+
+    /**
+     * 系统外已计发月份；非空时该补贴不再进入任何月份应发。
+     */
+    private String paidMonth;
+
+    /**
+     * 系统外已计发金额；为空时按配置金额展示。
+     */
+    private BigDecimal paidAmount;
 }

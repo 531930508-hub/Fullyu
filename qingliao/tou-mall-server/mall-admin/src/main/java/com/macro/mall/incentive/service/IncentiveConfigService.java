@@ -330,7 +330,9 @@ public class IncentiveConfigService {
             project.setProjectId(entity.getProjectId());
             project.setPartName(entity.getPartName());
             project.setAliases(entity.getAliases());
-            project.setDurationMinutes(entity.getDurationMinutes());
+            // 设置页未填时长会存 0，语义是「不限时长」；直接透传会让匹配要求订单时长=0。
+            project.setDurationMinutes(entity.getDurationMinutes() != null && entity.getDurationMinutes() > 0
+                    ? entity.getDurationMinutes() : null);
             project.setTargetCount(entity.getTargetCount() == null ? 5 : entity.getTargetCount());
             project.setAmount(entity.getAmount() == null ? new BigDecimal("500") : entity.getAmount());
             project.setEnabled(true);

@@ -307,10 +307,11 @@
             </div>
             <div class="training-status">
               <el-tag size="mini" :type="status(project).type" effect="plain">{{ status(project).text }}</el-tag>
-              <small v-if="project.completionDate">{{ project.completionDate }}</small>
+              <small v-if="project.status === 'paid'">已计发 {{ project.paidMonth }}</small>
+              <small v-else-if="project.completionDate">{{ project.completionDate }}</small>
               <small v-else-if="project.remaining !== null">还差 {{ project.remaining }} 单</small>
             </div>
-            <b class="training-amount">{{ money(project.earnedAmount) }}</b>
+            <b class="training-amount">{{ project.status === 'paid' ? '已计发' : money(project.earnedAmount) }}</b>
           </div>
         </div>
       </section>

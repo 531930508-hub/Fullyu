@@ -3,6 +3,7 @@ package com.macro.mall.incentive.dto;
 import com.macro.mall.incentive.model.TrainingProgress;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -50,5 +51,9 @@ public class TrainingRecordView {
         private String certSource;
         private LocalDateTime certifiedAt;
         private Integer teamSize = 0;
+        /** 系统外已计发月份；非空表示不再重复计发。 */
+        private String paidMonth;
+        /** 系统外已计发金额；为空按配置金额展示。 */
+        private BigDecimal paidAmount;
     }
 }

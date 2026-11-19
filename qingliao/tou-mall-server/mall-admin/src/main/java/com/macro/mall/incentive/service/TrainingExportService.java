@@ -47,7 +47,7 @@ public class TrainingExportService {
         Map<Long, Shop> safeShops = shops == null ? Collections.emptyMap() : shops;
         Map<String, String> safeProjects = projectNames == null ? Collections.emptyMap() : projectNames;
         StringBuilder csv = new StringBuilder("\ufeff");
-        csv.append("门店,疗愈师,项目编码,项目,认证来源,通过日期,认证时间,团队人数\n");
+        csv.append("门店,疗愈师,项目编码,项目,认证来源,通过日期,认证时间,团队人数,已计发月份,已计发金额\n");
         if (certs != null) {
             for (MassagistTrainingCert cert : certs) {
                 Massagist massagist = safeMassagists.get(cert.getMassagistId());
@@ -61,7 +61,9 @@ public class TrainingExportService {
                         .append(csv(sourceLabel(cert.getSource()))).append(',')
                         .append(csv(cert.getPassedAt())).append(',')
                         .append(csv(time(cert.getCertifiedAt()))).append(',')
-                        .append(cert.getTeamSize() == null ? 0 : cert.getTeamSize()).append('\n');
+                        .append(cert.getTeamSize() == null ? 0 : cert.getTeamSize()).append(',')
+                        .append(csv(cert.getPaidMonth())).append(',')
+                        .append(csv(cert.getPaidAmount())).append('\n');
             }
         }
         return csv.toString();

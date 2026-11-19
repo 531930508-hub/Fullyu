@@ -557,6 +557,8 @@ public class IncentiveDataService {
                     item.setCertSource(cert.getSource() == null ? "LEGACY" : cert.getSource());
                     item.setCertifiedAt(cert.getCertifiedAt());
                     item.setTeamSize(cert.getTeamSize() == null ? 0 : cert.getTeamSize());
+                    item.setPaidMonth(cert.getPaidMonth());
+                    item.setPaidAmount(cert.getPaidAmount());
                 }
                 view.getCerts().add(item);
             }
@@ -668,6 +670,10 @@ public class IncentiveDataService {
         MassagistTrainingCert cert = certMapper.selectById(certId);
         if (cert == null) {
             throw new BusinessException("考核记录不存在");
+        }
+        if (cert.getPaidMonth() != null && !cert.getPaidMonth().trim().isEmpty()) {
+            throw new BusinessException("该考核已于 " + cert.getPaidMonth()
+                    + " 计发，删除会造成重复发放；如确需删除，请先清除已计发标记");
         }
         MassagistTrainingCertLog log = new MassagistTrainingCertLog();
         log.setCertId(cert.getId());
@@ -1323,12 +1329,16 @@ public class IncentiveDataService {
                     massagist.getId(), project,
                     cert == null ? null : cert.getId(),
                     cert == null ? null : cert.getPassedAt(),
+                    cert == null ? null : cert.getPaidMonth(),
+                    cert == null ? null : cert.getPaidAmount(),
                     orders, context.month, context.asOf);
             section.getProjects().add(progress);
             if (progress.getEarnedAmount() != null) {
                 earned = earned.add(progress.getEarnedAmount());
             }
-            if (progress.getStatus() != null && progress.getStatus().startsWith("completed")) {
+            if (progress.getStatus() != null
+                    && (progress.getStatus().startsWith("completed")
+                    || TrainingCalculator.STATUS_PAID.equals(progress.getStatus()))) {
                 completed++;
             }
         }

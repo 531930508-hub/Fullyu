@@ -16,6 +16,16 @@ public interface MassagistTrainingAssessmentMapper extends BaseMapper<MassagistT
     List<MassagistTrainingAssessment> latestVotes(@Param("massagistId") Long massagistId,
                                                   @Param("projectKey") String projectKey);
 
+    /**
+     * 管理端考核明细用：包含已作废记录（作废后也要能追溯在岗证明照片）。
+     */
+    @Select("SELECT * FROM s_massagist_training_assessment "
+            + "WHERE massagist_id=#{massagistId} AND project_key=#{projectKey} "
+            + "ORDER BY submitted_at DESC, id DESC LIMIT #{limit}")
+    List<MassagistTrainingAssessment> allForTarget(@Param("massagistId") Long massagistId,
+                                                   @Param("projectKey") String projectKey,
+                                                   @Param("limit") int limit);
+
     @Select("SELECT id FROM s_massagist WHERE id=#{id} FOR UPDATE")
     Long lockMassagist(@Param("id") Long id);
 

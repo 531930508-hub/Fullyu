@@ -72,6 +72,7 @@ public class TrainingCertificationService {
         if (cert == null) {
             throw new BusinessException("考核记录不存在");
         }
+        requireNotPaid(cert);
         writeLog(cert, "REVOKE", cert.getPassedAt(), null,
                 accessService.currentAdmin().getId(), accessService.currentOperatorName(), safeReason);
         assessmentMapper.update(null, new UpdateWrapper<MassagistTrainingAssessment>()
@@ -161,6 +162,17 @@ public class TrainingCertificationService {
         log.setOperatorName(operatorName);
         log.setRemark(remark);
         certLogMapper.insert(log);
+    }
+
+    /**
+     * 已计发的考核不允许撤销：删掉记录会丢失「这笔钱已发过」的事实，
+     * 该伙伴重新认证后会被再算一次补贴。确需撤销时先清库里的 paid_month。
+     */
+    private void requireNotPaid(MassagistTrainingCert cert) {
+        if (cert.getPaidMonth() != null && !cert.getPaidMonth().trim().isEmpty()) {
+            throw new BusinessException("该考核已于 " + cert.getPaidMonth()
+                    + " 计发，撤销会造成重复发放；如确需撤销，请先清除已计发标记");
+        }
     }
 
     private String requireReason(String reason) {

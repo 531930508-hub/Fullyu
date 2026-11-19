@@ -65,6 +65,18 @@
           <button :class="{active: form.result === 1}" @click="form.result = 1">通过</button>
           <button :class="{active: form.result === 0}" @click="form.result = 0">不通过</button>
         </div>
+        <label class="ta-label">在岗证明照片（选填，前台据此核对身份）</label>
+        <div class="ta-proof">
+          <div v-for="(photo, idx) in proofPhotos" :key="photo.key" class="ta-proof-item">
+            <img :src="photo.preview" alt="在岗证明">
+            <span v-if="photo.uploading" class="ta-proof-mask">上传中…</span>
+            <button class="ta-proof-del" @click="removeProof(idx)">×</button>
+          </div>
+          <label v-if="proofPhotos.length < maxProofPhotos" class="ta-proof-add">
+            {{ uploadingProof ? '上传中…' : '+ 拍照 / 上传' }}
+            <input type="file" accept="image/*" :disabled="uploadingProof" @change="addProof">
+          </label>
+        </div>
         <label class="ta-label">备注（选填）</label>
         <textarea
           v-model="form.remark"
@@ -106,6 +118,7 @@
 <script>
 import dayjs from 'dayjs'
 import incentiveApi from '@/api/incentive'
+import {generatePreSignedUrl, uploadFile} from '@/api/oss'
 
 export default {
   name: 'TrainerAssess',
@@ -118,6 +131,10 @@ export default {
       projects: [],
       loadingProjects: false,
       form: {projectKey: '', assessDate: dayjs().format('YYYY-MM-DD'), result: 1, remark: ''},
+      // 在岗证明：{key: OSS key（提交用）, preview: 本地预览, uploading: 是否还在传}
+      proofPhotos: [],
+      maxProofPhotos: 6,
+      uploadingProof: false,
       submitting: false,
       mine: [],
       mineTotal: 0,
@@ -194,6 +211,7 @@ export default {
       if (!this.selectedTherapist) return this.notify('请先选择疗愈师')
       if (!this.form.projectKey) return this.notify('请选择考核部位')
       if (!this.form.assessDate) return this.notify('请选择考核日期')
+      if (this.uploadingProof || this.proofPhotos.some(p => p.uploading)) return this.notify('照片还在上传，请稍候')
       this.submitting = true
       try {
         const res = await incentiveApi.submitAssessment({
@@ -201,17 +219,52 @@ export default {
           projectKey: this.form.projectKey,
           assessDate: this.form.assessDate,
           result: this.form.result,
-          remark: this.form.remark
+          remark: this.form.remark,
+          proofPhotos: this.proofPhotos.map(p => p.key)
         })
         this.notify(res.data && res.data.certified ? '已记录，该项目已完成三人认证' : '已记录本次考核')
         this.form.projectKey = ''
         this.form.remark = ''
+        this.clearProof()
         await this.reloadAfterSubmit()
       } catch (e) {
         this.notify(this.messageOf(e, '提交失败，请稍后重试'))
       } finally {
         this.submitting = false
       }
+    },
+    async addProof(event) {
+      const file = event.target.files && event.target.files[0]
+      event.target.value = ''
+      if (!file) return
+      if (this.proofPhotos.length >= this.maxProofPhotos) return this.notify(`最多${this.maxProofPhotos}张照片`)
+      if (!/^image\//.test(file.type)) return this.notify('请选择图片文件')
+      if (file.size > 10 * 1024 * 1024) return this.notify('单张照片不能超过10MB')
+      const item = {key: '', preview: URL.createObjectURL(file), uploading: true}
+      this.proofPhotos.push(item)
+      this.uploadingProof = true
+      try {
+        // 先拿预签名 key，再 PUT 到 OSS；提交时只传 key，避免把临时签名 URL 存进库。
+        const res = await generatePreSignedUrl(file.name, 'training-proof')
+        const signed = res.data || {}
+        await uploadFile(signed.url, file, true)
+        item.key = signed.key
+        item.uploading = false
+      } catch (e) {
+        this.removeProof(this.proofPhotos.indexOf(item))
+        this.notify('照片上传失败，请重试')
+      } finally {
+        this.uploadingProof = false
+      }
+    },
+    removeProof(index) {
+      const item = this.proofPhotos[index]
+      if (item && item.preview) URL.revokeObjectURL(item.preview)
+      this.proofPhotos.splice(index, 1)
+    },
+    clearProof() {
+      this.proofPhotos.forEach(item => item.preview && URL.revokeObjectURL(item.preview))
+      this.proofPhotos = []
     },
     async reloadAfterSubmit() {
       const [profile, projects, mine] = await Promise.all([
@@ -291,6 +344,13 @@ export default {
 .ta-result button.active { background: #4c5a42; color: #f5f6ee; border-color: #4c5a42; }
 .ta-submit { width: 100%; margin-top: 16px; border: 0; border-radius: 12px; padding: 14px; background: #3f4a37; color: #f5f6ee; font-size: 16px; letter-spacing: .08em; }
 .ta-submit[disabled] { opacity: .6; }
+.ta-proof { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ta-proof-item { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: #f0f1e8; }
+.ta-proof-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ta-proof-mask { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(47,43,34,.45); color: #f5f6ee; font-size: 12px; }
+.ta-proof-del { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border: 0; border-radius: 50%; background: rgba(47,43,34,.7); color: #f5f6ee; font-size: 14px; line-height: 1; }
+.ta-proof-add { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border: 1px dashed #cfcbbc; border-radius: 10px; color: #8a877c; font-size: 13px; cursor: pointer; background: #fff; }
+.ta-proof-add input { display: none; }
 .ta-mine-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eeeadd; font-size: 13px; }
 .ta-mine-row span { display: block; color: #8a877c; font-size: 11px; margin-top: 3px; }
 .ta-mine-right { text-align: right; }

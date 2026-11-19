@@ -21,6 +21,7 @@ import com.macro.mall.incentive.mapper.MassagistTrainingAssessmentMapper;
 import com.macro.mall.incentive.mapper.MassagistTrainingCertMapper;
 import com.macro.mall.incentive.mapper.TrainingAssessmentQueryMapper;
 import com.macro.mall.service.MassagistService;
+import com.macro.mall.service.impl.OssServiceImpl;
 import com.macro.mall.service.shop.ShopService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -41,6 +43,9 @@ import java.util.stream.Collectors;
  */
 @Service
 public class TrainingAssessmentQueryService {
+
+    /** 明细页最多回溯的考核流水数，用于汇总在岗证明照片。 */
+    private static final int MAX_PROOF_ROWS = 50;
 
     @Autowired
     private IncentiveAccessService accessService;
@@ -68,6 +73,9 @@ public class TrainingAssessmentQueryService {
 
     @Autowired
     private TrainingExportService exportService;
+
+    @Autowired
+    private OssServiceImpl ossService;
 
     // ---------- 内训师 H5 ----------
 
@@ -350,7 +358,41 @@ public class TrainingAssessmentQueryService {
             vote.setVoidReason(row.getVoidReason());
             detail.getVotes().add(vote);
         }
+        applyProofPhotos(detail, queryMapper);
         return detail;
+    }
+
+    /**
+     * 在岗证明照片按时间倒序挂到最大的一份证明上，便于前台核验，不必逐票翻找。
+     */
+    private void applyProofPhotos(TrainingAssessmentDetail detail,
+                                  TrainingAssessmentQueryMapper queryMapper) {
+        List<MassagistTrainingAssessment> rows = assessmentMapper.allForTarget(
+                detail.getMassagistId(), detail.getProjectKey(), MAX_PROOF_ROWS);
+        Map<Long, String> firstPhotoByVote = new HashMap<>();
+        LinkedHashSet<String> photos = new LinkedHashSet<>();
+        for (MassagistTrainingAssessment row : rows) {
+            if (row.getProofPhotos() == null || row.getProofPhotos().trim().isEmpty()) {
+                continue;
+            }
+            String[] keys = row.getProofPhotos().split(",");
+            boolean first = true;
+            for (String key : keys) {
+                String url = ossService.publicUrl(key.trim());
+                if (url == null) {
+                    continue;
+                }
+                if (first) {
+                    firstPhotoByVote.put(row.getId(), url);
+                    first = false;
+                }
+                photos.add(url);
+            }
+        }
+        for (TrainingAssessmentDetail.VoteView vote : detail.getVotes()) {
+            vote.setProofPhotoUrl(firstPhotoByVote.get(vote.getId()));
+        }
+        detail.getProofPhotos().addAll(photos);
     }
 
     public String exportAssessments(String month, Long shopId, Long trainerId,

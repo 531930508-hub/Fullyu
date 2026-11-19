@@ -40,5 +40,8 @@ export function trainingStatus(progress) {
   if (progress.status === 'completed') {
     return {text: '已达标', type: 'success'}
   }
+  if (progress.status === 'paid') {
+    return {text: '已计发', type: 'info'}
+  }
   return {text: '累计中', type: 'primary'}
 }

@@ -105,8 +105,8 @@
         </div>
 
         <footer v-if="scheduleItems.length" class="panel__foot">
-          <span>共 {{ scheduleItems.length }} 场服务</span>
-          <span>已完成 {{ doneCount }} · 待到店 {{ waitingCount }}</span>
+          <span>共 {{ activeScheduleItems.length }} 场服务</span>
+          <span>已完成 {{ doneCount }} · 待到店 {{ waitingCount }}<template v-if="cancelledItemCount"> · 已取消 {{ cancelledItemCount }}</template></span>
         </footer>
       </div>
 
@@ -191,6 +191,13 @@ import { HOME_LINKS, presetFor } from './catalog'
 
 const SUPER_ADMIN_ROLE = '超级管理员'
 
+// 统计口径：已关闭(3)/已取消(4)/退款中(5)/已退款(6)/退款审批中(7) 都属于「取消单」，
+// 不计入今日预约、到店、完成服务、项目分布等指标；「今日取消」单独统计。
+const CANCELLED_ORDER_STATES = '3,4,5,6,7'
+const ACTIVE_ORDER_STATES = '0,1,2'
+// 预约明细状态：3 = 已取消
+const CANCELLED_APPOINTMENT_STATE = 3
+
 const pad = num => (num < 10 ? `0${num}` : `${num}`)
 const dateCode = date => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 
@@ -205,6 +212,7 @@ export default {
       shopIdLocal: null,
       todayOrders: [],
       todayOrderTotal: 0,
+      cancelledOrderTotal: 0,
       pendingPayTotal: 0,
       todayActualAmount: 0,
       yesterdayActualAmount: 0,
@@ -311,6 +319,13 @@ export default {
       })
       return items.sort((a, b) => this.parseTime(a.startRaw) - this.parseTime(b.startRaw))
     },
+    // 统计用：剔除已取消的预约场次（时间线里仍保留展示，方便看到取消记录）
+    activeScheduleItems() {
+      return this.scheduleItems.filter(item => item.state !== CANCELLED_APPOINTMENT_STATE)
+    },
+    cancelledItemCount() {
+      return this.scheduleItems.length - this.activeScheduleItems.length
+    },
     nextSession() {
       const now = new Date()
       return this.scheduleItems.find(item => item.state !== 2 && item.state !== 3 && this.parseTime(item.startRaw) >= now) || null
@@ -324,22 +339,23 @@ export default {
       return `还有 ${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`
     },
     doneCount() {
-      return this.scheduleItems.filter(item => item.state === 2).length
+      return this.activeScheduleItems.filter(item => item.state === 2).length
     },
     birthdayCount() {
       const names = new Set()
-      this.scheduleItems.forEach(item => {
+      this.activeScheduleItems.forEach(item => {
         if (item.isBirthday) names.add(item.customerName || item.uid.split('-')[0])
       })
       return names.size
     },
     waitingCount() {
-      return this.scheduleItems.filter(item => item.state === 0).length
+      return this.activeScheduleItems.filter(item => item.state === 0).length
     },
     arrivedCustomerCount() {
       const phones = new Set()
       this.todayOrders.forEach(order => {
         const details = order.orderDetailList || []
+        // 到店口径：只看已到店(1)/已完成(2)，已取消(3)的场次不计入
         const hasArrived = details.some(detail => detail.state === 1 || detail.state === 2)
         if (!hasArrived) return
         if (order.customerPhone) phones.add(order.customerPhone)
@@ -376,7 +392,7 @@ export default {
           label: '今日预约',
           value: this.todayOrderTotal,
           suffix: ' 单',
-          foot: `服务 ${this.scheduleItems.length} 场`,
+          foot: `服务 ${this.activeScheduleItems.length} 场${this.cancelledOrderTotal ? ` · 取消 ${this.cancelledOrderTotal} 单` : ''}`,
           tone: 'info',
           icon: 'M7 3.5v3M17 3.5v3M4.5 9h15M5 5.5h14a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1Z'
         },
@@ -415,7 +431,7 @@ export default {
     },
     projectStats() {
       const map = {}
-      this.scheduleItems.forEach(item => {
+      this.activeScheduleItems.forEach(item => {
         const title = item.projectTitle || '其他项目'
         map[title] = (map[title] || 0) + 1
       })
@@ -479,6 +495,7 @@ export default {
       this.loading = true
       if (this.hasBlock('kpiRevenue')) this.fetchRevenue()
       this.fetchOrders()
+      this.fetchCancelledOrders()
       if (this.hasBlock('kpiPending')) this.fetchPendingPay()
       if (this.hasBlock('todo')) this.fetchTodo()
       this.updatedAt = `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`
@@ -514,6 +531,8 @@ export default {
         size: 100,
         type: 0,
         order: '-id',
+        // 取消单不进入今日预约/到店/完成服务等统计
+        state: ACTIVE_ORDER_STATES,
         startAppointmentTime: `${today} 00:00:00`,
         endAppointmentTime: `${today} 23:59:59`
       }
@@ -528,6 +547,26 @@ export default {
         this.todayOrderTotal = 0
       } finally {
         this.ordersLoading = false
+      }
+    },
+    // 今日取消单独统计：已关闭/已取消/退款中/已退款/退款审批中
+    async fetchCancelledOrders() {
+      const today = dateCode(new Date())
+      const params = {
+        page: 1,
+        size: 1,
+        type: 0,
+        order: '-id',
+        state: CANCELLED_ORDER_STATES,
+        startAppointmentTime: `${today} 00:00:00`,
+        endAppointmentTime: `${today} 23:59:59`
+      }
+      if (this.shopId) params.shopId = this.shopId
+      try {
+        const res = await orderApi.page(params)
+        this.cancelledOrderTotal = (res.data || {}).total || 0
+      } catch (e) {
+        this.cancelledOrderTotal = 0
       }
     },
     async fetchPendingPay() {

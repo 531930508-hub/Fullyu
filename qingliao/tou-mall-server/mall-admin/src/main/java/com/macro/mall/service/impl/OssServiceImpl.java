@@ -176,6 +176,14 @@ public class OssServiceImpl implements OssService {
         return "https://" + OSS_BUCKET_NAME + "." + host + "/" + key;
     }
 
+    /**
+     * 判断是否为本站预签名上传返回的 OSS key（不带协议头的相对路径）。
+     */
+    public boolean isManagedKey(String key) {
+        return Strings.isNotBlank(key) && !key.startsWith("http")
+                && !key.contains("..") && key.length() <= 255;
+    }
+
     private String generateFinalUrl(String fileKey, Long expire) {
         // 设置预签名URL过期时间
         Date expiration = new Date(new Date().getTime() + expire);

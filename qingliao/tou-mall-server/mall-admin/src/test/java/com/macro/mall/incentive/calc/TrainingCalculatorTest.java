@@ -91,6 +91,55 @@ class TrainingCalculatorTest {
     }
 
     @Test
+    void paidCertNeverEarnsInAnyMonthAndKeepsProgressForDisplay() {
+        TrainingProjectRule project = sujin("头部", "头部", 3, "500");
+        List<TrainingOrder> orders = orders("2026-08-01", "2026-08-02", "2026-08-03");
+
+        // 系统外已计发：达标当月也不能再计入应发。
+        TrainingProgress august = calculator.calculate(MASSAGIST, project, 1L,
+                LocalDate.of(2026, 7, 31), "2026-08", new BigDecimal("500"),
+                orders, "2026-08", LocalDate.of(2026, 8, 31));
+        assertEquals(TrainingCalculator.STATUS_PAID, august.getStatus());
+        assertMoney("0.00", august.getEarnedAmount());
+        assertEquals("2026-08", august.getPaidMonth());
+        assertMoney("500.00", august.getPaidAmount());
+        assertEquals(3, august.getCount());
+        assertFalse(august.getCompletedThisMonth());
+
+        // 之后月份同样是已计发，不重复。
+        TrainingProgress september = calculator.calculate(MASSAGIST, project, 1L,
+                LocalDate.of(2026, 7, 31), "2026-08", new BigDecimal("500"),
+                orders, "2026-09", LocalDate.of(2026, 9, 30));
+        assertEquals(TrainingCalculator.STATUS_PAID, september.getStatus());
+        assertMoney("0.00", september.getEarnedAmount());
+        assertEquals("2026-08", september.getCompletionMonth());
+    }
+
+    @Test
+    void paidCertWithoutConfiguredPaidAmountFallsBackToRuleAmount() {
+        TrainingProjectRule project = sujin("头部", "头部", 3, "500");
+        List<TrainingOrder> orders = orders("2026-08-01");
+
+        TrainingProgress progress = calculator.calculate(MASSAGIST, project, 1L,
+                LocalDate.of(2026, 7, 31), "2026-09", null,
+                orders, "2026-09", LocalDate.of(2026, 9, 30));
+        assertEquals(TrainingCalculator.STATUS_PAID, progress.getStatus());
+        assertMoney("500.00", progress.getPaidAmount());
+        assertMoney("0.00", progress.getEarnedAmount());
+    }
+
+    @Test
+    void paidCertWithoutPassedAtIsStillPaid() {
+        TrainingProjectRule project = sujin("头部", "头部", 3, "500");
+
+        TrainingProgress progress = calculator.calculate(MASSAGIST, project, 1L,
+                null, "2026-10", new BigDecimal("500"),
+                new ArrayList<>(), "2026-11", LocalDate.of(2026, 11, 30));
+        assertEquals(TrainingCalculator.STATUS_PAID, progress.getStatus());
+        assertMoney("0.00", progress.getEarnedAmount());
+    }
+
+    @Test
     void eachProjectKeepsIndependentTargetAndAmount() {
         TrainingProjectRule head = sujin("头部", "头部", 2, "700");
         TrainingProjectRule face = sujin("面部", "面部", 3, "300");
@@ -198,12 +247,8 @@ class TrainingCalculatorTest {
     @Test
     void headSpaMatchesDurationAndSujinMatchesPartAlias() {
         TrainingProjectRule spa60 = headSpa("60", 60);
-        TrainingOrder sixty = order("2026-02-04", null);
-        sixty.setProjectId(1L);
-        sixty.setDuration(60);
-        TrainingOrder ninety = order("2026-02-05", null);
-        ninety.setProjectId(1L);
-        ninety.setDuration(90);
+        TrainingOrder sixty = headSpaOrder("2026-02-04", 60);
+        TrainingOrder ninety = headSpaOrder("2026-02-05", 90);
 
         assertTrue(calculator.matches(spa60, sixty));
         assertFalse(calculator.matches(spa60, ninety));
@@ -214,6 +259,82 @@ class TrainingCalculatorTest {
         TrainingOrder otherPart = order("2026-02-05", "头部");
         assertTrue(calculator.matches(shoulder, aliasOrder));
         assertFalse(calculator.matches(shoulder, otherPart));
+    }
+
+    /** 一张 60 分钟舒筋单同时做了手和肩：两个部位各记 1 单。 */
+    @Test
+    void oneSujinOrderWithTwoPartsCountsBothProjects() {
+        TrainingProjectRule hand = sujin("手部", "手部", 5, "500");
+        hand.setAliases("手,手臂");
+        TrainingProjectRule shoulder = sujin("肩部", "肩部", 5, "500");
+        shoulder.setAliases("肩,肩颈");
+        TrainingOrder order = order("2026-02-04", "[\"手\",\"肩\"]");
+        order.setDuration(60);
+
+        TrainingProgress handProgress = calculator.calculate(MASSAGIST, hand, 1L,
+                LocalDate.of(2026, 2, 3), Arrays.asList(order), "2026-02", LocalDate.of(2026, 2, 28));
+        TrainingProgress shoulderProgress = calculator.calculate(MASSAGIST, shoulder, 1L,
+                LocalDate.of(2026, 2, 3), Arrays.asList(order), "2026-02", LocalDate.of(2026, 2, 28));
+
+        assertEquals(1, handProgress.getRawCount());
+        assertEquals(1, shoulderProgress.getRawCount());
+    }
+
+    /** 舒筋单没有部位就不计：无法判断做了哪几个部位。 */
+    @Test
+    void sujinOrderWithoutPartsCountsNoProject() {
+        TrainingProjectRule head = sujin("头部", "头部", 5, "500");
+        TrainingOrder order = order("2026-02-04", null);
+
+        assertFalse(calculator.matches(head, order));
+    }
+
+    /** 头部水疗单的部位写「头」，不能算进「全感舒筋 · 头部」。 */
+    @Test
+    void headSpaOrderNeverCountsAsSujinHead() {
+        TrainingProjectRule sujinHead = sujin("头部", "头部", 5, "500");
+        TrainingProjectRule spa60 = headSpa("60", 60);
+        TrainingOrder spaOrder = headSpaOrder("2026-02-04", 60);
+        spaOrder.setParts("[\"头\"]");
+
+        assertFalse(calculator.matches(sujinHead, spaOrder));
+        assertTrue(calculator.matches(spa60, spaOrder));
+    }
+
+    /** 悦耳单不限时长、部位写不写耳都只算 1 次。 */
+    @Test
+    void earOrderCountsOnceWithOrWithoutEarPart() {
+        TrainingProjectRule ear = ear();
+        TrainingOrder withPart = earOrder("2026-02-04", "[\"耳\"]", 60);
+        TrainingOrder withoutPart = earOrder("2026-02-05", null, 30);
+
+        assertTrue(calculator.matches(ear, withPart));
+        assertTrue(calculator.matches(ear, withoutPart));
+
+        TrainingProgress progress = calculator.calculate(MASSAGIST, ear, 1L,
+                LocalDate.of(2026, 2, 3), Arrays.asList(withPart, withoutPart),
+                "2026-02", LocalDate.of(2026, 2, 28));
+        assertEquals(2, progress.getRawCount());
+    }
+
+    /** 舒筋单里部位写了耳，同样累计耳部（历史采耳记在舒筋项目下）。 */
+    @Test
+    void sujinOrderWithEarPartAlsoCountsEar() {
+        TrainingProjectRule ear = ear();
+        TrainingOrder order = order("2026-02-04", "[\"耳\"]");
+
+        assertTrue(calculator.matches(ear, order));
+    }
+
+    /** 悦耳单的部位带「头」「肩」，不能算进舒筋各部位。 */
+    @Test
+    void earOrderNeverCountsAsSujinPart() {
+        TrainingProjectRule head = sujin("头部", "头部", 5, "500");
+        TrainingProjectRule shoulder = sujin("肩部", "肩部", 5, "500");
+        TrainingOrder order = earOrder("2026-02-04", "[\"耳\",\"头\",\"肩\"]", 60);
+
+        assertFalse(calculator.matches(head, order));
+        assertFalse(calculator.matches(shoulder, order));
     }
 
     @Test
@@ -254,6 +375,38 @@ class TrainingCalculatorTest {
         project.setAmount(new BigDecimal("500"));
         project.setEnabled(true);
         return project;
+    }
+
+    private TrainingProjectRule ear() {
+        TrainingProjectRule project = new TrainingProjectRule();
+        project.setProjectKey("ear");
+        project.setProjectGroup("全感悦耳");
+        project.setProjectName("耳部");
+        project.setPartName("耳部");
+        project.setAliases("耳,耳部,采耳");
+        project.setTargetCount(30);
+        project.setAmount(new BigDecimal("500"));
+        project.setEnabled(true);
+        return project;
+    }
+
+    private TrainingOrder headSpaOrder(String date, int duration) {
+        TrainingOrder order = order(date, null);
+        order.setProjectId(1L);
+        order.setProjectTitle("头部水疗");
+        order.setDuration(duration);
+        return order;
+    }
+
+    private TrainingOrder earOrder(String date, String part, int duration) {
+        TrainingOrder order = new TrainingOrder();
+        order.setMassagistId(MASSAGIST);
+        order.setShopId(1L);
+        order.setProjectTitle("全感悦耳");
+        order.setServiceDate(LocalDate.parse(date));
+        order.setDuration(duration);
+        order.setParts(part);
+        return order;
     }
 
     private TrainingOrder order(String date, String part) {

@@ -836,7 +836,8 @@ export default {
     activeTraining() {
       const order = {'completed-this-month': 0, active: 1, upcoming: 2}
       return this.trainingProjects
-        .filter(project => !!project.passedAt && project.status !== 'completed')
+        .filter(project => !!project.passedAt
+          && project.status !== 'completed' && project.status !== 'paid')
         .sort((a, b) => (order[a.status] === undefined ? 3 : order[a.status])
           - (order[b.status] === undefined ? 3 : order[b.status]))
     },
@@ -963,6 +964,9 @@ export default {
       if (project.status === 'completed') {
         return '已达标'
       }
+      if (project.status === 'paid') {
+        return '已计发'
+      }
       if (project.status === 'upcoming') {
         return '待开始'
       }
@@ -975,7 +979,7 @@ export default {
       if (project.status === 'completed-this-month') {
         return 'done'
       }
-      if (project.status === 'completed') {
+      if (project.status === 'completed' || project.status === 'paid') {
         return 'quiet'
       }
       if (project.status === 'upcoming') {
@@ -993,6 +997,9 @@ export default {
       if (project.status === 'completed') {
         return (project.completionMonth || '') + ' 已计入 · 不重复'
       }
+      if (project.status === 'paid') {
+        return (project.paidMonth || '') + ' 已计发 · 不再重复'
+      }
       if (project.status === 'upcoming') {
         return (project.startDate || '') + ' 起开始累计'
       }
@@ -1004,6 +1011,9 @@ export default {
       }
       if (project.status === 'completed') {
         return '已计入'
+      }
+      if (project.status === 'paid') {
+        return '已计发'
       }
       if (project.status === 'completed-this-month') {
         return '+' + this.cash(project.earnedAmount, 0)

@@ -8,6 +8,7 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -41,6 +42,12 @@ public class MassagistTrainingCert extends BaseEntity {
 
     @ApiModelProperty("认证团队人数；历史与人工为0")
     private Integer teamSize;
+
+    @ApiModelProperty("已计发月份 yyyy-MM；非空表示该补贴已在系统外结清，不再重复计发")
+    private String paidMonth;
+
+    @ApiModelProperty("已计发金额；为空时按配置金额展示")
+    private BigDecimal paidAmount;
 
     @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;

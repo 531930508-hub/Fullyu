@@ -32,6 +32,11 @@ public class TrainingAssessmentDetail {
 
     private Integer teamSize;
 
+    /**
+     * 在岗证明照片（发给前台核验身份的截图）的可访问地址，按时间倒序。
+     */
+    private List<String> proofPhotos = new ArrayList<>();
+
     private List<VoteView> votes = new ArrayList<>();
 
     @Getter
@@ -45,5 +50,6 @@ public class TrainingAssessmentDetail {
         private LocalDateTime submittedAt;
         private Integer voided;
         private String voidReason;
+        private String proofPhotoUrl;
     }
 }

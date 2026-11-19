@@ -96,6 +96,7 @@
         <div class="legend">
           <span><i class="dot registered"></i>已登记</span>
           <span><i class="dot completed"></i>本月达标</span>
+          <span><i class="dot paid"></i>已计发</span>
           <span><i class="dot pending"></i>未登记</span>
         </div>
       </div>
@@ -135,8 +136,13 @@
                 <b v-if="certOf(scope.row, project).passedAt">{{ certOf(scope.row, project).passedAt }}</b>
                 <b v-else class="unregistered">待认证</b>
                 <small v-if="progressOf(scope.row, project)">
-                  {{ progressOf(scope.row, project).count }}/{{ progressOf(scope.row, project).target }}
-                  · {{ statusOf(scope.row, project).text }}
+                  <template v-if="progressOf(scope.row, project).status === 'paid'">
+                    已计发 {{ progressOf(scope.row, project).paidMonth }}
+                  </template>
+                  <template v-else>
+                    {{ progressOf(scope.row, project).count }}/{{ progressOf(scope.row, project).target }}
+                    · {{ statusOf(scope.row, project).text }}
+                  </template>
                 </small>
                 <small v-else-if="attemptOf(scope.row, project)">{{ attemptOf(scope.row, project) }}</small>
                 <small v-else>{{ teamCertEnabled ? '点击查看考核' : '已登记考核' }}</small>
@@ -231,7 +237,12 @@
           <small>状态</small>
           <b>{{ statusPreview.text }}</b>
         </div>
-        <p>通过考核次日起累计对应项目有效订单，达标当月计入一次培训奖励。</p>
+        <p v-if="progressPreview.status === 'paid'">
+          该补贴已于 {{ progressPreview.paidMonth }} 结清
+          <template v-if="progressPreview.paidAmount">（{{ money(progressPreview.paidAmount) }} 元）</template>，
+          不再进入任何月份应发。
+        </p>
+        <p v-else>通过考核次日起累计对应项目有效订单，达标当月计入一次培训奖励。</p>
       </div>
       <span slot="footer" class="dialog-footer">
         <el-button
@@ -475,6 +486,9 @@ export default {
     cellClass(row, project) {
       const progress = this.progressOf(row, project)
       const item = this.certOf(row, project)
+      if (progress && progress.status === 'paid') {
+        return 'paid'
+      }
       if (progress && progress.status === 'completed-this-month') {
         return 'completed'
       }
@@ -756,6 +770,10 @@ export default {
       background: #4C9A6A;
     }
 
+    &.paid {
+      background: #C9A227;
+    }
+
     &.pending {
       background: #D9D4E0;
     }
@@ -849,6 +867,15 @@ export default {
 
     b, small {
       color: #3D7B55;
+    }
+  }
+
+  &.paid {
+    background: #FBF6EC;
+    border-color: #EBDCBF;
+
+    b, small {
+      color: #8A6B3A;
     }
   }
 

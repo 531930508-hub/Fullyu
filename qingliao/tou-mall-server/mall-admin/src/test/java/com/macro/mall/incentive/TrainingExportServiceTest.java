@@ -75,9 +75,13 @@ class TrainingExportServiceTest {
         cert.setPassedAt(LocalDate.of(2026, 1, 5));
         cert.setCertifiedAt(LocalDateTime.of(2026, 1, 6, 9, 0));
         cert.setTeamSize(3);
+        cert.setPaidMonth("2026-02");
+        cert.setPaidAmount(new java.math.BigDecimal("500.00"));
         List<MassagistTrainingCert> certs = Arrays.asList(cert);
 
         String csv = service.certificationCsv(certs, people, shops, projects);
+        assertTrue(csv.contains("已计发月份,已计发金额"));
+        assertTrue(csv.contains("\"2026-02\",\"500.00\""));
         assertTrue(csv.contains("头部水疗60分钟"));
         assertTrue(csv.contains("\"三人认证\""));
         assertTrue(csv.contains("2026-01-06 09:00"));

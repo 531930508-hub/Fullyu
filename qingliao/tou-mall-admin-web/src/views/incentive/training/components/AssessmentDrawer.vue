@@ -42,6 +42,23 @@
           @click="revoke">撤销认证</el-button>
       </div>
 
+      <div v-if="detail && detail.proofPhotos && detail.proofPhotos.length" class="ad-proof">
+        <div class="ad-proof-head">
+          <small>在岗证明（{{ detail.proofPhotos.length }} 张）</small>
+          <span>点开核对是否真人在店</span>
+        </div>
+        <div class="ad-proof-grid">
+          <el-image
+            v-for="(url, idx) in detail.proofPhotos"
+            :key="url"
+            :src="url"
+            fit="cover"
+            :preview-src-list="detail.proofPhotos"
+            :initial-index="idx"
+            class="ad-proof-img"/>
+        </div>
+      </div>
+
       <div class="ad-section-title">
         <h4>考核记录</h4>
         <span>按考核日期倒序，作废票不计入三人认证</span>
@@ -67,6 +84,12 @@
             </small>
             <p v-if="vote.remark">{{ vote.remark }}</p>
             <p v-if="vote.voided" class="ad-void">作废原因：{{ vote.voidReason || '未填写' }}</p>
+            <el-image
+              v-if="vote.proofPhotoUrl"
+              :src="vote.proofPhotoUrl"
+              fit="cover"
+              :preview-src-list="detail.proofPhotos && detail.proofPhotos.length ? detail.proofPhotos : [vote.proofPhotoUrl]"
+              class="ad-vote-photo"/>
             <el-button
               v-if="superAdmin && !vote.voided"
               type="text"
@@ -227,6 +250,54 @@ export default {
     font-size: 11px;
     color: #79747E;
   }
+}
+
+.ad-proof {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid #EDE8F2;
+  background: #FAF9FC;
+  border-radius: 9px;
+}
+
+.ad-proof-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+
+  small {
+    font-size: 12px;
+    color: #2B2930;
+  }
+
+  span {
+    font-size: 10px;
+    color: #79747E;
+  }
+}
+
+.ad-proof-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.ad-proof-img {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.ad-vote-photo {
+  width: 64px;
+  height: 64px;
+  margin-top: 8px;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: zoom-in;
 }
 
 .ad-cert {
