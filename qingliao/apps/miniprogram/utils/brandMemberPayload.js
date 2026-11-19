@@ -119,6 +119,22 @@ export function normalizeRefundQuote(raw, translate) {
   }
 }
 
+/**
+ * 待生效续期：CRM 的 /me 在「当前卡生效 + 后面还排着一张卡」时带回 pendingCard
+ * （赠送会员码、续费单都是这个口径：新卡从当前到期日次日接续，不叠加到当前卡上）。
+ * 这里只拼一句展示文案——日期缺失就返回空串，页面不渲染这一行；
+ * 任何天数/起止计算都留在 CRM，前端不重算口径。
+ */
+export function pendingRenewalLine(pendingCard, translate) {
+  if (!isObject(pendingCard)) return ''
+  const from = typeof pendingCard.validFrom === 'string' ? pendingCard.validFrom.slice(0, 10) : ''
+  const until = typeof pendingCard.validUntil === 'string' ? pendingCard.validUntil.slice(0, 10) : ''
+  if (!from || !until) return ''
+  // tt(zh, en) 直接传进来；只给单参 t() 时退回中文，不猜英文。
+  const say = (zh, en) => (typeof translate === 'function' ? translate(zh, en) || zh : zh)
+  return `${say('已排期：', 'Scheduled: ')}${from}${say(' 起接续，权益至 ', ' onward, valid until ')}${until}`
+}
+
 export function normalizeBrandMember(raw, fallbackBenefits = [], translate) {
   const source = isObject(raw) ? raw : {}
   const member = isObject(source.member) ? source.member : {}

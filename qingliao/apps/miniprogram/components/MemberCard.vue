@@ -16,6 +16,8 @@
 				<text class="bmc-who">{{ whoLine }}</text>
 				<text class="bmc-valid">{{ validLine }}</text>
 			</view>
+			<!-- 续期已排期（赠送码/续费单接在当前卡之后）：不显示这一行，用户会以为没加上 -->
+			<text v-if="pendingLine" class="bmc-pending">{{ pendingLine }}</text>
 			<text v-if="renewalText" class="bmc-renewal">{{ renewalText }}</text>
 		</view>
 
@@ -84,6 +86,7 @@
 		entryPrice,
 		formatYuan
 	} from '../utils/memberCatalog'
+	import { pendingRenewalLine } from '../utils/brandMemberPayload'
 	import { useLocale } from '../utils/locale'
 
 	const props = defineProps({
@@ -149,6 +152,8 @@
 		const tail = expiring.value && days ? tt(` · 剩 ${days} 天`, ` · ${days} days left`) : ''
 		return tt(`至 ${until} 到期${tail} · 全门店可用`, `Valid until ${until}${tail} · all locations`)
 	})
+	/** 当前卡后面还排着一张（赠送码/续费单）：把它写出来，否则「有效期」看起来没变化。 */
+	const pendingLine = computed(() => pendingRenewalLine(props.data && props.data.pendingCard, tt))
 	/**
 	 * 卡脚金额：已开通看本年已省；未开通看 CRM 目录入口价（多档取最低一档），
 	 * 目录没拿到就只显示占位符。「起」由 entry.from 决定，不在模板里写死。
@@ -273,6 +278,14 @@
 		font-size: 9px;
 		line-height: 1.5;
 		color: #f4d9ae;
+	}
+	/* 已排期的下一张卡：比当前卡脚轻一档，避免和「至 X 到期」抢主次 */
+	.bmc-pending {
+		display: block;
+		margin-top: 4px;
+		font-size: 9px;
+		line-height: 1.5;
+		opacity: 0.7;
 	}
 
 	/* 卡脚：同色同体，只一道细线分隔 */

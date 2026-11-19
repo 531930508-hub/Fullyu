@@ -308,6 +308,8 @@ export async function loadYearCardSummary() {
     remainingDays: card.remainingDays,
     startTime: card.validFrom,
     endTime: card.validUntil,
+    // 当前卡后面还排着一张时（赠送码/续费单接续），CRM 用 pendingCard 下发；卡包顶部据此多显示一行。
+    pendingCard: brand && brand.pendingCard ? brand.pendingCard : null,
     pending: card.pendingStart ? { startTime: card.pendingStart } : null,
     current: face,
     expired: face,

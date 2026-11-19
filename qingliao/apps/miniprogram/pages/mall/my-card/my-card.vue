@@ -20,6 +20,7 @@
 							<text v-else-if="memberCardInfo.state === 'expired'">{{ t('已到期，可续费') }}</text>
 							<text v-else>{{ notJoinedText }}</text>
 						</view>
+						<view v-if="pendingLine" class="member-strip-pending">{{ pendingLine }}</view>
 					</view>
 					<view class="member-strip-btn">{{ memberCardInfo.state === 'active' || memberCardInfo.state === 'expiring' ? t('查看') : t('去开通') }}</view>
 				</view>
@@ -286,7 +287,8 @@
 
 
 <script setup>
-	import { t } from '../../../utils/locale'
+	import { t, useLocale } from '../../../utils/locale'
+	import { pendingRenewalLine } from '../../../utils/brandMemberPayload'
 	import { img } from '../../../utils/imageLocale'
 	import {
 		onLoad,
@@ -365,6 +367,9 @@
 	const invalidityGroupCard = ref([])
 	const invaliditySingleCard = ref([])
 	const memberCardInfo = ref({})
+	// 卡包顶部也要说明「后面还排着一张」：否则领了赠送/续了费，这里只看到当前卡的剩余天数，像没加上。
+	const { tt } = useLocale()
+	const pendingLine = computed(() => pendingRenewalLine(memberCardInfo.value.pendingCard, tt))
 	// 未开通卖点：最低一档价格同样来自 CRM 目录，目录没拿到时只留门店范围。
 	// 「起」只在目录里有多档时才写，单档写「起」会与点进去的唯一价格自相矛盾。
 	const notJoinedText = computed(() => {
@@ -626,6 +631,12 @@
 		font-size: 22rpx;
 		color: rgba(243, 233, 216, 0.74);
 		letter-spacing: 0.05em;
+	}
+	.member-strip-pending {
+		margin-top: 4rpx;
+		font-size: 20rpx;
+		color: rgba(243, 233, 216, 0.55);
+		letter-spacing: 0.04em;
 	}
 
 	.member-strip-btn {

@@ -141,3 +141,25 @@ test('refund quote errors and garbage never enable submit',()=>{
   const capped=quote({paidCents:4500,refundCents:9900,allowed:true})
   assert.equal(capped.canSubmit,false,'可退大于实付属于数据异常')
 })
+
+// 赠送码/续费单接在当前卡之后时，CRM 下发 pendingCard；卡面必须把它写出来，
+// 否则「有效期」看起来没变化（2026-11-19 会员领完 90 天码后反馈）。
+test('pendingCard renders as a scheduled line',()=>{
+  const line=available('pendingRenewalLine')
+  const card={validFrom:'2026-12-18',validUntil:'2027-03-17'}
+  assert.equal(line(card,(zh,en)=>en),'Scheduled: 2026-12-18 onward, valid until 2027-03-17')
+  assert.equal(line(card,(zh)=>zh),'已排期：2026-12-18 起接续，权益至 2027-03-17')
+})
+
+test('pendingCard without both dates renders nothing',()=>{
+  const line=available('pendingRenewalLine')
+  for (const raw of [null,undefined,'x',42,{},[],{validFrom:'2026-12-18'},{validUntil:'2027-03-17'},{validFrom:'',validUntil:''}]) {
+    assert.equal(line(raw,(zh,en)=>en),'',`${JSON.stringify(raw)} 不应渲染`)
+  }
+})
+
+test('normalize keeps the pendingCard CRM sent',()=>{
+  const out=normalize({member:{memberNo:'FY-1'},card:{state:'ACTIVE'},points:{balance:0},pendingCard:{state:'PENDING',validFrom:'2026-12-18',validUntil:'2027-03-17'}})
+  assert.equal(out.pendingCard.validUntil,'2027-03-17')
+  assert.equal(out.card.state,'ACTIVE','当前卡仍是主卡，待生效卡单独一行')
+})
