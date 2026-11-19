@@ -27,6 +27,7 @@ import type { BrandMemberContext } from './brand-member.guard';
 import { buildProfileUpdate, type ProfilePatch } from '../members/profile-input';
 import {
   issuePickupVouchers,
+  liveCardConfigOf,
   perksOf,
   refundQuote,
   savedForCard,
@@ -128,30 +129,6 @@ const benefitsOf = (raw: string): BenefitRow[] => {
   return rows;
 };
 
-/**
- * 会员权益文案只认「当前生效版本」，后台改字即刻生效；
- * 版本缺失或文案为空时才退回开卡时锁定的快照，保证页面不会空着。
- */
-const liveBenefitsOf = (
-  prisma: PrismaService,
-  productCode: string,
-  snapshotJson: string
-) => prisma.brandCardProduct
-  .findUnique({ where: { code: productCode } })
-  .then((product) => {
-    if (!product || !product.currentVersion) return null;
-    return prisma.brandCardVersion.findUnique({
-      where: {
-        productCode_version: { productCode, version: product.currentVersion }
-      }
-    });
-  })
-  .then((version) => {
-    if (!version || version.status !== 'ACTIVE') return benefitsOf(snapshotJson);
-    const rows = benefitsOf(version.benefitsJson);
-    return rows.length ? rows : benefitsOf(snapshotJson);
-  });
-
 const spendOf = (raw: string): Record<string, PointsSpendMode> => {
   const parsed = readJson(raw);
   const source = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
@@ -178,7 +155,7 @@ const requireText = (value: unknown, field: string, max = 100): string => {
 /**
  * 三端品牌会员契约 v1：
  * - 会员身份用「本业务本地用户 id」定位，不接受手机号/会员号，避免 PII 进入 URL 与日志；
- * - 卡期与权益在开卡时按产品版本快照，后续改价/改权益不影响已购；
+ * - 卡期与成交价在开卡时按产品版本快照；权益/积分口径/特权/游戏开关实时读当前生效版本；
  * - 续费接在当前卡期结束后一天，未生效期间返回 PENDING；
  * - CRM 不接管在场畅练卡与轻疗历史卡的卡期，品牌会员只返回 Full愈大会员卡。
  */
@@ -210,6 +187,8 @@ export class BrandMemberService {
     const primary = active || locked || pending || expired;
     const card = primary ? primary.view : { state: 'NONE' };
     const pendingCard = active && pending ? pending.view : undefined;
+    // 权益/积分/特权/游戏开关以卡产品当前生效版本为准；卡期与成交价仍是开卡快照。
+    const live = active ? await liveCardConfigOf(this.prisma, active.card) : null;
 
     const batches = await this.prisma.pointBatch.findMany({
       where: {
@@ -227,7 +206,7 @@ export class BrandMemberService {
       .reduce((sum, batch) => sum + batch.remaining, 0);
 
     const gameState = await this.game.summaryForMember(member.id);
-    const gameEligible = Boolean(active && active.card.gameEnabled);
+    const gameEligible = Boolean(live?.gameEnabled);
     let gameUrl: string | null = null;
     if (gameEligible) {
       const base = (process.env.CRM_GAME_URL || '').trim();
@@ -283,7 +262,7 @@ export class BrandMemberService {
         balance,
         expiring,
         expireAt: batches[0] ? formatDate(batches[0].expireAt) : null,
-        spend: spendOf(active ? active.card.pointsSpendJson : '{}')
+        spend: spendOf(live?.pointsSpendJson || '{}')
       },
       dice: {
         balance: gameState.balance,
@@ -294,10 +273,8 @@ export class BrandMemberService {
       prizes: { pending: gameState.pendingPrizes },
       savedCents,
       renewal,
-      benefits: active
-        ? await liveBenefitsOf(this.prisma, active.card.productCode, active.card.benefitsJson)
-        : [],
-      perks: perksOf(active ? active.card.perksJson : '{}'),
+      benefits: live ? benefitsOf(live.benefitsJson) : [],
+      perks: perksOf(live?.perksJson || '{}'),
       vouchers: vouchers.map(voucherView),
       notices: notices.map((row) => ({
         id: row.id,
@@ -537,10 +514,11 @@ export class BrandMemberService {
               validFrom: start,
               validUntil,
               state: start > shanghaiDayStart(now) ? 'PENDING' : 'ACTIVE',
-              benefitsJson: quote.benefitsJson,
+              // 同一报价锁定同一版本的四项配置，避免权益与特权来自不同版本。
+              benefitsJson: version?.benefitsJson || quote.benefitsJson,
               pointsSpendJson: version?.pointsSpendJson || '{}',
               perksJson: version?.perksJson || '{}',
-              gameEnabled: quote.gameEnabled,
+              gameEnabled: version?.gameEnabled ?? quote.gameEnabled,
               source: 'PAID',
               soldBy: ctx.business,
               soldByName: businessName(ctx.business),
@@ -789,7 +767,8 @@ export class BrandMemberService {
     }
     const business = row.business as Business;
     const active = await this.activeCard(row.member.id, now);
-    if (!active || !active.gameEnabled) {
+    const live = active ? await liveCardConfigOf(this.prisma, active) : null;
+    if (!live?.gameEnabled) {
       throw new ApiError(403, '开通有效品牌卡后才能进入愈行之旅', {
         code: 'GAME_UNAVAILABLE'
       });
@@ -830,7 +809,8 @@ export class BrandMemberService {
     const member = await this.findMember(input.localUserId, ctx);
     const now = new Date();
     const active = await this.activeCard(member.id, now);
-    if (!active || !active.gameEnabled) {
+    const live = active ? await liveCardConfigOf(this.prisma, active) : null;
+    if (!live?.gameEnabled) {
       throw new ApiError(403, '开通有效品牌卡后才能进入愈行之旅', {
         code: 'GAME_UNAVAILABLE'
       });

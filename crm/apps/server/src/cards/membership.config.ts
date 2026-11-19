@@ -10,7 +10,7 @@ import { giftsOf, perksOf, type CardPerks, type GiftRow } from '../program/progr
 /**
  * 在售大会员只有两档时长：月卡（FY_MONTH）与年卡（FY_ANNUAL）。
  * 后台一页同写两档：价格各自定，权益/积分/特权/礼/游戏开关两档共用一份，
- * 避免「年卡改了权益、月卡忘改」的口径漂移；已售卡仍按购买时快照执行。
+ * 避免「年卡改了权益、月卡忘改」的口径漂移；已售卡的权益/积分/特权/游戏开关读当前版本。
  */
 export const MEMBERSHIP_PLANS = [
   { code: 'FY_MONTH', label: '月卡' },

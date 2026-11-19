@@ -196,6 +196,75 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     expect(stored!.tokenHash).not.toBe(ticket);
   });
 
+  it('会员权益、积分口径、特权与游戏开关随当前版本实时生效', async () => {
+    const product = await h.prisma.brandCardProduct.findUniqueOrThrow({
+      where: { code: 'FY_ANNUAL' }
+    });
+    const where = {
+      productCode_version: { productCode: 'FY_ANNUAL', version: product.currentVersion! }
+    };
+    const original = await h.prisma.brandCardVersion.findUniqueOrThrow({ where });
+    try {
+      await h.prisma.brandCardVersion.update({
+        where,
+        data: {
+          benefitsJson: JSON.stringify([
+            { business: 'zc', title: '新版在场权益', desc: '后台刚保存的文案' }
+          ]),
+          pointsSpendJson: JSON.stringify({
+            ql: 'display_only',
+            sx: '1_point_1_yuan',
+            zc: 'display_only'
+          }),
+          perksJson: JSON.stringify({
+            presence: { prioritySeat: false, tierPrice: false, invitesPerQuarter: 2 },
+            lightcare: { advancePercent: 88 },
+            teahour: { perCupCents: 500 }
+          }),
+          gameEnabled: false
+        }
+      });
+
+      const res = await me('sx-test', 'teahour', 'local-m-lin');
+      expect(res.status).toBe(200);
+      expect(res.body.benefits).toEqual([
+        { business: 'presence', title: '新版在场权益', desc: '后台刚保存的文案' }
+      ]);
+      expect(res.body.points.spend).toEqual({
+        retreat: 'display_only',
+        teahour: '1_point_1_yuan',
+        presence: 'display_only'
+      });
+      expect(res.body.perks).toMatchObject({
+        presence: { prioritySeat: false, tierPrice: false, invitesPerQuarter: 2 },
+        lightcare: { advancePercent: 88 },
+        teahour: { perCupCents: 500 }
+      });
+      expect(res.body.game).toMatchObject({ enabled: false, url: null });
+
+      const denied = await signed('post', '/v1/brand-member/game/ticket', {
+        key: 'sx-test',
+        body: { business: 'teahour', localUserId: 'local-m-lin' }
+      });
+      expect(denied.status).toBe(403);
+      expect(denied.body.error).toBe('GAME_UNAVAILABLE');
+    } finally {
+      await h.prisma.brandCardVersion.update({
+        where,
+        data: {
+          benefitsJson: original.benefitsJson,
+          pointsSpendJson: original.pointsSpendJson,
+          perksJson: original.perksJson,
+          gameEnabled: original.gameEnabled
+        }
+      });
+    }
+
+    const restored = await me('sx-test', 'teahour', 'local-m-lin');
+    expect(restored.body.benefits).toHaveLength(3);
+    expect(restored.body.game.enabled).toBe(true);
+  });
+
   it('PATCH profile 落资料并递增版本，版本冲突 409、非法字段 400', async () => {
     const created = await signed('patch', '/v1/brand-member/profile', {
       key: 'sx-test',

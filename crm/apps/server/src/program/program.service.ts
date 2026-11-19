@@ -19,6 +19,7 @@ import {
   formatDate,
   formatIso,
   issuePickupVouchers,
+  liveCardConfigOf,
   maskPhone,
   memberByLocal,
   nextQuarterStart,
@@ -172,7 +173,8 @@ export class ProgramService {
     let dice: Awaited<ReturnType<GameService['earnOrderForMember']>> | null = null;
     if (row.cardId && paidCents > 0) {
       const card = await this.prisma.memberBrandCard.findUnique({ where: { id: row.cardId } });
-      if (card && card.gameEnabled && card.state !== 'REFUNDED') {
+      const live = card ? await liveCardConfigOf(this.prisma, card) : null;
+      if (card && live?.gameEnabled && card.state !== 'REFUNDED') {
         dice = await this.game.earnOrderForMember(member.id, ctx.business, orderRef, paidCents, now);
       }
     }
@@ -1809,7 +1811,8 @@ export class ProgramService {
 
   private async inviteQuota(memberId: string, now: Date) {
     const card = await cardActiveAt(this.prisma, memberId, now);
-    const quota = card ? perksOf(card.perksJson).presence.invitesPerQuarter : 0;
+    const live = card ? await liveCardConfigOf(this.prisma, card) : null;
+    const quota = live ? perksOf(live.perksJson).presence.invitesPerQuarter : 0;
     const periodKey = quarterKeyOf(now);
     const used = await this.prisma.memberInvite.count({
       where: { inviterId: memberId, periodKey, status: { not: 'VOID' } }

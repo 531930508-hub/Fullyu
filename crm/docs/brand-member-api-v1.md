@@ -96,11 +96,13 @@
 
 1C 实现补充：响应 `card` 另带 `cardId`；已有生效卡且又有续费时，`card` 是当前卡，`pendingCard` 是待生效卡。`savedCents` 尚无账本来源，暂返回 0。`game.url` 在 `CRM_GAME_URL` 未配置时为 `null`，不伪造可玩。
 
+`benefits`、`points.spend`、`perks` 与 `game.enabled` 对已发出的卡实时读取卡产品当前生效版本；赠送卡（`FY_GIFT`）与畅练卡附赠会员（`FY_BUNDLE`）没有独立产品，统一跟随年卡当前版本。卡期、价格仍是开卡快照。后台保存新版本后，业务端下次刷新即生效。
+
 ## 3.1 产品目录
 
 `GET /v1/brand-member/products`
 
-返回当前生效的产品与版本：`{ products: [{ code, name, priceCents, validDays, benefits, pointsSpend, gameEnabled, perks }] }`。前端只展示，价格以下单时的报价为准；新版本激活后目录立即变化，已购卡期不受影响。
+返回当前生效的产品与版本：`{ products: [{ code, name, priceCents, validDays, benefits, pointsSpend, gameEnabled, perks }] }`。前端只展示，价格以下单时的报价为准；新版本激活后目录立即变化，已购卡的卡期与成交价不变，权益/积分/特权/游戏开关按当前版本即时生效。
 
 `perks` 按业态分段下发，各端只读自己那一段（缺失或越界一律按 0，视为不参与）：
 
@@ -194,7 +196,7 @@
   1. 有有效畅练卡 → 免费；
   2. 否则有有效品牌年卡 → 课程会员价；
   3. 否则原价。
-- 服务端必须同时校验两种资格，不能只信前端展示；品牌资格以 CRM 返回或快照（10 分钟内）为准。
+- 服务端必须同时校验两种资格，不能只信前端展示；品牌资格以 CRM 返回或实时版本为准。
 - 文案：品牌卡称「Full愈年卡」，在场卡称「在场畅练卡」；不使用裸「会员」指代任一产品。
 
 ## 7. 错误码

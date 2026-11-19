@@ -22,6 +22,7 @@ import { ApiError, badRequest, conflict, notFound } from '../common/errors';
 import { newId } from '../common/ids';
 import type { StaffContext } from '../common/auth.types';
 import type { BrandMemberContext } from '../brand-member/brand-member.guard';
+import { liveCardConfigOf } from '../program/program.rules';
 import { RulesService } from './rules.service';
 
 const TZ_MS = 8 * 60 * 60 * 1000;
@@ -843,7 +844,8 @@ export class GameService {
       },
       orderBy: { validUntil: 'desc' }
     });
-    if (!card || !card.gameEnabled) {
+    const live = card ? await liveCardConfigOf(this.prisma, card) : null;
+    if (!live?.gameEnabled) {
       throw new ApiError(403, '开通有效品牌卡后才能进入愈行之旅', {
         code: 'GAME_UNAVAILABLE'
       });

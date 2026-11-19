@@ -18,6 +18,26 @@ const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 export type Db = PrismaService | Prisma.TransactionClient;
 
+/** 赠送/附赠卡不单独售卖，权益口径固定跟随年卡当前生效版本。 */
+const TEMPLATE_CARD_CODES: Record<string, string> = {
+  FY_GIFT: 'FY_ANNUAL',
+  FY_BUNDLE: 'FY_ANNUAL'
+};
+
+export type CardConfigSnapshot = Pick<
+  MemberBrandCard,
+  'productCode' | 'benefitsJson' | 'pointsSpendJson' | 'perksJson' | 'gameEnabled'
+>;
+
+export type LiveCardConfig = {
+  /** 当前生效版本号；产品/版本不存在时退回开卡快照，此时为 null。 */
+  version: number | null;
+  benefitsJson: string;
+  pointsSpendJson: string;
+  perksJson: string;
+  gameEnabled: boolean;
+};
+
 export type GiftRow = { title: string; desc: string; valueCents: number };
 export type PresencePerks = {
   prioritySeat: boolean;
@@ -149,6 +169,52 @@ const readPercent = (raw: unknown): number => {
 const readPerCupCents = (raw: unknown): number => {
   const value = Number(raw);
   return Number.isInteger(value) && value >= 0 && value <= TEACHOUR_MAX_PER_CUP_CENTS ? value : 0;
+};
+
+/**
+ * 对外会员接口读取卡产品「当前生效版本」的权益/积分/特权/游戏开关。
+ * 卡期、成交价仍保留开卡快照；赠送/附赠卡没有独立产品，统一跟随年卡当前版本。
+ * 产品下架或版本缺失时才退回开卡快照，避免接口直接空掉。
+ */
+export const liveCardConfigOf = async (
+  db: Db,
+  card: CardConfigSnapshot
+): Promise<LiveCardConfig> => {
+  const snapshot: LiveCardConfig = {
+    version: null,
+    benefitsJson: card.benefitsJson,
+    pointsSpendJson: card.pointsSpendJson,
+    perksJson: card.perksJson,
+    gameEnabled: card.gameEnabled
+  };
+  const configCode = TEMPLATE_CARD_CODES[card.productCode] || card.productCode;
+  const product = await db.brandCardProduct.findUnique({ where: { code: configCode } });
+  let version =
+    product?.currentVersion !== null && product?.currentVersion !== undefined
+      ? await db.brandCardVersion.findUnique({
+          where: {
+            productCode_version: {
+              productCode: configCode,
+              version: product.currentVersion
+            }
+          }
+        })
+      : null;
+  // 年卡下架时，赠送/附赠卡与 annualTemplate 一样退回最近激活的在售版本。
+  if (configCode !== card.productCode && (!version || version.status !== 'ACTIVE')) {
+    version = await db.brandCardVersion.findFirst({
+      where: { status: 'ACTIVE' },
+      orderBy: { activatedAt: 'desc' }
+    });
+  }
+  if (!version || version.status !== 'ACTIVE') return snapshot;
+  return {
+    version: version.version,
+    benefitsJson: version.benefitsJson,
+    pointsSpendJson: version.pointsSpendJson,
+    perksJson: version.perksJson,
+    gameEnabled: version.gameEnabled
+  };
 };
 
 /** 后台维护卡版本时校验实物礼与业态权益，返回规范化 JSON。 */

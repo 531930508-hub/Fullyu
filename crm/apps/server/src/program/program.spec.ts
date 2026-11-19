@@ -222,6 +222,51 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     expect(['ACTIVE', 'EXPIRING']).toContain(me.body.card.state);
     expect(me.body.game.enabled).toBe(true);
 
+    // 赠送卡没有独立产品，权益/特权/游戏开关跟随年卡当前版本，而不是领取时快照。
+    const annual = await h.prisma.brandCardProduct.findUniqueOrThrow({
+      where: { code: 'FY_ANNUAL' }
+    });
+    const annualWhere = {
+      productCode_version: { productCode: 'FY_ANNUAL', version: annual.currentVersion! }
+    };
+    const annualOriginal = await h.prisma.brandCardVersion.findUniqueOrThrow({
+      where: annualWhere
+    });
+    try {
+      await h.prisma.brandCardVersion.update({
+        where: annualWhere,
+        data: {
+          benefitsJson: JSON.stringify([
+            { business: 'sx', title: '赠送卡实时权益', desc: '跟随年卡当前版本' }
+          ]),
+          perksJson: JSON.stringify({
+            presence: { prioritySeat: false, tierPrice: false, invitesPerQuarter: 0 },
+            lightcare: { advancePercent: 90 },
+            teahour: { perCupCents: 300 }
+          }),
+          gameEnabled: false
+        }
+      });
+      const liveGift = await signed(
+        'get',
+        '/v1/brand-member/me?business=teahour&localUserId=local-m-sx-new'
+      );
+      expect(liveGift.body.benefits).toEqual([
+        { business: 'teahour', title: '赠送卡实时权益', desc: '跟随年卡当前版本' }
+      ]);
+      expect(liveGift.body.perks.teahour.perCupCents).toBe(300);
+      expect(liveGift.body.game.enabled).toBe(false);
+    } finally {
+      await h.prisma.brandCardVersion.update({
+        where: annualWhere,
+        data: {
+          benefitsJson: annualOriginal.benefitsJson,
+          perksJson: annualOriginal.perksJson,
+          gameEnabled: annualOriginal.gameEnabled
+        }
+      });
+    }
+
     // 仅限新会员：买过会员的老客不能领体验码，避免「老客重复薅 30 天」。
     const newOnly = await h.api('post', '/gift-campaigns', ops, {
       name: '新客专享',
@@ -606,6 +651,38 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     // 名额按自然季计，兼容字段 monthKey 与 periodKey 同值
     expect(quota.body.periodKey).toMatch(/^\d{4}-Q[1-4]$/);
     expect(quota.body.monthKey).toBe(quota.body.periodKey);
+
+    // 附赠卡同样跟随年卡当前版本：后台把每季名额改成 2，旧卡下一刷即读到 2。
+    const annual = await h.prisma.brandCardProduct.findUniqueOrThrow({
+      where: { code: 'FY_ANNUAL' }
+    });
+    const annualWhere = {
+      productCode_version: { productCode: 'FY_ANNUAL', version: annual.currentVersion! }
+    };
+    const annualOriginal = await h.prisma.brandCardVersion.findUniqueOrThrow({
+      where: annualWhere
+    });
+    try {
+      await h.prisma.brandCardVersion.update({
+        where: annualWhere,
+        data: {
+          perksJson: JSON.stringify({
+            presence: { prioritySeat: true, tierPrice: true, invitesPerQuarter: 2 },
+            lightcare: { advancePercent: 75.5 },
+            teahour: { perCupCents: 0 }
+          })
+        }
+      });
+      const liveQuota = await signed('get', '/v1/brand-member/invites?localUserId=local-m-su', {
+        key: 'zc-test'
+      });
+      expect(liveQuota.body.quota).toBe(2);
+    } finally {
+      await h.prisma.brandCardVersion.update({
+        where: annualWhere,
+        data: { perksJson: annualOriginal.perksJson }
+      });
+    }
 
     const invite = await signed('post', '/v1/brand-member/invites/create', {
       key: 'zc-test',
