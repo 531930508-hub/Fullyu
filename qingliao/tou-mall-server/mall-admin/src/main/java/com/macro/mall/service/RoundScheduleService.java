@@ -474,7 +474,46 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
         }
         Map<Long, Long> map = getMassagistRoundCountMap(shopId, date);
         roundScheduleList.forEach(s -> s.setRoundCount(map.getOrDefault(s.getMassagistId(), 0L)));
+        applyQueueOrder(shopId, date, roundScheduleList);
         return roundScheduleList;
+    }
+
+    /**
+     * 排班表显示顺序以轮牌队列为准：值班在前、seq 升序，round 重编为 1..n（展示用）。
+     * 队列里还没有的人（当天没起过轮牌/休息未纳入）保持原顺序垫后，所以队列未生成时行为与老逻辑完全一致。
+     */
+    private void applyQueueOrder(Long shopId, String date, List<RoundSchedule> list) {
+        if (CollectionUtils.isEmpty(list)) {
+            return;
+        }
+        List<ReceptionQueue> queue = receptionQueueService.orderList(date, shopId);
+        if (CollectionUtils.isEmpty(queue)) {
+            return;
+        }
+        Map<Long, ReceptionQueue> byId = new HashMap<>();
+        for (ReceptionQueue q : queue) {
+            byId.putIfAbsent(q.getMassagistId(), q);
+        }
+        List<RoundSchedule> inQueue = new ArrayList<>();
+        List<RoundSchedule> others = new ArrayList<>();
+        for (RoundSchedule rs : list) {
+            (byId.containsKey(rs.getMassagistId()) ? inQueue : others).add(rs);
+        }
+        inQueue.sort(Comparator.comparingInt(rs -> queue.indexOf(byId.get(rs.getMassagistId()))));
+        long no = 0;
+        for (RoundSchedule rs : inQueue) {
+            ReceptionQueue q = byId.get(rs.getMassagistId());
+            rs.setRound(++no);
+            if (q.getAssignCount() != null) {
+                rs.setRoundCount(q.getAssignCount().longValue());
+            }
+        }
+        for (RoundSchedule rs : others) {
+            rs.setRound(++no);
+        }
+        list.clear();
+        list.addAll(inQueue);
+        list.addAll(others);
     }
 
     /**
