@@ -16,6 +16,8 @@
         <text class="bmc-who">{{ whoLine }}</text>
         <text class="bmc-valid">{{ validLine }}</text>
       </view>
+      <!-- 续期已排期（赠送码/续费单接在当前卡之后）：不显示这一行，用户会以为没加上 -->
+      <text v-if="pendingLine" class="bmc-pending">{{ pendingLine }}</text>
       <text v-if="renewalText" class="bmc-renewal">{{ renewalText }}</text>
     </view>
 
@@ -69,7 +71,14 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { cardStateLabel, formatDate, formatYuan, type BrandCardProduct, type BrandMemberData } from '@/api/brandMember'
+import {
+  cardStateLabel,
+  formatDate,
+  formatYuan,
+  type BrandCardProduct,
+  type BrandMemberData
+} from '@/api/brandMember'
+import { pendingRenewalLine } from '@/utils/member-card-line'
 import { isEnglish, tr } from '@/locale'
 
 const props = defineProps<{
@@ -117,6 +126,8 @@ const validLine = computed(() => {
   const tail = expiring.value && days ? tr(` · 还剩 ${days} 天`, ` · ${days} days left`) : ''
   return tr(`有效期至 ${until}${tail} · 三店通用`, `Valid until ${until}${tail} · all three stores`)
 })
+/** 当前卡后面还排着一张（赠送码/续费单）：把它写出来，否则「有效期至」看起来没变化。 */
+const pendingLine = computed(() => pendingRenewalLine(props.data?.pendingCard, tr))
 /** 续费提醒的金额与文案以 CRM 为准，前端不自己推算；CRM 没给时只在临期补一句天数。 */
 const renewalText = computed(() => {
   const value = props.data
@@ -220,6 +231,14 @@ function brandName(business: string) {
   font-size: 9.5px;
   line-height: 1.5;
   opacity: 0.78;
+}
+/* 已排期的下一张卡：比「有效期至」轻一档，主次仍是当前卡 */
+.bmc-pending {
+  display: block;
+  margin-top: 4px;
+  font-size: 9px;
+  line-height: 1.5;
+  opacity: 0.7;
 }
 .bmc-renewal {
   display: block;

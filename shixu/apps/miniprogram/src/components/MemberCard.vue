@@ -16,6 +16,8 @@
         <text class="bmc-who">{{ whoLine }}</text>
         <text class="bmc-valid">{{ validLine }}</text>
       </view>
+      <!-- 续期已排期（赠送码/续费单接在当前卡之后）：不显示这一行，用户会以为没加上 -->
+      <text v-if="pendingLine" class="bmc-pending">{{ pendingLine }}</text>
     </view>
 
     <!-- 卡脚：两个互不重叠的点击区 -->
@@ -67,6 +69,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { cardStateLabel, entryPrice, formatDate, formatYuan } from '@/lib/brandMember';
+import { pendingRenewalLine } from '@/lib/memberCardLine';
 import { useLocale } from '@/lib/useLocale';
 
 const props = defineProps({
@@ -112,6 +115,9 @@ const validLine = computed(() => {
   const tail = expiring.value && days ? tt(` · 剩 ${days} 天`, ` · ${days} days left`) : '';
   return tt(`至 ${until} 到期${tail} · 全门店可用`, `Valid until ${until}${tail} · all locations`);
 });
+
+/** 当前卡后面还排着一张（赠送码/续费单）：把它写出来，否则「至 X 到期」看起来没变化。 */
+const pendingLine = computed(() => pendingRenewalLine(props.data && props.data.pendingCard, tt));
 
 // 会员价格只认 CRM 产品目录（多个时长取最低价）；读不到就显示「—」，不用本地价格补位。
 const memberEntry = computed(() => entryPrice(props.data && props.data.products));
@@ -204,6 +210,15 @@ function onSaved() {
   font-size: 9.5px;
   line-height: 1.5;
   opacity: 0.78;
+}
+
+/* 已排期的下一张卡：比「至 X 到期」轻一档，主次仍是当前卡 */
+.bmc-pending {
+  display: block;
+  margin-top: 4px;
+  font-size: 9px;
+  line-height: 1.5;
+  opacity: 0.7;
 }
 
 /* 卡脚：同色同体，只一道细线分隔 */

@@ -60,6 +60,8 @@ export interface BrandBenefit {
 export interface BrandMemberData {
   member: { memberNo: string; name: string; phoneMasked: string }
   card: BrandCardState
+  /** 当前卡之后还排着的一张（赠送码/续费单）：CRM 只在当前卡生效时下发，接续日期以它为准。 */
+  pendingCard?: BrandCardState | null
   points: {
     balance: number
     expiring: number
