@@ -667,12 +667,9 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 throw new BusinessException("订单不存在");
             }
             if (payAmount != null) {
-                // 人工确认收款允许改价（招待、抹零），但必须落在 [0, 原价] 区间，并留痕
+                // 人工确认收款允许改价（招待、抹零、美团券面额高于原价），不设上限，只拦负数并留痕
                 if (payAmount.compareTo(BigDecimal.ZERO) < 0) {
                     throw new BusinessException("实付金额不能为负数");
-                }
-                if (order.getTotalAmount() != null && payAmount.compareTo(order.getTotalAmount()) > 0) {
-                    throw new BusinessException("实付金额不能超过订单原价");
                 }
                 if (order.getPayAmount() != null && payAmount.compareTo(order.getPayAmount()) != 0) {
                     log.warn("确认收款改价: orderId={}, 系统应付={}, 实收={}", orderId, order.getPayAmount(), payAmount);
