@@ -99,10 +99,8 @@ const DICT_SETS: {
     code: 'course_type',
     name: '课程类型',
     items: [
-      { value: 'group', label: '团课' },
-      { value: 'private', label: '私教' },
-      { value: 'workshop', label: '工作坊' },
-      { value: 'camp', label: '训练营' },
+      { value: 'SINGLE', label: '单次课程', labelEn: 'Single class' },
+      { value: 'SERIES', label: '系列课程', labelEn: 'Series' },
     ],
   },
   {

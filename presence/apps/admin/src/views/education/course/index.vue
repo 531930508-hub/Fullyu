@@ -125,8 +125,7 @@
             <a-col :span="8">
               <a-form-item label="课程类型" required>
                 <a-select v-model:value="form.type" placeholder="选择类型" size="large">
-                  <a-select-option value="SINGLE">单次课程</a-select-option>
-                  <a-select-option value="SERIES">系列课程</a-select-option>
+                  <a-select-option v-for="t in courseTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-select-option>
                 </a-select>
               </a-form-item>
             </a-col>
@@ -680,6 +679,19 @@ const editingId = ref<string | null>(null)
 const dictStore = useDictStore()
 /** 课程时长选项（单次/多次共用 course_duration 值集） */
 const durationOptions = computed(() => dictStore.getItems('course_duration'))
+
+/** 课程类型兜底项：值集缺失或含枚举外脏值时，仍保证下拉可发布 */
+const DEFAULT_COURSE_TYPES = [
+  { value: 'SINGLE', label: '单次课程' },
+  { value: 'SERIES', label: '系列课程' },
+]
+/** 课程类型选项（读 course_type 值集；仅接受后端枚举允许的 SINGLE/SERIES） */
+const courseTypeOptions = computed(() => {
+  const configured = dictStore
+    .getItems('course_type')
+    .filter((i) => DEFAULT_COURSE_TYPES.some((d) => d.value === i.value))
+  return configured.length ? configured : DEFAULT_COURSE_TYPES
+})
 
 const difficultyMap: Record<string, string> = { BEGINNER: '入门', INTERMEDIATE: '进阶', ADVANCED: '高级' }
 
