@@ -15,8 +15,8 @@ export function getTrainer(id: string) {
   return get(`/trainers/admin/detail/${id}`)
 }
 
-/** 创建导师档案 */
-export function createTrainer(body: any) {
+/** 创建导师档案：传手机号即可，未注册的手机号后端会自动建号再绑定 */
+export function createTrainer(body: { phone: string } & Record<string, any>) {
   return post('/trainers', body)
 }
 

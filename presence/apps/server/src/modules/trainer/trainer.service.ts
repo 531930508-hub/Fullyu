@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { PrismaService } from '../../common/prisma.service'
 import { BusinessException } from '../../common/exceptions/business.exception'
+import { randomNickname } from '../../common/nickname'
 
 @Injectable()
 export class TrainerService {
@@ -285,12 +287,15 @@ export class TrainerService {
     }
   }
 
-  /** 创建导师档案（需已有用户），并标记 isTrainer
+  /** 创建导师档案：按手机号绑定用户（该手机号未注册时自动建号），并标记 isTrainer
    *  displayName 全局唯一，时薪自动从等级配置获取
+   *  兼容旧入参 userId：id 不存在时给业务提示，不再把 Prisma 的 P2025 透给前端
    */
   async create(data: any) {
-    const { userId } = data
-    if (!userId) throw new BusinessException('缺少关联用户', 4041)
+    const phone = String(data.phone ?? '').trim()
+    const legacyUserId = String(data.userId ?? '').trim()
+    if (!phone && !legacyUserId) throw new BusinessException('请填写导师手机号', 4041)
+    if (phone && !/^1\d{10}$/.test(phone)) throw new BusinessException('手机号格式不正确', 4002)
     // 校验姓名唯一
     if (data.displayName) {
       const dup = await this.prisma.trainerProfile.findUnique({ where: { displayName: data.displayName } })
@@ -298,9 +303,45 @@ export class TrainerService {
     }
     const profile = await this.buildProfileData(data, true)
     return this.prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: userId }, data: { isTrainer: true } })
-      return tx.trainerProfile.create({ data: { userId, ...profile } })
+      const user = await this.resolveUserForProfile(tx, {
+        phone,
+        userId: legacyUserId,
+        nicknameFallback: String(data.displayName || '').trim(),
+      })
+      // 一个用户只能有一份导师档案（trainerProfile.userId 唯一），提前拦下给业务提示
+      if (user.hasProfile) throw new BusinessException('该手机号已绑定导师档案', 4009)
+      await tx.user.update({ where: { id: user.id }, data: { isTrainer: true } })
+      return tx.trainerProfile.create({ data: { userId: user.id, ...profile } })
     })
+  }
+
+  /** 解析档案要绑定的用户：优先按手机号找/建号，兼容直接给 userId */
+  private async resolveUserForProfile(
+    tx: Prisma.TransactionClient,
+    input: { phone: string; userId: string; nicknameFallback: string },
+  ) {
+    const select = { id: true, phone: true, trainerProfile: { select: { id: true } } } as const
+    if (input.phone) {
+      const existing = await tx.user.findUnique({ where: { phone: input.phone }, select })
+      if (existing) return { id: existing.id, hasProfile: !!existing.trainerProfile }
+      // 与导师入驻申请同口径：未注册手机号先建号，昵称用导师姓名
+      const created = await tx.user
+        .create({
+          data: { phone: input.phone, nickname: input.nicknameFallback || randomNickname() },
+          select: { id: true },
+        })
+        // 两个后台同时添加同一手机号会撞 phone 唯一键：回读已建好的账号，不把 P2002 透给前端
+        .catch(async (e: any) => {
+          if (e?.code !== 'P2002') throw e
+          const retry = await tx.user.findUnique({ where: { phone: input.phone }, select: { id: true } })
+          if (!retry) throw e
+          return retry
+        })
+      return { id: created.id, hasProfile: false }
+    }
+    const byId = await tx.user.findUnique({ where: { id: input.userId }, select })
+    if (!byId) throw new BusinessException('关联用户不存在，请按手机号添加导师', 4041)
+    return { id: byId.id, hasProfile: !!byId.trainerProfile }
   }
 
   async update(id: string, data: any) {

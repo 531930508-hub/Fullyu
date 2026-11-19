@@ -172,9 +172,13 @@
     <!-- 添加导师弹窗 -->
     <a-modal v-model:open="showAddModal" title="添加导师" width="560px" :confirm-loading="adding" @ok="addTrainer">
       <a-form layout="vertical">
-        <a-form-item label="关联用户 ID" required>
-          <a-input v-model:value="addForm.userId" placeholder="输入已注册用户的 userId" />
-          <div style="font-size: 12px; color: #999; margin-top: 4px;">导师需绑定一个已注册用户账号</div>
+        <a-form-item label="手机号" required>
+          <a-input v-model:value="addForm.phone" placeholder="输入导师手机号，如 13812345678" :maxlength="11" />
+          <div style="font-size: 12px; color: #999; margin-top: 4px;">
+            <template v-if="phoneMatch">已匹配用户「{{ phoneMatch }}」，将直接绑定该账号</template>
+            <template v-else-if="phoneChecked">该手机号未注册，提交后自动创建用户账号</template>
+            <template v-else>手机号未注册时会先自动建号，再绑定导师档案</template>
+          </div>
         </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12"><a-form-item label="展示名称" required><a-input v-model:value="addForm.displayName" /></a-form-item></a-col>
@@ -221,11 +225,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { listTrainers, getTrainer, createTrainer, updateTrainer, adjustTrainerSeeds } from '@/api/trainer'
 import { resetTrainerPortalPassword } from '@/api/trainerPortal'
 import { listTrainerLevels } from '@/api/trainerLevel'
+import { adminListUsers } from '@/api/user'
 
 // 导师等级来自后端 trainer-levels 接口
 const rawLevels = ref<any[]>([])
@@ -256,8 +261,35 @@ const seedsSaving = ref(false)
 const levelColors: Record<number, string> = { 1: 'default', 2: 'blue', 3: 'purple', 4: 'gold', 5: 'red' }
 
 const editForm = ref<any>({})
-const addForm = ref({ userId: '', displayName: '', level: 1, seedifyCert: false, specialties: [] as string[], avatar: '', bio: '', certBadge: '' })
+const addForm = ref({ phone: '', displayName: '', level: 1, seedifyCert: false, specialties: [] as string[], avatar: '', bio: '', certBadge: '' })
 const seedsForm = ref({ amount: null as number | null, reason: '' })
+
+// 手机号匹配提示：填满 11 位后按手机号查一次用户，让操作者确认是「绑定已有账号」还是「自动建号」
+const phoneMatch = ref('')
+const phoneChecked = ref(false)
+let phoneLookupTimer: ReturnType<typeof setTimeout> | null = null
+watch(
+  () => addForm.value.phone,
+  (raw) => {
+    phoneMatch.value = ''
+    phoneChecked.value = false
+    if (phoneLookupTimer) clearTimeout(phoneLookupTimer)
+    const phone = String(raw || '').trim()
+    if (!/^1\d{10}$/.test(phone)) return
+    phoneLookupTimer = setTimeout(async () => {
+      try {
+        const list: any = await adminListUsers({ keyword: phone })
+        // 查询期间手机号又被改动，丢弃过期结果
+        if (String(addForm.value.phone || '').trim() !== phone) return
+        const hit = (Array.isArray(list) ? list : []).find((u: any) => u.phone === phone)
+        phoneMatch.value = hit ? hit.nickname || '未命名用户' : ''
+        phoneChecked.value = true
+      } catch {
+        // 无 user:view 权限或查询失败时不显示匹配结果，按未注册处理，最终以后端为准
+      }
+    }, 400)
+  },
+)
 
 // 门户账号密码重置：只展示一次，关抽屉即清空
 const portalPassword = ref('')
@@ -448,17 +480,20 @@ async function submitSeeds() {
 }
 
 function openAddTrainer() {
-  addForm.value = { userId: '', displayName: '', level: 1, seedifyCert: false, specialties: [], avatar: '', bio: '', certBadge: '' }
+  addForm.value = { phone: '', displayName: '', level: 1, seedifyCert: false, specialties: [], avatar: '', bio: '', certBadge: '' }
+  phoneMatch.value = ''
+  phoneChecked.value = false
   showAddModal.value = true
 }
 
 async function addTrainer() {
-  if (!addForm.value.userId) { message.warning('请填写关联用户 ID'); return }
+  const phone = String(addForm.value.phone || '').trim()
+  if (!/^1\d{10}$/.test(phone)) { message.warning('请填写 11 位手机号'); return }
   if (!addForm.value.displayName) { message.warning('请填写展示名称'); return }
   adding.value = true
   try {
     await createTrainer({
-      userId: addForm.value.userId,
+      phone,
       displayName: addForm.value.displayName,
       level: addForm.value.level,
       seedifyCert: addForm.value.seedifyCert,
@@ -467,7 +502,7 @@ async function addTrainer() {
       bio: addForm.value.bio,
       certBadge: addForm.value.certBadge,
     })
-    message.success('导师添加成功')
+    message.success(phoneMatch.value ? '导师添加成功' : '导师添加成功，已同步创建用户账号')
     showAddModal.value = false
     loadTrainers()
   } catch (e: any) {
