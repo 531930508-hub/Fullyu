@@ -88,12 +88,12 @@ class IncentiveExportTest {
         try { method = IncentiveDataService.class.getMethod("exportCsv", String.class, Long.class, Integer.class); }
         catch (NoSuchMethodException ignored) { }
         assertNotNull(method, "CSV 必须保留合作状态筛选");
-        try { return (String) method.invoke(service, "2026-01", null, status); }
+        try { return (String) method.invoke(service, "2026-11", null, status); }
         catch (InvocationTargetException e) { throw e.getCause(); }
     }
 
     @Test void legacyExportDoesNotSilentlyTruncateAfterFiveHundred() {
-        String csv = service.exportCsv("2026-01", null);
+        String csv = service.exportCsv("2026-11", null);
         assertEquals(503, csv.split("\n").length);
         assertTrue(csv.contains("合成人员501"));
         // 导出走整月批量查询（基础工时 + 到店人次），不做分页/500 行截断。
@@ -102,7 +102,7 @@ class IncentiveExportTest {
     }
 
     @Test void exportHeaderCarriesRetentionConversionAndCertifiedParts() {
-        String csv = service.exportCsv("2026-01", null);
+        String csv = service.exportCsv("2026-11", null);
         String[] lines = csv.split("\n");
         String header = lines[1];
         assertTrue(header.contains("考核通过部位"), header);
@@ -151,7 +151,7 @@ class IncentiveExportTest {
     }
 
     @Test void allShopExportUsesEachPersonsRealShop() {
-        String csv = service.exportCsv("2026-01", null);
+        String csv = service.exportCsv("2026-11", null);
         assertTrue(csv.contains("\"合成门店甲\",\"合成人员1\""));
         assertTrue(csv.contains("\"合成门店乙\",\"合成人员501\""));
         assertFalse(csv.contains("\"全部门店\",\"合成人员"));
@@ -173,12 +173,12 @@ class IncentiveExportTest {
 
     @Test void unauthorizedExportDoesNotQueryBusinessData() {
         doThrow(new BusinessException("无权导出")).when(access).requireGlobal();
-        assertThrows(BusinessException.class, () -> service.exportCsv("2026-01", null));
+        assertThrows(BusinessException.class, () -> service.exportCsv("2026-11", null));
         verifyNoInteractions(people, query);
     }
 
     @Test void dashboardStillReturnsOnlyRequestedPageButWholeScopeTotals() {
-        IncentiveDashboard dashboard = service.dashboard("2026-01", null, 1, 2, 20);
+        IncentiveDashboard dashboard = service.dashboard("2026-11", null, 1, 2, 20);
         assertEquals(501, dashboard.getTherapistCount());
         assertEquals(20, dashboard.getTherapists().size());
         assertEquals(Long.valueOf(21), dashboard.getTherapists().get(0).getMassagistId());
@@ -189,21 +189,21 @@ class IncentiveExportTest {
         List<ShopIncentiveTarget> rows = new ArrayList<>();
         for (long shopId = 7; shopId <= 36; shopId++) {
             ShopIncentiveTarget target = new ShopIncentiveTarget();
-            target.setShopId(shopId); target.setMonthCode("2026-01");
+            target.setShopId(shopId); target.setMonthCode("2026-11");
             target.setManagerMassagistId(shopId - 6);
             rows.add(target);
         }
         when(targets.selectList(any())).thenReturn(rows);
         ReflectionTestUtils.setField(service, "targetMapper", targets);
         ShopService shops = (ShopService) ReflectionTestUtils.getField(service, "shopService");
-        IncentiveDashboard dashboard = service.dashboard("2026-01", null, 1, 1, 20);
+        IncentiveDashboard dashboard = service.dashboard("2026-11", null, 1, 1, 20);
         assertEquals(501, dashboard.getTherapistCount());
         verify(shops, never()).getById(any());
         verify(shops, atMost(2)).listByIds(anyCollection());
     }
 
     @Test void excessivePageNumberCannotOverflowIndex() {
-        assertThrows(BusinessException.class, () -> service.dashboard("2026-01", null, 1, Integer.MAX_VALUE, 100));
+        assertThrows(BusinessException.class, () -> service.dashboard("2026-11", null, 1, Integer.MAX_VALUE, 100));
         verifyNoInteractions(people, query);
     }
 
@@ -225,8 +225,8 @@ class IncentiveExportTest {
         IncentiveController controller = new IncentiveController();
         ReflectionTestUtils.setField(controller, "dataService", data);
         MockHttpServletResponse response = new MockHttpServletResponse();
-        endpoint.invoke(controller, "2026-01", 5L, 0, response);
-        assertEquals(Arrays.asList("2026-01", 5L, 0), observed);
+        endpoint.invoke(controller, "2026-11", 5L, 0, response);
+        assertEquals(Arrays.asList("2026-11", 5L, 0), observed);
         assertEquals("合成 CSV", response.getContentAsString());
         assertEquals("text/csv;charset=UTF-8", response.getContentType());
         RequestParam parameter = endpoint.getParameters()[2].getAnnotation(RequestParam.class);

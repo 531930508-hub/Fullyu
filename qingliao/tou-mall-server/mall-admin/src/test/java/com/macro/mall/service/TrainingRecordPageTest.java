@@ -45,7 +45,7 @@ class TrainingRecordPageTest {
                 for (long id = 1; id <= 2; id++) {
                     ServiceDetailRow row = new ServiceDetailRow(); row.setOrderId(id); row.setMassagistId(7L);
                     row.setShopId(5L); row.setProjectId(101L); row.setDuration(60);
-                    row.setServiceDate(LocalDate.of(2026, 1, (int) id + 1)); rows.add(row);
+                    row.setServiceDate(LocalDate.of(2026, 11, (int) id + 1)); rows.add(row);
                 }
                 return rows;
             }
@@ -82,7 +82,7 @@ class TrainingRecordPageTest {
         when(configService.bundleForMonth(anyString())).thenReturn(bundle);
         ReflectionTestUtils.setField(service, "configService", configService);
         MassagistTrainingCert cert = new MassagistTrainingCert(); cert.setId(21L);
-        cert.setMassagistId(7L); cert.setProjectKey("head60"); cert.setPassedAt(LocalDate.of(2026, 1, 1));
+        cert.setMassagistId(7L); cert.setProjectKey("head60"); cert.setPassedAt(LocalDate.of(2026, 11, 1));
         when(certs.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.singletonList(cert));
     }
 
@@ -103,7 +103,7 @@ class TrainingRecordPageTest {
         try { method = IncentiveDataService.class.getMethod("trainingRecordsPage", String.class, Long.class, Integer.class, int.class, int.class, String.class); }
         catch (NoSuchMethodException ignored) { }
         assertNotNull(method, "培训页必须服务端分页并接受姓名筛选");
-        try { return (Map<String, Object>) method.invoke(service, "2026-01", 5L, status, page, size, keyword); }
+        try { return (Map<String, Object>) method.invoke(service, "2026-11", 5L, status, page, size, keyword); }
         catch (InvocationTargetException e) { throw e.getCause(); }
     }
 
@@ -115,7 +115,10 @@ class TrainingRecordPageTest {
     @Test void pageLoadsOnlySelectedPeopleAndCalculatesTheirTraining() throws Throwable {
         install(51); Map<String, Object> response = page(1, 2, 20, " 合成 ");
         assertEquals(51L, response.get("total")); assertEquals(2, response.get("pageNum"));
-        assertEquals(LocalDate.of(2026, 1, 31), response.get("cutoff"));
+        // 统计截止 = min(月末, 今天)：选中当月时截止到今天，选历史月份才是月末。
+        LocalDate today = LocalDate.now();
+        assertEquals(today.isBefore(LocalDate.of(2026, 11, 30)) ? today : LocalDate.of(2026, 11, 30),
+                response.get("cutoff"));
         List<TrainingRecordView> rows = (List<TrainingRecordView>) response.get("list");
         assertEquals(2, rows.size()); assertEquals(Long.valueOf(7), rows.get(0).getMassagistId());
         assertEquals(Integer.valueOf(1), rows.get(0).getCertifiedCount());
@@ -167,7 +170,7 @@ class TrainingRecordPageTest {
         assertTrue(config.hasStatement(id), "缺少仅当前页疗愈师服务订单查询");
         Map<String, Object> params = new HashMap<>(); params.put("shopIds", Collections.singletonList(5L));
         params.put("massagistIds", Arrays.asList(7L, 8L));
-        params.put("start", LocalDate.of(2026, 1, 2).atStartOfDay()); params.put("end", LocalDate.of(2026, 2, 1).atStartOfDay());
+        params.put("start", LocalDate.of(2026, 11, 2).atStartOfDay()); params.put("end", LocalDate.of(2026, 12, 1).atStartOfDay());
         BoundSql bound = config.getMappedStatement(id).getBoundSql(params); String sql = bound.getSql().replaceAll("\\s+", " ");
         assertTrue(sql.contains("od.massagist_id IN")); assertTrue(sql.contains("od.state = 2"));
         assertTrue(sql.contains("o.pay_time IS NOT NULL")); assertTrue(sql.contains("NOT EXISTS"));
