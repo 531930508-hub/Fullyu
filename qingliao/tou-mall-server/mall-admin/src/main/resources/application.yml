@@ -126,6 +126,9 @@ brand-crm:
 # CRM → 轻疗内部支付接口（仅供 CRM 服务端调用），默认关闭。
 # 配置 key-id 与 secret 即启用；密钥只通过环境变量注入，不写入仓库。
 incentive:
+  # 个税累计起算月：2026-08 起更换纳税服务商，个税与年度收入累计自该月起算（8-12 月）。
+  # 只对起算月及之后的月份生效；跨年后自动回到当年 1 月起算。
+  tax-accumulate-start-month: ${INCENTIVE_TAX_START_MONTH:2026-08}
   # 内训师三人考核：默认关闭，仅测试环境通过环境变量打开。
   team-cert-enabled: ${INCENTIVE_TEAM_CERT_ENABLED:false}
   team-cert-backfill-days: 30

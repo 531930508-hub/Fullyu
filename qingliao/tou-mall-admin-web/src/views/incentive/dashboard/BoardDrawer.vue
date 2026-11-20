@@ -347,10 +347,11 @@
           <div class="emphasis"><span>激励合计</span><b>¥{{ money(board.settlement.subtotal) }}</b></div>
           <div><span>服务费折算（÷{{ board.settlement.serviceFeeDivisor }}）</span><b>¥{{ money(board.settlement.preTax) }}</b></div>
           <div><span>年累计计税前</span><b>¥{{ money(board.settlement.annualIncome) }}</b></div>
-          <div><span>连续合作月数</span><b>{{ board.settlement.continuousMonths }} 个月</b></div>
+          <div><span>计税起算月</span><b>{{ board.settlement.taxStartMonth || '—' }}</b></div>
+          <div><span>计税月数</span><b>{{ board.settlement.continuousMonths }} 个月</b></div>
           <div><span>年累计应纳税所得额</span><b>¥{{ money(board.settlement.annualTaxableIncome) }}</b></div>
           <div><span>税率 / 速算扣除</span><b>{{ percent(board.settlement.taxRate, 0) }} / ¥{{ money(board.settlement.quickDeduction) }}</b></div>
-          <div><span>本年已预缴</span><b>¥{{ money(board.settlement.priorPaidTax) }}</b></div>
+          <div><span>累计已预缴</span><b>¥{{ money(board.settlement.priorPaidTax) }}</b></div>
           <div><span>本月个税预估</span><b>¥{{ money(board.settlement.tax) }}</b></div>
           <div class="emphasis"><span>合作结算预估</span><b>¥{{ money(board.settlement.net) }}</b></div>
         </div>

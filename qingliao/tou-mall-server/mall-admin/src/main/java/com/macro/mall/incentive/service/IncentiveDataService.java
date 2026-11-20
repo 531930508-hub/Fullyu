@@ -16,6 +16,7 @@ import com.macro.mall.incentive.calc.IncentiveCalculator;
 import com.macro.mall.incentive.calc.IncentiveMath;
 import com.macro.mall.incentive.calc.RepurchaseBatchCalculator;
 import com.macro.mall.incentive.calc.SettlementCalculator;
+import com.macro.mall.incentive.calc.TaxWindow;
 import com.macro.mall.incentive.calc.TrainingCalculator;
 import com.macro.mall.incentive.dto.IncentiveConfigBundle;
 import com.macro.mall.incentive.dto.IncentiveDashboard;
@@ -64,6 +65,7 @@ import com.macro.mall.service.SalaryOtherAmountService;
 import com.macro.mall.service.SalaryRecordService;
 import com.macro.mall.service.shop.ShopService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -151,6 +153,13 @@ public class IncentiveDataService {
 
     @Autowired
     private OrderService orderService;
+
+    /**
+     * 个税累计起算月（yyyy-MM）。2026-08 起更换纳税服务商，历史收入与已缴税不再进本年累计，
+     * 否则本月个税会把 1-7 月少缴的差额一次性补扣，技师侧看到「本月税特别多」。
+     */
+    @Value("${incentive.tax-accumulate-start-month:2026-08}")
+    private String taxAccumulateStartMonth;
 
     public IncentiveDashboard dashboard(String month, Long requestedShopId, Integer status, Integer page, Integer size) {
         int pageNo = page == null ? 1 : page;
@@ -1038,10 +1047,10 @@ public class IncentiveDataService {
             context.otherAmounts.merge(item.getMassagistId(), signed, BigDecimal::add);
         }
 
-        String year = month.substring(0, 4);
+        String taxStart = taxStartMonth(month);
         List<SalaryRecord> priorRecords = salaryRecordService.list(new LambdaQueryWrapper<SalaryRecord>()
                 .in(SalaryRecord::getMassagistId, massagistIds)
-                .ge(SalaryRecord::getMonthCode, year + "-01")
+                .ge(SalaryRecord::getMonthCode, taxStart)
                 .lt(SalaryRecord::getMonthCode, month));
         for (SalaryRecord record : priorRecords) {
             context.priorSalaryByMassagist
@@ -1188,15 +1197,17 @@ public class IncentiveDataService {
         BigDecimal priorPaid = prior.stream()
                 .map(r -> r.getPayableIncomeTax() == null ? BigDecimal.ZERO : r.getPayableIncomeTax())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        int continuousMonths = continuousMonths(prior, context.month);
+        int continuousMonths = taxMonths(prior, context.month);
         SettlementResult settlement = settlementCalculator.calculate(
                 base.getAmount(), manager.getTotalAmount(), training.getEarnedAmount(),
                 repurchase.getTotalAmount(), adjustment, priorAnnual, priorPaid, continuousMonths);
+        settlement.setTaxStartMonth(taxStartMonth(context.month));
         board.setSettlement(settlement);
 
         addRepurchaseBoardWarnings(board);
         if (includeAchievements && prior.isEmpty()) {
-            board.getWarnings().add("未找到本年度历史结算记录，年度个税按本年起算，最终以财务结算为准。");
+            board.getWarnings().add("未找到计税起算月 " + settlement.getTaxStartMonth()
+                    + " 以来的历史结算记录，年度个税按本月单月起算，最终以财务结算为准。");
         }
         return board;
     }
@@ -1425,19 +1436,21 @@ public class IncentiveDataService {
         return summary;
     }
 
-    private int continuousMonths(List<SalaryRecord> prior, String month) {
-        if (CollectionUtils.isEmpty(prior)) {
-            return 1;
-        }
-        Set<String> months = prior.stream().map(SalaryRecord::getMonthCode)
-                .filter(m -> m != null).collect(Collectors.toSet());
-        YearMonth cursor = IncentiveMath.shiftMonth(month, -1);
-        int count = 1;
-        while (months.contains(cursor.toString()) && count < 12) {
-            count++;
-            cursor = cursor.minusMonths(1);
-        }
-        return count;
+    /**
+     * 个税累计起算月。2026-08 起更换纳税服务商，起算月之前的收入与已缴税不进本年累计。
+     */
+    private String taxStartMonth(String month) {
+        return TaxWindow.startMonth(month, taxAccumulateStartMonth);
+    }
+
+    /**
+     * 计税月数（含本月）：自起算月与首个有效月份中较晚者起，按自然月连续计到本月。
+     */
+    private int taxMonths(List<SalaryRecord> prior, String month) {
+        List<String> recordMonths = prior.stream()
+                .map(SalaryRecord::getMonthCode)
+                .collect(Collectors.toList());
+        return TaxWindow.months(recordMonths, month, taxStartMonth(month));
     }
 
     private boolean isNewPartner(Massagist massagist, String month) {

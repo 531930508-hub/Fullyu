@@ -36,6 +36,11 @@ public class SettlementResult {
 
     private Integer continuousMonths = 0;
 
+    /**
+     * 个税累计起算月（yyyy-MM）。更换纳税服务商后累计口径从该月起算，起算月之前的收入与已缴税不参与本年累计。
+     */
+    private String taxStartMonth;
+
     private BigDecimal annualTaxableIncome = BigDecimal.ZERO;
 
     private BigDecimal taxRate = BigDecimal.ZERO;

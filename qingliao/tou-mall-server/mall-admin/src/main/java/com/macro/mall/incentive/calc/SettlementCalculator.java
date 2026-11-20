@@ -11,8 +11,8 @@ import java.math.RoundingMode;
  * <pre>
  * 结算基数 = 基础 + 店长 + 培训 + 已满足条件的复购 + 其他调整
  * 税前收入 = max(0, HALF_UP(结算基数 / 1.068, 0))
- * 年度应纳税所得额 = max(0, (历史年度收入 + 本月税前) × 0.8 − 连续合作月数 × 5000)
- * 本月个税 = max(0, 年度应纳税所得额 × 税率 − 速算扣除 − 已缴个税)
+ * 年度应纳税所得额 = max(0, (累计收入 + 本月税前) × 0.8 − 计税月数 × 5000)
+ * 本月个税 = max(0, 年度应纳税所得额 × 税率 − 速算扣除 − 起算月以来的已缴个税)
  * 税后收入 = 税前收入 − 本月个税
  * </pre>
  */
@@ -25,9 +25,9 @@ public class SettlementCalculator {
     /**
      * 计算合作结算预览。
      *
-     * @param priorAnnualIncome 本年度此前已计入的税前收入
-     * @param priorPaidTax      本年度此前已缴个税
-     * @param continuousMonths  连续合作月数（含本月）
+     * @param priorAnnualIncome 计税起算月以来的累计税前收入
+     * @param priorPaidTax      计税起算月以来的累计已缴个税
+     * @param continuousMonths  计税月数（含本月）
      */
     public SettlementResult calculate(BigDecimal baseReward,
                                       BigDecimal managerReward,

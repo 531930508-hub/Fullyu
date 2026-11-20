@@ -584,12 +584,15 @@
                 {{ taxOpen ? '收起税费依据' : '查看税费依据' }}
               </button>
               <div v-show="taxOpen" class="tax-grid">
-                <div class="kv"><span>年度累计换算金额</span><b>{{ cash(settlement.annualIncome) }}</b></div>
-                <div class="kv"><span>年度计税基数</span><b>{{ cash(settlement.annualTaxableIncome) }}</b></div>
-                <div class="kv"><span>连续合作月数</span><b>{{ settlement.continuousMonths || 0 }} 个月</b></div>
+                <div v-if="settlement.taxStartMonth" class="kv">
+                  <span>计税起算月</span><b>{{ settlement.taxStartMonth }} 起累计</b>
+                </div>
+                <div class="kv"><span>累计换算金额</span><b>{{ cash(settlement.annualIncome) }}</b></div>
+                <div class="kv"><span>累计计税基数</span><b>{{ cash(settlement.annualTaxableIncome) }}</b></div>
+                <div class="kv"><span>计税月数</span><b>{{ settlement.continuousMonths || 0 }} 个月</b></div>
                 <div class="kv"><span>适用税率</span><b>{{ percent(settlement.taxRate, 0) }}</b></div>
                 <div class="kv"><span>速算扣除</span><b>{{ cash(settlement.quickDeduction) }}</b></div>
-                <div class="kv"><span>本年已预缴</span><b>{{ cash(settlement.priorPaidTax) }}</b></div>
+                <div class="kv"><span>累计已预缴</span><b>{{ cash(settlement.priorPaidTax) }}</b></div>
               </div>
               <p class="card-note">以上为预估口径，不写入正式结算单；最终金额以财务核对后的合作结算为准。</p>
             </div>
