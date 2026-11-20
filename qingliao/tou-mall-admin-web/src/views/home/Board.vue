@@ -8,10 +8,6 @@
           <el-radio-button :label="1">床位</el-radio-button>
           <el-radio-button :label="2">疗愈师</el-radio-button>
         </el-radio-group>
-        <span v-if="isMassagist" class="readonly-tag">全店只读看板</span>
-        <span v-if="isMassagist && therapistDay && therapistDay.hasSchedule" class="readonly-tag" style="margin-left:8px">
-          当日排班门店{{ therapistMultiShop ? '（' + therapistShops.length + '家，可切换）' : '' }}
-        </span>
       </div>
       <div class="flex align-center flex-wrap">
         <shop-selector v-if="shopList && !isMassagist" v-model="searchForm.shopId" :clearable="false"
@@ -22,10 +18,6 @@
                    @change="changeTherapistShop">
           <el-option v-for="s in therapistShops" :key="s.shopId" :label="s.label" :value="s.shopId"/>
         </el-select>
-        <el-input v-show="showCustomerSearch" placeholder="输入客户手机号查找" v-model="searchForm.customerPhone"
-                  class="search-cellphone" clearable @clear="updateData" @blur="updateData"
-                  suffix-icon="el-icon-search">
-        </el-input>
         <el-button v-show="showTodayBtn" :class="['today_btn', { 'not-today': !isToday }]" round @click="initDate">
           今天
         </el-button>
@@ -450,9 +442,6 @@ export default {
     },
     showShopSelector() {
       return this.winWidth >= 515
-    },
-    showCustomerSearch() {
-      return this.winWidth >= 1135
     },
     showTodayBtn() {
       return this.winWidth >= 640
@@ -1189,15 +1178,6 @@ export default {
     color: #1D1B20;
   }
 
-  .readonly-tag {
-    margin-left: 12px;
-    padding: 2px 10px;
-    border-radius: 12px;
-    font-size: 12px;
-    color: #8a6a40;
-    background-color: #f6efe4;
-  }
-
   /* 疗愈师：所选日期本人没有排班时的空态，替代原来的“无权查看该门店”报错 */
   .therapist-empty {
     display: flex;
@@ -1265,15 +1245,6 @@ export default {
   }
 
   .shop-select {
-    /deep/ .el-input__inner {
-      border-radius: 20px;
-    }
-  }
-
-  .search-cellphone {
-    width: 200px;
-    margin-left: 16px;
-
     /deep/ .el-input__inner {
       border-radius: 20px;
     }
