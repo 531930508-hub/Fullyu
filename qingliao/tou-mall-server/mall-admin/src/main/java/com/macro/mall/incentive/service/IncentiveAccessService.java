@@ -181,7 +181,8 @@ public class IncentiveAccessService {
         if (massagistId == null) {
             throw new BusinessException("当前账号未关联疗愈师档案，无法进行内训考核");
         }
-        Massagist trainer = massagistService.getById(massagistId);
+        // 读的是登录账号自己的档案，不受门店作用域限制（内训师账号的 ums_admin 未必配置门店）。
+        Massagist trainer = massagistService.getByIdAcrossShops(massagistId);
         if (trainer == null) {
             throw new BusinessException("疗愈师档案不存在");
         }
@@ -225,7 +226,7 @@ public class IncentiveAccessService {
         if (id == null) {
             return false;
         }
-        Massagist massagist = massagistService.getById(id);
+        Massagist massagist = massagistService.getByIdAcrossShops(id);
         return massagist != null && Integer.valueOf(1).equals(massagist.getIsTrainer());
     }
 

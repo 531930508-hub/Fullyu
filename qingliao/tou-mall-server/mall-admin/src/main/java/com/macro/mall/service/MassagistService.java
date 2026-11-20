@@ -68,6 +68,26 @@ public class MassagistService extends BaseService<MassagistMapper, Massagist> {
         return wrapper;
     }
 
+    /**
+     * 跨店按 id 读取疗愈师，跳过 {@link BaseService} 的资源级门店校验（直连 mapper）。
+     *
+     * <p>仅用于内训师盲考链路：内训师归属某个门店，但可以考核任意门店的疗愈师，
+     * 走 {@link #getById} 会因“被考核人不在本人门店”被门店作用域拦掉。
+     * 调用方必须先完成身份鉴权（{@code IncentiveAccessService.requireTrainer()}），
+     * 否则等同于绕开门店隔离。</p>
+     */
+    public Massagist getByIdAcrossShops(Long id) {
+        return id == null ? null : getBaseMapper().selectById(id);
+    }
+
+    /** 跨店批量按 id 读取疗愈师，使用限制同 {@link #getByIdAcrossShops}。 */
+    public List<Massagist> listByIdsAcrossShops(Collection<Long> ids) {
+        if (CollectionUtils.isEmpty(ids)) {
+            return new ArrayList<>();
+        }
+        return getBaseMapper().selectBatchIds(ids);
+    }
+
     public List<Massagist> sortList(String day, Long shopId) {
         if (day == null) {
             day = DateUtil.getCurrentDateCode();

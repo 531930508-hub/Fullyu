@@ -136,7 +136,8 @@ public class TrainingAssessmentQueryService {
         if (massagistId == null) {
             throw new BusinessException("请选择疗愈师");
         }
-        if (massagistService.getById(massagistId) == null) {
+        // 盲考：被考核疗愈师可以属于任意门店，不能套门店作用域。
+        if (massagistService.getByIdAcrossShops(massagistId) == null) {
             throw new BusinessException("疗愈师档案不存在");
         }
         List<TrainerProjectOption> result = new ArrayList<>();
@@ -179,8 +180,9 @@ public class TrainingAssessmentQueryService {
         List<MassagistTrainingAssessment> rows = assessmentMapper.selectList(wrapper);
         List<Long> targetIds = rows.stream().map(MassagistTrainingAssessment::getMassagistId)
                 .distinct().collect(Collectors.toList());
+        // 记录已按 trainerMassagistId 收敛到本人，被考核人可能来自任意门店，故跨店读取。
         Map<Long, Massagist> targets = targetIds.isEmpty() ? Collections.emptyMap()
-                : massagistService.listByIds(targetIds).stream()
+                : massagistService.listByIdsAcrossShops(targetIds).stream()
                 .collect(Collectors.toMap(Massagist::getId, e -> e));
         Map<Long, Shop> shops = shopsOf(targets.values().stream().map(Massagist::getShopId)
                 .filter(Objects::nonNull).distinct().collect(Collectors.toList()));

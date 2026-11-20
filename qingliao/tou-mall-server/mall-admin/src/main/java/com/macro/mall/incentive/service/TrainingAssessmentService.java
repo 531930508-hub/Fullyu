@@ -80,7 +80,8 @@ public class TrainingAssessmentService {
         }
         String proofPhotos = normalizeProofPhotos(request.getProofPhotos());
 
-        Massagist target = massagistService.getById(request.getMassagistId());
+        // 盲考：可考核任意门店的在职疗愈师，不能套门店作用域（trainer 已通过 requireTrainer 鉴权）。
+        Massagist target = massagistService.getByIdAcrossShops(request.getMassagistId());
         if (target == null) {
             throw new BusinessException("疗愈师档案不存在");
         }
