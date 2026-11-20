@@ -64,15 +64,15 @@ logstash:
 
 # 小票打印
 print:
-  user: 2041097701@qq.com
-  ukey: EZ9996tDKCEqKUN8
-  sn: 221611350
-  appid: sp6972e32c161cd
-  appsecret: bf92c827272b2cbbbe3b421d44c2f36d
+  user: ${PRINT_USER:}
+  ukey: ${PRINT_UKEY:}
+  sn: ${PRINT_SN:}
+  appid: ${PRINT_APPID:}
+  appsecret: ${PRINT_APPSECRET:}
 
 # 百度语音识别/合成
 baidu:
   voice:
-    appId: 119355266
-    apiKey: OFbytKmtBx3OdZP0u2AEdPDD
-    secretKey: QzCQciJOyT7ayGMvL1hdZ8XgGkQsynwm
+    appId: ${BAIDU_VOICE_APP_ID:}
+    apiKey: ${BAIDU_VOICE_API_KEY:}
+    secretKey: ${BAIDU_VOICE_SECRET_KEY:}

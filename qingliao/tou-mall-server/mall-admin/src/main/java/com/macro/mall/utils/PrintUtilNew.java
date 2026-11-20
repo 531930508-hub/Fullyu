@@ -25,8 +25,10 @@ import org.springframework.stereotype.Component;
 public class PrintUtilNew {
     public static final String baseUri = "https://open.spyun.net/v1/";
 
-    private String appid="sp6972e32c161cd";
-    private String appsecret="bf92c827272b2cbbbe3b421d44c2f36d";
+    @Value("${print.appid}")
+    private String appid;
+    @Value("${print.appsecret}")
+    private String appsecret;
 
 /*    public PrintUtilNew(String appid, String appsecret) {
         this.appid = appid;

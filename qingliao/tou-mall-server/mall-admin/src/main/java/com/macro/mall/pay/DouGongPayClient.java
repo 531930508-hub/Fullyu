@@ -56,8 +56,6 @@ public class DouGongPayClient implements IPayClient {
 //    private static String baseNotifyUrl = "https://proxy.sanliu.top/admin/open/dgpay/refund/notify?orderId=";
     private static String baseNotifyUrl = "https://fullytherapy.com/admin/open/dgpay/refund/notify";
 
-    private static String secretKey = "j;LJFO2MV#asNh;vb";
-
     /***
      * @Description: 初始化设置商户公共参数（全局只需设置一次）
      * @throws Exception
@@ -703,7 +701,7 @@ public class DouGongPayClient implements IPayClient {
         String str = "refundSign:" + orderId;
 
         Mac hmac = Mac.getInstance("HmacSHA256");
-        SecretKeySpec keySpec = new SecretKeySpec(secretKey.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        SecretKeySpec keySpec = new SecretKeySpec(PayCert.signSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
         hmac.init(keySpec);
         byte[] hash = hmac.doFinal(str.getBytes(StandardCharsets.UTF_8));
 

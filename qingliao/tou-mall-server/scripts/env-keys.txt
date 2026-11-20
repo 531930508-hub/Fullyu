@@ -41,6 +41,20 @@ BRAND_CRM_KEY_ID
 BRAND_CRM_SECRET
 WHEN=
 
-# 说明：.env.example 里的 RABBITMQ_PASSWORD、MINIO_*、PRINT_*、BAIDU_VOICE_* 目前
-# 没有任何代码读取（MQ 密码在 application-prod.yml，打印 appid/secret 在 PrintUtilNew，
-# MinIO/百度语音未接入），不在必需清单内，排查时不要误判为"缺配置"。
+# 小票打印（application-prod.yml 的 print.* 已改为从环境变量取）
+PRINT_USER
+PRINT_UKEY
+PRINT_SN
+PRINT_APPID
+PRINT_APPSECRET
+
+# 百度语音（BaiduToken 注入 baidu.voice.*）
+BAIDU_VOICE_APP_ID
+BAIDU_VOICE_API_KEY
+BAIDU_VOICE_SECRET_KEY
+
+# 说明：BRAND_CRM_PURCHASE_ENABLED / BRAND_ORDER_REPORT_ENABLED 是可选的开售开关（默认关），
+# 不列入必需键。测试环境 /opt/fullyu-mall-test/crm.env 两个都配 1（购买+订单上报，退款才算得准）；
+# 生产开售前都不配（接口 503 暂未开售）。
+# RABBITMQ_PASSWORD、spring.datasource.password 仍写死在 application-prod.yml，
+# 不读环境变量；MINIO_* 无任何代码读取，属 .env.example 里的死键。
