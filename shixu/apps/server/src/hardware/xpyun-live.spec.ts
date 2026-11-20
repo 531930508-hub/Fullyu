@@ -260,6 +260,30 @@ describe('芯烨条码云标签适配', () => {
     expect(brand).not.toContain('\u00B7');
   });
 
+  it('历史单里的热饮占位冰量不印到杯贴：温度行只出「热」', () => {
+    const content = buildXpyunCupLabel(job([{ temp: '热', ice: '标准冰' }]).labels[0]);
+
+    expect(content).not.toContain('标准冰');
+    expect(content).toMatch(/<TEXT x="3" y="32" f="7">热<\/TEXT>/);
+  });
+
+  it('温度·冰量独占规格行，下单时间上移到眉题行右侧', () => {
+    const content = buildXpyunCupLabel(job([{ temp: '冰', ice: '标准冰' }]).labels[0]);
+
+    // 规格行不再给日期留位置：40mm 一行放不下「冰 · 标准冰」+「11-10 14:30」
+    expect(content).toMatch(/<TEXT x="3" y="32" f="7">冰 \| 标准冰<\/TEXT>/);
+    const at = (y: number) =>
+      [...content.matchAll(/<TEXT x="(\d+)" y="(\d+)" f="(\d+)"(?: a="right")?>([^<]*)<\/TEXT>/g)]
+        .filter(([, , row]) => row === String(y))
+        .map(([, x, , , text]) => `${x}:${text}`);
+    expect(at(32)).toEqual(['3:冰 | 标准冰']);
+    // 时间右对齐在 37mm，与「取餐号」眉题同一行（y=8），两者隔得开
+    const eyebrow = at(8);
+    expect(eyebrow).toHaveLength(2);
+    expect(eyebrow[0]).toBe('3:取餐号');
+    expect(eyebrow[1]).toMatch(/^37:\d\d-\d\d \d\d:\d\d$/);
+  });
+
   it('店名、茶名里的中点号也换成竖线，实机不会打成一串问号', () => {
     const content = buildXpyunCupLabel(
       job([{ storeName: '上海·西岸店', productName: '醒·花园蜜香' }]).labels[0]

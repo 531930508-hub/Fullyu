@@ -18,7 +18,7 @@ import {
 /**
  * 芯烨条码云（XP-420B 走「条码云」平台，不是「票据云」）标签直推。
  *
- * 与飞鹅的差别，也是选它的理由：
+ * 选它的理由：
  * - 同一台 XP-420B，不用在门店放一台常开的电脑跑打印代理，服务端直接推；
  * - 机器掉线时 printLabel 用 mode=0 直接回 1003，不会假入库、假成功；
  * - 下发后还有 queryOrderState 可以回查「真的出纸了没有」。
@@ -80,6 +80,7 @@ export const XPYUN_CUP_LAYOUT = {
   brandY: 3,
   cupSeqY: 3,
   rule1Y: 7,
+  /** 取餐号眉题；下单时间右对齐在同一行（规格行留给「温度 · 冰量」独用，挤一起会压字）。 */
   eyebrowY: 8,
   heroY: 12,
   customerY: 14,
@@ -219,9 +220,13 @@ export function buildXpyunCupLabel(
     })
   );
 
-  // ② 横线 + 取餐号眉题
+  // ② 横线 + 取餐号眉题 + 下单时间（右）
   parts.push(ruleTag(l.rule1Y, style));
   parts.push(...textTag(l.marginX, l.eyebrowY, '取餐号', { f: FONT_CN }));
+  // 时间与规格行分开：40mm 一行放不下「冰 · 标准冰」（f=7 全角 ≈ 21mm）+「11-10 14:30」，
+  // 挤同一行的结果就是日期压在规格上。眉题 3 个汉字 9mm，右对齐的日期 16.5mm，中间还有 11mm。
+  const when = formatLabelTime(label.orderedAt || label.printedAt, style.timeZone);
+  if (when) parts.push(...textTag(l.rightX, l.eyebrowY, when, { f: FONT_SMALL, a: 'right' }));
 
   // ③ 取餐号（主角）+ 称呼（右，3 个字格）
   parts.push(...textTag(l.marginX, l.heroY, pickupCodeOf(label), { f: FONT_HERO }));
@@ -249,11 +254,9 @@ export function buildXpyunCupLabel(
     })
   );
 
-  // ⑥ 温度·冰量（左）+ 下单时间（右）
-  const options = fitMm(optionLine(label.temp, label.ice), 17.5);
+  // ⑥ 温度·冰量：独占规格行，版面宽度全给它（时间已上移到眉题行）
+  const options = fitMm(optionLine(label.temp, label.ice), l.ruleWidthMm);
   parts.push(...textTag(l.marginX, l.optionY, options, { f: FONT_CN }));
-  const when = formatLabelTime(label.orderedAt || label.printedAt, style.timeZone);
-  parts.push(...textTag(l.rightX, l.optionY, when, { f: FONT_SMALL, a: 'right' }));
 
   // ⑦ 出餐二维码：码值是杯贴码，不是取餐号
   parts.push(ruleTag(l.rule3Y, style));

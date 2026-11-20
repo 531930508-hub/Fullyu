@@ -146,7 +146,8 @@ describe('顾客下单主流程', () => {
       items: [{ productId: 'xing-0', qty: 1, temp: '热', ice: '热饮' }]
     });
     expect(hotTea.status).toBe(201);
-    expect(hotTea.body.order.items[0].ice).toBe('标准冰');
+    // 热饮没有冰量可选，落库就是 null：不写「标准冰」占位，否则杯贴/小票会印出「热 · 标准冰」
+    expect(hotTea.body.order.items[0].ice).toBeNull();
 
     const fixed = await place({
       ...freshOrderBody(),

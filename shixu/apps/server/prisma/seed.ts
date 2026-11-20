@@ -171,7 +171,8 @@ async function seedOpeningTransactions() {
           totalCents: line.product.priceCents * line.qty,
           costCents: line.product.costCents * line.qty,
           temp: '热',
-          ice: line.product.kind === 'tea' ? '标准冰' : null
+          // 热饮没有冰量可选：与服务端 normalizeTeaOptions 口径一致，不落「标准冰」占位
+          ice: null
         }
       });
       for (let i = 0; i < line.qty; i += 1) {

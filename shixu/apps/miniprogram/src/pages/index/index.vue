@@ -584,7 +584,7 @@
                   <text>
                     {{ locale === 'en' ? item.nameEn || item.name : item.name }} ×{{ item.qty }}{{ item.refundedQty ? ` (${tt('已退', 'Refunded ')}${item.refundedQty})` : '' }}
                   </text>
-                  <text>{{ [item.temp ? sp(item.temp) : '', item.ice ? sp(item.ice) : ''].filter(Boolean).join(' · ') }}</text>
+                  <text>{{ [item.temp, item.temp === '热' ? '' : item.ice].filter(Boolean).map(sp).join(' · ') }}</text>
                 </view>
                 <view v-if="receiptOrder.couponDiscountCents" class="bill-line">
                   <text>{{ receiptOrder.couponTitle || tt('优惠券', 'Coupon') }}</text>

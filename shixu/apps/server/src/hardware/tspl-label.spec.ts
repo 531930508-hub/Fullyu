@@ -122,8 +122,10 @@ describe('TSPL 杯贴渲染（XP-420B）', () => {
 
   it('眉题只留中文：2mm 英文挤在 3mm 中文旁边会把呼吸吃光', () => {
     const out = raw();
-    expect(rowText(out, CUP_LABEL_LAYOUT.eyebrow.y)).toBe('取餐号');
-    expect(row(out, CUP_LABEL_LAYOUT.eyebrow.y)[0]).toEqual({ x: 20, y: 64, font: 'TSS24.BF2', text: '取' });
+    // 眉题行右端是下单时间（12 点小字），眉题本身仍然只有中文
+    const eyebrow = band(out, CUP_LABEL_LAYOUT.eyebrow.y, 0, LANE_SPLIT);
+    expect(texts(eyebrow)).toBe('取餐号');
+    expect(eyebrow[0]).toEqual({ x: 20, y: 64, font: 'TSS24.BF2', text: '取' });
     expect(lines().some((line) => line.includes('TAKE AWAY'))).toBe(false);
   });
 
@@ -182,20 +184,36 @@ describe('TSPL 杯贴渲染（XP-420B）', () => {
     const time = band(raw(), CUP_LABEL_LAYOUT.time.y, LANE_SPLIT, CUP_LABEL_LAYOUT.width);
     expect(texts(time)).toBe('11-1014:30');
     // 11 个字符 × 12 + 10 个 1 点字距 = 142，300 - 142 = 158
-    expect(time[0]).toEqual({ x: 158, y: 254, font: '0', text: '1' });
+    expect(time[0]).toEqual({ x: 158, y: CUP_LABEL_LAYOUT.time.y, font: '0', text: '1' });
     const last = time[time.length - 1];
     expect(last.x + 12).toBe(CUP_LABEL_LAYOUT.right);
   });
 
-  it('温度在左栏、时间在右栏：同一条基线但互不相撞', () => {
+  it('时间在眉题行右侧，与「取餐号」同一行也隔得开', () => {
     const out = raw();
-    const options = band(out, CUP_LABEL_LAYOUT.option.y, 0, LANE_SPLIT);
-    const time = band(out, CUP_LABEL_LAYOUT.time.y, LANE_SPLIT, CUP_LABEL_LAYOUT.width);
-    expect(CUP_LABEL_LAYOUT.option.y).toBe(CUP_LABEL_LAYOUT.time.y);
-    // 「冰 · 少冰」最后落 143，时间从 158 起，中间留 15 点呼吸
-    const optionsRight = options[options.length - 1].x + 24;
-    expect(optionsRight).toBe(143);
-    expect(time[0].x - optionsRight).toBe(15);
+    const eyebrow = row(out, CUP_LABEL_LAYOUT.eyebrow.y);
+    expect(texts(eyebrow)).toBe('取餐号11-1014:30');
+    const eyebrowRight = 20 + 24 + 3 + 24 + 3 + 24; // 三个 3mm 汉字 + 两档字距 = 98
+    const timeLeft = eyebrow.find((glyph) => glyph.text === '1')!.x;
+    expect(timeLeft - eyebrowRight).toBeGreaterThanOrEqual(40);
+  });
+
+  it('温度·冰量独占规格行：35mm 的一行放不下「冰 · 标准冰」+「11-10 14:30」，所以不再同行', () => {
+    const out = raw({ temp: '冰', ice: '标准冰' });
+    // 时间不再和规格共用基线，两栏各占一行，谁都不用截断、不会压字
+    expect(CUP_LABEL_LAYOUT.time.y).not.toBe(CUP_LABEL_LAYOUT.option.y);
+    expect(rowText(out, CUP_LABEL_LAYOUT.option.y)).toBe('冰·标准冰');
+    expect(out).not.toContain('…');
+    // 规格行只受版心约束：右缘不超过 300
+    const options = row(out, CUP_LABEL_LAYOUT.option.y);
+    expect(options[options.length - 1].x + 24).toBeLessThanOrEqual(CUP_LABEL_LAYOUT.right);
+  });
+
+  it('历史单里的热饮占位冰量不印到杯贴：热饮只出温度', () => {
+    const out = raw({ temp: '热', ice: '标准冰' });
+    expect(rowText(out, CUP_LABEL_LAYOUT.option.y)).toBe('热');
+    expect(out).not.toContain('标准冰');
+    expect(out).not.toContain('冰量');
   });
 
   it('称呼与杯序右对齐贴边，不压到取餐号', () => {
@@ -273,6 +291,8 @@ describe('TSPL 杯贴渲染（XP-420B）', () => {
     expect(optionLine('冰', '少冰')).toBe('冰 · 少冰');
     expect(optionLine('热', '热')).toBe('热');
     expect(optionLine('热', null)).toBe('热');
+    // 历史单落库时给热饮塞过「标准冰」占位：渲染层必须按温度把它清掉
+    expect(optionLine('热', '标准冰')).toBe('热');
     expect(optionLine(null, null)).toBe('');
     expect(bandText(raw(), CUP_LABEL_LAYOUT.option.y, 0, LANE_SPLIT)).toBe('冰·少冰');
   });

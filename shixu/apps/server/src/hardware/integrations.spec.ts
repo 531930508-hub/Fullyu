@@ -56,14 +56,15 @@ describe('integrations 装配', () => {
   });
 
   it('live 模式下缺少任何一项真实实现都会在启动时抛错', () => {
-    // 打印已接飞鹅；用尚未接真实实现的泡茶机验证「缺一项就启动失败」这条不变量。
+    // 打印已接条码云；用尚未接真实实现的泡茶机验证「缺一项就启动失败」这条不变量。
     const config = loadIntegrationsConfig({
       ...baseInput,
       env: {
         INTEGRATIONS_MODE: 'live',
-        FEIE_USER: 'test-user',
-        FEIE_UKEY: 'test-ukey',
-        FEIE_SN: 'SN-DEFAULT'
+        PRINTER_DRIVER: 'xpyun',
+        XPYUN_USER: 'test-user',
+        XPYUN_UKEY: 'test-ukey',
+        XPYUN_SN: 'SN-DEFAULT'
       }
     });
     expect(() => createIntegrations(config)).toThrow(/缺少 teaMachine 的真实实现/);
