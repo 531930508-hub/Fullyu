@@ -398,6 +398,8 @@ ssh test-cityretreat /root/bin/night2-rollback.sh db
 | 代码 | `CustomerService.initCustomer` 改调 `defaultNickname(phone)` |
 | 数据 | `sql/2026-11-21-customer-nickname-phone-tail.sql`（轻疗 `c_customer`） |
 | 数据 | `crm/apps/server/prisma/nickname-phone-tail-20261121.sql`（CRM `members.name`） |
+| 代码 | `presence`：`apps/server/src/common/nickname.ts` 新增 `defaultNickname(phone)`，微信登录/devLogin 建号改用它（导师建号兜底仍用随机词） |
+| 数据 | `presence/apps/server/prisma/nickname-phone-tail.sql`（在场 `users`） |
 | 前端 | 脱敏逻辑无需改（只在昵称等于「用户+完整手机号」时才遮）；客户列表头像占位字改为取号码后两位（`用户7229` → `29`），否则一万多位客户的头像都是同一个「用」 |
 
 **为什么必须两边一起改**：CRM 是会员资料主档，轻疗每次登录只要 CRM 的 `profile_version >=` 本地就整包覆盖昵称
@@ -405,12 +407,13 @@ ssh test-cityretreat /root/bin/night2-rollback.sh db
 
 **数据实测（生产库只读核对，2026-11-20）**
 
-| 项 | 轻疗 `c_customer` | CRM `members` |
-|---|---|---|
-| 总数 | 10,184 | 10,153 |
-| 随机样式（两位中文+四位数字） | 10,128 | 10,096 |
-| 客户自取昵称（保留不动） | 56 | 57 |
-| 脏手机号（保留原昵称） | 13 | 11 |
+| 项 | 轻疗 `c_customer` | CRM `members` | 在场 `users` |
+|---|---|---|---|
+| 总数 | 10,184 | 10,153 | 10 |
+| 随机样式（两位中文+四位数字） | 10,128 | 10,096 | 5 |
+| 客户自取昵称（保留不动） | 56 | 57 | 3 |
+| 脏手机号（保留原昵称） | 13 | 11 | 0 |
+| 已是「用户XXXX」（不动） | 0 | 1 | 2 |
 
 **重名是已知代价**（业务已确认接受）：后四位只有 1 万种，迁移后 **2,665 组重名**，
 「用户1888」「用户6666」「用户7777」各 10 人。昵称不作为唯一标识，检索仍以手机号为准。
@@ -427,16 +430,25 @@ ssh root@120.55.36.3 \
 ssh test-cityretreat 'mysql --defaults-extra-file=/opt/fullyu-mall-test/.rds.cnf tou_mall_current' \
   < sql/prod/2026-11-21-customer-nickname-phone-tail.sql
 
-# 3) 发版（新 jar 才让新客户走新规则）
+# 3) 在场（同实例 fullyu 库）
+scp presence/apps/server/prisma/nickname-phone-tail.sql root@120.55.36.3:/tmp/
+ssh root@120.55.36.3 \
+  'mysql --defaults-extra-file=/etc/fullyu/qingliao-backup.cnf fullyu < /tmp/nickname-phone-tail.sql'
+
+# 4) 发版：新 jar（轻疗）+ 新 presence 构建 + 新前端（头像占位字）
 ```
+
+在场与 CRM 之间没有昵称回写：它在场本地昵称只在客户自己改资料时推给 CRM，登录不会从 CRM 覆盖，所以这一步顺序不敏感。
 
 第 1 条用的是轻疗的 `fully` 账号（同一 RDS 上对 `crm` 库有写权限，已核对）；用 CRM 自己的库账号执行同样可以。
 
 **自检期望值**：轻疗 `still_random` = 13、`custom_kept` = 56（+ `user_tail` 10,115）；
-CRM `still_random` = 11、`custom_kept` = 57。两边脚本都可重跑（改完的昵称是 `用户XXXX`，被 `NOT LIKE '用户%'` 排除）。
+CRM `still_random` = 11、`custom_kept` = 57；在场 `still_random` = 0、`user_tail` = 7、`custom_kept` = 3。
+三份脚本都可重跑（改完的昵称是 `用户XXXX`，被 `NOT LIKE '用户%'` 排除）。
 
-**已验证**：在测试 RDS 上用生产数据副本（`nick_rehearse_mall` / `nick_rehearse_crm`）跑过两遍，
-结果与上面一致、二次执行零变化；`NicknameGeneratorTest` 7 项全绿。临时库与临时工程已删除。
+**已验证**：在测试 RDS 上用生产数据副本（`nick_rehearse_mall` / `nick_rehearse_crm` / `nick_rehearse_presence`）各跑两遍，
+结果与上面一致、二次执行零变化；`NicknameGeneratorTest` 7 项、在场 `test/nickname.spec.ts` 5 项全绿，
+在场 `tsc --noEmit` 通过。临时库与临时工程已删除。
 
 **已知边界**
 
@@ -444,11 +456,11 @@ CRM `still_random` = 11、`custom_kept` = 57。两边脚本都可重跑（改完
 2. 两端昵称不一致的 2 位：一位是 CRM 手机号干净、一位是 CRM 里客户自取过名字（`有光`）。
    客户下次登录时以 CRM 为准自动对齐，不需要额外处理。
 3. 直接 SQL 改 CRM `name` 不会写 `audit_logs`；需要留痕的话补一条后台操作记录即可。
-4. 在场（`fullyu.users`，10 个账号）本来就是独立的本地昵称，未纳入本次迁移；
-   它的默认值仍是随机词，避免社区帖子里把会员手机号后四位展示给其他会员。
+4. 在场昵称会出现在社区帖子里（其他会员可见），后四位外露是业务这次明确接受的取舍；
+   在场导师建号（`trainer.service.ts`）的兜底昵称仍是随机词——那是员工展示名，不走客户口径。
 
-**回滚**：两份脚本末尾都有按备份表还原的注释 SQL（`c_customer_nickname_bak_20261121`、
-`member_name_bak_20261121`），CRM 侧连 `profile_version` 一起还原，避免两端版本号打架。
+**回滚**：三份脚本末尾都有按备份表还原的注释 SQL（`c_customer_nickname_bak_20261121`、
+`member_name_bak_20261121`、`users_nickname_bak_20261121`），CRM 侧连 `profile_version` 一起还原，避免两端版本号打架。
 
 ## 十六、2026-12-05：疗愈师英文名（新增列）
 
