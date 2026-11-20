@@ -1,7 +1,9 @@
 <template>
   <div class="menu-wrapper">
     <template v-for="item in routes">
-      <template v-if="!item.hidden && item.children">
+      <!-- 分组只有在还有可见页面时才渲染：子项全被权限过滤/全被 hidden 时，
+           直接画 el-submenu 会留下一个点开空无一物的下拉 -->
+      <template v-if="!item.hidden && item.children && hasVisibleChild(item)">
         <router-link
           v-if="showAsSingle(item)"
           :to="singlePath(item)"
@@ -118,6 +120,14 @@ export default {
         block.items.push(child)
       })
       return blocks
+    },
+    // 分组内是否还有“点得到”的页面：hidden 子项与空分组都不算
+    hasVisibleChild(item) {
+      return (item.children || []).some(child => {
+        if (child.hidden) return false
+        if (child.children && child.children.length > 0) return this.hasVisibleChild(child)
+        return true
+      })
     },
     showAsSingle(item) {
       const children = (item.children || []).filter(child => !child.hidden)
