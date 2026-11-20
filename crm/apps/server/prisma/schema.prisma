@@ -92,6 +92,8 @@ model MemberIdentity {
   openId      String? @map("open_id")
   unionId     String? @map("union_id")
   memberId    String  @map("member_id")
+  /// 该业务端身份首次落到 CRM 的时间；与会员创建时间分开，用于追溯「谁什么时候接进来的」。
+  createdAt   DateTime @default(now()) @map("created_at")
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 

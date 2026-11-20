@@ -104,6 +104,11 @@ describe('CRM 1C：业务端签名接口、身份与积分', () => {
     expect(again.body.created).toBe(false);
     expect(again.body.memberId).toBe(first.body.memberId);
     expect(again.body.memberNo).toBe(first.body.memberNo);
+
+    // 身份绑定时间可回读，格式为 ISO
+    const pulled = await signed('get', '/external/members/ql-u-1');
+    expect(pulled.status).toBe(200);
+    expect(new Date(pulled.body.boundAt).toString()).not.toBe('Invalid Date');
   });
 
   it('占位昵称可被真实昵称升级，真实昵称不会被占位昵称盖回', async () => {
@@ -435,5 +440,43 @@ describe('CRM 1C：业务端签名接口、身份与积分', () => {
     expect(detail.body.balance).toBe(70);
     expect(sum._sum.remaining).toBe(70);
     expect(detail.body.ledger[0].balanceAfter).toBe(70);
+  });
+
+  it('控制字符护栏：同步链路清洗、人工编辑拒绝，导入失败原因进审计', async () => {
+    // 业务端登录每次都会带昵称：脏控制字符只清洗，不能把登录/建档卡死
+    const synced = await signed('post', '/external/members/resolve', {
+      body: { localUserId: 'ql-ctrl-1', phone: '13700009901', name: '正常\u0000名字' }
+    });
+    expect(synced.status).toBe(200);
+    const pulled = await signed('get', '/external/members/ql-ctrl-1');
+    expect(pulled.body.name).toBe('正常名字');
+
+    const profile = await signed('post', '/external/members/profile', {
+      body: { localUserId: 'ql-profile-1', name: '换\n行' }
+    });
+    expect(profile.status).toBe(400);
+    expect(profile.body.message).toContain('控制字符');
+
+    const reason = await signed('post', '/external/points/earn', {
+      body: { localUserId: 'ql-u-1', points: 1, reason: '带\u0007响铃', ref: 'order-ctrl-1' }
+    });
+    expect(reason.status).toBe(400);
+
+    // 导入失败明细（谁、为什么）落到审计里，便于事后追
+    const imported = await signed('post', '/external/members/import', {
+      key: 'zc-test',
+      body: { members: [{ localUserId: 'zc-imp-ctrl', name: '缺号' }] }
+    });
+    expect(imported.status).toBe(200);
+    expect(imported.body.failed).toHaveLength(1);
+
+    const audit = await h.api(
+      'get',
+      `/audit?action=${encodeURIComponent('外部导入会员')}&q=zc-imp-ctrl`,
+      admin
+    );
+    expect(audit.status).toBe(200);
+    expect(audit.body.logs).toHaveLength(1);
+    expect(audit.body.logs[0].detail).toContain('zc-imp-ctrl 缺少手机号');
   });
 });

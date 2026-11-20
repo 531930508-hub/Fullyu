@@ -9,6 +9,7 @@ import { newId } from '../common/ids';
 import { DEFAULT_MEMBER_NAME, isPlaceholderName } from '../common/member-name';
 import { runIdempotent } from '../common/idempotency';
 import { normalizePhone } from '../common/phone';
+import { assertNoControlChars, clip, stripControlChars } from '../common/text';
 import { buildProfileUpdate, type ProfilePatch } from '../members/profile-input';
 import type { ExternalContext } from './external.guard';
 
@@ -82,6 +83,8 @@ export class ExternalService {
       name: identity.member.name,
       ...this.profileFields(identity.member),
       status: identity.member.status,
+      /** 该业务端身份首次落到 CRM 的时间，业务端可据此判断「本次接入前是否已存在」。 */
+      boundAt: identity.createdAt.toISOString(),
       balance: await this.points.balance(identity.member.id)
     };
   }
@@ -187,11 +190,17 @@ export class ExternalService {
         });
       }
     }
+    const failedDetail = summary.failed.length
+      ? ` · 失败明细：${summary.failed.map((item) => `${item.localUserId || '(空)'} ${item.reason}`).join('；')}`
+      : '';
     await audit(this.prisma, {
       actor: actorOf(context.business, context),
       action: '外部导入会员',
       target: context.keyId,
-      detail: `新建 ${summary.created} · 绑定 ${summary.bound} · 已存在 ${summary.unchanged} · 失败 ${summary.failed.length}`
+      detail: clip(
+        `新建 ${summary.created} · 绑定 ${summary.bound} · 已存在 ${summary.unchanged} · 失败 ${summary.failed.length}${failedDetail}`,
+        1800
+      )
     });
     return summary;
   }
@@ -215,6 +224,7 @@ export class ExternalService {
     if (!REF.test(ref)) throw badRequest('ref 只能包含字母、数字与 . _ : -');
     const reason = (input?.reason || '').trim();
     if (!reason || reason.length > 100) throw badRequest('请填写 1–100 字的原因');
+    assertNoControlChars(reason, '原因');
 
     const identity = await this.prisma.memberIdentity.findUnique({
       where: { business_localUserId: { business: context.business, localUserId } },
@@ -434,19 +444,19 @@ export class ExternalService {
   private normalizeResolve(input: ResolveInput) {
     const localUserId = this.requireString(input?.localUserId, 'localUserId', 64);
     this.assertLocalId(localUserId);
-    const rawPhone = this.optionalString(input?.phone, 32);
+    const rawPhone = this.optionalString(input?.phone, 32, '手机号');
     const phone = normalizePhone(rawPhone);
     // 已同步身份的历史脏数据不能让整条同步失败；只有新建会员时才要求手机号有效。
     const invalidPhone = Boolean(rawPhone && !phone);
-    const unionId = this.optionalString(input?.unionId, 64);
-    const openId = this.optionalString(input?.openId, 64);
-    const appId = this.optionalString(input?.appId, 64);
-    const name = this.optionalString(input?.name, 20);
-    const avatarUrl = this.optionalString(input?.avatarUrl, 500);
+    const unionId = this.optionalString(input?.unionId, 64, 'unionId');
+    const openId = this.optionalString(input?.openId, 64, 'openId');
+    const appId = this.optionalString(input?.appId, 64, 'appId');
+    const name = this.optionalString(input?.name, 20, '姓名');
+    const avatarUrl = this.optionalString(input?.avatarUrl, 500, '头像地址');
     if (avatarUrl && !/^https?:\/\//i.test(avatarUrl)) throw badRequest('头像必须是 http(s) 地址');
     const gender = input?.gender ?? null;
     if (gender !== null && gender !== 1 && gender !== 2) throw badRequest('性别只能是 1、2 或空');
-    const birthday = this.optionalString(input?.birthday, 10);
+    const birthday = this.optionalString(input?.birthday, 10, '生日');
     if (birthday && !/^\d{4}-\d{2}-\d{2}$/.test(birthday)) throw badRequest('生日格式应为 YYYY-MM-DD');
     if (birthday && new Date(`${birthday}T00:00:00+08:00`).getTime() > Date.now()) {
       throw badRequest('生日不能晚于今天');
@@ -476,11 +486,11 @@ export class ExternalService {
     return text;
   }
 
-  private optionalString(value: unknown, max: number): string | null {
+  private optionalString(value: unknown, max: number, label: string): string | null {
     if (value === undefined || value === null) return null;
-    const text = String(value).trim();
+    const text = stripControlChars(String(value));
     if (!text) return null;
-    if (text.length > max) throw badRequest(`字段长度不能超过 ${max}`);
+    if (text.length > max) throw badRequest(`${label}长度不能超过 ${max}`);
     return text;
   }
 }

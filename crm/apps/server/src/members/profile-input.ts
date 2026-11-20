@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { badRequest } from '../common/errors';
+import { assertNoControlChars } from '../common/text';
 
 export type ProfilePatch = {
   name?: string;
@@ -17,6 +18,7 @@ export function buildProfileUpdate(input: ProfilePatch): Prisma.MemberUpdateInpu
   const data: Prisma.MemberUpdateInput = {};
   if (input.name !== undefined) {
     const name = String(input.name ?? '').trim();
+    assertNoControlChars(name, '姓名');
     if (name.length < 1 || name.length > 20) throw badRequest('姓名须为 1–20 个字符');
     data.name = name;
   }
