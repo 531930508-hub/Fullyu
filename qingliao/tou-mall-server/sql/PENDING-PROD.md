@@ -485,3 +485,29 @@ CRM `still_random` = 11、`custom_kept` = 57；在场 `still_random` = 0、`user
 4. 存量英文名（如 阿舍 Asher）目前在历史考核表里，需要业务确认后再决定是否回填，本轮只加列不写数据。
 
 **回滚**：`ALTER TABLE s_massagist DROP COLUMN english_name`（旧代码不读该列，可留可删）。
+
+## 十七、2026-11-21 00:0x：第 15 节上线执行记录
+
+**发版内容**：`main` = `90cca17`（比原计划多出 CRM 占位名/姓名规则、品牌卡开售开关、
+打印与百度语音密钥迁环境变量、时叙杯贴规格行/热饮冰量、飞鹅通道删除）。
+
+| 步骤 | 命令/产物 | 实测结果 |
+|---|---|---|
+| ① CRM 昵称 | `crm/apps/server/prisma/nickname-phone-tail-20261121.sql` | `still_random=11 custom_kept=57 user_tail=10106` |
+| ② 轻疗昵称 | `sql/prod/2026-11-21-customer-nickname-phone-tail.sql`（测试机 `.rds.cnf` 连生产） | `still_random=13 user_tail=10115 custom_kept=56` |
+| ③ 在场昵称 | `presence/apps/server/prisma/nickname-phone-tail.sql` | `still_random=0 user_tail=8 custom_kept=3` |
+| ④ 生产 env 补键 | `/etc/fullyu/qingliao.env` 追加 `BAIDU_VOICE_*`（旧值取自 `application-prod.yml`）；备份 `.bak-baidu-<TS>` | `check-env-keys.sh` 29 键 `ok` |
+| ⑤ 换 jar | `scripts/deploy-prod.sh`（自动快照 + env 门禁 + preflight + 冒烟 + 失败回滚） | 新 jar `sha256=4a20a57c…85813`，`Started MallAdminApplication in 96s`，4 项冒烟全 PASS |
+| ⑥ 管理端 dist | `/server/www/fully/dist`（`59a51eb` 构建，13 项闸门通过） | `index.html` 已切，`build-info.json`：`entry=app.1c5433…`、`markers=13`；回滚包 `dist.bak-20261120-233510` |
+| ⑦ 在场服务 | 生产 `/root/fullyu/apps/server/dist` 23:04 已含 `DEFAULT_NICKNAME_PREFIX='用户'` | 无需重复发布 |
+
+**遗留**
+
+1. 小程序没出包：`qingliao/apps/miniprogram` 本地 `node_modules` 缺 `uni` 可执行，需按原流程 `npm ci` 后在微信开发者工具上传。
+2. CRM 服务本次未重新发布（CRM 侧代码已在 `main`，占位名规则要生效需单独发 CRM）。
+3. `DouGongPayClient` 退款签名改用 `PAY_SIGN_SECRET`；生产 `DOUGONG_APPID` 为空（未启用），若将来接豆工通道需确认密钥一致。
+4. 回滚：jar 用 `scripts/rollback-prod-code.sh`（本次旧包 `97c572e1…` 在 `/server/java/fully/backup/20261120-233144/`），
+   前端 `mv dist dist.discard-<TS> && mv dist.bak-20261120-233510 dist`，昵称按三份 SQL 末尾注释还原。
+
+**顺带修掉的坑**：`maven.compiler.release=8` 在 JDK 8 上编不过（`invalid flag: --release`），已改成 `<jdk>[9,)</jdk>` 激活的 profile；
+cherry-pick 把 yml/pom 的 CRLF 改成 LF，已还原，避免整文件重写噪声。
