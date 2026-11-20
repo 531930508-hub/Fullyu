@@ -100,6 +100,21 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
     }
 
     /**
+     * 营业前预生成当日队列（定时任务调）：幂等，已经有队列就只做补位。
+     *
+     * <p>以前是「谁先打开看板谁触发初始化」，顺序取决于那一刻的班次顺序，
+     * 同一天不同时段看可能不一样；改成每天固定预生成后，一天之内顺序稳定。</p>
+     */
+    public int prebuild(String day, Long shopId) {
+        if (day == null || shopId == null) {
+            return 0;
+        }
+        int size = ensureDay(day, shopId, null).size();
+        log.info("轮牌预生成 shop={} day={} 人数={}", shopId, day, size);
+        return size;
+    }
+
+    /**
      * 保证当日队列存在：没有就按「班次顺序 + 调店置前 + 每日轮换」生成；
      * 有排班但不在队列里的人补到队尾（调店/临时加班/历史数据缺口）。
      */
@@ -321,6 +336,9 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         int beforeReceipt = nvl(q.getReceiptNo());
         int beforeDuty = nvl(q.getOnDuty());
         boolean needNoDutyIssue = dutyActive && beforeDuty == DUTY_OFF;
+        // 上钟留痕：排在前面的人为什么没轮到，直接写在日志里，前台/复盘不用再猜
+        String reason = action == ReceptionQueueAction.GRAB ? "抢单成功"
+                : skipNote(day, shopId, detailId, massagistId);
 
         q.setSeq(maxSeq(all) + 1);
         q.setOnDuty(DUTY_ON);
@@ -331,7 +349,10 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         updateById(q);
         saveLog(newLog(day, shopId, massagistId, action, detailId,
                 beforeSeq, q.getSeq(), beforeDuty, DUTY_ON, beforeReceipt, q.getReceiptNo(),
-                action == ReceptionQueueAction.GRAB ? "抢单成功" : null, operator));
+                reason, operator));
+        log.info("轮牌上钟 shop={} massagist={} detail={} seq {}→{} receipt {}→{}{}", shopId, massagistId, detailId,
+                beforeSeq, q.getSeq(), beforeReceipt, q.getReceiptNo(),
+                reason == null ? "" : " " + reason);
 
         if (needNoDutyIssue) {
             issueService.noDutyAssigned(day, shopId, detailId,
@@ -369,18 +390,27 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             long beforeSeq = nvl(q.getSeq());
             int beforeReceipt = nvl(q.getReceiptNo());
             int beforeDuty = nvl(q.getOnDuty());
-            q.setSeq(assignLog.getBeforeSeq() == null ? beforeSeq : assignLog.getBeforeSeq());
+            // 这次上钟之后他又接了别的单：位置以最新一次上钟为准，只把计数还回去、不回退位置。
+            // 否则取消/改期来回几次，人会从队尾一路被拉回队头，整条顺序就乱了。
+            boolean stillLatest = assignLog.getAfterSeq() == null || beforeSeq == nvl(assignLog.getAfterSeq());
+            String reason = "取消/改期回位";
+            if (stillLatest) {
+                q.setSeq(assignLog.getBeforeSeq() == null ? beforeSeq : assignLog.getBeforeSeq());
+                if (assignLog.getBeforeReceiptNo() != null) {
+                    q.setReceiptNo(assignLog.getBeforeReceiptNo());
+                }
+                if (assignLog.getBeforeOnDuty() != null) {
+                    q.setOnDuty(assignLog.getBeforeOnDuty());
+                }
+            } else {
+                reason = "取消/改期：之后已有新上钟记录，位置不回退";
+            }
             q.setAssignCount(Math.max(0, nvl(q.getAssignCount()) - 1));
-            if (assignLog.getBeforeReceiptNo() != null) {
-                q.setReceiptNo(assignLog.getBeforeReceiptNo());
-            }
-            if (assignLog.getBeforeOnDuty() != null) {
-                q.setOnDuty(assignLog.getBeforeOnDuty());
-            }
             updateById(q);
             saveLog(newLog(day, shopId, q.getMassagistId(), ReceptionQueueAction.REVERT, detailId,
-                    beforeSeq, q.getSeq(), beforeDuty, q.getOnDuty(), beforeReceipt, q.getReceiptNo(), "取消/改期回位", operator));
-            log.info("轮牌回位 shop={} massagist={} seq {}→{}", shopId, q.getMassagistId(), beforeSeq, q.getSeq());
+                    beforeSeq, q.getSeq(), beforeDuty, q.getOnDuty(), beforeReceipt, q.getReceiptNo(), reason, operator));
+            log.info("轮牌回位 shop={} massagist={} seq {}→{} {}{}", shopId, q.getMassagistId(), beforeSeq, q.getSeq(),
+                    reason, stillLatest ? "" : "（不回退）");
         }
     }
 
@@ -577,15 +607,47 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
     // ==================== 内部 ====================
 
     private void initDay(String day, Long shopId, Collection<Long> candidateIds) {
+        // 当天在本店有班的人（本店班次 + 调进本店的班次），以及各自最早上班时间
+        LinkedHashSet<Long> scheduled = new LinkedHashSet<>();
+        Map<Long, LocalTime> shiftStart = new HashMap<>();
+        for (MassagistSchedules s : massagistSchedulesService.simpleListByDateAndShopId(day, shopId)) {
+            if (s.getMassagistId() == null) {
+                continue;
+            }
+            scheduled.add(s.getMassagistId());
+            if (s.getStartTime() != null) {
+                shiftStart.merge(s.getMassagistId(), s.getStartTime(), (a, b) -> a.isBefore(b) ? a : b);
+            }
+        }
         LinkedHashSet<Long> order = new LinkedHashSet<>();
         try {
-            // 班次顺序：调店人员排最前 + 每日轮换（sequenceEnableDay），历史口径原样保留
+            // 班次顺序：调店人员排最前 + 每日轮换（sequenceEnableDay），历史口径原样保留；
+            // 只取当天真有班的人，班表上没有的人（休息/离职遗留）不再占队头
             List<Long> seed = massagistSchedulesService.getMassagistSchedulesList(day, shopId);
             if (!CollectionUtils.isEmpty(seed)) {
-                order.addAll(seed);
+                if (scheduled.isEmpty()) {
+                    // 这家店当天完全没排班（有的店不用排班）：保持老口径，按全员班次顺序铺
+                    order.addAll(seed);
+                } else {
+                    seed.stream().filter(scheduled::contains).forEach(order::add);
+                }
             }
         } catch (BusinessException e) {
             log.info("轮牌初始化：当天没有排班记录 shop={} day={}", shopId, day);
+        }
+        // 排班表上有、但不在班次顺序里的人，按上班时间接在后面
+        scheduled.stream()
+                .sorted(Comparator.comparing((Long id) -> shiftStart.getOrDefault(id, LocalTime.MAX))
+                        .thenComparingLong(id -> id))
+                .forEach(order::add);
+        LocalDate queueDate = parseDay(day);
+        if (queueDate.isBefore(LocalDate.now())) {
+            // 历史日期补建：按当天真实的上下钟顺序回填，别拿今天的班次顺序糊历史
+            LinkedHashSet<Long> actual = actualAssignOrder(shopId, queueDate);
+            if (!actual.isEmpty()) {
+                actual.addAll(order);
+                order = actual;
+            }
         }
         if (!CollectionUtils.isEmpty(candidateIds)) {
             candidateIds.stream().filter(Objects::nonNull).forEach(order::add);
@@ -607,6 +669,33 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         saveBatch(addRows);
         saveLogs(addLogs);
         log.info("轮牌初始化 shop={} day={} 人数={}", shopId, day, addRows.size());
+    }
+
+    /**
+     * 某天真实的上钟顺序：按明细开始时间排，最早开工的人排最前。
+     *
+     * <p>只用于历史日期补建队列——历史队列没生成过时，按当天的真实顺序回填才有意义。
+     * 注意不能用 s_round_schedule.round 排：那是「这个人今天第几单」，不是全店的上钟先后。</p>
+     */
+    private LinkedHashSet<Long> actualAssignOrder(Long shopId, LocalDate date) {
+        LinkedHashSet<Long> actual = new LinkedHashSet<>();
+        if (shopId == null || date == null) {
+            return actual;
+        }
+        try {
+            List<OrderDetail> list = orderDetailService.list(new LambdaQueryWrapper<OrderDetail>()
+                    .eq(OrderDetail::getShopId, shopId)
+                    .isNotNull(OrderDetail::getMassagistId)
+                    .ne(OrderDetail::getState, AppointmentState.CANCELED.getValue())
+                    .ge(OrderDetail::getStartTime, date.atStartOfDay())
+                    .lt(OrderDetail::getStartTime, date.plusDays(1).atStartOfDay())
+                    .orderByAsc(OrderDetail::getStartTime)
+                    .orderByAsc(OrderDetail::getId));
+            list.stream().map(OrderDetail::getMassagistId).filter(id -> id != null && id > 0).forEach(actual::add);
+        } catch (Exception e) {
+            log.warn("轮牌历史回填：读取当天上钟顺序失败 shop={} day={}", shopId, date, e);
+        }
+        return actual;
     }
 
     private ReceptionQueue addRowAtTail(String day, Long shopId, Long massagistId, String reason, String operator) {
@@ -653,6 +742,66 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             saveLogs(logs);
             log.info("轮牌编号重排 shop={} day={} 人数={}", shopId, day, update.size());
         }
+    }
+
+    /**
+     * 上钟留痕：写清楚「排在他前面的人为什么没轮到」——不在班 / 在服务 / 未值班。
+     *
+     * <p>以前只有代码里 skipMassagist 的 debug 日志，库里查不到，
+     * 于是「跳过 2 号派给 4 号」看起来就像系统乱排。现在直接落在上钟流水上。</p>
+     */
+    private String skipNote(String day, Long shopId, Long detailId, Long massagistId) {
+        List<ReceptionQueue> ordered = sorted(rows(day, shopId));
+        int index = -1;
+        for (int i = 0; i < ordered.size(); i++) {
+            if (massagistId.equals(ordered.get(i).getMassagistId())) {
+                index = i;
+                break;
+            }
+        }
+        if (index <= 0) {
+            return null;
+        }
+        // 按这单的服务时段判断「能不能接」，而不是按此刻——预约单提前排人时此刻没人在班很正常
+        LocalDateTime startTime = null;
+        LocalDateTime endTime = null;
+        if (detailId != null) {
+            try {
+                OrderDetail detail = orderDetailService.getById(detailId);
+                if (detail != null) {
+                    startTime = detail.getStartTime();
+                    endTime = detail.getEndTime();
+                }
+            } catch (Exception e) {
+                log.debug("上钟留痕：读取明细失败 detail={}", detailId, e);
+            }
+        }
+        Map<Long, List<MassagistSchedules>> shifts = shiftMap(day, shopId);
+        Map<Long, Boolean> busy = startTime == null
+                ? busyMap(shopId, LocalDateTime.now(), LocalDateTime.now().plusMinutes(1))
+                : busyMap(shopId, startTime, endTime);
+        boolean dutyActive = isDutyActive(ordered);
+        List<String> notes = new ArrayList<>();
+        for (int i = 0; i < index && notes.size() < 3; i++) {
+            ReceptionQueue q = ordered.get(i);
+            String why;
+            if (!inShift(shifts, q.getMassagistId(), startTime, endTime)) {
+                why = "不在班";
+            } else if (Boolean.TRUE.equals(busy.get(q.getMassagistId()))) {
+                why = "在服务";
+            } else if (dutyActive && !isOnDuty(q)) {
+                why = "未值班";
+            } else {
+                // 确实该轮到他却被跳过了：不硬编原因，交给人工核对，日志里不写误导信息
+                continue;
+            }
+            notes.add(massagistName(q.getMassagistId()) + "(" + why + ")");
+        }
+        if (notes.isEmpty()) {
+            return null;
+        }
+        String note = "跳过" + String.join("、", notes) + (index > notes.size() ? "等" + index + "人" : "");
+        return note.length() > 200 ? note.substring(0, 200) : note;
     }
 
     private List<ReceptionQueue> rows(String day, Long shopId) {

@@ -48,6 +48,13 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDetail> {
+    /**
+     * 接待单是否计入轮次（默认计入，与现有门店口径一致）。
+     * 接待单每 15 分钟自动生成一张，也占一次上钟位置；门店若认为「接待不算轮次」，
+     * 把这个开关关掉即可，不用改代码。
+     */
+    @org.springframework.beans.factory.annotation.Value("${reception.queue.reception-counts-round:true}")
+    boolean receptionCountsRound = true;
     @Autowired
     ProductService productService;
     @Autowired
@@ -2338,7 +2345,10 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     .filter(d -> Boolean.TRUE.equals(d.getIsUpdateSort()))
                     .filter(d -> d.getMassagistId() != null && d.getId() != null)
                     .collect(Collectors.toList());
-            if (!CollectionUtils.isEmpty(assignedList)) {
+            if (!receptionCountsRound) {
+                log.info("接待单不计入轮次（reception.queue.reception-counts-round=false）shop={} start={}", shopId, startTime);
+            }
+            if (receptionCountsRound && !CollectionUtils.isEmpty(assignedList)) {
                 roundScheduleService.updateByDetailList(assignedList, DateUtil.toYYYYMMDD(startTime), shopId);
             }
         }
