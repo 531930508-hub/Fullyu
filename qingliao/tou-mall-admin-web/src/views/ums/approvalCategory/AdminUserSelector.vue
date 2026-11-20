@@ -3,8 +3,8 @@
              :placeholder="placeholder" filterable :clearable="clearable">
     <el-option v-for="item in adminUserList"
                :value="item.id"
-               :label="`${item.nickName}`" :key="item.id">
-      <span>{{item.nickName}}</span>
+               :label="adminLabel(item)" :key="item.id">
+      <span>{{ adminLabel(item) }}</span>
     </el-option>
   </el-select>
 </template>
@@ -40,6 +40,12 @@ export default {
     this.$store.dispatch('setAdminUserList')
   },
   methods: {
+    // 昵称（账号）：账号一般是登录手机号，人多/重名时按姓名或手机号都能搜到
+    adminLabel(item) {
+      if (!item) return ''
+      if (item.nickName && item.username) return `${item.nickName}（${item.username}）`
+      return item.nickName || item.username || `id=${item.id}`
+    },
     change(id) {
       this.$emit('input', id)
       this.$emit('change', id)

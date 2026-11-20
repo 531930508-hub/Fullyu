@@ -38,7 +38,7 @@
           <el-select v-model="form.ccIdList" multiple filterable placeholder="审批结束后抄送，可多选" style="width: 100%">
             <el-option v-for="item in adminUserList"
                        :key="item.id"
-                       :label="item.nickName"
+                       :label="adminLabel(item)"
                        :value="item.id"></el-option>
           </el-select>
         </el-form-item>
@@ -106,6 +106,12 @@ export default {
       } catch (e) {
         return []
       }
+    },
+    // 昵称（账号）：账号一般是登录手机号，抄送人选人多时也能按姓名/手机号搜到
+    adminLabel(item) {
+      if (!item) return ''
+      if (item.nickName && item.username) return `${item.nickName}（${item.username}）`
+      return item.nickName || item.username || `id=${item.id}`
     },
     /**
      * 已有流程节点直接编辑；旧版按“级”配置的审批人转换成同名节点，保存后即迁移为新流程。

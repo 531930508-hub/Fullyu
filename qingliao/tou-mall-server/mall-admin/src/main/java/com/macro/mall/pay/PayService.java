@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -187,16 +189,23 @@ public class PayService {
     }
 
     /**
-     * 退款请求流水号：按「订单号 + 退款金额」确定性生成。
+     * 退款请求流水号：按「订单号 + 退款金额 + 本轮到账时间」确定性生成。
      *
      * <p>渠道按 req_seq_id 幂等，重试必须复用同一个号。用随机号/雪花号时，
      * 「请求已受理但本地没收到应答」的重试会变成第二笔退款。
      * 同单同金额重复发起会被渠道按重复交易拒绝——失败也比多退一次安全。</p>
+     *
+     * <p>带上 payTime 是因为「仅退款→重新收款→再退款」会回到未付款再被收一次，
+     * 两轮退款金额可能一分不差，只靠订单号+金额会和上一轮的流水号撞车被渠道拒掉。
+     * 同一轮到账时间内重试号不变，换了到账时间才会换号。</p>
      */
     public static String buildRefundReqSeqId(Order order, BigDecimal refundAmount) {
         String amount = refundAmount.setScale(2, java.math.RoundingMode.DOWN)
                 .toPlainString().replace(".", "");
-        return order.getCode() + "-R" + amount;
+        LocalDateTime payTime = order.getPayTime();
+        String round = payTime == null ? ""
+                : "-" + payTime.format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+        return order.getCode() + "-R" + amount + round;
     }
 
     public JSONObject queryRefundState(Order order) {

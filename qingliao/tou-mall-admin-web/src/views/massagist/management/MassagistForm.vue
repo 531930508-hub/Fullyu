@@ -21,6 +21,9 @@
                         :rules="[{required: true, message: '请输入疗愈师姓名', trigger: ['blur', 'change']}]">
             <el-input v-model="form.name" placeholder="请输入疗愈师姓名"></el-input>
           </el-form-item>
+          <el-form-item label="英文名" prop="englishName">
+            <el-input v-model="form.englishName" placeholder="选填，如 Asher" maxlength="64"></el-input>
+          </el-form-item>
           <el-form-item label="手机号码" prop="phone"
                         :rules="[{required: true, message: '请输入手机号码', trigger: ['blur', 'change']}]">
             <el-input v-model="form.phone" placeholder="请输入手机号码"></el-input>

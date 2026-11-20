@@ -92,6 +92,7 @@ public class ApprovalFlowNodeService extends BaseService<ApprovalFlowNodeMapper,
             ApprovalNodeMode mode = ApprovalNodeMode.of(input.getApproveMode());
             if (mode == null) throw new BusinessException("审批方式只能选择或签或会签");
             List<ApprovalFlowTarget> targets = normalizeTargets(input.getTargets());
+            validateTargetsExist(targets);
             ApprovalFlowNode node = new ApprovalFlowNode();
             node.setCategoryId(categoryId);
             node.setNodeName(StrUtil.isBlank(input.getNodeName()) ? "审批节点" + (sort + 1) : input.getNodeName().trim());
@@ -105,16 +106,22 @@ public class ApprovalFlowNodeService extends BaseService<ApprovalFlowNodeMapper,
     }
 
     /**
-     * 解析节点：指定人直接取后台账号；岗位按本店/全部门店解析为疗愈师的后台账号。
-     * 解析后会排除发起人（避免自己批自己），空节点直接跳过。
+     * 解析节点：「指定人员」只认后台账号（员工表 ums_admin）；「岗位」只认疗愈师身份（s_massagist + s_massagist_identity），
+     * 两套人互不混用——指定人不会因为不是疗愈师而消失，岗位也不会把后台账号直接当店长。
+     *
+     * <p>发起人可以提交后由自己审批（不排除发起人），节点里没人可用才跳过；
+     * 跳过的原因逐条带出去，免得最后统一报成“已离职”，把“账号停用”“岗位在本店没人”这类配置问题掩盖掉。</p>
      */
     public List<ApprovalResolvedNode> resolveNodes(List<ApprovalFlowNode> nodes, Long shopId, Long requesterAdminId) {
         List<ApprovalResolvedNode> result = new ArrayList<>();
         if (CollectionUtils.isEmpty(nodes)) return result;
+        LinkedHashSet<String> skipReasons = new LinkedHashSet<>();
         for (ApprovalFlowNode node : nodes) {
             if (node.getTargets() == null || node.getTargets().isEmpty()) parseTargets(node);
+            String nodeName = StrUtil.isBlank(node.getNodeName()) ? "审批节点" : node.getNodeName().trim();
             LinkedHashSet<Long> adminIds = new LinkedHashSet<>();
             List<Long> directUserIds = new ArrayList<>();
+            List<String> emptyIdentities = new ArrayList<>();
             for (ApprovalFlowTarget target : node.getTargets()) {
                 if (target == null) continue;
                 if (target.isUser()) {
@@ -123,26 +130,85 @@ public class ApprovalFlowNodeService extends BaseService<ApprovalFlowNodeMapper,
                     MassagistIdentityCode code = MassagistIdentityCode.of(target.getCode());
                     ApprovalTargetScope scope = ApprovalTargetScope.of(target.getScope());
                     if (code == null || scope == null) continue;
-                    adminIds.addAll(massagistIdentityService.resolveAdminIds(code, scope, shopId, requesterAdminId));
+                    // 岗位解析也不排除发起人：允许店长/内训师提交自己的单自己批
+                    // resolveAdminIds 返回的是 List（服务端按 id 去重后保序），这里别声明成 Set，编译不过
+                    List<Long> resolved = massagistIdentityService.resolveAdminIds(code, scope, shopId, null);
+                    if (resolved.isEmpty()) {
+                        emptyIdentities.add(code.getLabel()
+                                + (scope == ApprovalTargetScope.ALL ? "（全部门店）" : "（本店）"));
+                    }
+                    adminIds.addAll(resolved);
                 }
             }
             if (!directUserIds.isEmpty()) {
-                Set<Long> active = umsAdminService.listByIds(directUserIds).stream()
-                        .filter(admin -> admin != null && Integer.valueOf(1).equals(admin.getStatus()))
-                        .map(UmsAdmin::getId)
-                        .collect(Collectors.toSet());
-                for (Long id : directUserIds) if (active.contains(id)) adminIds.add(id);
+                Map<Long, UmsAdmin> adminMap = mapAdmins(directUserIds);
+                for (Long id : directUserIds) {
+                    UmsAdmin admin = adminMap.get(id);
+                    if (admin == null || !Integer.valueOf(1).equals(admin.getStatus())) {
+                        skipReasons.add("节点「" + nodeName + "」的指定审批人"
+                                + (admin == null ? "（id=" + id + "）" : "「" + adminLabel(admin) + "」")
+                                + "账号不存在或已停用");
+                        continue;
+                    }
+                    adminIds.add(id);
+                }
             }
-            if (requesterAdminId != null) adminIds.remove(requesterAdminId);
-            if (adminIds.isEmpty()) continue;
+            if (adminIds.isEmpty()) {
+                for (String identity : emptyIdentities) {
+                    skipReasons.add("节点「" + nodeName + "」的岗位" + identity + "没有在职且已关联后台账号的人员");
+                }
+                continue;
+            }
             ApprovalResolvedNode resolved = new ApprovalResolvedNode();
-            resolved.setNodeName(StrUtil.isBlank(node.getNodeName()) ? "审批节点" : node.getNodeName().trim());
+            resolved.setNodeName(nodeName);
             ApprovalNodeMode mode = ApprovalNodeMode.of(node.getApproveMode());
             resolved.setApproveMode((mode == null ? ApprovalNodeMode.ANY : mode).getCode());
             resolved.setAdminIds(new ArrayList<>(adminIds));
             result.add(resolved);
         }
+        if (result.isEmpty() && !skipReasons.isEmpty()) {
+            throw new BusinessException("审批流程里没有可用的审批人：" + String.join("；", skipReasons) + "。请到「审批设置」调整");
+        }
         return result;
+    }
+
+    /**
+     * 按主键批量取后台账号，不做门店行级校验。
+     *
+     * <p>审批人可以是总部账号（如 田昊 挂在总部门店）或别的门店的店长，门店账号提交单据时
+     * 用 listByIds 读这些账号会被 BaseService 的门店校验判成越权，审批人凭空“消失”。</p>
+     */
+    private Map<Long, UmsAdmin> mapAdmins(Collection<Long> ids) {
+        if (CollectionUtils.isEmpty(ids)) return Collections.emptyMap();
+        return umsAdminService.list(new LambdaQueryWrapper<UmsAdmin>().in(UmsAdmin::getId, ids)).stream()
+                .filter(admin -> admin != null && admin.getId() != null)
+                .collect(Collectors.toMap(UmsAdmin::getId, admin -> admin, (a, b) -> a));
+    }
+
+    private String adminLabel(UmsAdmin admin) {
+        if (!StrUtil.isBlank(admin.getNickName())) return admin.getNickName();
+        return StrUtil.isBlank(admin.getUsername()) ? "id=" + admin.getId() : admin.getUsername();
+    }
+
+    /**
+     * 保存审批设置时就把“找不到人”暴露出来：指定人必须是存在且启用的后台账号（员工）。
+     * 岗位不在这里卡——岗位的人由疗愈师身份在提交时解析，允许先配流程后招人。
+     */
+    private void validateTargetsExist(List<ApprovalFlowTarget> targets) {
+        List<Long> userIds = targets.stream()
+                .filter(target -> target != null && target.isUser() && !ObjUtil.isEmpty(target.getAdminId()))
+                .map(ApprovalFlowTarget::getAdminId)
+                .distinct()
+                .collect(Collectors.toList());
+        if (userIds.isEmpty()) return;
+        Map<Long, UmsAdmin> admins = mapAdmins(userIds);
+        for (Long id : userIds) {
+            UmsAdmin admin = admins.get(id);
+            if (admin == null) throw new BusinessException("指定的审批人（id=" + id + "）不存在，请重新选择");
+            if (!Integer.valueOf(1).equals(admin.getStatus())) {
+                throw new BusinessException("指定的审批人「" + adminLabel(admin) + "」账号已停用，请重新选择");
+            }
+        }
     }
 
     /**
@@ -168,13 +234,11 @@ public class ApprovalFlowNodeService extends BaseService<ApprovalFlowNodeMapper,
             chain.add(buildNode("总部CEO审批", Collections.singletonList(ceoId)));
             return chain;
         }
-        List<Long> managerIds = shopManagers.stream()
-                .filter(id -> !id.equals(requesterAdminId))
-                .collect(Collectors.toList());
+        List<Long> managerIds = new ArrayList<>(shopManagers);
         chain.add(buildNode("店长审批", managerIds));
         if (!sameDayLeave) return chain;
         Long ceoId = requireSecondApprover(requesterAdminId);
-        // 二级审批人兼任本店店长、或就是请假人本人时，不再重复挂一级
+        // 二级审批人兼任本店店长时不再重复挂一级
         if (managerIds.contains(ceoId)) return chain;
         chain.add(buildNode("总部CEO审批", Collections.singletonList(ceoId)));
         return chain;
@@ -186,13 +250,12 @@ public class ApprovalFlowNodeService extends BaseService<ApprovalFlowNodeMapper,
         if (ObjUtil.isEmpty(ceoId) || ceoId <= 0) {
             throw new BusinessException("请假需要二级审批人（总部CEO）审批，但系统还没配置该二级审批人，请联系管理员设置 approval.leave.second-approver-admin-id");
         }
-        UmsAdmin ceo = umsAdminService.getById(ceoId);
+        // 二级审批人一般挂在总部账号上，门店店长提交请假时不能被门店行级校验拦下
+        UmsAdmin ceo = mapAdmins(Collections.singletonList(ceoId)).get(ceoId);
         if (ceo == null || !Integer.valueOf(1).equals(ceo.getStatus())) {
             throw new BusinessException("请假的二级审批人（总部CEO）账号不存在或已停用，请联系管理员调整");
         }
-        if (ceoId.equals(requesterAdminId)) {
-            throw new BusinessException("二级审批人（总部CEO）就是请假人本人，请假需要更高层级审批，请联系管理员调整");
-        }
+        // 允许自己提交自己审批：二级审批人就是请假人本人时不再拦，由本人审批即可
         return ceoId;
     }
 

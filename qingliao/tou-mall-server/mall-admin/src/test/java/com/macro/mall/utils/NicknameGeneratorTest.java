@@ -6,47 +6,83 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 默认昵称生成规则：不拼手机号、格式固定为「中文词+4位数字」，
- * 且词库与历史数据迁移脚本保持一致。
+ * 默认昵称规则：「用户+手机号后四位」，手机号取不到后四位时退回「中文词+4位数字」。
+ *
+ * <p>后四位是业务确认过的取舍（店员靠它认人）；这里守住两件事：昵称只带四位数字、
+ * 不出现完整号码，且与历史数据迁移脚本的规则一致。</p>
  */
 class NicknameGeneratorTest {
 
     private static final Path MIGRATION_SQL =
-            Paths.get("..", "sql", "2026-11-12-customer-nickname-anonymize.sql");
+            Paths.get("..", "sql", "2026-11-21-customer-nickname-phone-tail.sql");
+
+    private static final Pattern USER_TAIL = Pattern.compile("^用户\\d{4}$");
+    private static final Pattern RANDOM_WORD = Pattern.compile("^[\\u4e00-\\u9fa5]{2}\\d{4}$");
 
     @Test
-    void nicknameIsChineseWordPlusFourDigits() {
-        Pattern format = Pattern.compile("^[\\u4e00-\\u9fa5]{2}\\d{4}$");
-        for (int i = 0; i < 2000; i++) {
-            String nickname = NicknameGenerator.randomNickname();
-            assertTrue(format.matcher(nickname).matches(), "unexpected nickname: " + nickname);
-        }
+    void defaultNicknameIsUserPlusPhoneTail() {
+        assertEquals("用户8000", NicknameGenerator.defaultNickname("13800138000"));
+        assertEquals("用户7996", NicknameGenerator.defaultNickname("+33688507996"));
+        assertEquals("用户2184", NicknameGenerator.defaultNickname("0031622462184"));
+        assertEquals("用户0000", NicknameGenerator.defaultNickname(" 13800130000 "));
+        assertTrue(USER_TAIL.matcher(NicknameGenerator.defaultNickname("13800138000")).matches());
     }
 
     @Test
-    void nicknameNeverEmbedsPhoneNumber() {
-        for (int i = 0; i < 2000; i++) {
-            String nickname = NicknameGenerator.randomNickname();
+    void dirtyPhoneFallsBackToRandomNickname() {
+        // 脏手机号末尾不足四位数字：退回随机昵称，绝不生成「用户朱」「用户11」这种怪名字
+        assertNull(NicknameGenerator.phoneTail("朱"));
+        assertNull(NicknameGenerator.phoneTail("11"));
+        assertNull(NicknameGenerator.phoneTail("852"));
+        assertNull(NicknameGenerator.phoneTail(null));
+        // 末尾夹了汉字（「18962990981朱」）：末尾四位不全是数字，同样走兜底，
+        // 与迁移脚本 phone REGEXP '[0-9]{4}$' 的口径保持一致
+        assertNull(NicknameGenerator.phoneTail("18962990981朱"));
+        assertTrue(RANDOM_WORD.matcher(NicknameGenerator.defaultNickname("朱")).matches());
+        assertTrue(RANDOM_WORD.matcher(NicknameGenerator.defaultNickname("11")).matches());
+        assertTrue(RANDOM_WORD.matcher(NicknameGenerator.defaultNickname("18962990981朱")).matches());
+    }
+
+    @Test
+    void phoneTailOnlyTakesTrailingDigits() {
+        assertEquals("8000", NicknameGenerator.phoneTail("13800138000"));
+        assertEquals("7996", NicknameGenerator.phoneTail("+33688507996"));
+        assertEquals("2184", NicknameGenerator.phoneTail("0031622462184"));
+        // 全角数字不算
+        assertNull(NicknameGenerator.phoneTail("１３８"));
+    }
+
+    @Test
+    void nicknameNeverKeepsWholePhoneNumber() {
+        String[] phones = {"13800138000", "+33688507996", "0031622462184"};
+        for (String phone : phones) {
+            String nickname = NicknameGenerator.defaultNickname(phone);
             assertFalse(nickname.matches(".*\\d{7,}.*"), "nickname keeps a long number: " + nickname);
-            assertFalse(nickname.startsWith("用户"));
+            assertFalse(nickname.contains(phone), "nickname keeps the whole phone: " + nickname);
         }
     }
 
     @Test
-    void nicknameIsRandomEnough() {
+    void randomNicknameStaysChineseWordPlusFourDigits() {
+        for (int i = 0; i < 2000; i++) {
+            String nickname = NicknameGenerator.randomNickname();
+            assertTrue(RANDOM_WORD.matcher(nickname).matches(), "unexpected nickname: " + nickname);
+            assertFalse(nickname.startsWith("用户"), "fallback must not look like a default nickname");
+        }
+    }
+
+    @Test
+    void randomNicknameIsRandomEnough() {
         Set<String> seen = new HashSet<>();
         for (int i = 0; i < 500; i++) {
             seen.add(NicknameGenerator.randomNickname());
@@ -56,18 +92,13 @@ class NicknameGeneratorTest {
     }
 
     @Test
-    void wordPoolMatchesMigrationSql() throws Exception {
+    void migrationSqlKeepsSameRule() throws Exception {
         assertTrue(Files.exists(MIGRATION_SQL), "missing migration sql: " + MIGRATION_SQL.toAbsolutePath());
         String sql = new String(Files.readAllBytes(MIGRATION_SQL), StandardCharsets.UTF_8);
-        int elt = sql.indexOf("ELT(");
-        int lpad = sql.indexOf("LPAD(", elt);
-        assertTrue(elt > 0 && lpad > elt, "迁移脚本里找不到 ELT 词库");
-        Matcher matcher = Pattern.compile("'([\\u4e00-\\u9fa5]{2})'").matcher(sql.substring(elt, lpad));
-        List<String> wordsInSql = new ArrayList<>();
-        while (matcher.find()) {
-            wordsInSql.add(matcher.group(1));
-        }
-        assertEquals(Arrays.asList(NicknameGenerator.WORDS), wordsInSql,
-                "NicknameGenerator.WORDS 与迁移脚本 ELT 词库顺序不一致，改词库请两边同步");
+        // 脚本必须用同一个前缀、同一个后四位口径，且不能把「用户xxxx」当成待改昵称反复改
+        assertTrue(sql.contains(NicknameGenerator.DEFAULT_PREFIX), "迁移脚本前缀与代码不一致");
+        assertTrue(sql.contains("RIGHT(`phone`, 4)") || sql.contains("RIGHT(`phone`,4)"),
+                "迁移脚本不是按手机号后四位生成");
+        assertTrue(sql.contains("NOT LIKE '用户%'"), "迁移脚本缺少「跳过已是用户xxxx」的条件");
     }
 }

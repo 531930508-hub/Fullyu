@@ -60,7 +60,7 @@
               <el-image v-if="scope.row.avatar" class="customer-avatar" :src="scope.row.avatar"
                         :preview-src-list="[scope.row.avatar]" fit="cover" @click.stop></el-image>
               <span v-else class="customer-avatar customer-avatar--empty">
-                {{ (scope.row.nickname || '客')[0] }}
+                {{ avatarInitial(scope.row.nickname) }}
               </span>
               <div class="customer-cell__main">
                 <span class="ellipsis">{{ displayNickname(scope.row.nickname, '未设置昵称') }}</span>
@@ -401,6 +401,13 @@ export default {
         return maskPhone(phone || nickname)
       }
       return nickname
+    },
+    // 头像占位字：默认昵称「用户7229」取号码后两位，其余取首字
+    // （默认昵称统一以「用户」开头，取首字会让一万多位客户的头像都变成同一个「用」）
+    avatarInitial(nickname) {
+      const name = nickname || '客'
+      const tail = /^用户(\d{4})$/.exec(name)
+      return tail ? tail[1].slice(-2) : name[0]
     }
   }
 }

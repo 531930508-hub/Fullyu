@@ -66,7 +66,10 @@ public class JobService {
         log.debug("run order timeout job ");
         try {
             List<Order> timeoutList = orderService.list(new LambdaQueryWrapper<Order>()
-                    .eq(Order::getState, OrderState.NOT_PAY.getValue()).isNotNull(Order::getOverTimeSeconds)
+                    .eq(Order::getState, OrderState.NOT_PAY.getValue())
+                    // 付过款的未付款单是「仅退款」打回来的，预约要留着等门店重新收款，不参与超时
+                    .isNull(Order::getPayTime)
+                    .isNotNull(Order::getOverTimeSeconds)
             );
             if (CollectionUtils.isEmpty(timeoutList)) {
                 return;

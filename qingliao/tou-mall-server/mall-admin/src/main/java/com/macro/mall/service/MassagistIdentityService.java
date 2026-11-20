@@ -141,7 +141,9 @@ public class MassagistIdentityService extends BaseService<MassagistIdentityMappe
     }
 
     /**
-     * 把岗位解析为可接收审批的后台账号：在职疗愈师 + 已关联且启用的后台账号；排除发起人自己。
+     * 把岗位解析为可接收审批的后台账号：在职疗愈师 + 已关联且启用的后台账号。
+     *
+     * @param excludeAdminId 需要排除的账号，传 null 表示不排除（审批允许自己提交自己审批）
      */
     public List<Long> resolveAdminIds(MassagistIdentityCode code, ApprovalTargetScope scope, Long shopId, Long excludeAdminId) {
         if (code == null) return Collections.emptyList();
@@ -159,7 +161,9 @@ public class MassagistIdentityService extends BaseService<MassagistIdentityMappe
                 .distinct()
                 .collect(Collectors.toList());
         if (adminIds.isEmpty()) return Collections.emptyList();
-        Set<Long> active = umsAdminService.listByIds(adminIds).stream()
+        // 岗位解析出的是“审批人”，可能落在总部/别的门店（如总部 CEO、跨店店长）；
+        // 这里必须绕开 listByIds 的门店行级校验，否则门店账号提交单据时会因读总部账号被判越权。
+        Set<Long> active = umsAdminService.list(new LambdaQueryWrapper<UmsAdmin>().in(UmsAdmin::getId, adminIds)).stream()
                 .filter(admin -> admin != null && Integer.valueOf(1).equals(admin.getStatus()))
                 .map(UmsAdmin::getId)
                 .collect(Collectors.toSet());

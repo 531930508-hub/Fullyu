@@ -149,6 +149,8 @@ ALTER TABLE `n_admin_approval_notice_attempt` DROP COLUMN `result`;
 
 ## 九、客户昵称去手机号化（数据迁移，非 DDL）
 
+> **2026-11-21 已回退**：默认昵称改回「用户+手机号后四位」，见第十五节。本节仅作历史记录保留。
+
 背景：历史客户默认昵称是「用户+手机号」，客户列表/订单/排班/导出都能看到号码，
 等于变相保留手机号。新代码（`NicknameGenerator`）改为「中文词+4位数字」（如 `青竹4821`），
 历史数据用 `sql/prod/2026-11-12-customer-nickname-anonymize.sql` 一次性清洗。
@@ -382,3 +384,91 @@ ssh test-cityretreat /root/bin/night2-rollback.sh db
 1. 后台各角色（店长/前台/理疗师/财务）登录后菜单是否与预期一致 —— 菜单 IA 是这次唯一"减法"，出问题最可能在这里
 2. 小程序下单、会员卡、`visit_no` 编号是否正常（`s_order.visit_no` 已全量回填，新单由新 jar 生成）
 3. 新 jar 日志 `ERROR` 计数；CRM/品牌卡相关功能默认关闭，未配环境变量前不应有相关报错
+
+## 十五、2026-11-21：客户默认昵称改回「用户+手机号后四位」
+
+**这是第九节的回退**，业务侧的取舍（店员要靠后四位认人）；第九节里「昵称不拼手机号」的结论作废，
+但那次的清洗脚本与备份表保留，不回退历史执行记录。
+
+**改了什么**
+
+| 位置 | 改动 |
+|---|---|
+| 代码 | `NicknameGenerator.defaultNickname(phone)` = `用户` + 手机号后四位；取不到后四位（脏号）退回随机词 |
+| 代码 | `CustomerService.initCustomer` 改调 `defaultNickname(phone)` |
+| 数据 | `sql/2026-11-21-customer-nickname-phone-tail.sql`（轻疗 `c_customer`） |
+| 数据 | `crm/apps/server/prisma/nickname-phone-tail-20261121.sql`（CRM `members.name`） |
+| 前端 | 脱敏逻辑无需改（只在昵称等于「用户+完整手机号」时才遮）；客户列表头像占位字改为取号码后两位（`用户7229` → `29`），否则一万多位客户的头像都是同一个「用」 |
+
+**为什么必须两边一起改**：CRM 是会员资料主档，轻疗每次登录只要 CRM 的 `profile_version >=` 本地就整包覆盖昵称
+（`BrandMemberProfileSync.refreshQuietly`）。只改轻疗，客户一登录就被改回随机词；只改 CRM，后台要等客户登录后才变。
+
+**数据实测（生产库只读核对，2026-11-20）**
+
+| 项 | 轻疗 `c_customer` | CRM `members` |
+|---|---|---|
+| 总数 | 10,184 | 10,153 |
+| 随机样式（两位中文+四位数字） | 10,128 | 10,096 |
+| 客户自取昵称（保留不动） | 56 | 57 |
+| 脏手机号（保留原昵称） | 13 | 11 |
+
+**重名是已知代价**（业务已确认接受）：后四位只有 1 万种，迁移后 **2,665 组重名**，
+「用户1888」「用户6666」「用户7777」各 10 人。昵称不作为唯一标识，检索仍以手机号为准。
+
+**执行顺序（同一窗口内完成）**
+
+```bash
+# 1) 先 CRM（生产 crm 库与轻疗同实例；库名按环境：生产 crm、测试机本地库 crm_test）
+scp crm/apps/server/prisma/nickname-phone-tail-20261121.sql root@120.55.36.3:/tmp/
+ssh root@120.55.36.3 \
+  'mysql --defaults-extra-file=/etc/fullyu/qingliao-backup.cnf crm < /tmp/nickname-phone-tail-20261121.sql'
+
+# 2) 再轻疗
+ssh test-cityretreat 'mysql --defaults-extra-file=/opt/fullyu-mall-test/.rds.cnf tou_mall_current' \
+  < sql/prod/2026-11-21-customer-nickname-phone-tail.sql
+
+# 3) 发版（新 jar 才让新客户走新规则）
+```
+
+第 1 条用的是轻疗的 `fully` 账号（同一 RDS 上对 `crm` 库有写权限，已核对）；用 CRM 自己的库账号执行同样可以。
+
+**自检期望值**：轻疗 `still_random` = 13、`custom_kept` = 56（+ `user_tail` 10,115）；
+CRM `still_random` = 11、`custom_kept` = 57。两边脚本都可重跑（改完的昵称是 `用户XXXX`，被 `NOT LIKE '用户%'` 排除）。
+
+**已验证**：在测试 RDS 上用生产数据副本（`nick_rehearse_mall` / `nick_rehearse_crm`）跑过两遍，
+结果与上面一致、二次执行零变化；`NicknameGeneratorTest` 7 项全绿。临时库与临时工程已删除。
+
+**已知边界**
+
+1. 13 位脏手机号（`7702`、`0000`、`朱` 等）保留原随机昵称，不生成「用户朱」「用户0000」这种名字。
+2. 两端昵称不一致的 2 位：一位是 CRM 手机号干净、一位是 CRM 里客户自取过名字（`有光`）。
+   客户下次登录时以 CRM 为准自动对齐，不需要额外处理。
+3. 直接 SQL 改 CRM `name` 不会写 `audit_logs`；需要留痕的话补一条后台操作记录即可。
+4. 在场（`fullyu.users`，10 个账号）本来就是独立的本地昵称，未纳入本次迁移；
+   它的默认值仍是随机词，避免社区帖子里把会员手机号后四位展示给其他会员。
+
+**回滚**：两份脚本末尾都有按备份表还原的注释 SQL（`c_customer_nickname_bak_20261121`、
+`member_name_bak_20261121`），CRM 侧连 `profile_version` 一起还原，避免两端版本号打架。
+
+## 十六、2026-12-05：疗愈师英文名（新增列）
+
+**改了什么**
+
+| 位置 | 改动 |
+|---|---|
+| 数据 | `sql/2026-12-05-massagist-english-name.sql` → `s_massagist.english_name varchar(64) NULL` |
+| 代码 | `Massagist.englishName`（`updateStrategy = ALWAYS`，清空时写 `NULL`，否则 MyBatis-Plus 默认忽略 null 改不掉） |
+| 前端 | 疗愈师管理列表加「英文名」列；新增/编辑弹窗「疗愈师姓名」下方加选填「英文名」 |
+
+**性质**：纯加列（`DEFAULT NULL`），旧 jar 实体不含该列，INSERT/UPDATE 显式列名，对现网零影响。
+守卫按 `information_schema.COLUMNS` 判存量，可重复执行；`sql/prod/` 已由 `scripts/make-prod-sql.py` 生成，
+契约测试 `MassagistEnglishNameContractTest` 覆盖「守卫 / 列定义 / 生产版无条件执行 / 实体字段」。
+
+**口径**
+
+1. 选填，只做展示与导出（排班看板、考核记录、培训考核导出的「中文名 英文名」写法），不参与任何匹配。
+2. 不改 `ums_admin.nick_name`：后台登录名、审批通知、申请人展示仍走中文名（见 `AdminNoticeDisplayName.SQL_APPLICANT`）。
+3. 列表搜索仍只按中文名 `like`；英文名不建索引。
+4. 存量英文名（如 阿舍 Asher）目前在历史考核表里，需要业务确认后再决定是否回填，本轮只加列不写数据。
+
+**回滚**：`ALTER TABLE s_massagist DROP COLUMN english_name`（旧代码不读该列，可留可删）。

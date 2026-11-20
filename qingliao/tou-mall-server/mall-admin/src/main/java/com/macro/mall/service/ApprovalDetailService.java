@@ -161,7 +161,7 @@ public class ApprovalDetailService extends BaseService<ApprovalDetailMapper, App
 
     /**
      * 解析审批流：优先用节点配置（岗位/指定人、或签/会签）；没有节点时回退旧的 approvalIds 逐人顺序审批。
-     * 节点里全是发起人本人或人员已离职/停用时，该节点自动跳过。
+     * 节点里人员已停用/岗位无人时该节点跳过，具体原因由节点解析逐条抛出；允许发起人自己审批自己提交的单。
      */
     private List<ApprovalResolvedNode> resolveNodes(ApprovalCategory category, Long shopId, Long createUser) {
         return resolveNodes(category, shopId, createUser, false);
@@ -175,7 +175,7 @@ public class ApprovalDetailService extends BaseService<ApprovalDetailMapper, App
         if (!nodes.isEmpty()) {
             List<ApprovalResolvedNode> resolved = approvalFlowNodeService.resolveNodes(nodes, shopId, createUser);
             if (resolved.isEmpty()) {
-                throw new BusinessException("审批流程中的审批人当前都不可用（可能已离职或停用），请联系管理员调整审批设置");
+                throw new BusinessException("「" + category.getTitle() + "」的审批节点里没有配置审批人，请联系管理员在审批设置中补上");
             }
             return resolved;
         }
@@ -190,11 +190,10 @@ public class ApprovalDetailService extends BaseService<ApprovalDetailMapper, App
         return resolved;
     }
 
-    /** 旧版逐人顺序审批：approvalIds 里每个人一个节点，已在内置节点里的人跳过。 */
+    /** 旧版逐人顺序审批：approvalIds 里每个人一个节点（允许包含发起人本人），已在内置节点里的人跳过。 */
     private List<ApprovalResolvedNode> legacyNodes(ApprovalCategory category, Long createUser, Collection<Long> skip) {
         List<ApprovalResolvedNode> legacyNodes = new ArrayList<>();
         for (Long adminId : ApprovalCategoryService.parseUsers(category.getApprovalIds(), true)) {
-            if (adminId.equals(createUser)) continue;
             if (skip != null && skip.contains(adminId)) continue;
             ApprovalResolvedNode legacy = new ApprovalResolvedNode();
             legacy.setNodeName(null);

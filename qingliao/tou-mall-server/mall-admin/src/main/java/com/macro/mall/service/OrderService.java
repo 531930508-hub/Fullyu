@@ -639,19 +639,54 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             if (productId != null) {
                 productService.addSale(order.getProductId());
             }
+            // 仅退款后重收的单，预约可能早就「已完成」（客人做完才退款）或已被取消：
+            // 收款不能把它们倒回「已到店」，否则看板上已完成的一单又变回在店状态
+            Integer appointmentState = order.getAppointmentState();
+            boolean appointmentSettled = AppointmentState.FINISHED.getValue().equals(appointmentState)
+                    || AppointmentState.CANCELED.getValue().equals(appointmentState);
             order.setState(OrderState.PAID_NOT_COMMENT.getValue());
             order.setPayTime(LocalDateTime.now());
             if (OrderType.COUPON.getValue().equals(order.getType())) {
                 order.setAppointmentState(AppointmentState.FINISHED.getValue());
                 afterOrderPaid(order);
             } else if (OrderType.PRODUCT.getValue().equals(order.getType())) {
-                order.setAppointmentState(AppointmentState.DOING.getValue());
+                if (!appointmentSettled) {
+                    order.setAppointmentState(AppointmentState.DOING.getValue());
+                }
                 handleBookingSuccessNotice(order.getId());
             } else if (OrderType.RECEPTION.getValue().equals(order.getType())) {
-                order.setAppointmentState(AppointmentState.DOING.getValue());
+                if (!appointmentSettled) {
+                    order.setAppointmentState(AppointmentState.DOING.getValue());
+                }
             }
             updateById(order);
+            // 仅退款后回到未付款的单重新收款：清掉上一轮退款痕迹，
+            // 否则再退款会卡在「已退款金额 + 本次退款 > 支付金额」。历史退款单仍在 refund_apply 里可查
+            clearRefundTraceAfterRepay(order);
         }
+    }
+
+    /**
+     * 重新收款后清掉订单上上一轮的退款痕迹（退款单本身不动，历史仍可在退款申请里查）。
+     *
+     * <p>不清的话，这一单下一次退款会被 refundOrder / refundPay 里的
+     * 「已退款金额 + 本次退款 ≤ 支付金额」直接拦掉，等于这单再也退不了。</p>
+     */
+    private void clearRefundTraceAfterRepay(Order order) {
+        if (!RefundState.SUCCESS.getValue().equals(order.getRefundState())) {
+            return;
+        }
+        // 内存里的对象一起归零：后面还有 copyProperties 拆单、二次 updateById，带着旧值会写回去
+        order.setRefundState(null);
+        order.setHasRefundAmount(BigDecimal.ZERO);
+        order.setRefundErrMsg(null);
+        // refund_hf_seq_id 故意留着：它是「上一轮退款」的流水号，退款回调迟到时靠它把老通知认出来丢掉
+        // updateById 忽略 null 字段，refund_state 只能靠 UpdateWrapper 置空
+        update(new LambdaUpdateWrapper<Order>()
+                .eq(Order::getId, order.getId())
+                .set(Order::getRefundState, null)
+                .set(Order::getHasRefundAmount, BigDecimal.ZERO)
+                .set(Order::getRefundErrMsg, null));
     }
 
     /**
@@ -678,6 +713,17 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             }
             if (couponCode != null) {
                 order.setCouponCode(couponCode);
+            }
+            // 付过款又回到未付款的单（仅退款那一轮），这一轮是门店现场重收：
+            // 微信/二维码付过的单一律记成现金，之后退款走线下，不会拿着旧支付方式把平台账上的钱再退一次
+            if (order.getPayTime() != null && OrderState.NOT_PAY.getValue().equals(order.getState())) {
+                if (couponCode != null && !couponCode.trim().isEmpty()) {
+                    order.setPayType(OrderPayType.MEITUAN.getValue());
+                } else if (OrderPayType.WECHAT.getValue().equals(order.getPayType())
+                        || OrderPayType.QR_CODE.getValue().equals(order.getPayType())) {
+                    log.warn("仅退款后线下重收，支付方式记为现金: orderId={}, 原支付方式={}", orderId, order.getPayType());
+                    order.setPayType(OrderPayType.CASH.getValue());
+                }
             }
             finishPay(order);
         }
@@ -1259,7 +1305,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             }
             //取消后该自然日可能已无有效订单，从这天起重排到店编号
             refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(id));
-            if (!OrderState.NOT_PAY.getValue().equals(state)) {
+            //仅退款回到未付款的单也有真实预约在客人手机上，取消同样要发取消通知
+            if (!OrderState.NOT_PAY.getValue().equals(state) || order.getPayTime() != null) {
                 handleBookingCancelNotice(id);
             }
             if (!BigDecimal.ZERO.equals(order.getIntegrationAmount())) {
@@ -1876,6 +1923,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             }
             order.setCancelOrderType(5);//5标识超时被取消了，改为5恢复正常状态
             updateById(order);
+            // 仅退款后订单回到未付款，客人又扫码/小程序重付：同样要清掉上一轮退款痕迹，否则这单再也退不了
+            clearRefundTraceAfterRepay(order);
             productService.addSale(order.getProductId());
             if (OrderType.PRODUCT.getValue().equals(order.getType())) {
                 String code = order.getCode();
@@ -2135,6 +2184,12 @@ public class OrderService extends BaseService<OrderMapper, Order> {
 
             Integer orderState = order.getState();
             if (OrderState.NOT_PAY.getValue().equals(orderState)) {
+                if (order.getPayTime() != null) {
+                    // 付过款、只是被仅退款打回未付款的单：预约是门店要留的，等重新收款或人工取消，
+                    // 不能按「下单 5 分钟未付」当超时单清掉
+                    log.info("skip timeout for refund-only order, orderId={}", orderId);
+                    return;
+                }
                 order.setState(OrderState.TIMEOUT.getValue());
                 order.setAppointmentState(AppointmentState.CANCELED.getValue());
                 order.setCancelOrderType(1);//超时取消
@@ -2305,6 +2360,11 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         if (OrderState.REFUNDING.getValue().equals(state)) {
             throw new ApiException("退款中订单不可重复操作退款");
         }
+        // 仅退款后订单回到未付款，状态拦不住二次审批：同一轮已经退过就不要再退一次
+        if (OrderState.NOT_PAY.getValue().equals(state) && order.getPayTime() != null
+                && RefundState.SUCCESS.getValue().equals(order.getRefundState())) {
+            throw new ApiException("该订单本轮已退款，请勿重复操作");
+        }
         BigDecimal payAmount = order.getPayAmount();
 
         if (refundAmount == null) {
@@ -2364,8 +2424,12 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             if (cancelType) {
                 order.setAppointmentState(AppointmentState.CANCELED.getValue());
             }
-            order.setState(OrderState.REFUNDED.getValue());
+            // 退款的两件事要分开：取消订单才取消预约，仅退款只把钱退回去，预约照常留着
+            order.setState(cancelType ? OrderState.REFUNDED.getValue() : stateAfterRefundOnly(order));
             order.setRefundState(RefundState.SUCCESS.getValue());
+            // 回调路径一直在这里累计，线下现金/美团券没有回调，得在这里补上，否则「已退款金额」永远是 0
+            BigDecimal refundedAmount = order.getHasRefundAmount() == null ? BigDecimal.ZERO : order.getHasRefundAmount();
+            order.setHasRefundAmount(refundedAmount.add(refundAmount));
             updateById(order);
             if (!BigDecimal.ZERO.equals(order.getIntegrationAmount())) {
                 integrationService.revocationIntegration(orderId, order.getCustomerId());
@@ -2378,6 +2442,21 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             }
         }
         return null;
+    }
+
+    /**
+     * 仅退款（不取消预约）资金到账后，订单落在哪个支付状态。
+     * <p>
+     * 现金 / 微信 / 二维码 / 美团这些真金白银付过的单：钱退给客人就等于没付，订单回到「未付款」，
+     * 预约继续留在看板上，等门店重新收款，或由门店手动取消；
+     * 卡券订单和券支付订单退的是券，券已退回 / 作废，订单不可能再结算，保持「已退款」。
+     */
+    private Integer stateAfterRefundOnly(Order order) {
+        if (OrderType.COUPON.getValue().equals(order.getType())
+                || OrderPayType.COUPON.getValue().equals(order.getPayType())) {
+            return OrderState.REFUNDED.getValue();
+        }
+        return OrderState.NOT_PAY.getValue();
     }
 
     /**
@@ -2419,13 +2498,15 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 refundAmount = BigDecimal.ZERO;
             }
 
-            // 只有「已退款成功」的同流水重复回调才跳过；退款中(DOING)的同流水回调必须继续处理
-            if (RefundState.SUCCESS.getValue().equals(order.getRefundState())) {
-                String refundHfSeqId = order.getRefundHfSeqId();
-                if (!StringUtils.isEmpty(refundHfSeqId) && refundHfSeqId.equals(hfSeqId)) {
-                    log.warn("退款回调重复接收：refundOrderSn={}", refundOrderSn);
-                    return;
-                }
+            // 同一个流水号的回调，只在这一轮还没收口时才处理：退款中/退款失败算「本轮没结束」，
+            // 成功后、以及仅退款后又被重新收款（refundState 清空、流水号留着）都算已收口。
+            // 收口后同流水再来回调只能是重放：再处理会把上一轮的钱记第二遍、把订单打回退款中。
+            Integer refundState = order.getRefundState();
+            boolean refundRoundClosed = !RefundState.DOING.getValue().equals(refundState)
+                    && !RefundState.ERROR.getValue().equals(refundState);
+            if (refundRoundClosed && !StringUtils.isEmpty(hfSeqId) && hfSeqId.equals(order.getRefundHfSeqId())) {
+                log.warn("退款回调重复接收/上一轮回调迟到，忽略：refundOrderSn={}", refundOrderSn);
+                return;
             }
             if ("S".equals(transStat)) {
                 BigDecimal hasRefundAmount = order.getHasRefundAmount();
@@ -2436,7 +2517,6 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 order.setRefundState(RefundState.SUCCESS.getValue());
                 order.setRefundErrMsg("success");
                 order.setHasRefundAmount(hasRefundAmount);
-                order.setState(OrderState.REFUNDED.getValue());
                 order.setRefundHfSeqId(hfSeqId);
                 if (OrderType.COUPON.getValue().equals(order.getType())) {
                     List<CustomerCoupon> customerCoupons = customerCouponService.listByOrderId(order.getId());
@@ -2449,15 +2529,27 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                         giveGiftService.updateById(giveGift);
                     }
                     order.setAppointmentState(AppointmentState.CANCELED.getValue());
+                    order.setState(OrderState.REFUNDED.getValue());
                 } else {
                     if (!refundOrder) {
                         order.setAppointmentState(AppointmentState.CANCELED.getValue());
                         orderDetailService.refundOrder(order.getId(), true);
+                        order.setState(OrderState.REFUNDED.getValue());
+                    } else {
+                        //仅退款：钱退回去，预约不动，等门店重新收款或手动取消
+                        order.setState(stateAfterRefundOnly(order));
                     }
                 }
                 updateById(order);
-                //退款到账后订单不再算到店，重排该客户当天的编号
-                refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(order.getId()));
+                // 渠道退款到账后要返还抵扣积分：微信/二维码支付在 doRefundOrder 里只是发起退款，钱没到账前
+                // 不撤销积分，全靠这个回调收敛，这里不补就永远不退；只认仍有效的抵扣记录，重复回调天然幂等
+                if (!BigDecimal.ZERO.equals(order.getIntegrationAmount())) {
+                    integrationService.revocationIntegration(order.getId(), order.getCustomerId());
+                }
+                //退款到账后订单不再算到店，重排该客户当天的编号；仅退款预约还留着（回到未付款），编号不能动
+                if (!OrderState.NOT_PAY.getValue().equals(order.getState())) {
+                    refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(order.getId()));
+                }
 
             } else if ("P".equals(transStat)) {
                 log.warn("退款进行中, orderSn={}", refundOrderSn);
@@ -2957,6 +3049,8 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 order.setUseCouponMap(JSON.toJSONString(customerCouponIdList));
 
                 updateById(order);
+                // 退过款又用券结清的单：清掉上一轮退款痕迹，否则券单退款会被「已退款金额」卡死
+                clearRefundTraceAfterRepay(order);
                 handleBookingSuccessNotice(orderId);
                 productService.addSale(order.getProductId());
                 if (!BigDecimal.ZERO.equals(order.getIntegrationAmount())) {//当使用full 卷支付时，将提前用微信支付扣除的积分返回
