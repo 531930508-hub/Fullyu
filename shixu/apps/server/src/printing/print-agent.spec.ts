@@ -96,8 +96,9 @@ describe('门店打印代理（芯烨 XP-420B / agent 模式）', () => {
     expect(job.labels).toHaveLength(1);
     expect(tspl).toContain('SIZE 40 mm,60 mm');
     expect(tspl).toMatch(/QRCODE \d+,\d+,M,5,A,0,"[A-Z]\d{3}-1"/);
-    // 杯贴是逐字发 TEXT 的，所以按行把字拼回来再断言
-    expect(glyphsAt(tspl, CUP_LABEL_LAYOUT.eyebrow.y)).toBe('取餐号');
+    // 杯贴是逐字发 TEXT 的，所以按行把字拼回来再断言；
+    // 眉题行右端还有下单时间（12 点小字），这里只看开头的「取餐号」三个字
+    expect(glyphsAt(tspl, CUP_LABEL_LAYOUT.eyebrow.y).startsWith('取餐号')).toBe(true);
     expect(glyphsAt(tspl, CUP_LABEL_LAYOUT.tel.y)).toBe('TEL021-54668899');
     // 只印门店名，不带城市前缀（库里 name 是「上海·西岸店」，short 是「西岸店」）
     expect(glyphsAt(tspl, CUP_LABEL_LAYOUT.store.y)).toBe('西岸店');

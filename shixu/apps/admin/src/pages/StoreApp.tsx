@@ -47,7 +47,7 @@ import {
   wallClockToMs,
   type GeoFix
 } from '../lib/attendance';
-import { ICE_OPTIONS, changeLineTemp, resolveLineOptions } from '../lib/lineOptions';
+import { ICE_OPTIONS, changeLineTemp, lineOptionText, resolveLineOptions } from '../lib/lineOptions';
 import { memberCodeFromScan, pickupCodeFromScan } from '../lib/scan';
 import { classifyScanGunKey, isPlausibleGunCode, normalizeGunCode } from '../lib/scanGun';
 import { IdempotencyKeys } from '../lib/idempotency';
@@ -2250,7 +2250,7 @@ function OrderDrawer({
                   <div className="delivery-item" key={item.id}>
                     <span>
                       {item.name}
-                      <span className="sub-cell">{item.temp || ''}{item.temp && item.ice ? ' · ' : ''}{item.ice || ''}</span>
+                      <span className="sub-cell">{lineOptionText(item.temp, item.ice)}</span>
                     </span>
                     <span className="muted">×{item.qty} {item.refundedQty ? `（已退 ${item.refundedQty}）` : ''}</span>
                     <strong>{money(item.totalCents)}</strong>

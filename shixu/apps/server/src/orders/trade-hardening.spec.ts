@@ -192,7 +192,8 @@ describe('交易链路加固（TX-08/10/13）', () => {
       const items = await h.prisma.orderItem.findMany({ where: { orderId: order.id } });
       expect(items).toHaveLength(2);
       const combo = items.map((x) => `${x.temp}/${x.ice ?? ''}`).sort();
-      expect(combo).toEqual(['冰/少冰', '热/标准冰'].sort());
+      // 热饮的冰量是 null（不再写「标准冰」占位），但行键仍是「温度+冰量」，两行不会被合并
+      expect(combo).toEqual(['冰/少冰', '热/'].sort());
       const units = await h.prisma.orderUnit.count({ where: { orderId: order.id } });
       expect(units).toBe(2);
       const stock = await h.prisma.stock.findUnique({

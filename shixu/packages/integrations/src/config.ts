@@ -57,16 +57,15 @@ const parseMode = (value: string | undefined): IntegrationsMode => {
 /**
  * 杯贴打印机驱动选择。
  * 芯烨 XP-420B 有两种接法：
- * - xpyun：走条码云（云端直推，门店不用开电脑，推荐）；
+ * - xpyun：走条码云（云端直推，门店不用开电脑，默认）；
  * - agent：USB 直连门店电脑，由打印代理领取 TSPL。
- * 飞鹅是整机云通道（feie）。写错值直接报错，不静默挑一个。
+ * 写错值直接报错，不静默挑一个。
  */
-const parsePrinterDriver = (value: string | undefined): 'feie' | 'xpyun' | 'agent' => {
+const parsePrinterDriver = (value: string | undefined): 'xpyun' | 'agent' => {
   const text = (value || '').trim().toLowerCase();
-  if (!text || text === 'feie' || text === 'feieyun') return 'feie';
-  if (text === 'xpyun' || text === 'xpyuncloud' || text === 'barcode') return 'xpyun';
+  if (!text || text === 'xpyun' || text === 'xpyuncloud' || text === 'barcode') return 'xpyun';
   if (text === 'agent' || text === 'xprinter' || text === 'local') return 'agent';
-  throw new Error(`PRINTER_DRIVER 只接受 feie / xpyun / agent，当前为「${value}」`);
+  throw new Error(`PRINTER_DRIVER 只接受 xpyun / agent，当前为「${value}」`);
 };
 
 /**
@@ -129,23 +128,6 @@ export function loadIntegrationsConfig(input: ConfigInput): IntegrationsConfig {
     upload: {
       root: input.uploadRoot,
       assetUrl: input.assetUrl
-    },
-    feie: {
-      user: trim(env.FEIE_USER),
-      ukey: trim(env.FEIE_UKEY),
-      sn: trim(env.FEIE_SN),
-      storeSn: parseStringMap(env.FEIE_STORE_SN, 'FEIE_STORE_SN'),
-      apiBase: (trim(env.FEIE_API_BASE) || 'https://api.de.feieyun.com').replace(/\/+$/, ''),
-      timeoutMs: clampNumber(env.FEIE_TIMEOUT_MS, 3_000, 30_000, 10_000),
-      labelWidthMm: clampNumber(env.FEIE_LABEL_WIDTH_MM, 20, 104, 40),
-      labelHeightMm: clampNumber(env.FEIE_LABEL_HEIGHT_MM, 10, 200, 30),
-      labelGap: (() => {
-        const gap = trim(env.FEIE_LABEL_GAP) || '2,0';
-        if (!/^\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/.test(gap)) {
-          throw new Error('FEIE_LABEL_GAP 必须是 "间距,偏移" 形式，如 2,0');
-        }
-        return gap;
-      })()
     },
     xpyun: {
       user: trim(env.XPYUN_USER),

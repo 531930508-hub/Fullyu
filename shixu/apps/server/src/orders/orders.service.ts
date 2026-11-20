@@ -183,11 +183,13 @@ export class OrdersService {
       return { temp, ice: null };
     }
     if (temp === '热') {
-      // V7 口径：热饮隐藏冰量选择，落库统一为标准冰占位；兼容旧客户端的“热饮”占位。
+      // V7 口径：热饮没有冰量可选，落库就是 null。
+      // 别再写「标准冰」占位——杯贴和小票直接拿 ice 渲染，会印成「热 · 标准冰」。
+      // 兼容旧客户端的「热饮」占位与历史上显式传上来的「标准冰」：都当没选。
       if (line.ice && line.ice !== '标准冰' && line.ice !== '热饮') {
         throw badRequest('热饮不支持选择冰量');
       }
-      return { temp, ice: '标准冰' };
+      return { temp, ice: null };
     }
     const ice = line.ice || '标准冰';
     if (!(ICE_OPTIONS as readonly string[]).includes(ice)) {

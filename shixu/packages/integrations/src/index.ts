@@ -5,14 +5,6 @@ export { liveProviders, type LiveContext, type LiveProviderFactories } from './p
 export { WechatMiniProgramAuth, type WechatLiveOptions } from './providers/live/wechat';
 export { HuifuPaymentGateway, type HuifuLiveOptions } from './providers/live/huifu';
 export {
-  FeieLabelPrinter,
-  buildFeieLabelContent,
-  escapeFeieText,
-  fitFeieText,
-  type FeieLabelPrinterOptions,
-  type FeieLabelStyle
-} from './providers/live/feie';
-export {
   XpyunLabelPrinter,
   buildXpyunCupLabel,
   buildXpyunCalibration,

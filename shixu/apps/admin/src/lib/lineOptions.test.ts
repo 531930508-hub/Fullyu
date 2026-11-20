@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { ICE_OPTIONS, changeLineTemp, resolveLineOptions } from './lineOptions';
+import { ICE_OPTIONS, changeLineTemp, lineOptionText, resolveLineOptions } from './lineOptions';
 
 const icedTea = { temps: ['热', '冰'], ice: true };
 const hotOnly = { temps: ['热'], ice: false };
+
+describe('lineOptionText', () => {
+  it('热饮只出温度，历史单落过的「标准冰」占位不往界面上带', () => {
+    expect(lineOptionText('热', '标准冰')).toBe('热');
+    expect(lineOptionText('热', null)).toBe('热');
+    expect(lineOptionText('冰', '少冰')).toBe('冰 · 少冰');
+    expect(lineOptionText(null, null)).toBe('');
+  });
+});
 
 describe('resolveLineOptions', () => {
   it('热饮不默认带冰量，草稿里的旧冰量也会清掉', () => {

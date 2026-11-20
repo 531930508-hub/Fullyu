@@ -36,3 +36,11 @@ export function changeLineTemp(
 ): LineOptions {
   return resolveLineOptions(product, temp, currentIce);
 }
+
+/**
+ * 「温度 · 冰量」的展示口径，与 resolveLineOptions 一致：
+ * 热饮没有冰量可选，历史单落过的「标准冰」占位不往界面上带。
+ */
+export function lineOptionText(temp?: string | null, ice?: string | null): string {
+  return [temp, temp === '热' ? '' : ice].filter(Boolean).join(' · ');
+}

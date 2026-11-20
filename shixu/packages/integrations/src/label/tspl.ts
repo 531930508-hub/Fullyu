@@ -60,7 +60,7 @@ type AsciiFont = (typeof ASCII_FONTS)[keyof typeof ASCII_FONTS];
 
 /**
  * 版式常量（dots）。与设计稿 1:1 对应：
- * 顶部 2.5mm 留白 → 品牌 → 取餐号 → 系列/品名 → 规格与时间 → 二维码 → 门店 → 电话。
+ * 顶部 2.5mm 留白 → 品牌 → 取餐号（眉题行右端落下单时间）→ 系列/品名 → 规格 → 二维码 → 门店 → 电话。
  *
  * 留白的分配原则：身份区（品牌/取餐号）紧、内容区（系列/品名/规格）松、
  * 底部（码/门店）收。单号不上杯贴——顾客与吧台都不读它，省下的一行换成行距。
@@ -90,8 +90,14 @@ export const CUP_LABEL_LAYOUT = {
   /** 系列：中文系列字 3mm + 英文系列名 2mm，英文右移 12 dots，基线抬 4 dots。 */
   series: { x: 20, y: 186, size: 24, enGap: 12, enDy: 4 },
   product: { x: 20, y: 216, size: 24 },
+  /**
+   * 温度 · 冰量独占一行：版心 280 点全给它，只有极端长的组合才会截断。
+   * 下单时间不在这行——「冰 · 标准冰」150 点 + 「11-10 14:30」142 点 = 292 点，超过 280 点的版心，
+   * 硬挤同一行必然压字（截断成「冰 · 标准…」或日期盖在规格上），所以时间上移到眉题行右端（见 time）。
+   */
   option: { x: 20, y: 254, size: 24 },
-  time: { y: 254 },
+  /** 下单时间：与「取餐号」眉题同一行、贴右边界；眉题 3 个汉字到 98 点，中间还有 60 点呼吸。 */
+  time: { y: 64 },
   rule3Y: 284,
   qr: { y: 294, cell: 5, modules: 21 },
   store: { y: 408, size: 24 },
@@ -239,11 +245,18 @@ export function pickupCodeOf(label: CupLabelPayload): string {
   return dash > 0 ? code.slice(0, dash) : code;
 }
 
-/** 温度与冰量合成一行；热饮不重复写冰量。 */
+/**
+ * 温度与冰量合成一行；热饮只出温度。
+ *
+ * 热饮没有冰量可选，落库就该是 null；历史上 normalizeTeaOptions 给热饮塞过
+ * 「标准冰」占位，已出的单子改不了，所以渲染层再兜一道：
+ * 温度是「热」时一律丢掉冰量，否则纸上会印出「热 · 标准冰」这种自相矛盾的规格。
+ */
 export function optionLine(temp: string | null, ice: string | null): string {
   const t = tsplText(temp);
   const i = tsplText(ice);
   if (!t) return i;
+  if (t === '热') return t;
   if (!i || i === t) return t;
   return `${t} · ${i}`;
 }
@@ -368,8 +381,8 @@ export function buildCupLabelTspl(label: CupLabelPayload, style: TsplLabelStyle 
   const tea = fitTracked(teaName || label.productName, l.rule.width, 24, 12, cn.tracking);
   cmds.push(...line(l.product.x, l.product.y, tea, { ...cn, bold: true }));
 
-  // ⑥ 温度 · 冰量（左） + 下单时间（右）
-  const options = fitTracked(optionLine(label.temp, label.ice), 140, 24, 12, cn.tracking);
+  // ⑥ 温度 · 冰量独占规格行；下单时间在眉题行右端（与规格行不同基线，才不会压字）
+  const options = fitTracked(optionLine(label.temp, label.ice), l.right - l.option.x, 24, 12, cn.tracking);
   if (options) cmds.push(...line(l.option.x, l.option.y, options, cn));
   const when = formatLabelTime(label.orderedAt || label.printedAt, style.timeZone);
   if (when) {

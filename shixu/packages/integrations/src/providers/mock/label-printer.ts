@@ -3,7 +3,7 @@ import { wait } from './util';
 
 /**
  * 内置云标签打印实现，只记录打印请求、不连任何打印机。
- * 真实驱动（飞鹅 / 得力 / 其它云打印）实现 LabelPrinter：把 labels 转成厂商模板后下发。
+ * 真实驱动（芯烨条码云 / 芯烨 USB 打印代理）实现 LabelPrinter：把 labels 转成厂商模板后下发。
  */
 export class MockLabelPrinter implements LabelPrinter {
   readonly name = 'mock-cloud-label';
