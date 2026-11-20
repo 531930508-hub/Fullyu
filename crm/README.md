@@ -309,7 +309,7 @@ E2 证据（测试环境，2026-11-08）：
 | 探针 | `/api/health` 200、`/admin/` 200、`/game/` 200、`/` 302、`/api/sync/status` 401；`dist/common/member-name.js` 含占位名判定 |
 | 回滚 | 解 tar 回三个目录 → `systemctl restart fullyu-crm` |
 | 未随发 | `9e1f9d9`（外部文本护栏 + `member_identities.created_at`）不在 `main`；合并前需先给生产库加列 |
-| 测试 | 本次未重发 `test-crm.fullyu.cn`（仍是旧版），需要时按同一命令序列在 `/opt/fullyu-crm-test` 复跑 |
+| 测试 | `test-crm.fullyu.cn`（8.133.6.18 `/opt/fullyu-crm-test`，unit `fullyu-crm-test`，库 `crm_test`）同批发布：备份 `/root/backups/test-crm-20261120-235002.tar.gz`，同命令序列重建；探针 `/api/health` 200、`/admin/` 200、`/api/sync/status` 401，日志 0 ERROR |
 
 ### 业务会员卡清表（2026-11-18 12:35）
 
