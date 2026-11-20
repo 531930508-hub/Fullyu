@@ -323,7 +323,15 @@ else
 fi
 
 # ---------- 2. 备份 + 停应用 ----------
+#  11) 两处同时发布：两个 mvn 抢同一个 target/，一方的 clean 删不掉对方占着的 mall-mbg/target
+#      → 那方 rc=1；同时两边共用一个 .build.rc，会读到对方的失败结果，健康的一方也跟着中止
+#      （2026-11-20 13:03/13:06 实测，本机与另一窗口同时在发测试）。停服前先看有没有别的活在打包。
 step "备份 jar、停应用"
+BUSY=$(ssh "$HOST" "pgrep -f 'plexus.classworlds.launcher.Launcher' >/dev/null && echo BUSY || echo IDLE" || echo IDLE)
+if [ "$BUSY" = "BUSY" ]; then
+  echo "中止：$HOST 上已有 mvn 在打包（另一端正在发布）。等它跑完再发：ssh $HOST 'pgrep -af plexus.classworlds'"
+  exit 1
+fi
 ssh "$HOST" MALL_UNIT="$UNIT" bash -s -- "$APP_DIR" "$JAR_REMOTE" "$START_SH" "$BK" <<REMOTE
 set -uo pipefail
 $RC
@@ -354,7 +362,7 @@ PHASE="stopped"
 
 # ---------- 3. 打包 ----------
 step "mvn package（服务器后台跑，60~180s）"
-BUILD_RC="$APP_DIR/.build.rc"; BUILD_LOG="$APP_DIR/.build.log"
+BUILD_RC="$APP_DIR/.build-$TS.rc"; BUILD_LOG="$APP_DIR/.build-$TS.log"
 # 2026-11-18 13:02 实测：mvn 在前台跑，ssh 一断（connection reset）本地 trap 直接进回滚，
 # 构建跟着被杀、target 里连 jar 都没有。改成 setsid 后台跑 + 轮询 rc 文件，断连只影响轮询。
 ssh "$HOST" bash -s -- "$SRC_REMOTE" "$JAR_REMOTE" "$BUILD_RC" "$BUILD_LOG" <<'REMOTE'

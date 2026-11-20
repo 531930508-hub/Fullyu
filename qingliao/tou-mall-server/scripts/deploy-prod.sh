@@ -82,7 +82,10 @@ if [ "$SKIP_PF" = 0 ] && ! DRY_RUN; then
   # preflight.sh 没有 --jar 选项（只有 --expect-jar-sha，校验的是 staging 里已上传的包），
   # 这里传了会让预检直接 exit 2、发版永远停在第一步（2026-11-19 实测）。
   # jar 指纹由第 3 步上传后校验；带 --with-sql 时库结构对账本来就落后，需配合 --skip-preflight 或先跑 DDL。
-  "$REPO/scripts/preflight.sh" || die "preflight 有 FAIL 项"
+  # 必须带库凭据：不带时 preflight 的「库结构对账」「库连通」两项永远 FAIL（预检端默认没有 RDS 账号，
+  # 2026-11-20 实测 NO-GO），结果所有人都得加 --skip-preflight，等于把整套预检废掉。
+  PF_DB_CNF=${PF_DB_CNF:-/etc/fullyu/qingliao-backup.cnf}
+  "$REPO/scripts/preflight.sh" --mysql-opts "--defaults-extra-file=$PF_DB_CNF" || die "preflight 有 FAIL 项"
 elif [ "$SKIP_PF" = 1 ]; then
   say "1/6 前置检查（已跳过）"
 fi
