@@ -105,11 +105,13 @@
             </div>
           </el-descriptions-item>
           <el-descriptions-item label="手机号码 Phone">
-            <!-- 号码仍按角色脱敏展示；拨号链接使用真实号码，点击不会把星号拨出去 -->
-            <a v-if="orderDetail.customer.phone" :href="'tel:' + orderDetail.customer.phone">
+            <!-- 号码仍按角色脱敏展示；拨号链接使用真实号码，点击不会把星号拨出去。
+                 同事订单（isPeerView）只给文本，不给 tel: 链接，避免把真实号码带出 -->
+            <a v-if="orderDetail.customer.phone && !isPeerView" :href="'tel:' + orderDetail.customer.phone">
               <i class="el-icon-phone-outline phone-dial__icon"></i>
               {{ orderDetail.customer.phone | maskPhoneFilter }}
             </a>
+            <span v-else-if="orderDetail.customer.phone">{{ orderDetail.customer.phone | maskPhoneFilter }}</span>
             <span v-else>-</span>
           </el-descriptions-item>
           <!--          <el-descriptions-item label="会员等级"> {{ orderDetail.customer.vipLevel || '无' }}</el-descriptions-item>
