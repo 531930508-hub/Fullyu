@@ -196,26 +196,36 @@ echo ""
 echo "二、生产线上当前 commit"
 echo ""
 
-tag_commit() { # project → short sha of newest prod tag
-  local t
-  t=$(git tag -l "prod-$1-*" --sort=-creatordate | head -1)
+tag_commit() { # project [变体] → short sha of newest prod tag（先找变体家族，再回落基础家族）
+  local p="$1" v="${2:-}" t=""
+  [ -n "$v" ] && t=$(git tag -l "prod-$p-$v-*" --sort=-refname | head -1)
+  [ -z "$t" ] && t=$(git tag -l "prod-$p-*" --sort=-refname | head -1)
   [ -z "$t" ] && { echo ""; return; }
   git rev-parse --short "$t^{commit}" 2>/dev/null
 }
 
-verdict_of() { # project sha → 判定文字
-  local p="$1" s="$2" ts tsha
+verdict_of() { # project sha [变体] → 判定文字
+  local p="$1" s="$2" v="${3:-}" ts tsha
   [ -z "$s" ] && { echo "无标记可读"; return; }
   if ! git cat-file -e "${s}^{commit}" >/dev/null 2>&1; then echo "⚠️ 本地无该提交"; return; fi
   if ! git merge-base --is-ancestor "$s" "$MAIN" 2>/dev/null; then
     echo "🔴 不在 main（下次从 main 发布即覆盖）"; return
   fi
-  tsha=$(tag_commit "$p")
+  tsha=$(tag_commit "$p" "$v")
   if [ -z "$tsha" ]; then echo "未记账"; return; fi
   if [ "$(git rev-parse "$s")" != "$(git rev-parse "$tsha^{commit}")" ]; then
     echo "🟡 与最新 tag 不一致（$tsha）"; return
   fi
-  behind=$(git rev-list --count "$s..$MAIN" 2>/dev/null || echo 0)
+  local paths=""
+  case "$p:$v" in
+    qingliao-mall:web) paths="qingliao/tou-mall-admin-web/" ;;
+    qingliao-mall:api) paths="qingliao/tou-mall-server/" ;;
+  esac
+  if [ -n "$paths" ]; then
+    behind=$(git rev-list --count "$s..$MAIN" -- $paths 2>/dev/null || echo 0)
+  else
+    behind=$(git rev-list --count "$s..$MAIN" 2>/dev/null || echo 0)
+  fi
   if [ "$behind" -gt 0 ]; then echo "一致（main 另有 $behind 条待发布提交）"; else echo "一致"; fi
 }
 
@@ -228,7 +238,7 @@ report_row() { # 单元 来源(ASCII) 线上commit 线上时间 判定
     val="$sha"
   fi
   [ -n "$at" ] && val="$val  $at"
-  printf '  %-22s %-26s %-40s %s\n' "$unit" "$src" "$val" "$v"
+  printf '  %-22s %-26s %-44s %s\n' "$unit" "$src" "$val" "$v"
   case "$v" in
     🔴*) ISSUES=$((ISSUES+1)); HOT="${HOT:-} $unit:$sha" ;;
     🟡*) ISSUES=$((ISSUES+1)); DRIFT="${DRIFT:-} $unit" ;;
@@ -245,7 +255,7 @@ if [ "$OFFLINE" -eq 0 ] && command -v curl >/dev/null 2>&1; then
   MALL_FRONT_SHA=$(printf '%s' "$bi" | sed -n 's/.*"commit"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{7,40\}\)".*/\1/p' | head -1)
   MALL_FRONT_TIME=$(printf '%s' "$bi" | sed -n 's/.*"builtAt"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
 fi
-report_row "qingliao-mall front" "build-info.json (GET)" "$MALL_FRONT_SHA" "$MALL_FRONT_TIME" "$(verdict_of qingliao-mall "$MALL_FRONT_SHA")"
+report_row "qingliao-mall front" "build-info.json (GET)" "$MALL_FRONT_SHA" "$MALL_FRONT_TIME" "$(verdict_of qingliao-mall "$MALL_FRONT_SHA" web)"
 
 # 轻疗商城后端 jar：MANIFEST 的 Implementation-Build（120.55 无 unzip，用 python3 读 zip）
 MALL_JAR_SHA=""
@@ -278,7 +288,7 @@ REMOTE
   MALL_JAR_TIME=$(printf '%s\n' "$out120" | sed -n 's/^MALL_JAR_TIME=//p' | head -1)
   PRESENCE_TIME=$(printf '%s\n' "$out120" | sed -n 's/^PRESENCE_TIME=//p' | head -1)
 fi
-report_row "qingliao-mall back" "jar MANIFEST (ssh)" "$MALL_JAR_SHA" "$MALL_JAR_TIME" "$(verdict_of qingliao-mall "$MALL_JAR_SHA")"
+report_row "qingliao-mall back" "jar MANIFEST (ssh)" "$MALL_JAR_SHA" "$MALL_JAR_TIME" "$(verdict_of qingliao-mall "$MALL_JAR_SHA" api)"
 
 # 在场：产物无 commit 标记，只能读改动时间（缺口见规范 §10）
 report_row "presence" "mtime (ssh)" "" "$PRESENCE_TIME" "仅时间，无法判定 commit"

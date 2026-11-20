@@ -25,28 +25,41 @@ PROJECTS="presence shixu crm qingliao-mini qingliao-mall"
 [ -n "$ONLY" ] && PROJECTS=$ONLY
 
 now=$(date +%s)
-printf '%-14s %-30s %-11s %-9s %s\n' 项目 "线上版本 tag" 提交 距今天 说明
-printf '%-14s %-30s %-11s %-9s %s\n' -------------- ------------------------------ ----------- --------- ------
-
-for p in $PROJECTS; do
-  tag=$(git tag -l "prod-$p-*" --sort=-creatordate | head -1)
+row() { # 显示名 tag
+  local label="$1" tag="$2" commit ct days note flag
   if [ -z "$tag" ]; then
-    printf '%-14s %-30s %-11s %-9s %s\n' "$p" "未记账" "-" "-" "跑 scripts/release-tag.sh $p \"说明\""
-    continue
+    printf '%-20s %-30s %-11s %-9s %s\n' "$label" "未记账" "-" "-" "scripts/release-tag.sh ${label%%/*} \"说明\""
+    return
   fi
   commit=$(git rev-parse --short "$tag^{commit}" 2>/dev/null || echo "?")
   ct=$(git log -1 --format=%ct "$tag^{commit}" 2>/dev/null || echo "$now")
   days=$(( (now - ct) / 86400 ))
   note=$(git tag -l --format='%(contents:subject)' "$tag" | head -1)
   flag=""
-  if ! git merge-base --is-ancestor "$tag^{commit}" main 2>/dev/null; then
-    flag=" ⚠️不在 main 上"
+  git merge-base --is-ancestor "$tag^{commit}" main 2>/dev/null || flag=" ⚠️不在 main 上"
+  printf '%-20s %-30s %-11s %-9s %s%s\n' "$label" "$tag" "$commit" "${days}天" "$note" "$flag"
+}
+# tag 名自带 yyyymmdd-HHmm，一律按名字排序：补记的旧 tag 不会因为"创建时间新"排到最前面
+printf '%-20s %-30s %-11s %-9s %s\n' 项目 "线上版本 tag" 提交 距今天 说明
+printf '%-20s %-30s %-11s %-9s %s\n' -------------- ------------------------------ ----------- --------- ------
+
+for p in $PROJECTS; do
+  # 变体：prod-<project>-<变体>-<yyyymmdd-HHmm>，前后端分开发布时按产物分别记账
+  vars=$(git tag -l "prod-$p-*" | sed -n "s/^prod-$p-\(.\{1,\}\)-[0-9]\{8\}-[0-9]\{4\}$/\1/p" | sort -u)
+  if [ -n "$vars" ]; then
+    for v in $vars; do
+      row "$p/$v" "$(git tag -l "prod-$p-$v-*" --sort=-refname | head -1)"
+    done
+    base=$(git tag -l "prod-$p-*" | grep -E "^prod-$p-[0-9]{8}-[0-9]{4}$" | sort -r | head -1)
+    [ -n "$base" ] && echo "  ↳ 另有未分变体的 $base（两个产物记在 tag message 里，已被上面按产物记的 tag 取代）"
+  else
+    row "$p" "$(git tag -l "prod-$p-*" --sort=-refname | head -1)"
   fi
-  printf '%-14s %-30s %-11s %-9s %s%s\n' "$p" "$tag" "$commit" "${days}天" "$note" "$flag"
 done
 
 echo ""
 echo "全部生产 tag（新→旧，最多 10 条）："
-git tag -l 'prod-*' --sort=-creatordate | head -10 | sed 's/^/  /'
+# 按 tag 名里的时间戳排（跨项目也能对齐时间线）
+git tag -l 'prod-*' | awk -F- '{print $(NF-1)"-"$NF"  "$0}' | sort -r | head -10 | sed 's/^[^ ]*  /  /'
 if [ -z "$(git tag -l 'prod-*' | head -1)" ]; then echo "  （暂无）"; fi
 exit 0
