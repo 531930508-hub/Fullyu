@@ -345,3 +345,45 @@ mvn -pl mall-admin -am -DskipTests package                               # 全�
 - 后端单测：`BrandOrderReporterTest` 8/8、`BrandMemberControllerTest` 7/7、`BrandCardPaymentServiceTest` 36/36、`BrandMemberClientTest` 9/9（同批共 60 项全过）。`createOrderBlocksDuplicateWithinAntiDoublePayWindow` 原断言的是旧口径“30 秒内刚支付同款即拦截”，与 §13 已确认的“续费合法、只拦 60 秒内同款未支付单”冲突，已按新口径改为断言 409「支付单正在创建」。
 - 小程序：`node --test tests/` 48/48；`brand-member.vue`、`order.vue` SFC 编译 0 错误；`mp-weixin` 构建成功，**未上传**。
 - 未部署 mall-test，未写生产数据，未提交代码；`sql/2026-11-08-brand-card-payment.sql` 与 `MemberCardOrder` 仅更新 `refund_type` 注释，无 schema 变更。
+
+## 15. 生产积分历史明细回填（2026-11-21，已执行）
+
+### 15.1 为什么做
+
+- 生产 `/etc/fullyu/qingliao.env` 里只有 `BRAND_CRM_*`，**没有** `CRM_ENABLED / CRM_BASE_URL / CRM_KEY_ID / CRM_SECRET`，`CrmProperties.isActive()` 为 false：生产轻疗积分一直记在本地 `s_integration`，CRM 只有 2026-11-17 14:50 迁进去的 1335 条 `qlmig:<customerId>` 汇总流水（合计 83619）＋ 2026-11-20 一条总部「补发」66。
+- 轻疗后台的积分流水页已在 2026-11-09 下线，明细没有入口可看，所以把本地 4714 行明细重建成 CRM 流水。
+
+### 15.2 各字段怎么来的
+
+| 本地 `s_integration` | CRM `point_ledger` |
+|---|---|
+| `type=1`（获得） | `EARN`，`delta=score`，时间 `create_time` |
+| `type=0 AND state=1`（有效抵扣） | `CONSUME`，`delta=-score`，时间 `create_time` |
+| `type=1 AND state=2 AND normal_score>0`（过期） | `EXPIRE`，`delta=-normal_score`，时间 `end_time` |
+| `type=0 AND state=0`（已取消/退款） | 不导：本地当时已冲回，导了会重复扣 |
+
+- `business='ql'`，`operator_name='轻疗历史导入'`，`ref=idem_key='qlhist:<earn|consume|expire>:<s_integration.id>'`，`note` 保留原备注并把订单号带在括号里。
+- 时间：本地是北京时间、CRM（Prisma）存 UTC，导入时统一 `CONVERT_TZ(...,'+08:00','+00:00')`，后台按 `Asia/Shanghai` 显示。
+- 同一秒内按 获得 → 消耗 → 到期 排序，逐会员顺推 `balance_after`；全量校验无负余额。
+- 1335 条 `qlmig:` 汇总行先整表归档到 `point_ledger_qlmig_backup_20261117` 再删除，否则同一段历史会被算两遍。
+
+### 15.3 余额怎么对齐
+
+- 目标余额 = 轻疗当前可用积分（`type=1 AND state=1 AND end_time > now()` 的 `normal_score` 之和，同一手机号合并的会员按身份求和）＋ 该会员 11-17 之后 **CRM 侧**自己的调整（如总部补发，本地账本里没有，不能被对齐冲掉）。
+- 差额只补/扣 `point_batches`（最老批次优先，扣完置 `DEPLETED`），**不另写流水**：差额本身已由导入的明细解释，再写一条 ADJUST 会重复计。
+- 结果：17 个 11-19 之后注册的新客各补 66（新客奖），4 人小额补差，1 人按其 11-17 后的本地消耗扣 66；净 +1086。另有 2 人源数据 `normal_score` 被人工改过（共 88 分），补 `qlhist:align:<memberId>` 对齐行。
+
+### 15.4 执行与结果
+
+- 脚本：`crm/apps/server/prisma/ql-ledger-history-20261121.sql`（在同一个 RDS 实例上跨库 JOIN，`tou_mall_current` × `crm`）。
+- 前置：17 个 11 月 19 日后注册、有积分记录但 CRM 无身份的客户先用 `crm/apps/server/scripts/import-ql-members.cjs` 补导（created 17 / failed 0）。
+- 备份：`/opt/fullyu-crm/backups/pre-ql-ledger-20261121/crm-points-before.sql`（point_ledger / point_batches / member_identities / members）。
+- 结果：ql 流水 4660 条（获得 3640 / 消耗 918 / 到期 100 / 对齐 2），合计 84771 = 本地可用积分；批次 1357 个共 84837（含总部补发的 66）。
+- 校验：链式（上一条余额＋本条 delta＝本条余额）、批次余额 vs 最后一条流水、负余额，三项均为 0；唯一不一致是那位收过总部补发的会员（CRM 72 / 本地 6，切 CRM 后以 72 为准）。
+- 幂等：`idem_key` 唯一，重放为 no-op（第二次执行差额为 0，行数不变）。回滚：删 `idem_key LIKE 'qlhist:%'`、从备份表还原 `qlmig:` 行、用上面的备份恢复批次。
+
+### 15.5 遗留
+
+- 这只是一次快照。生产积分写入仍走本地，之后新产生的积分不会进 CRM，直到把 `CRM_ENABLED=1 / CRM_BASE_URL / CRM_KEY_ID / CRM_SECRET` 写进 `/etc/fullyu/qingliao.env` 并重启轻疗服务。
+- 真正切 CRM 之前要再做一次余额对齐（届时本地又会有新差额），否则 CRM 余额会落后于本地。
+- 月度对账报表里 2025-07 起的轻疗消耗/到期会出现历史数字（此前只有 11-17 之后的 CRM 数据）。
