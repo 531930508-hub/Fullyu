@@ -93,7 +93,11 @@ public class OrderService extends BaseService<OrderMapper, Order> {
     }
 
     private static Object orderLock(Long orderId) {
-        return ORDER_LOCKS[(int) Math.floorMod(orderId == null ? 0L : orderId, ORDER_LOCKS.length)];
+        // 第二个参数必须显式转 long：Math 只有 floorMod(int,int) 和 floorMod(long,long)。
+        // 写成 floorMod(long, int) 时，JDK 18+ 的 javac 会选中 JDK 18 才新增的 floorMod(long,int)，
+        // 编译产物引用 Math.floorMod(JI)I，一放到 JDK 8 运行时就是 NoSuchMethodError（下单直接 500）。
+        // 线上 JDK 8，故锁定为 (J,J) 重载——JDK 8 / JDK 18+ 编译结果一致。
+        return ORDER_LOCKS[(int) Math.floorMod(orderId == null ? 0L : orderId, (long) ORDER_LOCKS.length)];
     }
     @Autowired
     @Lazy

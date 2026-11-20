@@ -30,6 +30,11 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <java.version>1.8</java.version>
+        <!-- 线上运行在 JDK 8；必须用 release 方式编译（等效于 javac 的 release 8 开关），
+             否则在 JDK 17/21 上构建时 javac 会挑中 JDK 9+ 新增的重载/API，产物放到 JDK 8 上
+             直接 NoSuchMethodError（2026-11 线上 floorMod(long,int) 事故即此）。
+             release 覆盖 source/target，会同时限制「语言特性」和「可引用的平台 API」。 -->
+        <maven.compiler.release>8</maven.compiler.release>
         <skipTests>true</skipTests>
 <!--        <docker.host>http://192.168.3.101:2375</docker.host>-->
 <!--        <docker.maven.plugin.version>0.40.2</docker.maven.plugin.version>-->
