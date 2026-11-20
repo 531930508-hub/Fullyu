@@ -254,11 +254,13 @@ export function activityFilter(value) {
   return '无'
 }
 
-// 超级管理员需要看到完整手机号/称呼（对账、客服回拨、导出核对），其余角色一律脱敏
-const SUPER_ADMIN_ROLE = '超级管理员'
+// 可见完整手机号/称呼的角色（对账、客服回拨、导出核对）：超级管理员、总助，其余角色一律脱敏
+// 新增角色只改这一处，maskPhoneFilter / maskNicknameFilter 共用同一判断
+const FULL_PHONE_ROLES = ['超级管理员', '总助']
 
-export function isSuperAdminUser() {
-  return (store.getters.roles || []).indexOf(SUPER_ADMIN_ROLE) > -1
+export function canSeeFullPhone() {
+  const roles = store.getters.roles || []
+  return roles.some(role => role != null && FULL_PHONE_ROLES.indexOf(String(role).trim()) > -1)
 }
 
 // 顾客手机号展示脱敏：11 位保留前 4 位与后 4 位，中间以 *** 占位；异常长度只保留首尾各 1-2 位
@@ -280,7 +282,7 @@ function maskPhoneValue(value) {
 
 // 顾客手机号展示脱敏（表格列 / 详情文本用）
 export function maskPhoneFilter(value) {
-  if (isSuperAdminUser()) return value == null ? '' : String(value).trim()
+  if (canSeeFullPhone()) return value == null ? '' : String(value).trim()
   return maskPhoneValue(value)
 }
 
@@ -288,7 +290,7 @@ export function maskPhoneFilter(value) {
 export function maskNicknameFilter(value) {
   const name = value == null ? '' : String(value).trim()
   if (!name) return name
-  if (isSuperAdminUser()) return name
+  if (canSeeFullPhone()) return name
   const auto = /^用户(1\d{10})$/.exec(name)
   if (auto) return '用户' + maskPhoneValue(auto[1])
   if (/^1\d{10}$/.test(name)) return maskPhoneValue(name)

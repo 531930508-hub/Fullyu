@@ -20,19 +20,19 @@ function load(roles) {
   return context;
 }
 
-test('非超级管理员看到脱敏手机号', () => {
+test('非特权角色看到脱敏手机号', () => {
   const ctx = load(['店长']);
   assert.equal(ctx.maskPhoneFilter('13812345678'), '1381***5678');
   assert.equal(ctx.maskPhoneFilter(''), '');
   assert.equal(ctx.maskPhoneFilter(null), '');
   // 已脱敏的文本再次过滤保持原样，不会叠加星号
   assert.equal(ctx.maskPhoneFilter('1381***5678'), '1381***5678');
-  assert.equal(ctx.isSuperAdminUser(), false);
+  assert.equal(ctx.canSeeFullPhone(), false);
 });
 
 test('超级管理员看到完整手机号与称呼', () => {
   const ctx = load(['超级管理员']);
-  assert.equal(ctx.isSuperAdminUser(), true);
+  assert.equal(ctx.canSeeFullPhone(), true);
   assert.equal(ctx.maskPhoneFilter('13812345678'), '13812345678');
   assert.equal(ctx.maskPhoneFilter(' 13812345678 '), '13812345678');
   assert.equal(ctx.maskPhoneFilter(null), '');
@@ -40,7 +40,24 @@ test('超级管理员看到完整手机号与称呼', () => {
   assert.equal(ctx.maskNicknameFilter('13812345678'), '13812345678');
 });
 
-test('非超级管理员的称呼脱敏规则保持不变', () => {
+test('总助看到完整手机号与称呼', () => {
+  const ctx = load(['总助']);
+  assert.equal(ctx.canSeeFullPhone(), true);
+  assert.equal(ctx.maskPhoneFilter('13812345678'), '13812345678');
+  assert.equal(ctx.maskPhoneFilter(' 13812345678 '), '13812345678');
+  assert.equal(ctx.maskPhoneFilter(null), '');
+  assert.equal(ctx.maskPhoneFilter(''), '');
+  assert.equal(ctx.maskNicknameFilter('用户13812345678'), '用户13812345678');
+  assert.equal(ctx.maskNicknameFilter('13812345678'), '13812345678');
+});
+
+test('总助叠加在其它角色里仍可见完整手机号', () => {
+  const ctx = load(['店长', '总助']);
+  assert.equal(ctx.canSeeFullPhone(), true);
+  assert.equal(ctx.maskPhoneFilter('13812345678'), '13812345678');
+});
+
+test('非特权角色的称呼脱敏规则保持不变', () => {
   const ctx = load(['门店店长', '财务']);
   assert.equal(ctx.maskNicknameFilter('用户13812345678'), '用户1381***5678');
   assert.equal(ctx.maskNicknameFilter('13812345678'), '1381***5678');
@@ -49,8 +66,8 @@ test('非超级管理员的称呼脱敏规则保持不变', () => {
   assert.equal(ctx.maskNicknameFilter(''), '');
 });
 
-test('roles 缺失时按非超级管理员处理', () => {
+test('roles 缺失时按非特权角色处理', () => {
   const ctx = load(undefined);
-  assert.equal(ctx.isSuperAdminUser(), false);
+  assert.equal(ctx.canSeeFullPhone(), false);
   assert.equal(ctx.maskPhoneFilter('13812345678'), '1381***5678');
 });
