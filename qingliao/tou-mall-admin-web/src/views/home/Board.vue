@@ -4,7 +4,7 @@
          style="margin-bottom: 24px;background-color: #FFFFFF;padding: 12px 24px;">
       <div class="flex align-center">
         <hamburger class="m-r-10" :toggleClick="toggleSideBar" :isActive="sidebar.opened"></hamburger>
-        <el-radio-group v-if="!isMassagist" class="group" v-model="searchForm.type" @change="updateData(true)" size="large">
+        <el-radio-group class="group" v-model="searchForm.type" @change="updateData(true)" size="large">
           <el-radio-button :label="1">床位</el-radio-button>
           <el-radio-button :label="2">疗愈师</el-radio-button>
         </el-radio-group>
@@ -646,8 +646,8 @@ export default {
     },
     initData() {
       this.searchForm.date = dateUtil.getCurrentDateCode()
-      // 疗愈师看板：固定按疗愈师维度展示全店排班，不限本人
-      this.searchForm.type = this.isMassagist ? 2 : 1
+      // 床位/疗愈师两种视图所有角色都能看，默认床位；疗愈师在床位视图里同样是只读
+      this.searchForm.type = 1
       this.searchForm.massagistId = ''
       if (this.isMassagist) {
         // 门店按「这一天我在哪家店」解析，交给 updateData 处理
@@ -714,8 +714,7 @@ export default {
     },
     async updateData(showloading = false) {
       if (this.isMassagist) {
-        // 疗愈师看板固定疗愈师维度，但不再限定本人：全店排班都可见
-        this.searchForm.type = 2
+        // 疗愈师看板全店可见、不限本人；视图（床位/疗愈师）由用户自己切换
         this.searchForm.massagistId = ''
         this.listLoading = true
         const hasSchedule = await this.resolveTherapistDay()
