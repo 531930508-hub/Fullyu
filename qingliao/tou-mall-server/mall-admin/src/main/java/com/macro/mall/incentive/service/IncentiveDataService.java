@@ -357,7 +357,12 @@ public class IncentiveDataService {
                                              boolean requireAccess) {
         String selected = IncentiveMath.normalizeMonth(month);
         requireNotFuture(selected);
-        Massagist massagist = massagistService.getById(massagistId);
+        // 本人视图（requireAccess=false）不做门店校验：massagistId 来自登录态，
+        // 与账号授权门店（ums_admin.shop_id/shop_id_arr）是两套配置，一旦不一致，
+        // getById 会被行级校验拒绝，页面只显示「无权访问该门店的数据」。
+        Massagist massagist = requireAccess
+                ? massagistService.getById(massagistId)
+                : massagistService.getByIdAcrossShops(massagistId);
         if (massagist == null) {
             throw new BusinessException("疗愈师档案不存在");
         }

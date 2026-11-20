@@ -169,6 +169,12 @@ public class ShopScopeService {
         return admin;
     }
 
+    /** 当前后台账号 id；非后台上下文返回 null。仅用于日志留痕。 */
+    public Long currentAdminIdOrNull() {
+        UmsAdmin admin = currentAdminOrNull();
+        return admin == null ? null : admin.getId();
+    }
+
     public boolean isGlobal() {
         return isGlobal(currentAdmin());
     }

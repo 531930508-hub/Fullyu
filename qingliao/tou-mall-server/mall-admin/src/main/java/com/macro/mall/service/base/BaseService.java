@@ -142,11 +142,14 @@ public class BaseService<M extends BaseMapper<T>, T> extends ServiceImpl<M, T> {
             // 容器尚未就绪（无作用域上下文），不阻断
             return;
         }
-        if (shopScopeService.isEnforce()) {
+        // 这类拒绝只回给前端一句话、不进日志，线上排查成本极高，因此两个分支都留痕。
+        boolean enforce = shopScopeService.isEnforce();
+        LOGGER.warn("[SHOP_SCOPE] 越权访问 entity={} shopId={} authorized={} requested={} adminId={} enforce={}",
+                entity.getClass().getSimpleName(), shopId, scope.getAuthorizedShopIds(),
+                scope.getRequestedShopIds(), shopScopeService.currentAdminIdOrNull(), enforce);
+        if (enforce) {
             throw new BusinessException("无权访问该门店的数据");
         }
-        LOGGER.warn("[SHOP_SCOPE] 越权访问（当前未拦截）entity={} shopId={}",
-                entity.getClass().getSimpleName(), shopId);
     }
 
     /**

@@ -71,10 +71,17 @@ public class MassagistService extends BaseService<MassagistMapper, Massagist> {
     /**
      * 跨店按 id 读取疗愈师，跳过 {@link BaseService} 的资源级门店校验（直连 mapper）。
      *
-     * <p>仅用于内训师盲考链路：内训师归属某个门店，但可以考核任意门店的疗愈师，
-     * 走 {@link #getById} 会因“被考核人不在本人门店”被门店作用域拦掉。
-     * 调用方必须先完成身份鉴权（{@code IncentiveAccessService.requireTrainer()}），
-     * 否则等同于绕开门店隔离。</p>
+     * <p>两类合法场景：</p>
+     * <ul>
+     *     <li>内训师盲考：内训师归属某个门店，但可以考核任意门店的疗愈师，走 {@link #getById}
+     *         会因“被考核人不在本人门店”被门店作用域拦掉。调用方必须先完成身份鉴权
+     *         （{@code IncentiveAccessService.requireTrainer()}）。</li>
+     *     <li>本人自助页（我的接单奖励、我的结算单）：id 来自登录态而非客户端参数，
+     *         读自己的档案不构成跨店越权；而档案门店与 {@code ums_admin.shop_id}
+     *         是两套配置，不一致时 {@link #getById} 会直接拒绝。</li>
+     * </ul>
+     *
+     * <p>其它情况不得调用，否则等同于绕开门店隔离。</p>
      */
     public Massagist getByIdAcrossShops(Long id) {
         return id == null ? null : getBaseMapper().selectById(id);
