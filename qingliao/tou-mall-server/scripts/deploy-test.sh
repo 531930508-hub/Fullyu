@@ -69,6 +69,13 @@ LAST_GOOD="$APP_DIR/backup/last-good/mall-admin-1.0-SNAPSHOT.jar"
 cd "$(dirname "$0")/.."
 SRV="$(cd .. && pwd)"
 
+# 溯源：测试机是「源码同步过去、就地 mvn」的模式，服务器上没有 .git，
+# git-commit-id 插件算不出提交，MANIFEST 的 Implementation-Build 会写成空串
+# （2026-11-20 23:28 的包就是这样，同天生产包因显式传了 -Dbuild.commit 正常）。
+# 所以由本机在同步前的源码状态里取 HEAD，打包时显式传 -Dbuild.commit。
+COMMIT="$(git -C "$SRV" rev-parse HEAD 2>/dev/null || true)"
+[ -n "$COMMIT" ] || echo "! 取不到本机 git HEAD，本次构建的 Implementation-Build 将为空"
+
 WEB_DIR="${WEB_DIR:-$SRV/tou-mall-admin-web}"
 WEB_REMOTE="$APP_DIR/admin-dist"
 WEB_HEALTH_URL="${WEB_HEALTH_URL:-https://test-cityretreat.fullyu.cn/}"
@@ -367,12 +374,12 @@ step "mvn package（服务器后台跑，60~180s）"
 BUILD_RC="$APP_DIR/.build-$TS.rc"; BUILD_LOG="$APP_DIR/.build-$TS.log"
 # 2026-11-18 13:02 实测：mvn 在前台跑，ssh 一断（connection reset）本地 trap 直接进回滚，
 # 构建跟着被杀、target 里连 jar 都没有。改成 setsid 后台跑 + 轮询 rc 文件，断连只影响轮询。
-ssh "$HOST" bash -s -- "$SRC_REMOTE" "$JAR_REMOTE" "$BUILD_RC" "$BUILD_LOG" <<'REMOTE'
+ssh "$HOST" bash -s -- "$SRC_REMOTE" "$JAR_REMOTE" "$BUILD_RC" "$BUILD_LOG" "$COMMIT" <<'REMOTE'
 set -uo pipefail
 rm -f "$3" "$4"
 setsid --fork nohup bash -c 'cd "$1" || exit 1
-  mvn -q -pl mall-admin -am -DskipTests clean package >>"$3" 2>&1
-  echo $? >"$2"' _ "$1" "$3" "$4" </dev/null >/dev/null 2>&1
+  mvn -q -pl mall-admin -am -DskipTests -Dbuild.commit="$4" -Dbuild.branch=main clean package >>"$3" 2>&1
+  echo $? >"$2"' _ "$1" "$3" "$4" "$5" </dev/null >/dev/null 2>&1
 echo "构建已在服务器后台启动"
 REMOTE
 echo -n "构建中"
