@@ -15,6 +15,13 @@
 				<text>{{ tt('正在读取会员身份', 'Loading your membership') }}</text>
 			</view>
 
+			<!-- 游客态：会员卡与账号绑定，不请求会员接口（否则 401 拦截器会直接把用户弹去登录），这里给一个明确的去登录入口 -->
+			<view v-else-if="needLogin" class="bm-state">
+				<text class="bm-state-title">{{ tt('登录后查看 Full愈大会员', 'Log in to view your Full Yu Member card') }}</text>
+				<text class="bm-state-desc">{{ tt('会员卡、积分与会员礼都与账号绑定，登录后即可查看与开通。', 'Your card, points and member gifts are tied to your account. Log in to view or join.') }}</text>
+				<button class="bm-btn primary full" @click="goLogin">{{ tt('去登录', 'Log in') }}</button>
+			</view>
+
 			<view v-else-if="error" class="bm-state">
 				<text class="bm-state-title">{{ tt('会员信息暂时连不上', 'Membership is unavailable') }}</text>
 				<text class="bm-state-desc">{{ error }}</text>
@@ -354,6 +361,8 @@
 	const customBar = ref(0)
 	const loading = ref(true)
 	const error = ref('')
+	// 游客态单独成页：未登录不发会员接口，展示「去登录」，登录返回后 onShow 再加载。
+	const needLogin = ref(false)
 	const data = ref(null)
 	const selectedCode = ref('')
 	const forcedCard = ref('')
@@ -1160,6 +1169,12 @@
 			// #ifndef MP-WEIXIN
 			customBar.value = statusBar.value + 44
 			// #endif
+			// 游客态：会员数据必须登录后才可读，提前拦下，避免 401 拦截器把用户弹去登录页。
+			needLogin.value = !isMock && !cookie.getToken()
+			if (needLogin.value) {
+				data.value = null
+				return
+			}
 			const forced = forcedCard.value
 			forcedCard.value = ''
 			if (isMock && (forced === 'NONE' || forced === 'ACTIVE')) {
@@ -1185,6 +1200,12 @@
 		if (data.value && active.value) void refreshStories()
 	}
 
+	function goLogin() {
+		uni.navigateTo({
+			url: '/pages/login/login'
+		})
+	}
+
 	onLoad((options) => {
 		if (isMock && options && (options.card === 'NONE' || options.card === 'ACTIVE')) {
 			forcedCard.value = options.card
@@ -1193,20 +1214,30 @@
 		const renewIntent = !!(options && options.renew === '1')
 		const sceneCode = parseGiftScene(options || {})
 		if (sceneCode && !cookie.getToken()) {
-			// 未登录先记住口令，登录页完成后自动领取并回到会员页。
+			// 未登录先记住口令，登录页完成后自动领取并回到会员页；返回时若未登录，页面停在游客态。
 			stashPendingGift(sceneCode)
+			needLogin.value = true
+			loading.value = false
 			uni.navigateTo({ url: '/pages/login/login' })
 			return
 		}
 		void load().then(() => {
 			if (sceneCode) void claimSceneGift(sceneCode)
-			if (renewIntent && !error.value) openRenewal()
+			// 游客态不弹续费层：先登录，避免没有会员身份就进入购买确认。
+			if (renewIntent && !needLogin.value && !error.value) openRenewal()
 		})
 	})
 
+	// 首次进入由 onLoad 负责加载；之后的每一次显示都按当前登录态重走 load：
+	// 登录返回会拿到会员数据，退出登录返回则会切回「去登录」，不留上一位用户的卡片。
+	let firstShow = true
 	onShow(() => {
 		syncLocale()
-		if (data.value) void load()
+		if (firstShow) {
+			firstShow = false
+			return
+		}
+		void load()
 	})
 
 	onUnload(() => {

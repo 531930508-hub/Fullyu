@@ -654,10 +654,8 @@
 	}
 	const renewMemberCard = () => {
 		if (!cookie.getToken()) {
-			uni.showToast({ title: tt('请先登录', 'Please log in first'), icon: 'none' })
-			setTimeout(() => {
-				uni.navigateTo({ url: '/pages/login/login' })
-			}, 500)
+			// 未登录直接去登录页：不在首页弹提示再跳，登录返回后横幅会重新取会员身份。
+			uni.navigateTo({ url: '/pages/login/login' })
 			return
 		}
 		// 续办只能发生在会员页：报价、支付、开卡都在那一条链路上完成，

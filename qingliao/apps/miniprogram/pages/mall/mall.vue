@@ -548,6 +548,11 @@
 	}
 
 	const goMemberCard = () => {
+		// 未登录不进品牌会员页（那边读会员数据会触发 401 再弹一次登录提示），入口直接去登录页。
+		if (!cookie.getToken()) {
+			uni.navigateTo({ url: '/pages/login/login' })
+			return
+		}
 		uni.navigateTo({
 			url: '/pages/user/brand-member/brand-member'
 		})

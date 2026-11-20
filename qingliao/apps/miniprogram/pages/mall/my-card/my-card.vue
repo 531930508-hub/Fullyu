@@ -429,6 +429,11 @@
 		}
 	}
 	const goMemberCard = () => {
+		// 未登录不进品牌会员页，避免在那一页再触发一次登录流程；入口直接去登录页。
+		if (!cookie.getToken()) {
+			uni.navigateTo({ url: '/pages/login/login' })
+			return
+		}
 		uni.navigateTo({
 			url: '/pages/user/brand-member/brand-member'
 		})
