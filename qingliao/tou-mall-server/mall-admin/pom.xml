@@ -157,22 +157,6 @@
                         </dependency>
                     </requiresUnpack>
                 </configuration>
-                <executions>
-                    <!-- 顺带写 META-INF/build-info.properties，/actuator/info 可读 -->
-                    <execution>
-                        <id>build-info</id>
-                        <phase>generate-resources</phase>
-                        <goals>
-                            <goal>build-info</goal>
-                        </goals>
-                        <configuration>
-                            <additionalProperties>
-                                <commit>${build.commit}</commit>
-                                <branch>${build.branch}</branch>
-                            </additionalProperties>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
