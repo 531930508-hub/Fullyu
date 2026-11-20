@@ -30,7 +30,7 @@ import static org.mockito.Mockito.*;
  * 审批节点解析与保存的边界用例。
  *
  * <p>解析结果会被快照进 f_approval_detail，因此这里重点保证：
- * 岗位解析走身份表、停用账号被剔除、发起人不会被派给自己、空节点被跳过、配置非法时给出可读错误。</p>
+ * 岗位解析走身份表、停用账号被剔除、发起人自己可以审批自己提交的单、空节点被跳过、配置非法时给出可读错误。</p>
  *
  * @author Full愈
  * @date 2026/11/09
@@ -82,9 +82,14 @@ class ApprovalFlowNodeResolutionTest {
         return node.getAdminIds().stream().map(String::valueOf).collect(Collectors.toList());
     }
 
+    /** 审批人账号查询统一走 list(wrapper)：按主键直查，不经过门店行级校验。 */
+    private void adminAccounts(UmsAdmin... admins) {
+        when(service.umsAdminService.list(any(Wrapper.class))).thenReturn(Arrays.asList(admins));
+    }
+
     @Test void shopManagerIdentityResolvesToStoreAdmins() {
         when(service.massagistIdentityService.resolveAdminIds(
-                MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, 5L))
+                MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Arrays.asList(7L, 8L));
         List<ApprovalResolvedNode> resolved = service.resolveNodes(
                 Collections.singletonList(node("店长审批", ApprovalNodeMode.ANY.getCode(),
@@ -109,24 +114,18 @@ class ApprovalFlowNodeResolutionTest {
         assertEquals(Collections.singletonList("12"), adminIds(resolved.get(0)));
     }
 
-    @Test void inactiveAccountIsDroppedAndRequesterIsNeverAssignedToSelf() {
-        when(service.umsAdminService.listByIds(argThat(ids -> ids != null && ids.size() == 3)))
-                .thenReturn(Arrays.asList(admin(5L, 1), admin(6L, 1), admin(11L, 0)));
+    @Test void inactiveAccountIsDroppedAndRequesterMayApproveOwnRequest() {
+        adminAccounts(admin(5L, 1), admin(6L, 1), admin(11L, 0));
         List<ApprovalResolvedNode> resolved = service.resolveNodes(
                 Collections.singletonList(node("直属主管", ApprovalNodeMode.ANY.getCode(),
                         userTarget(5L), userTarget(6L), userTarget(11L))),
                 9L, 5L);
         assertEquals(1, resolved.size());
-        assertEquals(Collections.singletonList("6"), adminIds(resolved.get(0)));
+        assertEquals(Arrays.asList("5", "6"), adminIds(resolved.get(0)));
     }
 
     @Test void nodeWithoutAnyApproverIsSkipped() {
-        when(service.umsAdminService.listByIds(anyCollection())).thenAnswer(call -> {
-            List<Long> ids = new ArrayList<>(call.getArgument(0));
-            List<UmsAdmin> admins = new ArrayList<>();
-            for (Long id : ids) admins.add(admin(id, Long.valueOf(11L).equals(id) ? 0 : 1));
-            return admins;
-        });
+        adminAccounts(admin(6L, 1), admin(11L, 0));
         List<ApprovalResolvedNode> resolved = service.resolveNodes(Arrays.asList(
                 node("空节点", ApprovalNodeMode.ANY.getCode(), userTarget(11L)),
                 node("有效节点", ApprovalNodeMode.ANY.getCode(), userTarget(6L))), 9L, null);
@@ -150,7 +149,7 @@ class ApprovalFlowNodeResolutionTest {
     }
 
     @Test void blankApproveModeFallsBackToAnyWhileUnknownModeIsRejectedOnSave() {
-        when(service.umsAdminService.listByIds(anyCollection())).thenReturn(Collections.singletonList(admin(6L, 1)));
+        adminAccounts(admin(6L, 1));
         List<ApprovalResolvedNode> resolved = service.resolveNodes(
                 Collections.singletonList(node("历史节点", null, userTarget(6L))), 9L, null);
         assertEquals(ApprovalNodeMode.ANY.getCode(), resolved.get(0).getApproveMode());
@@ -159,6 +158,7 @@ class ApprovalFlowNodeResolutionTest {
     }
 
     @Test void duplicateTargetsAreStoredOnce() {
+        adminAccounts(admin(6L, 1));
         service.replaceNodes(3L, Collections.singletonList(node("去重", ApprovalNodeMode.ANY.getCode(),
                 userTarget(6L), userTarget(6L),
                 identityTarget(MassagistIdentityCode.SHOP_MANAGER.getCode(), ApprovalTargetScope.SHOP.getCode()),
@@ -209,7 +209,7 @@ class ApprovalFlowNodeResolutionTest {
         when(service.massagistIdentityService.resolveAdminIds(
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Collections.singletonList(7L));
-        when(service.umsAdminService.getById(20L)).thenReturn(admin(20L, 1));
+        adminAccounts(admin(20L, 1));
         service.leaveSecondApproverAdminId = 20L;
 
         List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, true);
@@ -225,7 +225,7 @@ class ApprovalFlowNodeResolutionTest {
         when(service.massagistIdentityService.resolveAdminIds(
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Collections.singletonList(5L));
-        when(service.umsAdminService.getById(20L)).thenReturn(admin(20L, 1));
+        adminAccounts(admin(20L, 1));
         service.leaveSecondApproverAdminId = 20L;
 
         List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, false);
@@ -234,12 +234,17 @@ class ApprovalFlowNodeResolutionTest {
         assertEquals(Arrays.asList("20"), adminIds(chain.get(0)));
     }
 
-    @Test void hqCeoOwnLeaveIsRejected() {
+    @Test void hqCeoOwnLeaveIsApprovedBySelf() {
         when(service.massagistIdentityService.resolveAdminIds(
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Collections.singletonList(20L));
+        adminAccounts(admin(20L, 1));
         service.leaveSecondApproverAdminId = 20L;
-        assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 20L, false));
+        // 允许自己提交自己审批：CEO 请假时二级审批人就是本人，不再拦下
+        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 20L, false);
+        assertEquals(1, chain.size());
+        assertEquals("总部CEO审批", chain.get(0).getNodeName());
+        assertEquals(Collections.singletonList("20"), adminIds(chain.get(0)));
     }
 
     @Test void leaveChainRejectedWhenShopHasNoManagerIdentity() {
@@ -263,7 +268,7 @@ class ApprovalFlowNodeResolutionTest {
         when(service.massagistIdentityService.resolveAdminIds(
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Collections.singletonList(7L));
-        when(service.umsAdminService.getById(20L)).thenReturn(admin(20L, 0));
+        adminAccounts(admin(20L, 0));
         service.leaveSecondApproverAdminId = 20L;
         BusinessException e = assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 5L, true));
         assertTrue(e.getMessage().contains("停用"));
@@ -273,20 +278,23 @@ class ApprovalFlowNodeResolutionTest {
         when(service.massagistIdentityService.resolveAdminIds(
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Collections.singletonList(7L));
-        when(service.umsAdminService.getById(7L)).thenReturn(admin(7L, 1));
+        adminAccounts(admin(7L, 1));
         service.leaveSecondApproverAdminId = 7L;
         List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, true);
         assertEquals(1, chain.size());
         assertEquals("店长审批", chain.get(0).getNodeName());
     }
 
-    @Test void hqCeoManagerIsRejectedWhenSubmittingOwnLeave() {
+    @Test void hqCeoManagerOwnLeaveGoesToHimself() {
         when(service.massagistIdentityService.resolveAdminIds(
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Arrays.asList(7L, 20L));
-        when(service.umsAdminService.getById(20L)).thenReturn(admin(20L, 1));
+        adminAccounts(admin(20L, 1));
         service.leaveSecondApproverAdminId = 20L;
-        // CEO 自己请假：店长那一级不派给自己，二级也不能是他本人 → 拦下
-        assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 20L, false));
+        // CEO 兼店长自己请假：允许自己审批自己，落到本人这一级
+        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 20L, false);
+        assertEquals(1, chain.size());
+        assertEquals("总部CEO审批", chain.get(0).getNodeName());
+        assertEquals(Collections.singletonList("20"), adminIds(chain.get(0)));
     }
 }
