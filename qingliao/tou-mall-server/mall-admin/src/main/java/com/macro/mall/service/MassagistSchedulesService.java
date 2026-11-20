@@ -11,9 +11,11 @@ import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.consts.NormalConst;
 import com.macro.mall.entity.Massagist;
 import com.macro.mall.entity.MassagistSchedules;
+import com.macro.mall.entity.Shop;
 import com.macro.mall.mapper.MassagistSchedulesMapper;
 import com.macro.mall.service.base.BaseService;
 import com.macro.mall.service.base.WrapperBuilder;
+import com.macro.mall.service.shop.ShopService;
 import com.macro.mall.utils.DateUtil;
 import com.macro.mall.utils.RedisUtil;
 import org.apache.logging.log4j.util.Strings;
@@ -29,6 +31,8 @@ import javax.validation.constraints.NotNull;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -70,6 +74,9 @@ public class MassagistSchedulesService extends BaseService<MassagistSchedulesMap
     @Autowired
     @Lazy
     OrderDetailService orderDetailService;
+    @Autowired
+    @Lazy
+    ShopService shopService;
     @Autowired
     RedisUtil redisUtil;
 
@@ -1036,5 +1043,94 @@ public class MassagistSchedulesService extends BaseService<MassagistSchedulesMap
             if (update(uw)) updated++;
         }
         return updated;
+    }
+
+    private static final DateTimeFormatter WEEK_HH_MM = DateTimeFormatter.ofPattern("HH:mm");
+
+    /**
+     * 门店周看板：一周排班 + 参排疗愈师（含本周被调到本店的人）。
+     *
+     * <p>周视图要一屏看完“谁在本店、谁被调走、谁被借调过来”，所以除了 shop_id=本店，
+     * 还要带上 target_shop_id=本店的调店段；否则借调期间的人和班在两店都看不到。</p>
+     *
+     * <p>展示类读取，跨店只用于把班表拼全，不做写侧放行：门店授权由调用方先用
+     * {@code access.resolveShopId(shopId)} 收敛，传进来的 shopId 必须已是授权门店。</p>
+     */
+    public JSONObject weekBoard(Long shopId, String dayStartStr, String dayEndStr) {
+        if (shopId == null || shopId <= 0) throw new BusinessException("请选择门店");
+        LocalDate dayStart;
+        LocalDate dayEnd;
+        try {
+            dayStart = LocalDate.parse(dayStartStr);
+            dayEnd = LocalDate.parse(dayEndStr);
+        } catch (Exception e) {
+            throw new BusinessException("查询日期格式不正确");
+        }
+        if (dayEnd.isBefore(dayStart)) throw new BusinessException("查询日期区间不正确");
+        if (ChronoUnit.DAYS.between(dayStart, dayEnd) > 30) throw new BusinessException("单次最多查看 31 天");
+
+        List<MassagistSchedules> shifts = list(new LambdaQueryWrapper<MassagistSchedules>()
+                .between(MassagistSchedules::getDay, dayStart, dayEnd)
+                .and(w -> w.eq(MassagistSchedules::getShopId, shopId)
+                        .or().eq(MassagistSchedules::getTargetShopId, shopId)));
+        shifts.sort(Comparator.comparing((MassagistSchedules s) -> s.getDay())
+                .thenComparing(s -> s.getStartTime() == null ? LocalTime.MIN : s.getStartTime())
+                .thenComparing(s -> s.getMassagistId() == null ? 0L : s.getMassagistId()));
+
+        JSONArray shiftArray = new JSONArray();
+        Set<Long> massagistIds = new LinkedHashSet<>();
+        Set<Long> shopIds = new LinkedHashSet<>();
+        shopIds.add(shopId);
+        for (MassagistSchedules shift : shifts) {
+            if (shift.getMassagistId() != null) massagistIds.add(shift.getMassagistId());
+            if (shift.getShopId() != null && shift.getShopId() > 0) shopIds.add(shift.getShopId());
+            if (shift.getTargetShopId() != null && shift.getTargetShopId() > 0) shopIds.add(shift.getTargetShopId());
+            JSONObject item = new JSONObject();
+            item.put("id", shift.getId());
+            item.put("massagistId", shift.getMassagistId());
+            item.put("shopId", shift.getShopId());
+            item.put("targetShopId", shift.getTargetShopId());
+            item.put("schedulesType", shift.getSchedulesType());
+            item.put("day", shift.getDay() == null ? null : shift.getDay().toString());
+            item.put("startTime", shift.getStartTime() == null ? null : shift.getStartTime().format(WEEK_HH_MM));
+            item.put("endTime", shift.getEndTime() == null ? null : shift.getEndTime().format(WEEK_HH_MM));
+            shiftArray.add(item);
+        }
+
+        // 名册 = 本店疗愈师（保持原有顺序）+ 本周借调到本店的人，名称跨店补齐
+        Map<Long, Massagist> massagistMap = new LinkedHashMap<>();
+        for (Massagist massagist : massagistService.list(new LambdaQueryWrapper<Massagist>()
+                .eq(Massagist::getShopId, shopId))) {
+            if (massagist.getId() != null) massagistMap.put(massagist.getId(), massagist);
+        }
+        List<Long> borrowedIds = massagistIds.stream()
+                .filter(id -> !massagistMap.containsKey(id)).collect(Collectors.toList());
+        for (Massagist massagist : massagistService.listByIdsAcrossShops(borrowedIds)) {
+            if (massagist.getId() != null) massagistMap.put(massagist.getId(), massagist);
+        }
+        JSONArray massagistArray = new JSONArray();
+        for (Massagist massagist : massagistMap.values()) {
+            JSONObject item = new JSONObject();
+            item.put("id", massagist.getId());
+            item.put("name", massagist.getName());
+            item.put("shopId", massagist.getShopId());
+            item.put("status", massagist.getStatus());
+            if (massagist.getShopId() != null && massagist.getShopId() > 0) shopIds.add(massagist.getShopId());
+            massagistArray.add(item);
+        }
+
+        // 调店会跨店，看板上出现的门店名一次性下发，避免前端受门店授权列表限制显示成“其他门店”
+        JSONObject shops = new JSONObject();
+        for (Shop shop : shopService.listByIds(shopIds)) {
+            if (shop.getId() != null) shops.put(String.valueOf(shop.getId()), shop.getName());
+        }
+
+        JSONObject result = new JSONObject();
+        result.put("dayStart", dayStart.toString());
+        result.put("dayEnd", dayEnd.toString());
+        result.put("shifts", shiftArray);
+        result.put("massagists", massagistArray);
+        result.put("shops", shops);
+        return result;
     }
 }

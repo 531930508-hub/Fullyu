@@ -42,4 +42,12 @@ export default {
       params:{approvalId}
     })
   },
+  // 周视图：一周休息看板（leaves + 折算休息天数 stats）
+  weekBoard(params) {
+    return request({
+      url: '/massagistLeave/weekBoard',
+      method: 'get',
+      params
+    })
+  },
 }

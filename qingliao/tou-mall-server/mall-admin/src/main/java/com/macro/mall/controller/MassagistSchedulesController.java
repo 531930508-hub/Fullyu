@@ -92,6 +92,16 @@ public class MassagistSchedulesController {
         params.put("shopId",shopId);
         return CommonResult.success(massagistSchedulesService.listNoPage(params));
     }
+    @GetMapping("/weekBoard")
+    @ApiOperation("门店周看板：一周排班（含调入本店的调店段）")
+    public CommonResult weekBoard(@RequestParam(required = false) Long shopId,
+                                  @RequestParam String dayStart,
+                                  @RequestParam String dayEnd) {
+        // 先收敛到授权门店，再交给服务层跨店拼班表（借用调店的人可能档案在别的门店）
+        Long resolvedShopId = access.resolveShopId(shopId);
+        if (resolvedShopId == null) throw new BusinessException("请选择门店");
+        return CommonResult.success(massagistSchedulesService.weekBoard(resolvedShopId, dayStart, dayEnd));
+    }
     @GetMapping("/myDay")
     @ApiOperation("疗愈师本人某天的排班门店（可能多家，调店取目标店）")
     public CommonResult myDay(@RequestParam String date) {

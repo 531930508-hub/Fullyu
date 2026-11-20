@@ -11,6 +11,7 @@
       <span class="week-legend">
         <i class="dot dot-normal"></i>本店排班
         <i class="dot dot-target"></i>调店接单
+        <i class="dot dot-inbound"></i>调入本店
         <i class="dot dot-leave"></i>已批准休息
         <i class="dot dot-leave-pending"></i>休息审批中
         <span class="legend-tip">点击空格子为该疗愈师排班</span>
@@ -19,11 +20,17 @@
     <el-alert v-if="loadError" :title="loadError" type="error" show-icon :closable="false">
       <el-button type="text" @click="fetch">重新加载</el-button>
     </el-alert>
+    <el-alert v-if="leaveError" :title="leaveError" type="warning" show-icon :closable="false" class="leave-error">
+      <el-button type="text" @click="fetch">重新加载</el-button>
+    </el-alert>
     <div class="week-table-container" v-loading="loading">
       <el-table :data="rows" border class="week-table" :empty-text="emptyText" :max-height="tableMaxHeight">
         <el-table-column label="疗愈师" width="150" fixed>
           <template slot-scope="scope">
             <div class="massagist-name">{{ scope.row.name }}</div>
+            <div v-if="scope.row.borrowed" class="massagist-meta">
+              <el-tag size="mini" type="warning" effect="plain">借调 · 来自{{ shopName(scope.row.homeShopId) }}</el-tag>
+            </div>
             <div class="massagist-meta">本周已排 {{ scope.row.scheduledDays }} 天</div>
             <div v-if="scope.row.restDays > 0 || scope.row.pendingLeaveDays > 0" class="massagist-meta is-rest">
               <span v-if="scope.row.restDays > 0">本周休息 {{ scope.row.restDays }} 天</span>
@@ -42,18 +49,17 @@
             <div class="week-cell" :class="{'is-today': col.isToday, 'is-past': col.isPast}"
                  @click="handleCellClick(scope.row, col)">
               <div v-for="leave in cellLeaves(scope.row, col.day)" :key="'leave-' + leave.approvalId + '-' + leave.day"
-                   class="leave-chip" :class="{'is-pending': leave.pending}" :title="leaveTitle(leave)">
+                   class="leave-chip" :class="{'is-pending': leave.pending}" :title="leaveTitle(leave)" @click.stop>
                 <div class="chip-time">休息 {{ leave.startTime }}-{{ leave.endTime }}</div>
                 <div class="chip-tag">{{ leave.pending ? '休息审批中' : '已批准休息' }}</div>
               </div>
               <div v-for="item in cellSchedules(scope.row, col.day)" :key="item.id"
-                   class="shift-chip" :class="{'is-target': isTargetShop(item)}"
-                   :title="chipTitle(item)" @click.stop="handleEdit(item)">
+                   class="shift-chip" :class="{'is-target': isTargetShop(item), 'is-inbound': isInbound(item)}"
+                   :title="chipTitle(item)" @click.stop="handleChipClick(item)">
                 <div class="chip-time">{{ item.startTime | hhmm }}-{{ item.endTime | hhmm }}</div>
-                <div v-if="isTargetShop(item)" class="chip-tag">调店 · {{ shopName(item.targetShopId) }}</div>
-                <div v-else-if="item.schedulesType == 1" class="chip-tag">调店优先</div>
+                <div v-if="chipTag(item)" class="chip-tag">{{ chipTag(item) }}</div>
               </div>
-              <div v-if="!cellSchedules(scope.row, col.day).length && !cellLeaves(scope.row, col.day).length" class="cell-add">
+              <div v-if="!scope.row.borrowed && !cellSchedules(scope.row, col.day).length && !cellLeaves(scope.row, col.day).length" class="cell-add">
                 <i class="el-icon-plus"></i> 排班
               </div>
             </div>
@@ -68,13 +74,19 @@
 import {mapGetters} from 'vuex'
 import dayjs from 'dayjs'
 import massagistSchedulesApi from '@/api/massagistSchedules'
-import massagistApi from '@/api/massagist'
+import massagistLeaveApi from '@/api/massagistLeave'
 
 const WEEK_DAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 function toDay(value) {
   if (!value) return ''
   return String(value).slice(0, 10)
+}
+
+function roundDays(value) {
+  const num = Number(value)
+  if (!num) return 0
+  return Math.round(num * 100) / 100
 }
 
 function mondayOf(date) {
@@ -95,9 +107,13 @@ export default {
     return {
       weekStart: mondayOf(dayjs()),
       massagists: [],
-      schedules: [],
+      shifts: [],
+      leaves: [],
+      leaveStats: {},
+      shopNames: {},
       loading: false,
       loadError: '',
+      leaveError: '',
       requestSeq: 0,
     }
   },
@@ -129,32 +145,55 @@ export default {
     },
     rows() {
       const allowedId = this.massagistId ? String(this.massagistId) : ''
+      const statusFilter = this.status === null || this.status === '' || this.status === undefined
+        ? '' : String(this.status)
       const byMassagist = new Map()
-      const ensure = (massagistId) => {
-        const key = String(massagistId)
-        if (!byMassagist.has(key)) {
-          byMassagist.set(key, {massagistId, name: this.massagistName(massagistId), byDay: {}, scheduledDays: 0})
-        }
-        return byMassagist.get(key)
-      }
-      this.massagists.forEach(m => ensure(m.id))
-      this.schedules.forEach(schedule => {
-        const day = toDay(schedule.day)
-        if (!day) return
-        const row = ensure(schedule.massagistId)
-        if (!row.byDay[day]) row.byDay[day] = []
-        row.byDay[day].push(schedule)
+      // 行只按名册生成：后端给的名册 = 本店疗愈师 + 本周被借调到本店的人。
+      // 状态/疗愈师筛选在本地做，切筛选条件不必重新请求。
+      this.massagists.forEach(m => {
+        const key = String(m.id)
+        if (statusFilter && String(m.status) !== statusFilter) return
+        if (allowedId && key !== allowedId) return
+        byMassagist.set(key, {
+          massagistId: m.id,
+          name: m.name,
+          homeShopId: m.shopId,
+          // 档案不在本店、只是本周被借调过来的人：本店只读，排班/编辑都要回到原店
+          borrowed: String(m.shopId) !== String(this.shopId),
+          byDay: {},
+          byLeaveDay: {},
+          scheduledDays: 0,
+          restDays: 0,
+          pendingLeaveDays: 0,
+        })
       })
-      const rows = []
+      this.shifts.forEach(shift => {
+        const row = byMassagist.get(String(shift.massagistId))
+        const day = toDay(shift.day)
+        if (!row || !day) return
+        if (!row.byDay[day]) row.byDay[day] = []
+        row.byDay[day].push(shift)
+      })
+      this.leaves.forEach(leave => {
+        const row = byMassagist.get(String(leave.massagistId))
+        const day = toDay(leave.day)
+        if (!row || !day) return
+        if (!row.byLeaveDay[day]) row.byLeaveDay[day] = []
+        row.byLeaveDay[day].push(leave)
+      })
       byMassagist.forEach(row => {
-        if (allowedId && String(row.massagistId) !== allowedId) return
         Object.keys(row.byDay).forEach(day => {
           row.byDay[day].sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)))
         })
+        Object.keys(row.byLeaveDay).forEach(day => {
+          row.byLeaveDay[day].sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)))
+        })
+        const stat = this.leaveStats[String(row.massagistId)] || {}
         row.scheduledDays = Object.keys(row.byDay).length
-        rows.push(row)
+        row.restDays = roundDays(stat.restDays)
+        row.pendingLeaveDays = Number(stat.pendingDates || 0)
       })
-      return rows
+      return Array.from(byMassagist.values())
     },
     emptyText() {
       if (!this.shopId) return '请先选择门店'
@@ -172,7 +211,6 @@ export default {
   },
   created() {
     this.$store.dispatch('setShopAllList')
-    this.$store.dispatch('setMassagistList')
     this.fetch()
   },
   methods: {
@@ -191,79 +229,107 @@ export default {
     async fetch() {
       if (!this.shopId) {
         this.massagists = []
-        this.schedules = []
+        this.shifts = []
+        this.leaves = []
+        this.leaveStats = {}
+        this.shopNames = {}
         this.loadError = ''
+        this.leaveError = ''
         return
       }
       const seq = ++this.requestSeq
       this.loading = true
+      const range = {shopId: this.shopId, dayStart: this.weekStart, dayEnd: this.weekEnd}
       try {
-        const params = {
-          shopId: this.shopId,
-          dayStart: this.weekStart,
-          dayEnd: this.weekEnd,
-          all: 1,
-          limit: 2000,
-          order: 'day,startTime',
-        }
-        const massagistParams = {shopId: this.shopId, all: 1}
-        if (this.status !== null && this.status !== '' && this.status !== undefined) {
-          massagistParams.status = this.status
-        }
-        const [massagistRes, scheduleRes] = await Promise.all([
-          massagistApi.list(massagistParams),
-          massagistSchedulesApi.list(params),
+        // 休息看板是补充信息：它挂了不能把整周班表一起打空，单独降级成一条提示
+        const [boardRes, leaveRes] = await Promise.all([
+          massagistSchedulesApi.weekBoard(range),
+          massagistLeaveApi.weekBoard(range).catch(() => null),
         ])
         if (seq !== this.requestSeq) return
-        this.massagists = this.unwrapList(massagistRes)
-        this.schedules = this.unwrapList(scheduleRes)
+        const board = (boardRes && boardRes.data) || {}
+        this.massagists = Array.isArray(board.massagists) ? board.massagists : []
+        this.shifts = Array.isArray(board.shifts) ? board.shifts : []
+        this.shopNames = board.shops || {}
+        const leaveBoard = leaveRes && leaveRes.data
+        this.leaves = leaveBoard && Array.isArray(leaveBoard.leaves) ? leaveBoard.leaves : []
+        this.leaveStats = (leaveBoard && leaveBoard.stats) || {}
+        this.leaveError = leaveBoard ? '' : '休息数据加载失败，本周只显示排班'
         this.loadError = ''
       } catch (e) {
         if (seq !== this.requestSeq) return
         this.massagists = []
-        this.schedules = []
+        this.shifts = []
+        this.leaves = []
+        this.leaveStats = {}
+        this.shopNames = {}
         this.loadError = '周视图加载失败，请重试'
       } finally {
         if (seq === this.requestSeq) this.loading = false
       }
     },
-    unwrapList(res) {
-      const data = res && res.data
-      if (Array.isArray(data)) return data
-      if (data && Array.isArray(data.list)) return data.list
-      return []
-    },
     cellSchedules(row, day) {
       return row.byDay[day] || []
     },
+    cellLeaves(row, day) {
+      return row.byLeaveDay[day] || []
+    },
     isTargetShop(schedule) {
-      return schedule && schedule.targetShopId > 0
+      // 本店的人被调到别家店：当天不在本店接单
+      return !!(schedule && schedule.targetShopId > 0 && !this.isInbound(schedule))
+    },
+    isInbound(schedule) {
+      // 主场次在别的店、调店目标才是当前看板门店：她是被借调过来上班的
+      return !!(schedule && schedule.targetShopId > 0
+        && String(schedule.shopId) !== String(this.shopId))
     },
     shopName(shopId) {
+      const key = String(shopId)
+      if (this.shopNames[key]) return this.shopNames[key]
       const list = this.shopListAll || []
       const shop = list.find(s => s.id == shopId)
-      return shop ? shop.name : '其他门店'
+      return shop ? shop.name : `门店${shopId}`
     },
-    massagistName(massagistId) {
-      const hit = (this.massagists || []).find(m => m.id == massagistId)
-      if (hit) return hit.name
-      const global = this.$store.getters.massagistList || []
-      const found = global.find(m => m.id == massagistId)
-      return found ? found.name : `疗愈师${massagistId}`
+    chipTag(schedule) {
+      if (this.isInbound(schedule)) return `调入 · 来自${this.shopName(schedule.shopId)}`
+      if (this.isTargetShop(schedule)) return `调店 · ${this.shopName(schedule.targetShopId)}`
+      if (schedule.schedulesType == 1) return '调店优先'
+      return ''
     },
     chipTitle(schedule) {
       const time = `${this.hhmm(schedule.startTime)}-${this.hhmm(schedule.endTime)}`
-      return this.isTargetShop(schedule)
-        ? `${time} 调店接单：${this.shopName(schedule.targetShopId)}（点击编辑）`
-        : `${time} 本店排班（点击编辑）`
+      if (this.isInbound(schedule)) {
+        return `${time} 从${this.shopName(schedule.shopId)}调入本店（归属${this.shopName(schedule.shopId)}，本店只读）`
+      }
+      if (this.isTargetShop(schedule)) {
+        return `${time} 调店接单：${this.shopName(schedule.targetShopId)}（点击编辑）`
+      }
+      return `${time} 本店排班（点击编辑）`
+    },
+    leaveTitle(leave) {
+      const state = leave.pending ? '休息审批中' : '已批准休息'
+      const fullDay = leave.fullDay ? '（整天）' : ''
+      return `休息 ${leave.startTime}-${leave.endTime} · ${state}${fullDay}`
     },
     handleCellClick(row, col) {
+      if (row.borrowed) {
+        this.$message.info(`该疗愈师属于${this.shopName(row.homeShopId)}，排班请到所属门店，或用“调店”入口调整`)
+        return
+      }
       const today = dayjs().format('YYYY-MM-DD')
       if (col.day < today) {
         this.$message.warning('不能为已过去的日期排班')
         return
       }
       this.$emit('create', {massagistId: row.massagistId, day: col.day})
+    },
+    handleChipClick(schedule) {
+      // 调入班次的归属店不是本店，改它会被后端按门店作用域拒绝，这里直接说明只读
+      if (this.isInbound(schedule)) {
+        this.$message.info(`该班次归属${this.shopName(schedule.shopId)}，本店仅查看借调安排`)
+        return
+      }
+      this.handleEdit(schedule)
     },
     handleEdit(schedule) {
       this.$emit('edit', schedule)
@@ -341,10 +407,27 @@ export default {
         background: #e6a23c;
       }
 
+      .dot-inbound {
+        background: #fff;
+        border: 2px solid #e6a23c;
+      }
+
+      .dot-leave {
+        background: #67c23a;
+      }
+
+      .dot-leave-pending {
+        background: #c0c4cc;
+      }
+
       .legend-tip {
         margin-left: 8px;
       }
     }
+  }
+
+  .leave-error {
+    margin-top: 8px;
   }
 
   .week-table-container {
@@ -417,6 +500,15 @@ export default {
       border-color: #b3d8ff;
     }
 
+    .chip-time {
+      font-weight: 600;
+    }
+
+    .chip-tag {
+      font-size: 11px;
+      opacity: 0.85;
+    }
+
     .shift-chip {
       border-left: 3px solid #409eff;
       background: #ecf5ff;
@@ -432,13 +524,27 @@ export default {
         color: #8a5a12;
       }
 
-      .chip-time {
-        font-weight: 600;
+      &.is-inbound {
+        border-left-style: dashed;
+        border-left-color: #e6a23c;
+        background: #fdf6ec;
+        color: #8a5a12;
       }
+    }
 
-      .chip-tag {
-        font-size: 11px;
-        opacity: 0.85;
+    .leave-chip {
+      border-left: 3px solid #67c23a;
+      background: #f0f9eb;
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #3f6b2b;
+
+      &.is-pending {
+        border-left-color: #c0c4cc;
+        background: #f4f4f5;
+        color: #606266;
       }
     }
   }

@@ -43,6 +43,14 @@ export default {
       params
     })
   },
+  // 周视图：一周排班（含调入本店的调店段）
+  weekBoard(params) {
+    return request({
+      url: '/massagistSchedules/weekBoard',
+      method: 'get',
+      params
+    })
+  },
   // 疗愈师本人某天的排班门店（当天调店取目标店）
   myDay(date) {
     return request({
