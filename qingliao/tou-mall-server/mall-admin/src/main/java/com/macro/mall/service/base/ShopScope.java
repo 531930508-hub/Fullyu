@@ -92,6 +92,28 @@ public class ShopScope {
         }
     }
 
+    /**
+     * 追加临时授权门店，返回新的作用域对象。
+     *
+     * <p>用于“疗愈师按排班日期临时多一间店”的场景：授权只对本次请求生效，
+     * 不写回账号配置；全局角色与未登录上下文原样返回。</p>
+     */
+    public ShopScope withExtraShopIds(List<Long> extraShopIds) {
+        if (global || extraShopIds == null || extraShopIds.isEmpty()) {
+            return this;
+        }
+        Set<Long> merged = new LinkedHashSet<>();
+        if (authorizedShopIds != null) {
+            merged.addAll(authorizedShopIds);
+        }
+        for (Long shopId : extraShopIds) {
+            if (shopId != null && shopId > 0) {
+                merged.add(shopId);
+            }
+        }
+        return new ShopScope(false, new ArrayList<>(merged), requestedShopIds);
+    }
+
     /** 判断某条记录是否在当前作用域内，用于按 id 读写的资源级校验 */
     public boolean contains(Long shopId) {
         if (global) {

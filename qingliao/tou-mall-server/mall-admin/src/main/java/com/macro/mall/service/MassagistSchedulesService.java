@@ -941,12 +941,29 @@ public class MassagistSchedulesService extends BaseService<MassagistSchedulesMap
         massagistSchedulesList.stream().forEach(e -> {
             List<MassagistSchedules> mas = new ArrayList<>();
             mas.add(e);
-            Massagist massagist = massagistService.getById(e.getMassagistId());
+            // 调店技师的原店可能是别的门店，看板展示不能按当前门店作用域拦
+            Massagist massagist = massagistService.getByIdAcrossShops(e.getMassagistId());
             massagist.setSchedulesList(mas);
             massagistList.add(massagist);
         });
         List<Long> massagistIds = massagistSchedulesList.stream().map(MassagistSchedules::getMassagistId).collect(Collectors.toList());
         return massagistList;
+    }
+
+    /**
+     * 某天在原店（shop_id=本店）有排班的记录。
+     *
+     * <p>用于看板补列：技师档案可能挂在别的门店（例如长期驻店换了店但档案没改），
+     * 只看档案会漏人，导致她当天看不到自己的排班列。</p>
+     */
+    public List<MassagistSchedules> listByDayAndShopId(LocalDate day, Long shopId) {
+        if (day == null || shopId == null) {
+            return new ArrayList<>();
+        }
+        LambdaQueryWrapper<MassagistSchedules> lqw = new LambdaQueryWrapper<>();
+        lqw.eq(MassagistSchedules::getDay, day);
+        lqw.eq(MassagistSchedules::getShopId, shopId);
+        return list(lqw);
     }
 
     public List<MassagistSchedules> listByMassagistIdAndShopIdAndDate(Long massagistId, Long shopId, LocalDate yyyymmdd) {
@@ -956,6 +973,42 @@ public class MassagistSchedulesService extends BaseService<MassagistSchedulesMap
         lqw.eq(MassagistSchedules::getDay, yyyymmdd);
         return list(lqw);
     }
+    /**
+     * 某疗愈师某天排班涉及的门店：原店 + 调店目标店。
+     *
+     * <p>用于“按日期临时授权”：只有当天确有排班/调店的门店才进授权范围，
+     * 不能拿任意一天的排班去读别家店。</p>
+     */
+    public List<Long> shopIdsByMassagistAndDay(Long massagistId, LocalDate day) {
+        Set<Long> ids = new LinkedHashSet<>();
+        if (massagistId == null || massagistId <= 0 || day == null) {
+            return new ArrayList<>(ids);
+        }
+        List<MassagistSchedules> rows = list(new LambdaQueryWrapper<MassagistSchedules>()
+                .eq(MassagistSchedules::getMassagistId, massagistId)
+                .eq(MassagistSchedules::getDay, day));
+        for (MassagistSchedules row : rows) {
+            if (row.getShopId() != null && row.getShopId() > 0) {
+                ids.add(row.getShopId());
+            }
+            if (row.getTargetShopId() != null && row.getTargetShopId() > 0) {
+                ids.add(row.getTargetShopId());
+            }
+        }
+        return new ArrayList<>(ids);
+    }
+
+    /** 某疗愈师某天的排班记录（可能分多段） */
+    public List<MassagistSchedules> listByMassagistIdAndDay(Long massagistId, LocalDate day) {
+        if (massagistId == null || massagistId <= 0 || day == null) {
+            return Collections.emptyList();
+        }
+        return list(new LambdaQueryWrapper<MassagistSchedules>()
+                .eq(MassagistSchedules::getMassagistId, massagistId)
+                .eq(MassagistSchedules::getDay, day)
+                .orderByAsc(MassagistSchedules::getStartTime));
+    }
+
     public List<MassagistSchedules> listMassagistSchedulesByDate(String yyyymmdd, Long massagistId) {
         LambdaQueryWrapper<MassagistSchedules> lqw = new LambdaQueryWrapper<>();
         lqw.eq(MassagistSchedules::getDay, yyyymmdd);

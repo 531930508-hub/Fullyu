@@ -849,6 +849,11 @@
 	}
 
 	const go_page_brand_member = () => {
+		// 未登录不进品牌会员页，入口直接去登录页。
+		if (!cookie.getToken()) {
+			uni.navigateTo({ url: '/pages/login/login' })
+			return
+		}
 		uni.navigateTo({
 			url: '/pages/user/brand-member/brand-member'
 		})

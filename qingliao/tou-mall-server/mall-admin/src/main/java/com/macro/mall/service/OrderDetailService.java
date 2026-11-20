@@ -1165,7 +1165,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         if (CollectionUtils.isEmpty(massagistIds)) {
             return;
         }
-        List<Massagist> massagistList = massagistService.listByIds(massagistIds);
+        // 明细里的技师可能是别的门店的（调店/跨店排班），展示补齐不能按门店作用域拦
+        List<Massagist> massagistList = massagistService.listByIdsAcrossShops(massagistIds);
         if (CollectionUtils.isEmpty(massagistList)) {
             return;
         }
@@ -1597,6 +1598,20 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     if(resources.stream().noneMatch(e->e.getId().equals(m.getId()))){
                         resources.add(m);
                     }
+                });
+            }
+            //把「当天排班在本店、但档案挂在别店」的技师也加进来，否则她看不到自己的排班列
+            List<MassagistSchedules> localSchedules = massagistSchedulesService
+                    .listByDayAndShopId(schedulingParam.getStartDateTime().toLocalDate(), schedulingParam.getShopId());
+            List<Long> scheduledIds = localSchedules.stream().map(MassagistSchedules::getMassagistId).distinct()
+                    .filter(id -> id != null && resources.stream().noneMatch(e -> e.getId().equals(id)))
+                    .collect(Collectors.toList());
+            if (!scheduledIds.isEmpty()) {
+                Map<Long, List<MassagistSchedules>> schedulesByMassagist = localSchedules.stream()
+                        .collect(Collectors.groupingBy(MassagistSchedules::getMassagistId));
+                massagistService.listByIdsAcrossShops(scheduledIds).forEach(m -> {
+                    m.setSchedulesList(schedulesByMassagist.get(m.getId()));
+                    resources.add(m);
                 });
             }
             //疗愈师只读看板：只返回本人一列

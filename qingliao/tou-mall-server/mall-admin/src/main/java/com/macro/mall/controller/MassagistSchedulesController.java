@@ -1,5 +1,6 @@
 package com.macro.mall.controller;
 
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.github.pagehelper.PageHelper;
@@ -91,6 +92,75 @@ public class MassagistSchedulesController {
         params.put("shopId",shopId);
         return CommonResult.success(massagistSchedulesService.listNoPage(params));
     }
+    @GetMapping("/myDay")
+    @ApiOperation("疗愈师本人某天的排班门店（可能多家，调店取目标店）")
+    public CommonResult myDay(@RequestParam String date) {
+        JSONObject result = new JSONObject();
+        result.put("hasSchedule", false);
+        Long massagistId = access.currentMassagistIdOrNull();
+        if (massagistId == null) {
+            return CommonResult.success(result);
+        }
+        java.time.LocalDate day;
+        try {
+            day = java.time.LocalDate.parse(date.trim());
+        } catch (RuntimeException e) {
+            throw new BusinessException("日期格式不正确");
+        }
+        List<MassagistSchedules> rows = massagistSchedulesService.listByMassagistIdAndDay(massagistId, day);
+        if (rows.isEmpty()) {
+            return CommonResult.success(result);
+        }
+        // 每一段排班对应“当天实际所在门店”：调店段取目标店
+        JSONArray shops = new JSONArray();
+        Map<Long, JSONObject> byShopId = new LinkedHashMap<>();
+        for (MassagistSchedules row : rows) {
+            boolean transfer = row.getTargetShopId() != null && row.getTargetShopId() > 0;
+            Long shopId = transfer ? row.getTargetShopId() : row.getShopId();
+            if (shopId == null || shopId <= 0 || byShopId.containsKey(shopId)) {
+                continue;
+            }
+            JSONObject shop = new JSONObject();
+            shop.put("shopId", shopId);
+            shop.put("shopName", shopName(shopId));
+            shop.put("transfer", transfer);
+            shop.put("fromShopId", row.getShopId());
+            shop.put("fromShopName", shopName(row.getShopId()));
+            shop.put("label", transfer
+                    ? shopName(shopId) + "（调自 " + shopName(row.getShopId()) + "）"
+                    : shopName(shopId));
+            byShopId.put(shopId, shop);
+            shops.add(shop);
+        }
+        if (shops.isEmpty()) {
+            return CommonResult.success(result);
+        }
+        // 默认门店：当前时段所在门店，不在营业时段内就取最早一段
+        java.time.LocalTime now = java.time.LocalTime.now();
+        Long defaultShopId = null;
+        for (MassagistSchedules row : rows) {
+            if (row.getStartTime() != null && row.getEndTime() != null
+                    && !now.isBefore(row.getStartTime()) && now.isBefore(row.getEndTime())) {
+                defaultShopId = row.getTargetShopId() != null && row.getTargetShopId() > 0
+                        ? row.getTargetShopId() : row.getShopId();
+                break;
+            }
+        }
+        if (defaultShopId == null || !byShopId.containsKey(defaultShopId)) {
+            defaultShopId = shops.getJSONObject(0).getLong("shopId");
+        }
+        JSONObject defaultShop = byShopId.get(defaultShopId);
+        result.put("hasSchedule", true);
+        result.put("massagistId", massagistId);
+        result.put("shopId", defaultShopId);
+        result.put("shopName", defaultShop.get("shopName"));
+        result.put("transfer", defaultShop.get("transfer"));
+        result.put("fromShopId", defaultShop.get("fromShopId"));
+        result.put("fromShopName", defaultShop.get("fromShopName"));
+        result.put("shops", shops);
+        return CommonResult.success(result);
+    }
+
     @DeleteMapping("/remove")
     @ApiOperation("删除")
     public CommonResult remove(@RequestParam Long id) {
