@@ -505,9 +505,21 @@ CRM `still_random` = 11、`custom_kept` = 57；在场 `still_random` = 0、`user
 
 1. 小程序没出包：`qingliao/apps/miniprogram` 本地 `node_modules` 缺 `uni` 可执行，需按原流程 `npm ci` 后在微信开发者工具上传。
 2. CRM 服务本次未重新发布（CRM 侧代码已在 `main`，占位名规则要生效需单独发 CRM）。
-3. `DouGongPayClient` 退款签名改用 `PAY_SIGN_SECRET`；生产 `DOUGONG_APPID` 为空（未启用），若将来接豆工通道需确认密钥一致。
+3. `DouGongPayClient` 退款签名改用 `PAY_SIGN_SECRET`。**更正（11-21 复核）**：豆工客户端就是线上的汇付通道封装（`BasePayClient` + `huifu_id`），不是「未启用」；但该签名只拼进 `baseNotifyUrl`，而 `dataMap.put("notify_url", …)` 与 `DyPayController` 的 `refund/notify` 处理器都在初始导入时就是注释状态，`validateRefundSign` 无调用方，线上无可执行路径。支付回调验签走 `DgPaySignUtils.verifySign(msgBody, PayCert.signSecret, sign)`，本次未改动。若将来恢复退款回调，需给签名单独配一个密钥变量。
 4. 回滚：jar 用 `scripts/rollback-prod-code.sh`（本次旧包 `97c572e1…` 在 `/server/java/fully/backup/20261120-233144/`），
    前端 `mv dist dist.discard-<TS> && mv dist.bak-20261120-233510 dist`，昵称按三份 SQL 末尾注释还原。
 
 **顺带修掉的坑**：`maven.compiler.release=8` 在 JDK 8 上编不过（`invalid flag: --release`），已改成 `<jdk>[9,)</jdk>` 激活的 profile；
 cherry-pick 把 yml/pom 的 CRLF 改成 LF，已还原，避免整文件重写噪声。
+
+### 十七补记（2026-11-21 00:2x）
+
+- **CRM 生产已发**（`crm.fullyu.cn` / 121.40.119.57 `/opt/fullyu-crm`，unit `fullyu-crm`）：源码取 `main@90cca17`，
+  备份 `/root/backups/crm-all-20261120-234*`，`pnpm install --frozen-lockfile` + `schema:mysql` + `prisma generate` + `tsc` 重建 dist，
+  重启后 `/api/health` 200、`/admin/` 200、`/` 302、`/api/sync/status` 401；`dist/common/member-name.js` 含占位名新逻辑。
+  无 schema 变更，未跑 `db:push`。
+- **`9e1f9d9`（外部接入文本护栏 + `member_identities.created_at`）不在 `main`**，本次未随发；合并前必须先给生产 `crm` 库加列。
+- **生产/测试 env 去重**：`BAIDU_VOICE_*` 出现过空值与实值各一份，已按「后者生效」删掉前面的空行（`/etc/fullyu/qingliao.env`、`/opt/fullyu-mall-test/.env`），
+  测试机同时补齐 `PRINT_*`/`BAIDU_VOICE_*`（下次发测试后端才不会静默丢打印配置）。
+- **轻疗小程序**：`main` 含 `4afccb8` 的下单页改动，已用 devtools CLI 覆盖上传开发版 `1.0.22`（1.1 MB，AppID `wxeb4e8a99b7eeebf8`）。
+- **豆工/汇付核对**：生产 66 单 `pay_type` 只有 0/1/2；退款走 `BasePayClient` 请求体，不含本次改动的签名串。
