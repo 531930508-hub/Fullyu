@@ -156,18 +156,12 @@
                             <artifactId>logback-core</artifactId>
                         </dependency>
                     </requiresUnpack>
-                    <!-- 换包后核对：unzip -p jar META-INF/MANIFEST.MF | grep Implementation-Build -->
-                    <archive>
-                        <manifestEntries>
-                            <Implementation-Build>${build.commit}</Implementation-Build>
-                            <Implementation-Branch>${build.branch}</Implementation-Branch>
-                        </manifestEntries>
-                    </archive>
                 </configuration>
                 <executions>
                     <!-- 顺带写 META-INF/build-info.properties，/actuator/info 可读 -->
                     <execution>
                         <id>build-info</id>
+                        <phase>generate-resources</phase>
                         <goals>
                             <goal>build-info</goal>
                         </goals>
@@ -181,11 +175,23 @@
                 </executions>
             </plugin>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Implementation-Build>${build.commit}</Implementation-Build>
+                            <Implementation-Branch>${build.branch}</Implementation-Branch>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+            <plugin>
                 <!-- 在 git 仓库里构建时生成 BOOT-INF/classes/git.properties（commit/branch/构建时间）；
                      从 git archive 导出构建时没有 .git，不失败，靠 -Dbuild.commit 兜底 -->
                 <groupId>io.github.git-commit-id</groupId>
                 <artifactId>git-commit-id-maven-plugin</artifactId>
-                <!-- 4.9.10 是最后一批按 Java 8 编译的版本；5.x 是 class 55，测试机 JDK8 加载不了 -->
+                <!-- 4.9.9 是 4.x 里仍按 Java 8 编译且镜像可用的版本；5.x 起是 class 55，JDK8 加载不了 -->
                 <version>4.9.9</version>
                 <executions>
                     <execution>
