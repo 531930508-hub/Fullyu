@@ -29,12 +29,13 @@
 					</view>
 					<view class="member-hero-foot">
 						<view class="member-hero-status">
-							<text v-if="memberCardState === 'active' || memberCardState === 'expiring'">{{ t('会员生效中 · 剩余 ') }}{{memberCardInfo.remainingDays}}{{ t(' 天 · 三店通用') }}</text>
+							<text v-if="memberDegraded">{{ t('会员信息同步中，稍后自动更新') }}</text>
+							<text v-else-if="memberCardState === 'active' || memberCardState === 'expiring'">{{ t('会员生效中 · 剩余 ') }}{{memberCardInfo.remainingDays}}{{ t(' 天 · 三店通用') }}</text>
 							<text v-else-if="memberCardState === 'pending'">{{ t('续费已排期，到期后自动续期') }}</text>
 							<text v-else-if="memberCardState === 'expired'">{{ t('会员已到期，续费继续享三店会员价') }}</text>
 							<text v-else>{{ t('开通大会员，卡期可选') }}</text>
 						</view>
-						<view class="member-hero-btn">{{memberCardState === 'none' || memberCardState === 'expired' ? t('去开通') : t('查看')}}</view>
+						<view class="member-hero-btn">{{ memberDegraded ? t('查看') : (memberCardState === 'none' || memberCardState === 'expired' ? t('去开通') : t('查看')) }}</view>
 					</view>
 				</view>
 
@@ -507,6 +508,11 @@
 	const memberCatalog = ref({ products: [] })
 	const showOtherCards = ref(false)
 	const memberCardState = computed(() => memberCardInfo.value.state || 'none')
+	// 会员中心不可用：hero 只保留入口，卡期、积分与价格都不展示（缓存价可能已调整）。
+	const memberDegraded = computed(() => {
+		const state = memberCardInfo.value.syncState
+		return state === 'stale' || state === 'unknown'
+	})
 	const { tt, locale } = useLocale()
 	// 入口价：多档取最低一档（90 天 ¥99 与 365 天 ¥365 并存时报 ¥99），
 	// 「起」只在多档时出现，和会员页卡脚、时叙首页同一套口径。
@@ -536,14 +542,17 @@
 	const fetchMemberCard = async () => {
 		// 商城顶部会员卡与首页/我的/卡包同源：只读 CRM 品牌会员。
 		const summary = (await loadYearCardSummary()) || {}
-		memberCardInfo.value = summary
-		memberCardConfig.value = summary.product || {}
-		if (((summary && summary.products) || []).length) return
-		// 未登录（或身份摘要没带目录）时退回公开目录，入口价照样显示；读不到就保持不写金额。
-		try {
-			memberCatalog.value = await loadCardCatalog()
-		} catch (error) {
-			memberCatalog.value = { products: [] }
+		const degraded = summary.syncState === 'stale' || summary.syncState === 'unknown'
+		// 降级时缓存里的卡期/价格/权益一律不用：价格与折扣可能已调整，宁可先不上价。
+		memberCardInfo.value = degraded ? { syncState: summary.syncState } : summary
+		memberCardConfig.value = degraded ? {} : (summary.product || {})
+		if (degraded || !((summary && summary.products) || []).length) {
+			// 未登录（或身份摘要没带目录）时退回公开目录，入口价照样显示；读不到就保持不写金额。
+			try {
+				memberCatalog.value = await loadCardCatalog()
+			} catch (error) {
+				memberCatalog.value = { products: [] }
+			}
 		}
 	}
 

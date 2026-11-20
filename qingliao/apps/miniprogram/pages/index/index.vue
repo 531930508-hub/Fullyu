@@ -613,6 +613,8 @@
 	const memberInfo = ref({})
 	const renewStrip = computed(() => {
 		const data = memberInfo.value || {}
+		// 会员中心不可用时卡期不可信：不提示「还有 3 天到期」，避免把过期快照当实时数据。
+		if (data.syncState === 'stale' || data.syncState === 'unknown') return { show: false }
 		if (data.pending) return { show: false }
 		const expired = data.state === 'expired'
 		const days = Number(data.remainingDays)

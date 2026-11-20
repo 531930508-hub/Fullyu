@@ -35,6 +35,8 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
@@ -171,10 +173,28 @@ public class CustomerService extends BaseService<CustomerMapper, Customer> imple
             saveCustomerTagByActivityCode(activityCode, customer.getId());
         }
 
-        // 会员中心开启时以 CRM 为唯一积分账本；CRM 故障时登录直接失败，不回退成本地积分
+        // 会员中心开启时以 CRM 为唯一积分账本。
+        // CRM 故障不能挡住登录：降级为「本地登录成功 + memberSync=degraded」，
+        // 小程序按「卡面保留、积分/卡期打码、显示同步中」展示，恢复后下一次请求自动回到实时数据。
         Long crmBalance = null;
+        boolean memberSyncDegraded = false;
         if (crmSyncService.isActive()) {
-            crmBalance = crmSyncService.ensureIdentity(customer);
+            try {
+                crmBalance = crmSyncService.ensureIdentity(customer);
+            } catch (BusinessException e) {
+                // 身份冲突（409）必须让顾客看到并联系客服：带着冲突档案继续下单只会更乱。
+                if (e.getStatus() != 409) {
+                    memberSyncDegraded = true;
+                    log.warn("会员中心暂不可用，登录降级继续，customerId={} status={} message={}",
+                            customer.getId(), e.getStatus(), e.getMessage());
+                } else {
+                    throw e;
+                }
+            } catch (Exception e) {
+                memberSyncDegraded = true;
+                log.warn("会员中心调用异常，登录降级继续，customerId={} error={}",
+                        customer.getId(), e.getClass().getSimpleName());
+            }
         }
         // 登录后确认过会员身份，顺手把 CRM 的称呼/头像/性别/生日拉回本地；
         // 先拉再发 token，小程序端拿到的登录态就是最新资料。
@@ -199,6 +219,8 @@ public class CustomerService extends BaseService<CustomerMapper, Customer> imple
         tokenMap.put("token", token);
         tokenMap.put("customer", customer);
         tokenMap.put("tokenHead", tokenHead);
+        // 前端据此决定卡面数据是否可信：degraded 时保留卡面结构、打码积分与卡期、显示「同步中」。
+        tokenMap.put("memberSync", memberSyncDegraded ? "degraded" : "live");
 
         String key = RedisKey.AUTH_KEY + token;
         redisService.set(key, customer.getId(), expiration);
@@ -223,6 +245,66 @@ public class CustomerService extends BaseService<CustomerMapper, Customer> imple
         List<Customer> customerList = phoneList.stream().map(this::initCustomer).collect(Collectors.toList());
         saveBatch(customerList);
         return customerList;
+    }
+
+    /**
+     * 建号即建档：后台建单、批量导入、发券等通道都走 save/saveBatch 落库，
+     * 统一在事务提交后补一次会员中心身份确认，避免“轻疗有客户、会员中心查无此人”。
+     * 建档失败只记日志，不影响主流程，夜间任务会重试。
+     */
+    @Override
+    public boolean save(Customer entity) {
+        boolean saved = super.save(entity);
+        if (saved) {
+            ensureCrmIdentityAfterCommit(entity);
+        }
+        return saved;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean saveBatch(Collection<Customer> entityList) {
+        boolean saved = super.saveBatch(entityList);
+        if (saved) {
+            for (Customer customer : entityList) {
+                ensureCrmIdentityAfterCommit(customer);
+            }
+        }
+        return saved;
+    }
+
+    private void ensureCrmIdentityAfterCommit(Customer customer) {
+        if (customer == null || customer.getId() == null || !crmSyncService.isActive()) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            crmSyncService.ensureIdentityQuietly(customer);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                crmSyncService.ensureIdentityQuietly(customer);
+            }
+        });
+    }
+
+    /**
+     * 兜底补扫：把近 days 天新建的客户再确认一次会员中心身份。
+     * resolve 幂等，已建档的直接 unchanged，覆盖建号时会员中心不可用或走旁路落库的客户。
+     */
+    public int backfillCrmIdentities(int days) {
+        if (!crmSyncService.isActive()) {
+            return 0;
+        }
+        LambdaQueryWrapper<Customer> lqw = new LambdaQueryWrapper<>();
+        lqw.ge(Customer::getCreateTime, LocalDateTime.now().minusDays(days));
+        List<Customer> customers = list(lqw);
+        for (Customer customer : customers) {
+            crmSyncService.ensureIdentityQuietly(customer);
+        }
+        log.info("会员中心身份补扫完成，窗口 {} 天，候选 {} 条", days, customers.size());
+        return customers.size();
     }
 
     /**

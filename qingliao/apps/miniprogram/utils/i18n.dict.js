@@ -495,6 +495,11 @@ const dict = {
 	'Full愈 · 轻疗': 'Full Yu · City Retreat',
 	'关于Full愈': 'About Full Yu',
 	'条款政策': 'Terms & policies',
+	// 会员中心不可用时的降级文案：卡面保留，数字打码，不把「连不上」渲染成 0 分/未开通。
+	'同步中': 'Syncing',
+	'积分同步中，稍后自动更新': 'Points are syncing — they will update automatically',
+	'会员信息同步中，稍后自动更新': 'Membership is syncing — it will update automatically',
+	'会员信息同步中，积分与有效期稍后自动恢复': 'Membership is syncing — points and dates will update automatically',
 
 	// ===================== 会员状态 / 支付提示 =====================
 	'生效中': 'Active',

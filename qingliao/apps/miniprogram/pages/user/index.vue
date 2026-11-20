@@ -98,14 +98,14 @@
 				<view class="flex justify-around  pb-4 items-center mt-3">
 					<!-- 预约 -->
 					<view @click="go_page_valid_login('/pages/user/points/points')" class="flex flex-col w-[48%]">
-						<view v-if="userInfo.integration>0"
+						<view v-if="userInfo.integration>0 || memberDegraded"
 							class="text-center text-[#584219] text-[48rpx] text-[#D2956E] font-semibold w-full">
-							{{ userInfo.integration || 0 }}<text class="text-[30rpx] font-medium">{{ t('积分') }}</text>
+							{{ memberDegraded ? MEMBER_MASK : (userInfo.integration || 0) }}<text class="text-[30rpx] font-medium">{{ t('积分') }}</text>
 						</view>
-						<view v-if="userInfo.integration>0" class="text-[#584219] text-[28rpx] text-center pt-2 pb-2">
-							{{ t('可抵扣') }}{{ userInfo.integration || 0 }}{{ t('元') }}</view>
+						<view v-if="userInfo.integration>0 || memberDegraded" class="text-[#584219] text-[28rpx] text-center pt-2 pb-2">
+							{{ memberDegraded ? t('积分同步中，稍后自动更新') : t('可抵扣') + (userInfo.integration || 0) + t('元') }}</view>
 						<view v-else class="text-[#584219] text-[28rpx] text-center pt-2 pb-2">{{ t('您还没有积分') }}</view>
-						<view v-if="userInfo.integration>0" class="flex justify-center items-center text-[24rpx]">
+						<view v-if="userInfo.integration>0 && !memberDegraded" class="flex justify-center items-center text-[24rpx]">
 							<text>{{invalidIntegration||0}}{{ t('积分将于12/31号过期') }}</text>
 							<image src="/static/icons/arrow-right.png" class="w-[24rpx] h-[24rpx]"></image>
 						</view>
@@ -143,7 +143,7 @@
 				<view class="year-card-foot flex items-center justify-between">
 					<text>{{ t('时叙 · 在场 · 轻疗 三店通用') }}</text>
 					<view class="flex items-center">
-						<text class="year-card-link">{{ userInfo.token ? (yearCardState==='none'||yearCardState==='expired' ? t('去开通') : t('查看')) : t('登录查看') }}</text>
+						<text class="year-card-link">{{ userInfo.token ? (memberDegraded ? t('查看') : (yearCardState==='none'||yearCardState==='expired' ? t('去开通') : t('查看'))) : t('登录查看') }}</text>
 						<image src="/static/icons/arrow-right.png" class="w-[30rpx] h-[30rpx]"></image>
 					</view>
 				</view>
@@ -251,6 +251,7 @@
 	import customerApi from '../../api/customer'
 	import customerCouponApi from '../../api/customerCoupon'
 	import { loadYearCardSummary, priceLabel } from '../../api/brandMember'
+	import { MEMBER_MASK, isMemberDegraded } from '../../utils/memberSync'
 	import { useLocale } from '../../utils/locale'
 	const { syncLocale, locale } = useLocale()
 	import CouponNoticePanel from '../../components/CouponNoticePanel.vue'
@@ -267,8 +268,11 @@
 	const userLastoneCoupon = ref({})
 	//Full愈大会员
 	const memberCardInfo = ref({})
+	// 会员中心不可用时：卡面保留，积分与有效期换成「**** + 同步中」，不显示成 0 分/未开通。
+	const memberDegraded = computed(() => isMemberDegraded(memberCardInfo.value.syncState))
 	const yearCardState = computed(() => memberCardInfo.value.state || 'none')
 	const yearCardTag = computed(() => {
+		if (memberDegraded.value) return t('同步中')
 		switch (yearCardState.value) {
 			case 'active':
 				return t('生效中')
@@ -284,6 +288,8 @@
 	})
 	const yearCardDesc = computed(() => {
 		const data = memberCardInfo.value
+		// 降级时卡期与积分不可信：只说明「同步中」，不拿过期快照说「还有 3 天」。
+		if (memberDegraded.value) return t('会员信息同步中，积分与有效期稍后自动恢复')
 		// 卡脚只显示卡期与积分；折扣/立减文案一律来自 CRM 权益区，不在入口重复写数字。
 		const points = Number(data.points != null ? data.points : userInfo.value.integration) || 0
 		switch (yearCardState.value) {

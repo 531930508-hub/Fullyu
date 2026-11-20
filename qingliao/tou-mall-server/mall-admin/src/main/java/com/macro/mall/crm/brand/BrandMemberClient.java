@@ -3,6 +3,7 @@ package com.macro.mall.crm.brand;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.macro.mall.common.exception.BusinessException;
+import com.macro.mall.crm.CrmCircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -15,6 +16,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Mac;
@@ -45,6 +47,9 @@ public class BrandMemberClient {
 
     private final BrandMemberProperties properties;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    /** 单测里手动 new 时用这个实例，Spring 环境由容器注入与 CrmClient 共享的熔断器。 */
+    @Autowired
+    private CrmCircuitBreaker breaker = new CrmCircuitBreaker();
     /** 用 Apache HttpClient 而不是 HttpURLConnection：JDK 的后者不支持 PATCH（资料同步要用）。 */
     private final CloseableHttpClient httpClient;
 
@@ -272,6 +277,10 @@ public class BrandMemberClient {
         if (!properties.isActive()) {
             throw new BrandMemberException("BRAND_MEMBER_DISABLED", "品牌会员服务尚未开启", 503);
         }
+        if (breaker.isOpen()) {
+            // 熔断期间不再排队等超时：立刻按不可用返回，前端按「同步中」降级展示。
+            throw unavailable();
+        }
         String timestamp = String.valueOf(System.currentTimeMillis() / 1000L);
         String nonce = newNonce();
         String rawBody = body == null ? "" : body;
@@ -291,12 +300,20 @@ public class BrandMemberClient {
                     : EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
             JsonNode node = text == null || text.isEmpty() ? null : objectMapper.readTree(text);
             if (status >= 200 && status < 300) {
+                breaker.recordSuccess();
                 return node;
             }
             throw mapError(status, node);
         } catch (BusinessException e) {
+            // 业务错误说明 CRM 是活的：重置计数；只有「不可用」才计入熔断。
+            if (e instanceof BrandMemberException && ((BrandMemberException) e).is(BrandMemberException.UNAVAILABLE)) {
+                breaker.recordFailure();
+            } else {
+                breaker.recordSuccess();
+            }
             throw e;
         } catch (IOException e) {
+            breaker.recordFailure();
             log.warn("品牌会员 CRM 调用异常，method={} path={} error={}", method, path, e.getClass().getSimpleName());
             throw unavailable();
         }

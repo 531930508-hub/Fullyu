@@ -29,8 +29,15 @@ import {
   priceLabel
 } from '../utils/memberCatalog'
 import { t } from '../utils/locale'
+import {
+  MEMBER_SYNC,
+  isMemberDegraded,
+  readMemberSummaryCache,
+  setMemberSyncState,
+  writeMemberSummaryCache
+} from '../utils/memberSync'
 
-export { discountText, formatYuan, priceLabel }
+export { isMemberDegraded, discountText, formatYuan, priceLabel }
 
 export const BRAND_BUSINESS = 'retreat'
 export const BRAND_BUSINESS_NAME = '轻疗'
@@ -250,24 +257,34 @@ function withLocalIdentity(base) {
  * 接口不可用时向上抛错，页面显示重试，不把“连不上”误判成“未开通”。
  */
 export async function loadBrandMember() {
-  if (!isMock) {
+  if (isMock) {
+    // mock 模式没有后端，也没有「同步中」可言。
+    setMemberSyncState(MEMBER_SYNC.LIVE)
+    // mock 模式没有后端，直接用本地合成卡面；不再回读任何”本店卡”接口。
+    return withLocalIdentity({
+      ...clone(mockState),
+      ...normalizeCatalog(MOCK_CARD_PRODUCTS)
+    })
+  }
+  try {
     const [me, catalog] = await Promise.all([
       http.get({ url: '/brandMember/me', showErrorMessage: false }),
       http.get({ url: '/brandMember/products', showErrorMessage: false }).catch(() => null)
     ])
-    // 身份三要素缺失时不能当成“未开通”：交给页面显示可重试状态，避免误判。
+    // 身份三要素缺失时不能当成”未开通”：交给页面显示可重试状态，避免误判。
     if (!hasBrandIdentity(me)) {
       throw new Error('BRAND_MEMBER_PAYLOAD_INVALID')
     }
     // 目录缺失时 products 为空，页面改为提示重试并禁用购买，
     // 不再拿本地常量顶替 CRM 的报价与折扣。
+    setMemberSyncState(MEMBER_SYNC.LIVE)
     return { ...normalizeBrandMember(me, [], t), ...normalizeCatalog(catalog) }
+  } catch (error) {
+    // 先把同步态记下来再向上抛：页面决定用缓存降级还是显示重试，
+    // 但「现在是不是实时数据」全站只有一个来源。
+    setMemberSyncState(readMemberSummaryCache() ? MEMBER_SYNC.STALE : MEMBER_SYNC.UNKNOWN)
+    throw error
   }
-  // mock 模式没有后端，直接用本地合成卡面；不再回读任何"本店卡"接口。
-  return withLocalIdentity({
-    ...clone(mockState),
-    ...normalizeCatalog(MOCK_CARD_PRODUCTS)
-  })
 }
 
 /**
@@ -290,7 +307,10 @@ export async function loadYearCardSummary() {
   try {
     brand = await loadBrandMember()
   } catch (error) {
-    return {}
+    // CRM 不可用：有上一次成功的快照就给快照（stale），没有就只给 unknown 骨架。
+    // 页面据此保留卡面、把积分与卡期换成「****」，而不是让会员卡「消失」造成恐慌。
+    const cached = readMemberSummaryCache()
+    return cached ? { ...cached, syncState: MEMBER_SYNC.STALE } : { syncState: MEMBER_SYNC.UNKNOWN }
   }
   const card = (brand && brand.card) || {}
   const catalog = normalizeCatalog(brand)
@@ -303,7 +323,7 @@ export async function loadYearCardSummary() {
     cardType: card.productCode === 'FY_MONTH' ? 'month' : 'year',
     cardName: card.productName || ''
   }
-  return {
+  const summary = {
     state: String(card.state || 'NONE').toLowerCase(),
     remainingDays: card.remainingDays,
     startTime: card.validFrom,
@@ -325,6 +345,9 @@ export async function loadYearCardSummary() {
     // 入口卖点只读 CRM 权益文案；没有配置时页面隐藏这一行。
     benefits: Array.isArray(brand && brand.benefits) ? brand.benefits : []
   }
+  // 成功读到就留一份快照：CRM 抖动时首页/我的页还能显示「卡在、数据同步中」。
+  writeMemberSummaryCache(summary)
+  return { ...summary, syncState: MEMBER_SYNC.LIVE }
 }
 
 export function quoteBrandCard(productCode) {

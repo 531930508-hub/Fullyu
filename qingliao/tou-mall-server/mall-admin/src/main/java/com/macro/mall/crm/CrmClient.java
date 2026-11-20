@@ -36,6 +36,10 @@ public class CrmClient {
     @Autowired
     private CrmProperties properties;
 
+    /** 单测里手动 new 时用这个实例，Spring 环境由容器注入共享的熔断器。 */
+    @Autowired
+    private CrmCircuitBreaker breaker = new CrmCircuitBreaker();
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public boolean isActive() {
@@ -161,16 +165,31 @@ public class CrmClient {
      * 用同一请求体重试不会重复扣增。
      */
     private JsonNode call(String method, String path, String body, boolean allowNotFound) {
+        if (breaker.isOpen()) {
+            // 熔断期间不再排队等超时：立刻按不可用返回，登录等主流程走降级。
+            throw unavailable();
+        }
         IOException last = null;
         for (int attempt = 0; attempt < 2; attempt++) {
             try {
-                return callOnce(method, path, body, allowNotFound);
+                JsonNode node = callOnce(method, path, body, allowNotFound);
+                breaker.recordSuccess();
+                return node;
             } catch (IOException e) {
                 last = e;
                 log.warn("会员中心调用异常，{}重试，method={} path={} error={}",
                         attempt == 0 ? "准备" : "重试后仍失败，", method, path, e.getClass().getSimpleName());
+            } catch (BusinessException e) {
+                // 409/422/400 说明 CRM 是活的，按正常响应重置熔断；503 计入失败。
+                if (e.getStatus() >= 500) {
+                    breaker.recordFailure();
+                } else {
+                    breaker.recordSuccess();
+                }
+                throw e;
             }
         }
+        breaker.recordFailure();
         log.error("会员中心调用失败，method={} path={} error={}", method, path,
                 last == null ? "unknown" : last.getClass().getSimpleName());
         throw unavailable();

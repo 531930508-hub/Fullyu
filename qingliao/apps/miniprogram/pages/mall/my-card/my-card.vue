@@ -15,14 +15,15 @@
 					<view>
 						<view class="member-strip-title">{{ t('Full愈大会员') }}</view>
 						<view class="member-strip-sub">
-							<text v-if="memberCardInfo.state === 'active' || memberCardInfo.state === 'expiring'">{{ t('生效中 · 剩余 ') }}{{memberCardInfo.remainingDays}}{{ t(' 天 · 三店通用') }}</text>
+							<text v-if="memberDegraded">{{ t('会员信息同步中，稍后自动更新') }}</text>
+							<text v-else-if="memberCardInfo.state === 'active' || memberCardInfo.state === 'expiring'">{{ t('生效中 · 剩余 ') }}{{memberCardInfo.remainingDays}}{{ t(' 天 · 三店通用') }}</text>
 							<text v-else-if="memberCardInfo.state === 'pending'">{{ t('续费已排期') }}</text>
 							<text v-else-if="memberCardInfo.state === 'expired'">{{ t('已到期，可续费') }}</text>
 							<text v-else>{{ notJoinedText }}</text>
 						</view>
-						<view v-if="pendingLine" class="member-strip-pending">{{ pendingLine }}</view>
+						<view v-if="pendingLine && !memberDegraded" class="member-strip-pending">{{ pendingLine }}</view>
 					</view>
-					<view class="member-strip-btn">{{ memberCardInfo.state === 'active' || memberCardInfo.state === 'expiring' ? t('查看') : t('去开通') }}</view>
+					<view class="member-strip-btn">{{ memberDegraded ? t('查看') : (memberCardInfo.state === 'active' || memberCardInfo.state === 'expiring' ? t('查看') : t('去开通')) }}</view>
 				</view>
 			</view>
 
@@ -367,6 +368,11 @@
 	const invalidityGroupCard = ref([])
 	const invaliditySingleCard = ref([])
 	const memberCardInfo = ref({})
+	// 会员中心不可用时卡片保留、卡期与积分不展示，避免把过期快照当成实时卡期。
+	const memberDegraded = computed(() => {
+		const state = memberCardInfo.value.syncState
+		return state === 'stale' || state === 'unknown'
+	})
 	// 卡包顶部也要说明「后面还排着一张」：否则领了赠送/续了费，这里只看到当前卡的剩余天数，像没加上。
 	const { tt } = useLocale()
 	const pendingLine = computed(() => pendingRenewalLine(memberCardInfo.value.pendingCard, tt))

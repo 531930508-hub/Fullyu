@@ -63,6 +63,21 @@ public class CrmSyncService {
         return ensure(customer).getBalance();
     }
 
+    /**
+     * 建号/补扫场景使用的静默建档：与登录同一套语义（新建会员照常发 66 分新客奖励，
+     * ref 幂等不会重复发），任何异常只记日志，绝不影响建单等主流程。
+     */
+    public void ensureIdentityQuietly(Customer customer) {
+        if (customer == null || customer.getId() == null || !isActive()) {
+            return;
+        }
+        try {
+            ensure(customer);
+        } catch (Exception e) {
+            log.warn("会员中心建档失败，customerId={}，原因={}", customer.getId(), e.getMessage());
+        }
+    }
+
     /** 写积分前先确认身份存在；本次新建的会员按原规则补发 66 分新客奖励。 */
     private CrmMember ensure(Customer customer) {
         CrmMember member = crmClient.resolve(identityOf(customer));

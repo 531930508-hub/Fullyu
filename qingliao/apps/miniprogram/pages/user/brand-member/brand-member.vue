@@ -23,7 +23,7 @@
 			</view>
 
 			<view v-else-if="error" class="bm-state">
-				<text class="bm-state-title">{{ tt('会员信息暂时连不上', 'Membership is unavailable') }}</text>
+				<text class="bm-state-title">{{ tt('会员信息正在同步', 'Membership is syncing') }}</text>
 				<text class="bm-state-desc">{{ error }}</text>
 				<button class="bm-btn primary" @click="load">{{ tt('重新加载', 'Reload') }}</button>
 			</view>
@@ -1135,8 +1135,8 @@
 	// 主动文案保持不变，真实原因（接口 message / 网络 errMsg / HTTP 状态）追加在后面。
 	function loadErrorText(e) {
 		const base = tt(
-			'请稍后重试，会员状态不会被误判为未开通。',
-			'Please try again later. Your membership status will not be mistaken for inactive.'
+			'会员权益与已购卡照常可用，积分与卡期不会丢失；数据恢复后会在这里自动更新。',
+			'Your benefits and purchased cards still work. Points and dates will update here automatically once syncing finishes.'
 		)
 		console.error('[brand-member] 会员信息加载失败:', e)
 		let detail = ''

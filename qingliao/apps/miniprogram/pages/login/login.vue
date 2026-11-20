@@ -63,6 +63,7 @@ import payUtils from "../../utils/payUtils";
 import cookie from "../../utils/cookieUtil"
 import UniPopup from "../../uni_modules/uni-popup/components/uni-popup/uni-popup.vue";
 import { claimGiftCode, takePendingGift } from "../../api/brandMember";
+import { MEMBER_SYNC, readMemberSummaryCache, setMemberSyncState } from "../../utils/memberSync";
 
 const {proxy} = getCurrentInstance()
 const vm = proxy
@@ -174,6 +175,14 @@ const login = async (phone) => {
 
   vm.$Cache.put('userInfo', customer)
   vm.$Cache.put('token', response.token)
+
+  // 会员中心降级时登录照常成功，但积分/卡期不可信：
+  // 记下同步态，首页与「我的」据此显示「同步中」并打码数字，而不是显示 0 分或「未开通」。
+  if (response.memberSync === 'degraded') {
+    setMemberSyncState(readMemberSummaryCache() ? MEMBER_SYNC.STALE : MEMBER_SYNC.UNKNOWN)
+  } else {
+    setMemberSyncState(MEMBER_SYNC.LIVE)
+  }
 
   cookie.saveAuth(customer)
   cookie.updProjectList()
