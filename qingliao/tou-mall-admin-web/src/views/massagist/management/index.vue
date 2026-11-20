@@ -35,6 +35,9 @@
           <template slot-scope="scope">{{ scope.row.shopId | shopNameFilter }}</template>
         </el-table-column>
         <el-table-column label="疗愈师姓名" prop="name"></el-table-column>
+        <el-table-column label="英文名" prop="englishName" width="120">
+          <template slot-scope="scope">{{ scope.row.englishName || '—' }}</template>
+        </el-table-column>
         <el-table-column label="身份" width="200">
           <template slot-scope="scope">
             <el-tag v-for="code in identityCodes(scope.row)"

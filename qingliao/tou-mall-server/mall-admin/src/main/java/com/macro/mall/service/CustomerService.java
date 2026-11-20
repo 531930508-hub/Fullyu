@@ -247,8 +247,8 @@ public class CustomerService extends BaseService<CustomerMapper, Customer> imple
             throw new BusinessException("手机号码格式错误，请提供：11位中国大陆号码或国际号码（以'+'开头）");
         }
         Customer customer = new Customer();
-        //默认昵称不再拼手机号：历史「用户+手机号」等同于变相保留号码，改成随机中文昵称
-        customer.setNickname(NicknameGenerator.randomNickname());
+        //默认昵称「用户+手机号后四位」，店员凭后四位认人；手机号脏数据（取不到后四位）退回随机昵称
+        customer.setNickname(NicknameGenerator.defaultNickname(phone));
         customer.setPhone(phone);
         customer.setOpenId(openId);
         customer.setInvitationCode(invitationCode());

@@ -150,7 +150,7 @@
         </el-descriptions>
         <div v-if="!readOnly" class="flex1 flex flex-column justify-end">
           <el-button
-            v-if="orderDetail.order.state==0 && (orderDetail.order.payType == 3 || orderDetail.order.payType == 4)"
+            v-if="orderDetail.order.state==0 && (orderDetail.order.payType == 3 || orderDetail.order.payType == 4 || (orderDetail.order.payTime && (orderDetail.order.payType == 0 || orderDetail.order.payType == 1)))"
             @click="handlePay(orderDetail.order)"
             class="btn-A">确认收款
           </el-button>
@@ -166,7 +166,7 @@
             @click="sendMessageSMS(orderDetail.orderId)">发送取消短信
           </el-button>
           <el-button
-            v-if="orderDetail.order && (((orderDetail.order.state==1 || orderDetail.order.state==2) && orderDetail.order.appointmentState==1) || orderDetail.order.appointmentState==0)"
+            v-if="orderDetail.order && (((orderDetail.order.state==1 || orderDetail.order.state==2) && orderDetail.order.appointmentState==1) || orderDetail.order.appointmentState==0 || (orderDetail.order.state==0 && orderDetail.order.appointmentState==1))"
             class="btn-B"
             @click="cancelOrder(orderDetail.order)">取消订单
           </el-button>

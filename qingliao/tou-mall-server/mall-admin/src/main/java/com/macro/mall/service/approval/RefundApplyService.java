@@ -187,9 +187,16 @@ public class RefundApplyService extends BaseService<RefundApplyMapper, RefundApp
         return onlyOne;
     }
 
+    /**
+     * 取订单当前这一轮的退款申请。
+     *
+     * <p>仅退款后订单会回到未付款再被收一次，同一单可以有多张申请单；
+     * 回调/重提都按「最新一张」读退款金额和类型，取到上一轮的老单会按过期金额退款。</p>
+     */
     public RefundApply getByOrderId(Long orderId) {
         LambdaQueryWrapper<RefundApply> lqw = new LambdaQueryWrapper<>();
         lqw.eq(RefundApply::getOrderId, orderId);
+        lqw.orderByDesc(RefundApply::getId);
         RefundApply onlyOne = getOnlyOne(lqw);
         return onlyOne;
     }

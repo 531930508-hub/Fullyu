@@ -31,6 +31,10 @@ public class Massagist extends BaseEntity {
     @ApiModelProperty("姓名")
     private String name;
 
+    @ApiModelProperty("英文名（选填，仅展示/导出用）")
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String englishName;
+
     @ApiModelProperty("性别")
     private String sex;
 

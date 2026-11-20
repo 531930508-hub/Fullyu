@@ -475,22 +475,27 @@
 	}
 	//去支付按钮
 	const handleToPay = async (record) => {
-		const createTime = Date.parse(record.createTime) / 1000
-		const currentTime = Date.parse(new Date()) / 1000
-		if (record.overTimeSeconds) {
-			countdown.value = Math.max(0, Math.floor(record.overTimeSeconds - (currentTime - createTime)));
+		// 付过款又被「仅退款」打回未付款的单：预约还留着等重收，没有下单倒计时，不能当超时单挡掉
+		if (!record.payTime) {
+			const createTime = Date.parse(record.createTime) / 1000
+			const currentTime = Date.parse(new Date()) / 1000
+			if (record.overTimeSeconds) {
+				countdown.value = Math.max(0, Math.floor(record.overTimeSeconds - (currentTime - createTime)));
+			} else {
+				countdown.value = constant.payCutDownSeconds;
+			}
+			if (countdown.value <= 0) {
+				// 倒计时结束：订单已自动取消，刷新列表即可
+				countdown.value = 0
+				searchData()
+				uni.showToast({
+					title: t('订单已超时取消，请重新预约'),
+					icon: 'none'
+				})
+				return
+			}
 		} else {
-			countdown.value = constant.payCutDownSeconds;
-		}
-		if (countdown.value <= 0) {
-			// 倒计时结束：订单已自动取消，刷新列表即可
 			countdown.value = 0
-			searchData()
-			uni.showToast({
-				title: t('订单已超时取消，请重新预约'),
-				icon: 'none'
-			})
-			return
 		}
 		// 先取结算数据再开弹窗，避免弹窗用上一单的价格/券数渲染后被误确认
 		if (payModelPageRef.value && payModelPageRef.value.fetchData) {

@@ -184,6 +184,7 @@
             <div v-if="scope.row.state==5">
               {{ scope.row.state | orderStateFilter }}-{{ scope.row.refundState | refundStateFilter }}
             </div>
+            <div v-else-if="scope.row.state==0 && scope.row.refundState==1" class="c-warning">未付款（已退款待重收）</div>
             <div v-else>{{ scope.row.state | orderStateFilter }}</div>
           </template>
         </el-table-column>
@@ -265,7 +266,7 @@
                          @click="updForm(scope.row,scope.$index)">修改
               </el-button>
               <el-button size="mini" type="text"
-                         v-if="(type==0 && (((scope.row.state==1 || scope.row.state==2) && scope.row.appointmentState==1) || scope.row.appointmentState==0)) || (type==1 && scope.row.appointmentState==0)"
+                         v-if="(type==0 && (((scope.row.state==1 || scope.row.state==2) && scope.row.appointmentState==1) || scope.row.appointmentState==0 || (scope.row.state==0 && scope.row.appointmentState==1))) || (type==1 && scope.row.appointmentState==0)"
                          @click="cancelOrder(scope.row,scope.$index)">取消
               </el-button>
               <el-button size="mini"
@@ -294,7 +295,7 @@
               </el-button>
               <el-button size="mini"
                          type="text"
-                         v-if="scope.row.state==0 && (scope.row.payType == 3 || scope.row.payType == 4)"
+                         v-if="scope.row.state==0 && (scope.row.payType == 3 || scope.row.payType == 4 || (scope.row.payTime && (scope.row.payType == 0 || scope.row.payType == 1)))"
                          @click="handlePay(scope.row)">确认收款
               </el-button>
             </el-row>
