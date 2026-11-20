@@ -179,13 +179,18 @@ public class UmsAdminController {
     /**
      * 内训师/店长身份供前端决定是否展示手机端考核入口。
      * 功能开关关闭时始终返回 false，避免生产环境提前暴露入口。
+     *
+     * <p>读的是「当前登录账号自己的档案」，必须跨店读取：调店当天 {@code getAdminByUsername} 会把账号门店
+     * 换成目标店（shopId/shopIdArr 只剩目标店），本人档案仍挂在归属店，这时走被门店作用域兜底的
+     * {@code getById} 会抛「无权访问该门店的数据」，把 /admin/info 整个打挂——前端拿不到用户信息就直接
+     * FedLogOut 掉登录，头像下拉里的内训考核入口跟着消失。这里只用它判断身份，不涉及他店业务数据。</p>
      */
     private void putIdentity(Map<String, Object> data, UmsAdmin umsAdmin) {
         boolean trainer = false;
         boolean shopManager = false;
         Long massagistId = umsAdmin.getMassagistId();
         if (massagistId != null) {
-            Massagist massagist = massagistService.getById(massagistId);
+            Massagist massagist = massagistService.getByIdAcrossShops(massagistId);
             trainer = teamCertProperties.enabled() && massagist != null
                     && Integer.valueOf(1).equals(massagist.getIsTrainer())
                     && Integer.valueOf(1).equals(massagist.getStatus());
