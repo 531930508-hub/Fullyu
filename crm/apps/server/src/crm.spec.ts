@@ -166,8 +166,8 @@ describe('CRM 服务：会员、积分调整与审计', () => {
     const bad = await h.api('post', '/adjustments/batch', ops, {
       reason: '批量补发',
       lines: [
-        { memberId: 'm-lin', points: 50 },
-        { memberId: 'm-tang', points: -10 }
+        { phone: '13812346620', points: 50 },
+        { phone: '13900210021', points: -10 }
       ]
     });
     expect(bad.status).toBe(400);
@@ -176,8 +176,8 @@ describe('CRM 服务：会员、积分调整与审计', () => {
     const ok = await h.api('post', '/adjustments/batch', ops, {
       reason: '批量补发',
       lines: [
-        { memberId: 'm-lin', points: 50 },
-        { memberId: 'm-su', points: -100 }
+        { phone: '13812346620', points: 50 },
+        { phone: '13620932093', points: -100 }
       ]
     });
     expect(ok.status).toBe(201);
@@ -198,6 +198,55 @@ describe('CRM 服务：会员、积分调整与审计', () => {
     expect(await balanceOf('m-lin')).toBe(before);
   });
 
+  it('批量调整只认手机号：未知/重复按行报错，明细显示姓名、会员号与脱敏手机号', async () => {
+    const unknown = await h.api('post', '/adjustments/batch', ops, {
+      reason: '手机号批量',
+      lines: [
+        { phone: '13812346620', points: 10 },
+        { phone: '13900000000', points: 10 }
+      ]
+    });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.message).toContain('第 2 行');
+    expect(unknown.body.message).toContain('13900000000');
+
+    const duplicated = await h.api('post', '/adjustments/batch', ops, {
+      reason: '手机号批量',
+      lines: [
+        { phone: '13812346620', points: 10 },
+        { phone: '+86 138 1234 6620', points: 10 }
+      ]
+    });
+    expect(duplicated.status).toBe(400);
+    expect(duplicated.body.message).toContain('第 2 行');
+    expect(duplicated.body.message).toContain('重复');
+
+    const ok = await h.api('post', '/adjustments/batch', ops, {
+      reason: '手机号批量',
+      lines: [
+        { phone: '138-1234-6620', points: 10 },
+        { phone: '+86 136 2093 2093', points: 5 }
+      ]
+    });
+    expect(ok.status).toBe(201);
+    expect(ok.body.request.totalPoints).toBe(15);
+    const detail = await h.api('get', `/adjustments/${ok.body.request.id}`, fin);
+    expect(detail.status).toBe(200);
+    expect(detail.body.request.payloadJson).toBeUndefined();
+    expect(detail.body.lines[0]).toMatchObject({
+      memberNo: 'FY-2602-008812',
+      name: '林小满',
+      phoneMasked: '138****6620'
+    });
+    expect(detail.body.lines[1]).toMatchObject({
+      memberNo: 'FY-2607-001204',
+      name: '苏晚晚',
+      phoneMasked: '136****2093'
+    });
+    const list = await h.api('get', '/adjustments', fin);
+    expect(list.body.some((row: { payloadJson?: unknown }) => 'payloadJson' in row)).toBe(false);
+  });
+
   it('相同幂等键重试只入账一次；同键不同内容返回 409', async () => {
     const key = 'adjust:test:1';
     const body = { memberId: 'm-tang', points: 30, reason: '幂等测试' };
@@ -214,7 +263,7 @@ describe('CRM 服务：会员、积分调整与审计', () => {
   it('客服可发起单笔但不能批量；驳回必须填写意见', async () => {
     const batch = await h.api('post', '/adjustments/batch', cs, {
       reason: '批量',
-      lines: [{ memberId: 'm-lin', points: 1 }]
+      lines: [{ phone: '13812346620', points: 1 }]
     });
     expect(batch.status).toBe(403);
     const created = await h.api('post', '/adjustments', cs, {

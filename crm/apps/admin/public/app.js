@@ -1165,11 +1165,11 @@
       ${
         can('crm:adjust:batch')
           ? `<div class="panel">
-              <div class="panel-head"><h2>批量调整</h2><span class="help">每行「会员号,分值」；整单复核失败则不执行</span></div>
+              <div class="panel-head"><h2>批量调整</h2><span class="help">每行「手机号,±分值」；整单复核失败则不执行</span></div>
               <form id="batch-form" class="form-grid">
-                <div class="field full"><label>调整行</label><textarea name="lines" rows="4" placeholder="FY-2602-008812,100&#10;FY-2607-001204,-50" required></textarea></div>
+                <div class="field full"><label>调整行</label><textarea name="lines" rows="4" placeholder="13812346620,100&#10;13620932093,-50" required></textarea></div>
                 <div class="field full"><label>原因</label><input name="reason" required minlength="2" maxlength="200" /></div>
-                <div class="full row-actions"><button class="btn small" type="submit">提交批量审批</button><span class="help">批量一律进入审批，由另一人批准。</span></div>
+                <div class="full row-actions"><button class="btn small" type="submit">提交批量审批</button><span class="help">手机号是唯一入口；无手机号的会员请先在档案补全。批量一律进入审批，由另一人批准。</span></div>
               </form>
             </div>`
           : ''
@@ -1187,9 +1187,16 @@
         panel.style.display = 'block';
         panel.innerHTML = `<b>${esc(detail.request.id)}</b> · ${esc(detail.request.reason)}
           <div class="table-wrap" style="margin-top:8px"><table>
-            <thead><tr><th>会员</th><th>分值</th></tr></thead>
+            <thead><tr><th>姓名</th><th>会员号</th><th>手机号</th><th>分值</th></tr></thead>
             <tbody>${detail.lines
-              .map((line) => `<tr><td class="mono small">${esc(line.memberId)}</td><td>${line.points > 0 ? '+' : ''}${line.points}</td></tr>`)
+              .map(
+                (line) => `<tr>
+                  <td>${esc(line.name)}</td>
+                  <td class="mono small">${esc(line.memberNo || '—')}</td>
+                  <td class="mono small">${esc(line.phoneMasked || '—')}</td>
+                  <td>${line.points > 0 ? '+' : ''}${line.points}</td>
+                </tr>`
+              )
               .join('')}</tbody>
           </table></div>`;
       }).catch(reportError));
@@ -1227,19 +1234,32 @@
       batchForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const values = formValues(batchForm);
-        const members = await api('/members');
-        const byNo = new Map(members.members.map((row) => [row.memberNo, row.id]));
-        const lines = values.lines
+        const rows = values.lines
           .split(/\n+/)
           .map((line) => line.trim())
-          .filter(Boolean)
-          .map((line) => {
-            const [memberNo, points] = line.split(/[,，\s]+/);
-            return { memberId: byNo.get(memberNo), points: Number(points), memberNo };
-          });
-        const missing = lines.filter((line) => !line.memberId);
-        if (missing.length) return toast(`找不到会员：${missing.map((line) => line.memberNo).join('、')}`, 'error');
-        if (!lines.length) return toast('请填写至少一行', 'error');
+          .filter(Boolean);
+        if (!rows.length) return toast('请填写至少一行', 'error');
+        const lines = rows.map((line, index) => {
+          // 手机号里可能有空格（+86 138 ...），所以分值从行尾取；也兼容只有空格分隔的写法。
+          const comma = Math.max(line.lastIndexOf(','), line.lastIndexOf('，'));
+          let phone = '';
+          let pointsText = '';
+          if (comma >= 0) {
+            phone = line.slice(0, comma).trim();
+            pointsText = line.slice(comma + 1).trim();
+          } else {
+            const match = line.match(/^(.*\S)\s+([+-]?\d+)$/);
+            if (match) {
+              phone = match[1].trim();
+              pointsText = match[2];
+            }
+          }
+          return { row: index + 1, phone, pointsText, points: Number(pointsText) };
+        });
+        const invalid = lines.find(
+          (line) => !line.phone || !line.pointsText || !Number.isInteger(line.points) || line.points === 0
+        );
+        if (invalid) return toast(`第 ${invalid.row} 行格式应为「手机号,±分值」`, 'error');
         try {
           await guard(event.submitter, async () => {
             await api('/adjustments/batch', {
@@ -1247,7 +1267,7 @@
               headers: { 'Idempotency-Key': idemKey('ui-batch') },
               body: {
                 reason: values.reason,
-                lines: lines.map((line) => ({ memberId: line.memberId, points: line.points }))
+                lines: lines.map((line) => ({ phone: line.phone, points: line.points }))
               }
             });
             toast('批量调整已提交审批');
