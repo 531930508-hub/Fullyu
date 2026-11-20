@@ -297,6 +297,20 @@ E2 证据（测试环境，2026-11-08）：
 - 两端 `CRM_OUTBOX_INTERVAL_MS` 均已配置，概览不会出现「投递 worker 未启用」告警；若某环境为空，看板会显式提示。
 - 本地分支 `fix/runtime-env-and-services-20261118` 未推送（ahead 37 / behind 6，且含其他系统未发布提交）；本次发布直接取本地已提交的 CRM 产物。
 
+## 发布记录：昵称占位规则 + 程序规则（2026-11-21 00:43）
+
+| 项 | 值 |
+|---|---|
+| commit | `main@90cca17`（含 `86a7d9f` 占位名可被真实昵称升级、`03e7fd6` 程序规则） |
+| 生产 | `crm.fullyu.cn`（121.40.119.57 `/opt/fullyu-crm`，unit `fullyu-crm`，RDS `crm`） |
+| 产物 | 服务器端就地构建：`pnpm install --frozen-lockfile` → `schema:mysql` → `prisma generate --schema prisma/schema.mysql.prisma` → `rm -rf dist && tsc`，另建 `packages/shared/dist` |
+| 数据 | `schema.mysql.prisma` 相对 `928a029` 逐字节一致，**未跑 `db:push`** |
+| 备份 | `/root/backups/crm-all-20261120-234*.tar.gz`（`apps/server/dist` + `packages/shared/dist` + `apps/admin/public`） |
+| 探针 | `/api/health` 200、`/admin/` 200、`/game/` 200、`/` 302、`/api/sync/status` 401；`dist/common/member-name.js` 含占位名判定 |
+| 回滚 | 解 tar 回三个目录 → `systemctl restart fullyu-crm` |
+| 未随发 | `9e1f9d9`（外部文本护栏 + `member_identities.created_at`）不在 `main`；合并前需先给生产库加列 |
+| 测试 | 本次未重发 `test-crm.fullyu.cn`（仍是旧版），需要时按同一命令序列在 `/opt/fullyu-crm-test` 复跑 |
+
 ### 业务会员卡清表（2026-11-18 12:35）
 
 - 线上库核查：两端 MySQL（生产 RDS `crm`、测试 `crm_test`）表数与 `schema.mysql.prisma` 一一对应（各 32 张），**不存在 `business_card_catalog`**，无需 DROP；RDS 全实例搜 `%business_card%` 为空。
