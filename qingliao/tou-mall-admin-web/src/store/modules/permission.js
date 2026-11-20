@@ -112,8 +112,10 @@ const permission = {
         const accessedRouters = asyncRouterMap.map(cloneRoute).filter(v => {
           if (v.children && v.children.length > 0) {
             v.children = v.children.filter(child => canAccess(child));
-            // 父级菜单缺失但子菜单有权限时仍保留分组，避免增量迁移期间整组消失
-            return canAccess(v) || v.children.length > 0;
+            // 父级菜单缺失但子菜单有权限时仍保留分组，避免增量迁移期间整组消失；
+            // 反过来，只授权了父级菜单行、下面一个子页都没有授权时不能保留，
+            // 否则侧边栏会多出一个点开是空的下拉
+            return v.children.length > 0;
           }
           return canAccess(v);
         });
