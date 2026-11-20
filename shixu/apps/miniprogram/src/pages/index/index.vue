@@ -800,7 +800,7 @@
                   <text class="asset-label">{{ tt('券', 'Coupons') }}</text>
                 </button>
                 <button hover-class="none" class="asset-item" @click="openAssets('points')">
-                  <text class="asset-value">{{ state.customer.points || 0 }}</text>
+                  <text class="asset-value">{{ pointsText }}</text>
                   <text class="asset-label">{{ tt('积分', 'Points') }}</text>
                 </button>
                 <button hover-class="none" class="asset-item" @click="goPickups">
@@ -1145,7 +1145,7 @@
           <text class="tiny muted">{{ tt('张券可用', 'coupons available') }}</text>
         </view>
         <view class="asset-summary-item">
-          <text class="asset-summary-value">{{ state.customer.points || 0 }}</text>
+          <text class="asset-summary-value">{{ pointsText }}</text>
           <text class="tiny muted">{{ tt('积分 · 全平台共享', 'points · shared platform-wide') }}</text>
         </view>
       </view>
@@ -1620,6 +1620,10 @@ const brandActive = computed(() => ['ACTIVE', 'EXPIRING', 'PENDING'].includes(br
 const brandRemaining = computed(() => (brandMember.value && brandMember.value.card && brandMember.value.card.remainingDays) || 0);
 const brandValidUntil = computed(() => formatBrandDate(brandMember.value && brandMember.value.card && brandMember.value.card.validUntil));
 const brandPoints = computed(() => (brandMember.value && brandMember.value.points && brandMember.value.points.balance) || 0);
+// 会员中心故障时后端照常登录（memberSync=degraded）：积分读数不可信，
+// 显示「同步中」而不是 0，避免会员以为积分被清空。
+const memberSyncing = computed(() => Boolean(state.customer && state.customer.memberSync === 'degraded'));
+const pointsText = computed(() => (memberSyncing.value ? tt('同步中', 'Syncing') : state.customer.points || 0));
 const brandDice = computed(() => (brandMember.value && brandMember.value.dice && brandMember.value.dice.balance) || 0);
 const brandPending = computed(() => (brandMember.value && brandMember.value.prizes && brandMember.value.prizes.pending) || 0);
 // CRM 目录里时长可能不止一个（90 天 / 365 天），入口只报最低价并标「起」，

@@ -1,6 +1,7 @@
 import { createHash, createHmac } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ApiError } from '../common/errors';
+import { CrmCircuitBreaker } from './crm-breaker';
 import { crmConfig, type CrmConfig } from './crm.config';
 
 /**
@@ -71,6 +72,8 @@ export const signCrmRequest = (
 export class CrmClient {
   private readonly logger = new Logger('CrmClient');
   private readonly config: CrmConfig | null;
+  // CRM 整体不可用时短路，避免每次调用都排满超时把 node 拖住。
+  private readonly breaker = new CrmCircuitBreaker();
 
   constructor() {
     try {
@@ -142,6 +145,10 @@ export class CrmClient {
   private async request<T>(method: 'GET' | 'POST', path: string, payload?: unknown): Promise<T> {
     const config = this.config;
     if (!config) throw new ApiError(503, '会员服务未开启', { code: 'CRM_DISABLED' });
+    if (this.breaker.isOpen()) {
+      // 熔断期间不再排队等超时：登录等主流程立刻走降级分支。
+      throw new ApiError(503, '会员服务暂时不可用，请稍后重试', { code: 'CRM_UNAVAILABLE' });
+    }
 
     const rawBody = payload === undefined ? '' : JSON.stringify(payload);
     const timestamp = String(Math.floor(Date.now() / 1000));
@@ -166,6 +173,7 @@ export class CrmClient {
     } catch (error) {
       const reason = error instanceof Error && error.name === 'AbortError' ? '超时' : '网络异常';
       this.logger.warn(`会员中心${reason}：${method} ${path}`);
+      this.breaker.recordFailure();
       throw new ApiError(503, '会员服务暂时不可用，请稍后重试', { code: 'CRM_UNAVAILABLE' });
     } finally {
       clearTimeout(timer);
@@ -176,6 +184,7 @@ export class CrmClient {
       text = await response.text();
     } catch {
       this.logger.warn(`会员中心响应读取失败：${method} ${path}`);
+      this.breaker.recordFailure();
       throw new ApiError(503, '会员服务暂时不可用，请稍后重试', { code: 'CRM_UNAVAILABLE' });
     }
     let body: unknown = null;
@@ -186,7 +195,13 @@ export class CrmClient {
         body = text.slice(0, 200);
       }
     }
-    if (!response.ok) throw new CrmResponseError(response.status, body);
+    if (!response.ok) {
+      // 5xx 才算 CRM 不可用；4xx 说明服务是活的，按正常响应重置熔断。
+      if (response.status >= 500) this.breaker.recordFailure();
+      else this.breaker.recordSuccess();
+      throw new CrmResponseError(response.status, body);
+    }
+    this.breaker.recordSuccess();
     return body as T;
   }
 

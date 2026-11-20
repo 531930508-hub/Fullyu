@@ -367,14 +367,27 @@ export class AuthService {
 
   /**
    * 顾客对外视图：积分以 CRM 为唯一账本。
-   * 未开启 CRM 时沿用本地只读字段；开启后调用失败必须报错，绝不静默回退本地 0 分。
+   * 未开启 CRM 时沿用本地只读字段；开启后 CRM 不可用不再阻断登录，
+   * 返回 memberSync='degraded'，前端把积分打码为「同步中」。
    * 会籍（memberTier/memberUntil）先按 CRM 品牌卡刷新，本地只做 5 分钟缓存。
    */
   private async customerView(customer: CrmCustomer): Promise<ReturnType<typeof customerPayload>> {
     const fresh = await this.membership.refresh(customer);
     const perCupCents = await this.perkRates.perCupCents();
     if (!this.crm.enabled) return customerPayload(fresh, undefined, perCupCents);
-    const member = await this.crm.resolve(this.crmIdentity(fresh));
+    let member: CrmMember;
+    try {
+      member = await this.crm.resolve(this.crmIdentity(fresh));
+    } catch (error) {
+      // 身份冲突是唯一要让顾客看到的 CRM 报错；其余一律降级，先进得来点得动单。
+      if (error instanceof ApiError && error.code === 'IDENTITY_CONFLICT') throw error;
+      this.logger.warn(
+        `会员中心暂不可用，按降级视图返回：customer=${fresh.id} ${
+          error instanceof Error ? error.message : '未知错误'
+        }`
+      );
+      return customerPayload(fresh, undefined, perCupCents, 'degraded');
+    }
     const synced = await this.adoptCrmProfile(
       await this.adoptCrmName(fresh, member.name),
       member
@@ -593,7 +606,12 @@ export function customerPayload(
   /** 会员中心余额；传入时以它为准，用于替换业务端本地只读积分。 */
   pointsOverride?: number,
   /** CRM 下发的每杯立减金额（分）；缺省用本地默认值。 */
-  perCupCents?: number
+  perCupCents?: number,
+  /**
+   * 会员数据是否可信：'degraded' 表示 CRM 故障、积分/会籍按本地快照展示，
+   * 前端必须打码成「同步中」，不能把读不到渲染成 0 分。
+   */
+  memberSync: 'live' | 'degraded' = 'live'
 ) {
   // UI-02：会员等级与折扣由服务端按库内记录和有效期判定，不信任客户端申报。
   const discount = annualDiscountCents(customer, perCupCents);
@@ -602,6 +620,7 @@ export function customerPayload(
     memberTier: discount ? 'annual' : 'standard',
     discountPerCupCents: discount,
     // 积分全平台共享，CRM 接入后余额来自会员中心；未接入时只展示本地余额。
-    points: pointsOverride === undefined ? customer.points ?? 0 : pointsOverride
+    points: pointsOverride === undefined ? customer.points ?? 0 : pointsOverride,
+    memberSync
   };
 }
