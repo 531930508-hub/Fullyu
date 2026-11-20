@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { HttpStatus, Injectable, Logger } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { ConfigService } from '@nestjs/config'
 import { widestDataScope, type DataScope } from '@fullyu/shared'
@@ -12,6 +12,8 @@ import { defaultNickname } from '../../common/nickname'
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -63,8 +65,9 @@ export class AuthService {
       })
     }
 
-    // 4. 会员中心身份：手机号/unionId 命中同一会员，登录失败即明确报错
-    await this.syncCrmIdentity(user)
+    // 4. 会员中心身份：手机号/unionId 命中同一会员。
+    // CRM 故障不阻断登录（memberSync=degraded，前端显示「同步中」）；身份冲突仍直接报错。
+    const memberSyncDegraded = await this.syncCrmIdentity(user)
 
     // 5. 生成 JWT token
     const token = this.jwtService.sign({
@@ -75,6 +78,7 @@ export class AuthService {
 
     return {
       token,
+      memberSync: memberSyncDegraded ? 'degraded' : 'live',
       user: {
         id: user.id,
         phone: user.phone,
@@ -111,7 +115,7 @@ export class AuthService {
       })
     }
     // 本地快捷登录与真实微信登录走同一套会员解析，避免出现「只在微信入口同步」的盲区
-    await this.syncCrmIdentity(user)
+    const memberSyncDegraded = await this.syncCrmIdentity(user)
     const token = this.jwtService.sign({
       sub: user.id,
       phone: user.phone,
@@ -119,6 +123,7 @@ export class AuthService {
     })
     return {
       token,
+      memberSync: memberSyncDegraded ? 'degraded' : 'live',
       user: {
         id: user.id,
         phone: user.phone,
@@ -284,8 +289,11 @@ export class AuthService {
   }
 
   /**
-   * 登录后把本地用户解析到 CRM。未开启时无操作；
-   * 开启后 CRM 不可用或身份冲突会直接阻断登录，避免带着错误身份产生订单。
+   * 登录后把本地用户解析到 CRM。未开启时无操作。
+   *
+   * CRM 不可用不再阻断登录：顾客要能进小程序、能预约、能核销，返回 true 表示本次
+   * 会员数据是降级的（前端展示「同步中」，积分/卡期打码）。身份冲突（409）仍然抛出，
+   * 因为带着两个档案继续下单会把积分记到错误的人身上，只能人工合并。
    */
   private async syncCrmIdentity(user: {
     id: string
@@ -293,14 +301,28 @@ export class AuthService {
     nickname: string
     unionId?: string | null
     openId?: string | null
-  }) {
-    if (!this.crm.enabled) return
-    await this.crm.resolve({
-      localUserId: user.id,
-      phone: user.phone,
-      name: user.nickname,
-      unionId: user.unionId ?? null,
-      openId: user.openId ?? null,
-    })
+  }): Promise<boolean> {
+    if (!this.crm.enabled) return false
+    try {
+      await this.crm.resolve({
+        localUserId: user.id,
+        phone: user.phone,
+        name: user.nickname,
+        unionId: user.unionId ?? null,
+        openId: user.openId ?? null,
+      })
+      return false
+    } catch (error) {
+      // 409 是唯一需要顾客看见的 CRM 报错（档案冲突）；其余一律降级。
+      if (error instanceof BusinessException && error.getStatus() === HttpStatus.CONFLICT) {
+        throw error
+      }
+      this.logger.warn(
+        `会员中心暂不可用，登录降级继续：userId=${user.id} ${
+          error instanceof Error ? error.message : '未知错误'
+        }`,
+      )
+      return true
+    }
   }
 }

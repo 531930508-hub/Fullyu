@@ -136,7 +136,7 @@ describe('在场业务接入点', () => {
     await fake.close()
   })
 
-  it('登录后解析 CRM 身份；CRM 故障阻断登录并沿用业务错误码', async () => {
+  it('登录后解析 CRM 身份；CRM 故障降级登录，身份冲突仍阻断', async () => {
     const crm = new CrmClient(
       configOf({ ...baseEnv, CRM_BASE_URL: fake.url }),
     )
@@ -172,6 +172,7 @@ describe('在场业务接入点', () => {
 
     const result = await service.wechatPhoneLogin('login-code', 'phone-code')
     expect(result.token).toBe('token-1')
+    expect(result.memberSync).toBe('live')
     const sent = JSON.parse(fake.requests[0].body) as Record<string, unknown>
     expect(sent).toMatchObject({
       localUserId: user.id,
@@ -180,12 +181,19 @@ describe('在场业务接入点', () => {
       unionId: user.unionId,
     })
 
+    // CRM 挂了不能挡住登录：照常签发 token，前端按 memberSync=degraded 展示「同步中」。
     fake.failNext = { status: 503, body: { message: 'down' } }
-    await expect(service.wechatPhoneLogin('login-code-2', 'phone-code-2')).rejects.toMatchObject({
-      bizCode: 5030
+    const degraded = await service.wechatPhoneLogin('login-code-2', 'phone-code-2')
+    expect(degraded.token).toBe('token-1')
+    expect(degraded.memberSync).toBe('degraded')
+    expect(jwt.sign).toHaveBeenCalledTimes(2)
+
+    // 身份冲突（409）是唯一必须让顾客看到的 CRM 报错：带着两份档案继续下单会把积分记错人。
+    fake.failNext = { status: 409, body: { error: 'CONFLICT' } }
+    await expect(service.wechatPhoneLogin('login-code-3', 'phone-code-3')).rejects.toMatchObject({
+      bizCode: 4090,
     })
-    // 失败时不签发 token，避免带着未同步身份进入下单链路。
-    expect(jwt.sign).toHaveBeenCalledTimes(1)
+    expect(jwt.sign).toHaveBeenCalledTimes(2)
   })
 
   it('积分余额读取 CRM；未同步时补一次解析；关闭时沿用本地记录', async () => {

@@ -3,6 +3,11 @@ import { post } from '@/utils/request'
 
 export interface LoginResult {
   token: string
+  /**
+   * 会员数据是否可信：CRM 故障时后端照常签发 token，但积分/卡期是本地旧值或读不到，
+   * 页面据此显示「同步中」，不要把读不到渲染成 0 分、未开通。
+   */
+  memberSync?: 'live' | 'degraded'
   user: {
     id: string
     phone: string

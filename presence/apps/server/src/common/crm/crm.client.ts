@@ -2,6 +2,7 @@ import { createHash, createHmac } from 'node:crypto'
 import { HttpStatus, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { BusinessException } from '../exceptions/business.exception'
+import { CrmCircuitBreaker } from './crm-breaker'
 import { crmConfigFrom, type PresenceCrmConfig } from './crm.config'
 
 /**
@@ -83,6 +84,8 @@ const unavailable = () =>
 export class CrmClient {
   private readonly logger = new Logger('CrmClient')
   private readonly config: PresenceCrmConfig | null
+  // CRM 整体不可用时短路，避免每次调用都排满超时把 node 拖住。
+  private readonly breaker = new CrmCircuitBreaker()
 
   constructor(config: ConfigService) {
     // 配置错误直接拒绝启动：不允许「看似开启、实际不可用」。
@@ -185,6 +188,10 @@ export class CrmClient {
   ): Promise<T> {
     const config = this.config
     if (!config) throw unavailable()
+    if (this.breaker.isOpen()) {
+      // 熔断期间不再排队等超时：登录等主流程立刻走降级分支。
+      throw unavailable()
+    }
 
     const rawBody = payload === undefined ? '' : JSON.stringify(payload)
     const timestamp = String(Math.floor(Date.now() / 1000))
@@ -209,6 +216,7 @@ export class CrmClient {
     } catch (error) {
       const reason = error instanceof Error && error.name === 'AbortError' ? '超时' : '网络异常'
       this.logger.warn(`会员中心${reason}：${method} ${path}`)
+      this.breaker.recordFailure()
       throw unavailable()
     } finally {
       clearTimeout(timer)
@@ -219,6 +227,7 @@ export class CrmClient {
       text = await response.text()
     } catch {
       this.logger.warn(`会员中心响应读取失败：${method} ${path}`)
+      this.breaker.recordFailure()
       throw unavailable()
     }
     let body: unknown = null
@@ -229,7 +238,13 @@ export class CrmClient {
         body = text.slice(0, 200)
       }
     }
-    if (!response.ok) throw new CrmResponseError(response.status, body)
+    if (!response.ok) {
+      // 5xx 才算 CRM 不可用；4xx 说明服务是活的，按正常响应重置熔断。
+      if (response.status >= 500) this.breaker.recordFailure()
+      else this.breaker.recordSuccess()
+      throw new CrmResponseError(response.status, body)
+    }
+    this.breaker.recordSuccess()
     return body as T
   }
 

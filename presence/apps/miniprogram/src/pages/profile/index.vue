@@ -25,7 +25,7 @@
           <text class="brand-entry-state">{{ brandActive ? tr(`还有 ${brandRemaining} 天`, `${brandRemaining} days left`) : tr('三店通用', 'All three stores') }}</text>
         </view>
         <text class="brand-entry-title serif">{{ tr('Full愈大会员', 'Full Yu Member') }}</text>
-        <text class="brand-entry-sub">{{ brandActive ? tr(`积分 ${brandPoints} · 骰子 ${brandDice}`, `${brandPoints} points · ${brandDice} dice`) : (isLoggedIn ? (brandMember ? tr('会员卡 · 三店通用', 'Member card · three stores') : tr('品牌通用会员 · 三店权益', 'Brand-wide membership · three stores')) : tr('会员卡 · 三店通用 · 登录后查看积分与有效期', 'Member card · three stores · sign in for points')) }}</text>
+        <text class="brand-entry-sub">{{ brandActive ? tr(`积分 ${brandPoints} · 骰子 ${brandDice}`, `${brandPoints} points · ${brandDice} dice`) : (memberSyncing ? tr('会员信息同步中', 'Membership syncing') : (isLoggedIn ? (brandMember ? tr('会员卡 · 三店通用', 'Member card · three stores') : tr('品牌通用会员 · 三店权益', 'Brand-wide membership · three stores')) : tr('会员卡 · 三店通用 · 登录后查看积分与有效期', 'Member card · three stores · sign in for points'))) }}</text>
         <view class="brand-entry-foot">
           <text>{{ brandActive ? tr('进入品牌会员中心', 'Open brand membership') : (isLoggedIn ? tr('开通品牌会员', 'Join Full Yu Member') : tr('了解品牌会员', 'See brand membership')) }}</text>
           <PresenceIcon name="arrow" :size="22" :color="brandActive ? '#eec76f' : iconColors.primary" />
@@ -34,7 +34,7 @@
       <PageState v-if="isLoggedIn && loading" state="loading" :title="tr('正在读取账户信息', 'Loading account')" />
       <PageState v-else-if="isLoggedIn && loadError" state="error" :title="tr('账户信息加载失败', 'Failed to load account')" :message="tr('会员状态与资产暂时无法确认', 'Membership and assets are temporarily unavailable')" :action="tr('重新加载', 'Reload')" @action="loadUserData" />
       <view v-if="isLoggedIn && !loading && !loadError" class="stats-card">
-        <button class="stat-item" @tap="goAssets"><text class="stat-value emphasis">{{ points }}</text><text class="stat-label">{{ tr('积分', 'Points') }}</text></button>
+        <button class="stat-item" @tap="goAssets"><text class="stat-value emphasis">{{ pointsSyncing ? tr('同步中', 'Syncing') : points }}</text><text class="stat-label">{{ tr('积分', 'Points') }}</text></button>
         <button class="stat-item" @tap="goPage('my-courses')"><text class="stat-value">{{ upcomingCount }}</text><text class="stat-label">{{ tr('待上课', 'Upcoming') }}</text></button>
         <button class="stat-item" @tap="goPage('my-courses')"><text class="stat-value">{{ completedCount }}</text><text class="stat-label">{{ tr('已完成', 'Completed') }}</text></button>
         <button class="stat-item" @tap="goVouchers"><text class="stat-value">{{ voucherCount }}</text><text class="stat-label">{{ tr('代金券', 'Vouchers') }}</text></button>
@@ -146,10 +146,14 @@ const userStore = useUserStore()
 const { userInfo, isLoggedIn, isTrainer, activeView } = storeToRefs(userStore)
 const language = computed(() => userStore.language)
 const points = ref(0)
+/** 积分取不到（会员中心故障）：显示「同步中」而不是 0，0 分会让会员误以为积分被清空。 */
+const pointsSyncing = ref(false)
 const completedCount = ref(0)
 const upcomingCount = ref(0)
 const voucherCount = ref(0)
 const brandMember = ref<BrandMemberData | null>(null)
+/** 会员卡接口失败（区别于「确实没有会员卡」回 null 的情况）。 */
+const brandLoadFailed = ref(false)
 /** 扫码带会员码时只自动弹一次登录层，避免顾客关闭后反复打断。 */
 let giftLoginPrompted = false
 const loading = ref(false)
@@ -167,6 +171,8 @@ const consentHint = ref(false)
 const avatarText = computed(() => userInfo.value?.nickname?.charAt(0) || (isEnglish() ? 'F' : '愈'))
 const maskedPhone = computed(() => { const p = userInfo.value?.phone || ''; return p.length === 11 ? `${p.slice(0, 3)}****${p.slice(7)}` : p })
 const brandActive = computed(() => ['ACTIVE', 'EXPIRING', 'PENDING'].includes(brandMember.value?.card?.state || ''))
+/** 登录时会员中心不可用，或会员卡读取失败：状态未知，不能渲染成「未开通」。 */
+const memberSyncing = computed(() => isLoggedIn.value && !brandMember.value && (brandLoadFailed.value || userStore.memberSync === 'degraded'))
 const brandRemaining = computed(() => brandMember.value?.card?.remainingDays || 0)
 const brandPoints = computed(() => brandMember.value?.points?.balance || 0)
 const brandDice = computed(() => brandMember.value?.dice?.balance || 0)
@@ -180,11 +186,14 @@ const accountMenu = computed(() => [
 ])
 
 async function loadBrandData() {
-  if (!isLoggedIn.value) { brandMember.value = null; return }
+  if (!isLoggedIn.value) { brandMember.value = null; brandLoadFailed.value = false; return }
   try {
     brandMember.value = await loadBrandMember()
+    brandLoadFailed.value = false
   } catch {
+    // 读失败与「没有会员卡」必须区分：失败时显示「同步中」，不能诱导老会员去开通。
     brandMember.value = null
+    brandLoadFailed.value = true
   }
 }
 
@@ -199,9 +208,15 @@ async function loadUserData() {
   loading.value = true
   loadError.value = false
   try {
-    const [pts, orders, vouchers] = await Promise.all([getPoints(), listMyOrders(), listMyVouchers()])
+    const [ptsResult, orders, vouchers] = await Promise.all([
+      getPoints().then((pts) => ({ ok: true as const, balance: pts.balance })).catch(() => ({ ok: false as const })),
+      listMyOrders(),
+      listMyVouchers(),
+    ])
     if (!uni.getStorageSync('token')) { userStore.logout(); return }
-    points.value = pts.balance
+    // 积分读不到只降级这一格：预约与代金券仍然可用，整页报错会把顾客挡在门外。
+    pointsSyncing.value = !ptsResult.ok
+    if (ptsResult.ok) points.value = ptsResult.balance
     const courseOrders = (orders || []).filter(o => o.orderType === 'COURSE')
     completedCount.value = courseOrders.filter(o => o.status === 'COMPLETED').length
     upcomingCount.value = courseOrders.filter(o => o.status === 'PAID').length

@@ -15,6 +15,11 @@ export const useUserStore = defineStore('user', () => {
   // 语言在 store 创建时即从本地恢复，避免首屏 setup 早于 App.onLaunch 时读到默认中文。
   const storedLanguage = uni.getStorageSync('language')
   const language = ref<'zh' | 'en'>(storedLanguage === 'en' ? 'en' : 'zh')
+  // 会员中心（CRM）不可用时后端仍允许登录，登录响应带 memberSync=degraded。
+  // 这里只记状态，不改登录结果：顾客先进得来，会员数据按「同步中」展示。
+  const memberSync = ref<'live' | 'degraded'>(
+    uni.getStorageSync('memberSync') === 'degraded' ? 'degraded' : 'live',
+  )
   /**
    * 端内视角（Skool 式双视角）：
    * student = 课程视角（我想上什么课），trainer = 导师视角（经营我的社群）。
@@ -44,18 +49,22 @@ export const useUserStore = defineStore('user', () => {
     if (storedLang) language.value = storedLang
   }
 
-  function setLogin(data: { token: string; user: any }) {
+  function setLogin(data: { token: string; user: any; memberSync?: 'live' | 'degraded' }) {
     token.value = data.token
     userInfo.value = data.user
+    memberSync.value = data.memberSync === 'degraded' ? 'degraded' : 'live'
     uni.setStorageSync('token', data.token)
     uni.setStorageSync('userInfo', JSON.stringify(data.user))
+    uni.setStorageSync('memberSync', memberSync.value)
   }
 
   function logout() {
     token.value = ''
     userInfo.value = null
+    memberSync.value = 'live'
     uni.removeStorageSync('token')
     uni.removeStorageSync('userInfo')
+    uni.removeStorageSync('memberSync')
   }
 
   function switchLanguage() {
@@ -70,7 +79,7 @@ export const useUserStore = defineStore('user', () => {
   async function login(phoneCode: string) {
     const loginCode = await wxLogin()
     const res = await wechatPhoneLogin(loginCode, phoneCode)
-    setLogin({ token: res.token, user: res.user })
+    setLogin({ token: res.token, user: res.user, memberSync: res.memberSync })
     return res
   }
 
@@ -79,13 +88,14 @@ export const useUserStore = defineStore('user', () => {
    */
   async function devLogin(phone: string) {
     const res = await devLoginApi(phone)
-    setLogin({ token: res.token, user: res.user })
+    setLogin({ token: res.token, user: res.user, memberSync: res.memberSync })
     return res
   }
 
   return {
     token,
     userInfo,
+    memberSync,
     language,
     viewMode,
     isLoggedIn,
