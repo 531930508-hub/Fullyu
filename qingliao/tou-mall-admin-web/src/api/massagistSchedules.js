@@ -43,6 +43,14 @@ export default {
       params
     })
   },
+  // 疗愈师本人某天的排班门店（当天调店取目标店）
+  myDay(date) {
+    return request({
+      url: '/massagistSchedules/myDay',
+      method: 'get',
+      params: {date}
+    })
+  },
   clearFuture(massagistId, shopId) {
     return request({
       url: '/massagistSchedules/clearFuture',

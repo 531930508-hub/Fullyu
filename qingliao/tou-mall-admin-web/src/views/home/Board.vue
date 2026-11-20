@@ -8,11 +8,20 @@
           <el-radio-button :label="1">床位</el-radio-button>
           <el-radio-button :label="2">疗愈师</el-radio-button>
         </el-radio-group>
-        <span v-if="isMassagist" class="readonly-tag">只读看板</span>
+        <span v-if="isMassagist" class="readonly-tag">全店只读看板</span>
+        <span v-if="isMassagist && therapistDay && therapistDay.hasSchedule" class="readonly-tag" style="margin-left:8px">
+          当日排班门店{{ therapistMultiShop ? '（' + therapistShops.length + '家，可切换）' : '' }}
+        </span>
       </div>
       <div class="flex align-center flex-wrap">
         <shop-selector v-if="shopList && !isMassagist" v-model="searchForm.shopId" :clearable="false"
-                       @change="changeShop" width="160px" :disabled="isMassagist" select-class="shop-select"/>
+                       @change="changeShop" width="160px" select-class="shop-select"/>
+        <!-- 疗愈师：默认就是当天排班所在门店，当天涉及多家门店时才可切换 -->
+        <el-select v-else-if="isMassagist && therapistShops.length" v-model="searchForm.shopId"
+                   class="shop-select" style="width:200px" :disabled="!therapistMultiShop"
+                   @change="changeTherapistShop">
+          <el-option v-for="s in therapistShops" :key="s.shopId" :label="s.label" :value="s.shopId"/>
+        </el-select>
         <el-input v-show="showCustomerSearch" placeholder="输入客户手机号查找" v-model="searchForm.customerPhone"
                   class="search-cellphone" clearable @clear="updateData" @blur="updateData"
                   suffix-icon="el-icon-search">
@@ -57,7 +66,15 @@
     </div>
     <div class="content" v-loading="listLoading">
       <reception-div v-show="showPrevAndNextDateBtn && !isMassagist" :reception-data="receptionData"></reception-div>
-      <div class="scroll-container" ref="refScrollContainer" :style="{height:contentHeight+'px'}">
+      <div v-if="therapistEmpty" class="therapist-empty">
+        <div class="therapist-empty-title">{{ therapistEmptyTitle }}</div>
+        <div class="therapist-empty-desc">
+          这一天没有你的排班，可能休息或排班还没生成。看板只显示当天有排班门店的排班，
+          你可以回今天，或点右上角日期查看其他日期。
+        </div>
+        <el-button round type="primary" plain @click="initDate">回今天</el-button>
+      </div>
+      <div v-else class="scroll-container" ref="refScrollContainer" :style="{height:contentHeight+'px'}">
         <div class="bed-wrapper">
           <div class="bed-item"></div>
           <div v-for="item in dataList" class="bed-item" :style="item.type == 0?{'width':'120px'}:{}"
@@ -70,6 +87,7 @@
           </div>
           <schedules-line v-for="(item,index) in dataList" :massagist-round="getMassagistRound(item.id)"
                           :key="index" :avatar-url="item.avatarUrl" :name="item.name"
+                          :is-self="isMassagist && massagistId && item.id == massagistId"
                           :order-detail-list="item.orderDetailList" :sort-index="getMassagistSortIndex(item.id)"
                           :schedules-list="item.schedulesList" :massagist-round-count="getMassagistRoundCount(item.id)"
                           class="bed-item" v-if="searchForm.type==2"></schedules-line>
@@ -243,6 +261,7 @@ import PadReceptionOrderDetail from "./PadReceptionOrderDetail";
 import Hamburger from "../../components/Hamburger";
 import ShopSelector from "../shop/shopList/ShopSelector";
 import roundScheduleApi from "../../api/roundSchedule"
+import massagistSchedulesApi from "../../api/massagistSchedules"
 import AdminTodoCard from "./AdminTodoCard";
 
 export default {
@@ -288,6 +307,8 @@ export default {
       contentHeight: window.innerHeight,
       massagistRound: [],
       listLoading: true,
+      // 疗愈师看板：所选日期本人所在门店（含调店），用来决定看哪家店的看板
+      therapistDay: null,
       shopEndTime:'22:00'
     }
   },
@@ -409,6 +430,23 @@ export default {
     },
     isMassagist() {
       return this.roles.filter(s => s == '疗愈师').length > 0
+    },
+    // 疗愈师这天没有排班（含排班接口还没返回）：不拉别家店的看板，直接给空态
+    therapistEmpty() {
+      if (!this.isMassagist || this.listLoading) {
+        return false
+      }
+      return !this.therapistDay || !this.therapistDay.hasSchedule
+    },
+    therapistEmptyTitle() {
+      return this.searchForm.date + ' 你没有排班记录'
+    },
+    // 这一天她排班涉及的门店（调店段算目标店），多于一家时允许切换
+    therapistShops() {
+      return (this.therapistDay && this.therapistDay.shops) || []
+    },
+    therapistMultiShop() {
+      return this.therapistShops.length > 1
     },
     showShopSelector() {
       return this.winWidth >= 515
@@ -606,19 +644,17 @@ export default {
 
       return {leftOffset, width: adjustedWidth, zIndex};
     },
-    //疗愈师只读看板：只看本人列，避免暴露同事排期
-    scopeReadOnly(list) {
-      if (!this.isMassagist) return list
-      const ownId = this.massagistId
-      if (ownId === null || ownId === undefined || ownId === '') return []
-      return list.filter(item => item && item.id == ownId)
-    },
     initData() {
-      this.searchForm.shopId = this.shopId
       this.searchForm.date = dateUtil.getCurrentDateCode()
-      // 疗愈师只有只读看板：固定按疗愈师维度，只展示本人一列
+      // 疗愈师看板：固定按疗愈师维度展示全店排班，不限本人
       this.searchForm.type = this.isMassagist ? 2 : 1
-      this.searchForm.massagistId = this.isMassagist ? this.massagistId : ''
+      this.searchForm.massagistId = ''
+      if (this.isMassagist) {
+        // 门店按「这一天我在哪家店」解析，交给 updateData 处理
+        this.fetchData()
+        return
+      }
+      this.searchForm.shopId = this.shopId
       if (!this.hasShopId()) {
         // 账号没有门店范围时不要用 null 调接口，等用户选择门店后再加载
         this.dataList = []
@@ -643,16 +679,57 @@ export default {
       this.searchForm.date = dateUtil.addDay(this.searchForm.date, 1, 'YYYY-MM-DD');
       this.updateData(true)
     },
+    /**
+     * 疗愈师看板：先确认「这一天我在哪家店」。
+     * 调店日看目标店；休息日返回 false，由上层走空态，不再拿账号门店去碰权限。
+     */
+    async resolveTherapistDay() {
+      this.therapistDay = null
+      const date = this.searchForm.date
+      if (!date) {
+        return false
+      }
+      try {
+        const res = await massagistSchedulesApi.myDay(date)
+        this.therapistDay = res.data || {hasSchedule: false}
+      } catch (e) {
+        this.therapistDay = {hasSchedule: false}
+      }
+      const day = this.therapistDay
+      if (day && day.hasSchedule && day.shopId) {
+        // 当天有多家店时保留用户手动切换的那家，其余情况用排班默认门店
+        const shops = day.shops || []
+        const current = this.searchForm.shopId
+        const keepCurrent = current && shops.some(s => String(s.shopId) === String(current))
+        this.searchForm.shopId = keepCurrent ? current : day.shopId
+        return true
+      }
+      this.searchForm.shopId = ''
+      return false
+    },
     async fetchData() {
       await this.updateData()
       this.updateTime();
       if (!this.isMassagist) this.fetchReceptionData()
     },
     async updateData(showloading = false) {
-      if (!this.hasShopId()) return
       if (this.isMassagist) {
+        // 疗愈师看板固定疗愈师维度，但不再限定本人：全店排班都可见
         this.searchForm.type = 2
-        this.searchForm.massagistId = this.massagistId
+        this.searchForm.massagistId = ''
+        this.listLoading = true
+        const hasSchedule = await this.resolveTherapistDay()
+        if (!hasSchedule) {
+          // 这天没有排班：不拿账号门店去顶，直接空态，避免"无权查看该门店"
+          this.dataList = []
+          this.massagistRound = []
+          this.listLoading = false
+          return
+        }
+      }
+      if (!this.hasShopId()) {
+        this.listLoading = false
+        return
       }
       if (showloading){
         this.listLoading = true
@@ -662,7 +739,7 @@ export default {
       }
       try {
         let res = await orderDetailApi.schedulingMap(this.searchForm)
-        this.dataList = this.scopeReadOnly(res.data || [])
+        this.dataList = res.data || []
         if (this.searchForm.type == 2) {
           this.fetchMassagistRound()
         }
@@ -1073,6 +1150,10 @@ export default {
       this.fetchShopTimeList()
       this.fetchData()
     },
+    // 疗愈师切换当天排班门店：只换门店，日期不变
+    changeTherapistShop() {
+      this.updateData(true)
+    },
   },
   filters: {
     formatDateTime(timeStr) {
@@ -1116,6 +1197,34 @@ export default {
     font-size: 12px;
     color: #8a6a40;
     background-color: #f6efe4;
+  }
+
+  /* 疗愈师：所选日期本人没有排班时的空态，替代原来的“无权查看该门店”报错 */
+  .therapist-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 16px;
+    margin-top: 8px;
+    background-color: #ffffff;
+    border-radius: 8px;
+  }
+
+  .therapist-empty-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #49454f;
+    margin-bottom: 8px;
+  }
+
+  .therapist-empty-desc {
+    max-width: 460px;
+    font-size: 13px;
+    line-height: 22px;
+    color: #79747e;
+    text-align: center;
+    margin-bottom: 20px;
   }
 
   .group /deep/ .el-radio-button:first-child .el-radio-button__inner {

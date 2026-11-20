@@ -327,8 +327,10 @@ fi
 #      → 那方 rc=1；同时两边共用一个 .build.rc，会读到对方的失败结果，健康的一方也跟着中止
 #      （2026-11-20 13:03/13:06 实测，本机与另一窗口同时在发测试）。停服前先看有没有别的活在打包。
 step "备份 jar、停应用"
-BUSY=$(ssh "$HOST" "pgrep -f 'plexus.classworlds.launcher.Launcher' >/dev/null && echo BUSY || echo IDLE" || echo IDLE)
-if [ "$BUSY" = "BUSY" ]; then
+#   注意：只能用 java 进程过滤，`pgrep -f plexus...` 会把 ssh 自己那条 bash -c 也算进去，
+#   导致每次发布都误判 BUSY（2026-11-20 13:42 实测）
+BUSY=$(ssh "$HOST" "pgrep -a java | grep -c 'plexus.classworlds.launcher.Launcher' || true" | tr -d '[:space:]')
+if [ "${BUSY:-0}" != "0" ]; then
   echo "中止：$HOST 上已有 mvn 在打包（另一端正在发布）。等它跑完再发：ssh $HOST 'pgrep -af plexus.classworlds'"
   exit 1
 fi

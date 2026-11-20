@@ -1,9 +1,13 @@
 package com.macro.mall.service.base;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.macro.mall.bo.AdminUserDetails;
 import com.macro.mall.common.exception.BusinessException;
+import com.macro.mall.entity.Massagist;
 import com.macro.mall.model.UmsAdmin;
 import com.macro.mall.model.UmsRole;
+import com.macro.mall.service.MassagistSchedulesService;
+import com.macro.mall.service.MassagistService;
 import com.macro.mall.service.UmsAdminService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +19,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -46,6 +51,14 @@ public class ShopScopeService {
     @Autowired
     @Lazy
     private UmsAdminService adminService;
+
+    @Autowired
+    @Lazy
+    private MassagistService massagistService;
+
+    @Autowired
+    @Lazy
+    private MassagistSchedulesService massagistSchedulesService;
 
     /** 是否拦截越界请求（改为 false 可整体回退到旧的“仅记录日志”行为） */
     public boolean isEnforce() {
@@ -83,6 +96,64 @@ public class ShopScopeService {
             return new ShopScope(true, null, requested);
         }
         return new ShopScope(false, authorizedShopIds(admin), requested);
+    }
+
+    /**
+     * 按排班日期给疗愈师临时补一档门店授权。
+     *
+     * <p>背景：疗愈师的可看门店只来自账号配置，调店记录在排班表里，两套东西不打通，
+     * 于是“我 11-14 被调到 B 店”这一天她反而看不到 B 店看板。这里做最小放开：
+     * 只有当次的 {@code date} 在该疗愈师排班表里确有记录（原店或调店目标店）时，
+     * 才把对应门店并入本次请求的授权范围；不写回账号，也不跨日期生效。</p>
+     *
+     * <p>调用方需保证只对读请求生效（GET），写操作仍走账号授权。</p>
+     *
+     * @param scope 已解析的门店作用域
+     * @param day   请求里的业务日期；为空时不做任何扩展
+     */
+    public ShopScope extendForScheduleDate(ShopScope scope, LocalDate day) {
+        if (scope == null || scope.isGlobal() || day == null) {
+            return scope;
+        }
+        // 只有“请求了不在授权里的门店”才需要查排班，绝大多数请求在这里直接返回
+        List<Long> requested = scope.getRequestedShopIds();
+        if (requested == null || requested.isEmpty()) {
+            return scope;
+        }
+        boolean missing = false;
+        for (Long shopId : requested) {
+            if (!scope.contains(shopId)) {
+                missing = true;
+                break;
+            }
+        }
+        if (!missing) {
+            return scope;
+        }
+        Long massagistId = currentMassagistIdOrNull();
+        if (massagistId == null) {
+            return scope;
+        }
+        List<Long> extraShopIds = massagistSchedulesService.shopIdsByMassagistAndDay(massagistId, day);
+        if (CollectionUtils.isEmpty(extraShopIds)) {
+            return scope;
+        }
+        return scope.withExtraShopIds(extraShopIds);
+    }
+
+    /** 当前账号绑定的疗愈师档案 id；后台运营账号没有档案时返回 null */
+    public Long currentMassagistIdOrNull() {
+        UmsAdmin admin = currentAdminOrNull();
+        if (admin == null) {
+            return null;
+        }
+        if (admin.getMassagistId() != null) {
+            return admin.getMassagistId();
+        }
+        Massagist massagist = massagistService.getOne(new LambdaQueryWrapper<Massagist>()
+                .eq(Massagist::getUmsAdminId, admin.getId())
+                .last("LIMIT 1"), false);
+        return massagist == null ? null : massagist.getId();
     }
 
     /** 当前后台账号；非后台上下文返回 null */

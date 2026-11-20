@@ -13,7 +13,7 @@
             orderDetail.state==3?'yellow':
             'white'
           ]">{{ orderDetail.state | appointmentStateFilter }} </span></el-descriptions-item>
-          <el-descriptions-item label="支付状态"> {{ orderDetail.order.state | orderStateFilter }}</el-descriptions-item>
+          <el-descriptions-item label="支付状态" v-if="!isPeerView"> {{ orderDetail.order.state | orderStateFilter }}</el-descriptions-item>
           <el-descriptions-item label="支付方式">
           <span
             :style="!readOnly && ((orderDetail.order.state == 0 && orderDetail.order.payType==0) || (orderDetail.order.payType==3 && orderDetail.order.state != 0))?'cursor: pointer;color: #409EFF':''"
@@ -28,11 +28,11 @@
             {{ orderDetail.startTime | formatDateTime }}-{{ orderDetail.endTime  | formatDateTime }}
           </el-descriptions-item>
           <el-descriptions-item label="疗愈时长"> {{ orderDetail.duration }} mins</el-descriptions-item>
-          <el-descriptions-item label="用券数量" v-if="orderDetail.order.payType==2"> {{
+          <el-descriptions-item label="用券数量" v-if="orderDetail.order.payType==2 && !isPeerView"> {{
               orderDetail.order.couponAmount
             }}张
           </el-descriptions-item>
-          <el-descriptions-item :label="`${orderDetail.order.state==0?'应':'实'}付金额`">
+          <el-descriptions-item :label="`${orderDetail.order.state==0?'应':'实'}付金额`" v-if="!isPeerView">
             <span v-if="orderDetail.order.state==3 || orderDetail.order.state==4">0 元</span>
             <div v-else>
               <div
@@ -61,11 +61,11 @@
           </el-descriptions-item>
           <el-descriptions-item label="服务备注">
             {{ orderDetail.comment }}
-            <i class="el-icon-edit" style="cursor: pointer;padding: 0 4px"
+            <i v-if="!isPeerView" class="el-icon-edit" style="cursor: pointer;padding: 0 4px"
                @click="updateComment(orderDetail)"></i>
           </el-descriptions-item>
           <el-descriptions-item label="">
-            <div v-if="readOnly" class="font-extra-small hover-click" style="text-align: right"
+            <div v-if="readOnly" class="font-extra-small" :class="{'hover-click': !isPeerView}" style="text-align: right"
                  @click="showAddOrderLabel(orderDetail.order)">
               <span v-if="orderDetail.order.oil || partsText(orderDetail.order.parts)">
                 精油 {{ orderDetail.order.oil || '无' }}
@@ -73,7 +73,7 @@
                       style="margin-left: 10px">部位 {{ partsText(orderDetail.order.parts) }}</span>
               </span>
               <span v-else style="color: #C1C0C4">未记录精油和部位</span>
-              <i class="el-icon-edit" style="margin-left: 4px;cursor: pointer"></i>
+              <i v-if="!isPeerView" class="el-icon-edit" style="margin-left: 4px;cursor: pointer"></i>
             </div>
             <div v-else class="flex align-center justify-end hover-click font-extra-small"
                  @click="showAddOrderLabel(orderDetail.order)">精油和部位
@@ -82,12 +82,12 @@
         </el-descriptions>
         <el-descriptions :column="1" labelClassName="c-c1c0c4" :colon="false" contentClassName="c-49454f">
           <el-descriptions-item label="">
-            <div class="flex align-center justify-end hover-click font-extra-small"
+            <div v-if="!isPeerView" class="flex align-center justify-end hover-click font-extra-small"
                  @click="showOrderHistoryDialog(orderDetail.customer)">消费记录
             </div>
           </el-descriptions-item>
           <!-- 订单相关审批（改单/退款/送券等）：超级管理员可回溯完整流程 -->
-          <el-descriptions-item label="" v-if="orderApprovals.length">
+          <el-descriptions-item label="" v-if="orderApprovals.length && !isPeerView">
             <div class="flex align-center justify-end font-extra-small order-approvals">
               <span class="c-info m-r5">审批记录</span>
               <el-tag v-for="item in orderApprovals" :key="item.id" size="mini"
@@ -122,14 +122,14 @@
               v-if="!readOnly" class="el-icon-edit" style="margin-left: 4px;cursor: pointer"></i>
             </div>
           </el-descriptions-item>
-          <el-descriptions-item label="备注 Note">
+          <el-descriptions-item label="备注 Note" v-if="!isPeerView">
             <div :class="{'hover-click': !readOnly, 'flex': !readOnly, 'align-center': !readOnly, 'justify-end': !readOnly}"
                  @click="handleEditCustomer(orderDetail.customer)">
               <span>{{ orderDetail.customer.note }}</span>
               <i v-if="!readOnly" class="el-icon-edit" style="margin-left: 4px;cursor: pointer"></i>
             </div>
           </el-descriptions-item>
-          <el-descriptions-item label="疗愈师偏好">
+          <el-descriptions-item label="疗愈师偏好" v-if="!isPeerView">
             <div class="flex align-center justify-end flex-wrap">
               <span style="margin-right: 8px">收藏 {{ customerPreference.favoriteCount }}</span>
               <template v-if="customerPreference.blockList.length">
@@ -180,7 +180,7 @@
         </div>
         <div v-if="readOnly" class="flex1 flex font-extra-small"
              style="align-items: flex-end;justify-content: center;padding-bottom: 8px;color: #C1C0C4">
-          疗愈师账号仅可查看订单，可填写服务备注与精油部位
+          {{ isPeerView ? '同事订单，仅可查看项目与客户服务信息' : '疗愈师账号仅可查看订单，可填写服务备注与精油部位' }}
         </div>
       </div>
     </el-drawer>
@@ -245,7 +245,17 @@ export default {
     }
   },
   computed: {
-    ...mapGetters([])
+    ...mapGetters(['massagistId']),
+    //同事订单：疗愈师看板全店可见后，非本人的单隐藏金额、支付状态、客户画像与消费记录。
+    //归属以详情接口返回的 massagistId 为准（而不是点击时的卡片），避免 prop 时序问题
+    isPeerView() {
+      if (!this.readOnly) return false
+      const ownId = this.massagistId
+      if (ownId === null || ownId === undefined || ownId === '') return true
+      const detailOwner = this.orderDetail && (this.orderDetail.massagistId
+        || (this.orderDetail.massagist && this.orderDetail.massagist.id))
+      return detailOwner == null || detailOwner != ownId
+    }
   },
   created() {
   },
@@ -258,9 +268,15 @@ export default {
     async initOrderDetail(id) {
       let res = await orderDetailApi.info(id);
       this.orderDetail = res.data || {customer: {}, massagist: {avatarUrl: ''}, order: {}}
-      this.loadCustomerPreference(this.orderDetail.customerId || (this.orderDetail.customer && this.orderDetail.customer.id))
-      //审批记录异步加载，失败不阻塞订单详情主流程
-      this.loadOrderApprovals(this.orderDetail.order && this.orderDetail.order.id)
+      if (this.isPeerView) {
+        //同事订单不拉客户偏好和审批记录，省掉无用的数据暴露
+        this.customerPreference = {favoriteCount: 0, blockList: []}
+        this.orderApprovals = []
+      } else {
+        this.loadCustomerPreference(this.orderDetail.customerId || (this.orderDetail.customer && this.orderDetail.customer.id))
+        //审批记录异步加载，失败不阻塞订单详情主流程
+        this.loadOrderApprovals(this.orderDetail.order && this.orderDetail.order.id)
+      }
 
       let yuyueTime=this.orderDetail.startTime;
       let tenTime=dateUtil.addSeconds(this.orderDetail.startTime,600);
@@ -442,7 +458,10 @@ export default {
       }
     },
     async updateComment(row) {
-      // 只读看板也允许修改服务备注，其余字段仍只读
+      // 只读看板也允许修改服务备注，其余字段仍只读；同事订单不开放
+      if (this.isPeerView) {
+        return
+      }
       this.$prompt('请输入备注内容', '更改备注', {
         confirmButtonText: '保存',
         cancelButtonText: '取消',
@@ -533,6 +552,9 @@ export default {
       this.$emit("submit-success")
     },
     showOrderHistoryDialog(customer) {
+      if (this.isPeerView) {
+        return
+      }
       let title = this.customerTitle(customer) + '的消费记录'
       this.$refs.refOrderHistoryDialog.open(customer.id, title)
     },
@@ -550,9 +572,9 @@ export default {
       }
       return nickname
     },
-    //只读模式（疗愈师）也允许记录精油和部位：服务结束后由本人补录
+    //只读模式（疗愈师）也允许记录精油和部位：服务结束后由本人补录；同事订单不开放
     showAddOrderLabel(order) {
-      if (!order || !order.id) {
+      if (this.isPeerView || !order || !order.id) {
         return
       }
       this.$refs.refOrderLabelDialog.open({orderId: order.id, oil: order.oil, parts: order.parts})

@@ -7,12 +7,14 @@ import com.macro.mall.service.base.ShopScopeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,6 +35,10 @@ public class ShopScopeInterceptor implements HandlerInterceptor {
     private static final String PARAM_SHOP_ID = "shopId";
     /** 多店参数名（支持逗号分隔或重复参数） */
     private static final String PARAM_SHOP_IDS = "shopIds";
+    /** 业务日期参数名：看板/排班接口用 date，订单列表用 startDateTime 的前 10 位 */
+    private static final String PARAM_DATE = "date";
+    private static final String PARAM_START_DATE = "startDate";
+    private static final String PARAM_START_DATE_TIME = "startAppointmentTime";
 
     @Autowired
     private ShopScopeService shopScopeService;
@@ -52,6 +58,10 @@ public class ShopScopeInterceptor implements HandlerInterceptor {
         }
         if (scope == null) {
             return true;
+        }
+        // 疗愈师按日期临时放开：仅读请求生效，且只放开“当天确有排班/调店”的门店
+        if (HttpMethod.GET.matches(request.getMethod())) {
+            scope = shopScopeService.extendForScheduleDate(scope, parseDate(request));
         }
         ShopScopeHolder.set(scope);
         try {
@@ -85,6 +95,35 @@ public class ShopScopeInterceptor implements HandlerInterceptor {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /** 取请求里的业务日期；取不到或格式异常时返回 null（等于不做按日期放开） */
+    private LocalDate parseDate(HttpServletRequest request) {
+        String raw = firstNonBlank(
+                request.getParameter(PARAM_DATE),
+                request.getParameter(PARAM_START_DATE),
+                request.getParameter(PARAM_START_DATE_TIME));
+        if (raw == null) {
+            return null;
+        }
+        String value = raw.trim();
+        if (value.length() > 10) {
+            value = value.substring(0, 10);
+        }
+        try {
+            return LocalDate.parse(value);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private List<Long> parseIds(HttpServletRequest request) {

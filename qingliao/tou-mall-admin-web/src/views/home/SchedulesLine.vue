@@ -68,9 +68,10 @@
       </div>
     </div>
     <div slot="reference" class="bed-item">
-      <img class="icon" :src="avatarUrl" mode="aspectFill"/>
+      <img class="icon" :class="{'icon-self': isSelf}" :src="avatarUrl" mode="aspectFill"/>
       <div style="width: 70px;">
-        <div class="flex" style="width: 100%;">
+        <div class="flex align-center" style="width: 100%;">
+          <div v-if="isSelf" class="self-tag">我</div>
           <div style="width: 75%">{{ name }}</div>
           <div v-if="massagistRoundCount"
                style="font-size: 12px; width: 16px; height: 16px; border: 1px solid #333; border-radius: 50%; text-align: center; ">
@@ -137,6 +138,8 @@ export default {
     massagistRound: null,
     sortIndex: null,
     massagistRoundCount: null,
+    //当前列是否为本登录疗愈师本人（看板全店可见后用于区分「我的列」）
+    isSelf: {type: Boolean, default: false},
   },
   data() {
     return {
@@ -224,5 +227,20 @@ export default {
   height: 40px;
   border-radius: 50%;
   margin-right: 16px;
+}
+
+.icon-self {
+  box-shadow: 0 0 0 2px #6750a4;
+}
+
+.self-tag {
+  flex: none;
+  margin-right: 4px;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: #FFFFFF;
+  background-color: #6750a4;
+  border-radius: 4px;
 }
 </style>
