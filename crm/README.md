@@ -297,6 +297,20 @@ E2 证据（测试环境，2026-11-08）：
 - 两端 `CRM_OUTBOX_INTERVAL_MS` 均已配置，概览不会出现「投递 worker 未启用」告警；若某环境为空，看板会显式提示。
 - 本地分支 `fix/runtime-env-and-services-20261118` 未推送（ahead 37 / behind 6，且含其他系统未发布提交）；本次发布直接取本地已提交的 CRM 产物。
 
+## 发布记录：外部接入文本护栏 + 身份创建时间（2026-11-21 00:56）
+
+| 项 | 值 |
+|---|---|
+| commit | `main@7096b0d`（cherry-pick `9e1f9d9`；父提交不在 `main`，自动合并无冲突） |
+| 顺序 | **先列后码**：两个库加 `member_identities.created_at` → 两端重建发布 |
+| DDL | `ALTER TABLE member_identities ADD COLUMN created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)`，按 `information_schema` 判存量可重复执行 |
+| 回填 | 存量身份时间取 `members.created_at` 近似（`UPDATE … JOIN members`，条件 `i.created_at > m.created_at`）；生产 10,185 行、测试 25 行，`NULL` 均为 0 |
+| 备份 | 生产 `/root/backups/crm-member_identities-20261120-235339.sql.gz`（`SHOW CREATE TABLE` + 全表 TSV）；测试 `crm_test-member_identities-20261120-235346.sql.gz` |
+| 测试 | `test-crm.fullyu.cn`：备份 `test-crm-20261120-2356*.tar.gz`；探针 `POST /api/external/members/resolve`，昵称带换行 → 入库为 `探针用 户9999`（控制字符被剥掉），`created:true`；`GET /api/external/members/probe-tg-20261121` 返回 `boundAt` |
+| 生产 | `crm.fullyu.cn`：备份 `crm-all-20261120-2356*.tar.gz`；`GET /api/external/members/11314` 200，返回 `boundAt=2026-11-20T15:17:37.140Z`（即回填值），name `用户9828` |
+| 测试结果 | `pnpm --filter @fullyu/crm-server test` 13 套 / 111 项全过（含新增文本护栏与占位名用例） |
+| 回滚 | 解 tar 回 `apps/server/dist`、`packages/shared/dist`、`apps/admin/public` → `systemctl restart fullyu-crm`；数据库列可留（旧代码不读），要删就 `ALTER TABLE member_identities DROP COLUMN created_at` |
+
 ## 发布记录：昵称占位规则 + 程序规则（2026-11-21 00:43）
 
 | 项 | 值 |
@@ -308,7 +322,7 @@ E2 证据（测试环境，2026-11-08）：
 | 备份 | `/root/backups/crm-all-20261120-234*.tar.gz`（`apps/server/dist` + `packages/shared/dist` + `apps/admin/public`） |
 | 探针 | `/api/health` 200、`/admin/` 200、`/game/` 200、`/` 302、`/api/sync/status` 401；`dist/common/member-name.js` 含占位名判定 |
 | 回滚 | 解 tar 回三个目录 → `systemctl restart fullyu-crm` |
-| 未随发 | `9e1f9d9`（外部文本护栏 + `member_identities.created_at`）不在 `main`；合并前需先给生产库加列 |
+| 未随发 | `9e1f9d9`（外部文本护栏 + `member_identities.created_at`）当时不在 `main`；已于 00:56 单独排期发布，见下一条记录 |
 | 测试 | `test-crm.fullyu.cn`（8.133.6.18 `/opt/fullyu-crm-test`，unit `fullyu-crm-test`，库 `crm_test`）同批发布：备份 `/root/backups/test-crm-20261120-235002.tar.gz`，同命令序列重建；探针 `/api/health` 200、`/admin/` 200、`/api/sync/status` 401，日志 0 ERROR |
 
 ### 业务会员卡清表（2026-11-18 12:35）

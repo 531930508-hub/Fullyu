@@ -518,7 +518,7 @@ cherry-pick 把 yml/pom 的 CRLF 改成 LF，已还原，避免整文件重写�
   备份 `/root/backups/crm-all-20261120-234*`，`pnpm install --frozen-lockfile` + `schema:mysql` + `prisma generate` + `tsc` 重建 dist，
   重启后 `/api/health` 200、`/admin/` 200、`/` 302、`/api/sync/status` 401；`dist/common/member-name.js` 含占位名新逻辑。
   无 schema 变更，未跑 `db:push`。
-- **`9e1f9d9`（外部接入文本护栏 + `member_identities.created_at`）不在 `main`**，本次未随发；合并前必须先给生产 `crm` 库加列。
+- **`9e1f9d9` 已补发（11-21 00:56，`main@7096b0d`）**：先给生产 `crm`、测试 `crm_test` 两个库加 `member_identities.created_at`（DATETIME(3)，存量回填 `members.created_at`，生产 10,185 行），再两端重建 CRM；探针验证控制字符被剥离、`GET /api/external/members/:id` 返回 `boundAt`。详见 `crm/README.md` 同名发布记录。
 - **生产/测试 env 去重**：`BAIDU_VOICE_*` 出现过空值与实值各一份，已按「后者生效」删掉前面的空行（`/etc/fullyu/qingliao.env`、`/opt/fullyu-mall-test/.env`），
   测试机同时补齐 `PRINT_*`/`BAIDU_VOICE_*`（下次发测试后端才不会静默丢打印配置）。
 - **轻疗小程序**：`main` 含 `4afccb8` 的下单页改动，已用 devtools CLI 覆盖上传开发版 `1.0.22`（1.1 MB，AppID `wxeb4e8a99b7eeebf8`）。
