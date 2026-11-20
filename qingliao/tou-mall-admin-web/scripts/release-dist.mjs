@@ -20,8 +20,9 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const webRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
+const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = git(['-C', webRoot, 'rev-parse', '--show-toplevel']).trim()
 
 function git(args) {
@@ -41,6 +42,12 @@ if (!['prod', 'test'].includes(envName)) fail(`--env 只能是 prod 或 test，�
 const baseApi = envName === 'prod' ? 'https://manage.fullytherapy.com/api' : '/api'
 const outArg = arg('--out', '')
 
+// 先拉一次 origin/main，否则本地 ref 过期会把「刚合进来的修复」判成不存在
+try {
+  execFileSync('git', ['-C', repoRoot, 'fetch', '--quiet', 'origin', 'main'], { stdio: 'ignore' })
+} catch {
+  console.warn('! git fetch origin main 失败，按本地已有的 origin/main 判定')
+}
 const main = git(['-C', repoRoot, 'rev-parse', 'origin/main']).trim()
 const commit = arg('--commit', main)
 try {
