@@ -27,7 +27,7 @@
 | 环境变量 | `crm.env`(600)、`.env`、`.rds.cnf`；启动脚本里 `INCENTIVE_TEAM_CERT_ENABLED=true`、`-Duser.timezone=Asia/Shanghai`（2026-11-13 补，之前每次巡检都在报缺这个参数） |
 | 看护 | `bin/backend-guard.sh`，root crontab `*/2 * * * *`：进程没了就拉起，日志 `logs/backend-guard.log`；发布期间靠 `$APP_DIR/.deploy.lock` 避让 |
 | 后台前端 | `admin-dist/`，nginx 占**站点根** `/`（11-17 前是 `/mall-admin/`）；商城 H5 在 `/h5/`，游戏在 `/game/`；SPA 用 no-cache + 带哈希 bundle，改域名后不会再出现旧 JS 被缓存的问题 |
-| 小程序 | `apps/miniprogram`，`utils/appConfig.js` 里测试域名 `https://test-cityretreat.fullyu.cn`（11-17 统一，旧 `mall-test` 已从包内清除）；AppID `wxeb4e8a99b7eeebf8`，开发版最新 **1.0.18** |
+| 小程序 | `apps/miniprogram`，`utils/appConfig.js` 里测试域名 `https://test-cityretreat.fullyu.cn`（11-17 统一，旧 `mall-test` 已从包内清除）；AppID `wxeb4e8a99b7eeebf8`，开发版最新 **1.0.22**（会员卡入口未登录直达登录页） |
 | 备份 | `backup/deploy-<时间戳>/`、`backup/jar-*.jar` |
 | 日志 | `logs/app.log` |
 | Jenkins | `/var/jenkins`，job：`Full愈大会员后端部署`、`Full愈大会员管理端前端部署` |
