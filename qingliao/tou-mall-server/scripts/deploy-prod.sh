@@ -84,8 +84,10 @@ if [ "$SKIP_PF" = 0 ] && ! DRY_RUN; then
   # jar 指纹由第 3 步上传后校验；带 --with-sql 时库结构对账本来就落后，需配合 --skip-preflight 或先跑 DDL。
   # 必须带库凭据：不带时 preflight 的「库结构对账」「库连通」两项永远 FAIL（预检端默认没有 RDS 账号，
   # 2026-11-20 实测 NO-GO），结果所有人都得加 --skip-preflight，等于把整套预检废掉。
+  # 2026-11-22 修订：preflight 的 --sql-dir 默认是相对路径 `sql/prod`，在仓库根跑就找不到脚本、
+  # 「库结构对账」误报 FAIL（§14 实测）。这里显式传绝对路径，与 CWD 无关。
   PF_DB_CNF=${PF_DB_CNF:-/etc/fullyu/qingliao-backup.cnf}
-  "$REPO/scripts/preflight.sh" --mysql-opts "--defaults-extra-file=$PF_DB_CNF" || die "preflight 有 FAIL 项"
+  "$REPO/scripts/preflight.sh" --mysql-opts "--defaults-extra-file=$PF_DB_CNF" --sql-dir "$REPO/sql/prod" || die "preflight 有 FAIL 项"
 elif [ "$SKIP_PF" = 1 ]; then
   say "1/6 前置检查（已跳过）"
 fi
@@ -231,9 +233,12 @@ NEWPID=$(start_app)
 echo "new_pid=$NEWPID"
 
 check_fingerprints() {   # 手册 §10.6：这三类错误必须为 0
+  # 返回码：0=通过；1=有致命错误；2=日志里还没有 Started 行（应继续等，不是失败）
+  # 2026-11-22 实测：Started 行比 /health 200 晚约 60~95 s，原来「健康检查一过就查」
+  # 会把成功发布判成 FINGERPRINTS_BAD（exit 30，§16）。改成轮询，最多 150 s。
   local log="$APP_DIR/logs/mall-admin-$(date +%F).log" n bad=0 c
-  n=$(grep -n 'Started MallAdminApplication' "$log" | tail -1 | cut -d: -f1)
-  [ -n "${n:-}" ] || { echo "FINGERPRINT 没找到 Started 行"; return 1; }
+  n=$(grep -n 'Started MallAdminApplication' "$log" 2>/dev/null | tail -1 | cut -d: -f1)
+  [ -n "${n:-}" ] || { echo "FINGERPRINT 日志里还没有 Started 行"; return 2; }
   for p in 'Unknown column' 'Illegal mix of collations' 'NoClassDefFoundError'; do
     c=$(tail -n +"$n" "$log" | grep -c "$p" || true)
     echo "FINGERPRINT $p = $c"
@@ -252,7 +257,18 @@ if wait_health 180; then
     exit 40
   fi
   sed 's/^/    /' /tmp/envchk.$$; rm -f /tmp/envchk.$$
-  check_fingerprints || { echo "FINGERPRINTS_BAD 起了但日志有已知致命错误，按失败处理"; exit 30; }
+  FP_OUT=""; FP_RC=2
+  for _i in $(seq 1 50); do          # 每 3 s 看一次，最多 150 s
+    FP_OUT=$(check_fingerprints 2>&1); FP_RC=$?
+    [ "$FP_RC" != 2 ] && break
+    sleep 3
+  done
+  [ -n "$FP_OUT" ] && echo "$FP_OUT" | sed 's/^/    /'
+  case "$FP_RC" in
+    0) ;;
+    2) echo "FINGERPRINTS_TIMEOUT 150s 内日志仍无 Started 行（/health 已 200：先人工核对日志路径与时区，别盲目回滚）"; exit 31 ;;
+    *) echo "FINGERPRINTS_BAD 起了但日志有已知致命错误，按失败处理"; exit 30 ;;
+  esac
 else
   echo "HEALTH_FAIL 180s 内没起来，开始回滚"
   tail -n 40 "$APP_DIR/logs/mall-admin-$(date +%F).log" | sed 's/^/    LOG /'

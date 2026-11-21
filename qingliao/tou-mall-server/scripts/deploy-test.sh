@@ -30,13 +30,17 @@
 #
 #   ./scripts/deploy-test.sh              # 对账 → 同步 → 停 → 打包 → 启动 → 健康检查
 #   ./scripts/deploy-test.sh --with-web    # 同上 + 管理端前端构建/发布
+#   ./scripts/deploy-test.sh --with-web --no-web-gate  # 前端不过闸门（只发未合并分支时用）
 #   ./scripts/deploy-test.sh --no-sync     # 源码没变，只重建重启
 #   ./scripts/deploy-test.sh --status      # 不发布，只看版本/进程/开关/前端/运行库
 #   ./scripts/deploy-test.sh --allow-collation-drift  # 排序规则漂移只告警不拦截
 #   ./scripts/deploy-test.sh --skip-sql-audit         # 跳过库对账（确认过才用）
 #
-# --with-web：本机 `npm run build:test`（BASE_API=/api，同源），
-#   产物先备份远端 admin-dist，再 rsync 覆盖站点根 `/`，并校验首页引用新 app.js。
+# --with-web：走发布闸门 `node tou-mall-admin-web/scripts/release-dist.mjs --env test`
+#   （BASE_API=/api；只接受 origin/main 上的提交、逐条 grep release-markers.tsv、写
+#   static/build-info.json），产物先备份远端 admin-dist，再 rsync 覆盖站点根 `/`，
+#   校验首页引用新 app.js，并回读 build-info.json 核对前端溯源。
+#   加 --no-web-gate 才退回老的 `npm run build:test`：那次没有 build-info.json，前端不可溯源。
 #
 #   7) 「停完没起来」：20:54 那次中断把应用停了 40 分钟、全站 502，只有一小时一次的
 #      巡检报警（2026-11-13 实测）⇒ 本脚本装了 EXIT trap：只要进入「已停服」阶段后
@@ -80,12 +84,13 @@ WEB_DIR="${WEB_DIR:-$SRV/tou-mall-admin-web}"
 WEB_REMOTE="$APP_DIR/admin-dist"
 WEB_HEALTH_URL="${WEB_HEALTH_URL:-https://test-cityretreat.fullyu.cn/}"
 
-SYNC=1; STATUS_ONLY=0; WEB=0; SKIP_AUDIT=0; STRICT="--strict-collations"
+SYNC=1; STATUS_ONLY=0; WEB=0; SKIP_AUDIT=0; STRICT="--strict-collations"; WEB_GATE=1
 for a in "$@"; do
   case "$a" in
     --no-sync) SYNC=0 ;;
     --status)  STATUS_ONLY=1 ;;
     --with-web) WEB=1 ;;
+    --no-web-gate) WEB_GATE=0 ;;
     --skip-sql-audit) SKIP_AUDIT=1 ;;
     --strict-collations) STRICT="--strict-collations" ;;
     --allow-collation-drift) STRICT="" ;;
@@ -311,11 +316,32 @@ fi
 
 # ---------- 0(可选). 本机构建管理端前端 ----------
 if [ "$WEB" = 1 ]; then
-  step "构建管理端前端（本机 npm run build:test）"
+  step "构建管理端前端（发布闸门 release-dist.mjs --env test）"
   [ -f "$WEB_DIR/package.json" ] || { echo "找不到前端工程: $WEB_DIR"; exit 1; }
   [ -d "$WEB_DIR/node_modules" ] || { echo "缺少 node_modules，请先: cd $WEB_DIR && npm ci"; exit 1; }
-  ( cd "$WEB_DIR" && npm run build:test ) | tail -5
-  [ -f "$WEB_DIR/dist/index.html" ] || { echo "前端构建产物缺失: $WEB_DIR/dist/index.html"; exit 1; }
+  WEB_DIST="$WEB_DIR/dist"
+  REL="$WEB_DIR/scripts/release-dist.mjs"
+  if [ "$WEB_GATE" = 1 ] && [ -f "$REL" ]; then
+    # 闸门要求提交已在 origin/main 里，产物带 static/build-info.json（部署后可 curl 回读核对）并逐条 grep 功能标记。
+    # 2026-11-22 实测：直接 npm run build:test 的 dist 没有 build-info.json，前端溯源静默丢失；
+    # 手搓 dist 也正是 11-20「总助手机号/一键拨号静默回退」那次事故的来源。
+    WEB_GATE_DIST="$(mktemp -d "${TMPDIR:-/tmp}/ql-admin-dist.XXXXXX")"
+    WEB_TGZ="${WEB_GATE_DIST%/}.tgz"     # 别放在解包目录里，解包前会清空该目录
+    if ! node "$REL" --env test --out "$WEB_TGZ"; then
+      rm -f "$WEB_TGZ"
+      echo "前端闸门失败（标记缺失 / 提交不在 origin/main / 构建报错）。"
+      echo "临时要发未合并的分支，可显式加 --no-web-gate（产物无 build-info.json，溯源为空）。"
+      exit 1
+    fi
+    rm -rf "$WEB_GATE_DIST"; mkdir -p "$WEB_GATE_DIST"
+    tar xzf "$WEB_TGZ" -C "$WEB_GATE_DIST" || { rm -f "$WEB_TGZ"; echo "解包闸门产物失败"; exit 1; }
+    rm -f "$WEB_TGZ"
+    WEB_DIST="$WEB_GATE_DIST"
+  else
+    echo "! 已跳过发布闸门（--no-web-gate 或找不到 $REL）：产物无 build-info.json，前端溯源为空"
+    ( cd "$WEB_DIR" && npm run build:test ) | tail -5
+  fi
+  [ -f "$WEB_DIST/index.html" ] || { echo "前端构建产物缺失: $WEB_DIST/index.html"; exit 1; }
 fi
 
 # ---------- 1. 同步源码 ----------
@@ -491,8 +517,8 @@ if [ "$WEB" = 1 ]; then
   ssh "$HOST" "mkdir -p '$BK' && tar czf '$BK/admin-dist.tgz' -C '$APP_DIR' admin-dist && ls -l '$BK/admin-dist.tgz'"
 
   step "同步 dist → $WEB_REMOTE 并校验首页"
-  rsync -az --delete "$WEB_DIR/dist/" "$HOST:$WEB_REMOTE/"
-  APP_JS=$(grep -o 'static/js/app\.[a-z0-9]*\.js' "$WEB_DIR/dist/index.html" | head -1)
+  rsync -az --delete "$WEB_DIST/" "$HOST:$WEB_REMOTE/"
+  APP_JS=$(grep -o 'static/js/app\.[a-z0-9]*\.js' "$WEB_DIST/index.html" | head -1)
   [ -n "$APP_JS" ] || { echo "本地 index.html 未找到 app.js 引用"; exit 1; }
   wcode=$(curl -s -o /tmp/admin-index.html -w '%{http_code}' --max-time 8 "$WEB_HEALTH_URL?deploy=$TS" || true)
   if [ "$wcode" != "200" ] || ! grep -q "$APP_JS" /tmp/admin-index.html; then
@@ -501,7 +527,16 @@ if [ "$WEB" = 1 ]; then
     echo "回滚命令：ssh $HOST \"rm -rf $WEB_REMOTE && tar xzf $BK/admin-dist.tgz -C $APP_DIR\""
     exit 1
   fi
-  echo "前端就绪：${WEB_HEALTH_URL}（${APP_JS}）"
+  # 前端溯源：闸门产物必须有 build-info.json，回读不到就说明这次发的是手搓 dist
+  BCODE=$(curl -s -o /tmp/admin-build-info.json -w '%{http_code}' --max-time 8 "${WEB_HEALTH_URL}static/build-info.json" || true)
+  if [ "$BCODE" = "200" ] && grep -q '"commit"' /tmp/admin-build-info.json; then
+    echo "前端就绪：${WEB_HEALTH_URL}（${APP_JS}）"
+    sed 's/^/    /' /tmp/admin-build-info.json | head -8
+  else
+    echo "前端已切到 ${APP_JS}，但取不到 static/build-info.json（HTTP $BCODE）——本次前端不可溯源"
+  fi
+  # 闸门产物是解在临时目录里的，覆盖完就删（注意别动脚本自己的 EXIT 回滚 trap）
+  [ -n "${WEB_GATE_DIST:-}" ] && rm -rf "$WEB_GATE_DIST" "${WEB_GATE_DIST%/}.tgz"
 fi
 
 echo
