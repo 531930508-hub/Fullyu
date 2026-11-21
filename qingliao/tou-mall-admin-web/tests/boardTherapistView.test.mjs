@@ -38,6 +38,8 @@ function setup(roles) {
     }
   });
   state.roles = roles;
+  state.$refs = {};
+  state.$nextTick = fn => fn();
   state.fetchShopTimeList = () => {};
   state.updateTime = () => {};
   state.fetchReceptionData = () => {};
@@ -78,7 +80,7 @@ test('疗愈师切回疗愈师视图时不被强制改回床位', async () => {
   assert.equal(state.searchForm.massagistId, '', '疗愈师视图仍看全店排班');
 });
 test('床位视图对疗愈师依旧是只读：拖拽、新增预约与写入入口都关闭', () => {
-  assert.match(template, /:disabled="isMassagist \|\| item\.type == 0"/);
+  assert.match(template, /:disabled="isMassagist \|\| item\.type == 0 \|\| pendingMove"/);
   assert.match(template, /:read-only="isMassagist"/);
   const {state} = setup(['疗愈师']);
   let openedAppointment = 0;

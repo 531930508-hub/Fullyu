@@ -3,6 +3,9 @@ package com.macro.mall.service;
 import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.entity.Bed;
 import com.macro.mall.entity.OrderDetail;
+import com.macro.mall.entity.Massagist;
+import com.macro.mall.entity.Order;
+import com.macro.mall.entity.Project;
 import com.macro.mall.enums.AppointmentState;
 import com.macro.mall.enums.NormalState;
 import com.macro.mall.mapper.OrderDetailMapper;
@@ -16,6 +19,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -62,6 +70,7 @@ class DragScheduleConflictTest {
         ReflectionTestUtils.setField(service, "projectService", projectService);
         ReflectionTestUtils.setField(service, "roundScheduleService", roundScheduleService);
         ReflectionTestUtils.setField(service, "orderService", orderService);
+        ReflectionTestUtils.setField(service, "massagistSchedulesService", mock(MassagistSchedulesService.class));
         when(projectService.isReceptionOrder(anyLong())).thenReturn(false);
         when(mapper.updateById(any(OrderDetail.class))).thenReturn(1);
     }
@@ -69,6 +78,7 @@ class DragScheduleConflictTest {
     private OrderDetail detail(long id, Integer state, Long massagistId, Long bedId, int hour, int minute, int minutes) {
         OrderDetail detail = new OrderDetail();
         detail.setId(id);
+        detail.setOrderId(id + 100L);
         detail.setShopId(1L);
         detail.setProjectId(2L);
         detail.setState(state);
@@ -84,6 +94,7 @@ class DragScheduleConflictTest {
 
     private void givenOccupiedBy(OrderDetail dragged, OrderDetail other) {
         when(mapper.selectById(dragged.getId())).thenReturn(dragged);
+        when(mapper.selectById(other.getId())).thenReturn(other);
         when(mapper.findOverlapListByShopAndTime(eq(1L), any(), any()))
                 .thenReturn(new ArrayList<>(Arrays.asList(dragged, other)));
     }
@@ -124,6 +135,20 @@ class DragScheduleConflictTest {
 
         assertTrue(e.getMessage().contains("床7"), e.getMessage());
         verify(mapper, never()).updateById(any(OrderDetail.class));
+    }
+
+    @Test
+    void completedSourceRejectsConfirmedSwapInsteadOfMovingAlone() {
+        OrderDetail dragged = detail(1L, AppointmentState.FINISHED.getValue(), 11L, 5L, 14, 0, 60);
+        OrderDetail occupied = detail(2L, AppointmentState.WAITING.getValue(), 12L, 7L, 14, 30, 60);
+        givenOccupiedBy(dragged, occupied);
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.updateDetail(1L, 7L, null, at(14, 30), 2L));
+
+        assertTrue(error.getMessage().contains("本次未调整"));
+        assertEquals(Long.valueOf(5L), dragged.getBedId());
+        assertNoScheduleWrites();
     }
 
     @Test
@@ -202,6 +227,203 @@ class DragScheduleConflictTest {
         assertEquals(DAY.atTime(16, 0), captor.getValue().getStartTime());
         assertEquals(DAY.atTime(17, 0), captor.getValue().getEndTime());
         verify(mapper, never()).findOverlapListByShopAndTime(any(), any(), any());
+    }
+
+    private void givenCrossZoneBeds() {
+        Map<Long, Integer> bedTypes = new HashMap<>();
+        bedTypes.put(5L, 1);
+        bedTypes.put(7L, 2);
+        when(bedService.findTypeMapByIdList(any())).thenReturn(bedTypes);
+        Map<Integer, Long> projects = new HashMap<>();
+        projects.put(1, 1L);
+        projects.put(2, 2L);
+        when(projectService.findIdMapByTypeList(any())).thenReturn(projects);
+        for (long id = 1; id <= 2; id++) {
+            Project project = new Project();
+            project.setId(id);
+            project.setType((int) id);
+            project.setTitle(id == 1 ? "头部水疗" : "全感舒筋");
+            when(projectService.getById(id)).thenReturn(project);
+        }
+        givenSkills(11L, "疗愈师甲", "[1, 2]");
+        givenSkills(12L, "疗愈师乙", "[1, 2]");
+    }
+
+    private void givenSkills(long id, String name, String projects) {
+        Massagist massagist = new Massagist();
+        massagist.setId(id);
+        massagist.setName(name);
+        massagist.setProjectArr(projects);
+        when(massagistService.getByIdAcrossShops(id)).thenReturn(massagist);
+        when(massagistService.findNameById(id)).thenReturn(name);
+    }
+
+    private void assertNoScheduleWrites() {
+        verify(mapper, never()).updateById(any(OrderDetail.class));
+        verify(mapper, never()).update(any(), any());
+        verify(orderService, never()).updateById(any(Order.class));
+        verifyNoInteractions(roundScheduleService);
+    }
+
+    @Test
+    void crossZoneMoveKeepsTherapistAndChangesProjectWithoutChangingQueue() {
+        givenCrossZoneBeds();
+        OrderDetail source = detail(1L, 0, 11L, 5L, 14, 0, 60);
+        source.setProjectId(1L);
+        source.setSpecifyType(1);
+        source.setIsUpdateSort(true);
+        Order order = new Order();
+        order.setId(source.getOrderId());
+        order.setProductId(4L);
+        when(orderService.getById(order.getId())).thenReturn(order);
+        when(mapper.selectById(1L)).thenReturn(source);
+
+        service.updateDetail(1L, 7L, null, at(14, 0));
+
+        assertEquals(2L, source.getProjectId());
+        assertEquals(11L, source.getMassagistId());
+        assertEquals(1, source.getSpecifyType());
+        assertEquals(60, source.getDuration());
+        assertEquals(DAY.atTime(15, 0), source.getEndTime());
+        assertEquals(5L, order.getProductId());
+        assertTrue(source.getIsLockBed());
+        assertTrue(source.getIsUpdateSort());
+        verify(mapper, never()).update(any(), any());
+        verifyNoInteractions(roundScheduleService);
+    }
+
+    @Test
+    void crossZoneSwapKeepsBothTherapistsAndChangesBothProjects() {
+        givenCrossZoneBeds();
+        OrderDetail source = detail(1L, 0, 11L, 5L, 14, 0, 60);
+        source.setProjectId(1L);
+        OrderDetail target = detail(2L, 0, 12L, 7L, 15, 0, 45);
+        givenOccupiedBy(source, target);
+
+        service.updateDetail(1L, 7L, null, at(15, 0), 2L);
+
+        assertEquals(2L, source.getProjectId());
+        assertEquals(1L, target.getProjectId());
+        assertEquals(11L, source.getMassagistId());
+        assertEquals(12L, target.getMassagistId());
+        assertEquals(DAY.atTime(15, 0), source.getStartTime());
+        assertEquals(DAY.atTime(14, 0), target.getStartTime());
+        assertEquals(60, source.getDuration());
+        assertEquals(45, target.getDuration());
+        verify(mapper, times(2)).updateById(any(OrderDetail.class));
+        verify(mapper, never()).update(any(), any());
+        verifyNoInteractions(roundScheduleService);
+    }
+
+    @Test
+    void missingNewProjectSkillRejectsMoveBeforeChangingAnything() {
+        givenCrossZoneBeds();
+        givenSkills(11L, "疗愈师甲", "[1, 12]");
+        OrderDetail source = detail(1L, 0, 11L, 5L, 14, 0, 60);
+        source.setProjectId(1L);
+        when(mapper.selectById(1L)).thenReturn(source);
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.updateDetail(1L, 7L, null, at(14, 0)));
+
+        assertTrue(error.getMessage().contains("疗愈师甲"));
+        assertTrue(error.getMessage().contains("全感舒筋"));
+        assertEquals(5L, source.getBedId());
+        assertEquals(1L, source.getProjectId());
+        assertEquals(11L, source.getMassagistId());
+        assertNoScheduleWrites();
+    }
+
+    @Test
+    void targetMissingSkillRejectsWholeSwapBeforeEitherOrderChanges() {
+        givenCrossZoneBeds();
+        givenSkills(12L, "疗愈师乙", "[2]");
+        OrderDetail source = detail(1L, 0, 11L, 5L, 14, 0, 60);
+        source.setProjectId(1L);
+        OrderDetail target = detail(2L, 0, 12L, 7L, 15, 0, 60);
+        givenOccupiedBy(source, target);
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.updateDetail(1L, 7L, null, at(15, 0), 2L));
+
+        assertTrue(error.getMessage().contains("疗愈师乙"));
+        assertTrue(error.getMessage().contains("头部水疗"));
+        assertEquals(5L, source.getBedId());
+        assertEquals(7L, target.getBedId());
+        assertEquals(1L, source.getProjectId());
+        assertEquals(2L, target.getProjectId());
+        assertEquals(DAY.atTime(14, 0), source.getStartTime());
+        assertEquals(DAY.atTime(15, 0), target.getStartTime());
+        assertNoScheduleWrites();
+    }
+
+    @Test
+    void missingProjectMappingRejectsCrossZoneMove() {
+        givenCrossZoneBeds();
+        when(projectService.findIdMapByTypeList(any())).thenReturn(Collections.emptyMap());
+        OrderDetail source = detail(1L, 0, 11L, 5L, 14, 0, 60);
+        when(mapper.selectById(1L)).thenReturn(source);
+
+        assertThrows(BusinessException.class, () -> service.updateDetail(1L, 7L, null, at(14, 0)));
+
+        assertEquals(5L, source.getBedId());
+        assertNoScheduleWrites();
+    }
+
+    @Test
+    void bedMoveRejectsRetainedTherapistTimeConflict() {
+        OrderDetail source = detail(1L, 0, 11L, 5L, 14, 0, 60);
+        OrderDetail blocker = detail(3L, 0, 11L, 8L, 15, 0, 60);
+        givenOccupiedBy(source, blocker);
+        when(massagistService.findNameById(11L)).thenReturn("疗愈师甲");
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.updateDetail(1L, 7L, null, at(15, 0)));
+
+        assertTrue(error.getMessage().contains("疗愈师甲"));
+        assertEquals(DAY.atTime(14, 0), source.getStartTime());
+        assertNoScheduleWrites();
+    }
+
+    @Test
+    void bedSwapRejectsOtherTherapistTimeConflict() {
+        OrderDetail source = detail(1L, 0, 11L, 5L, 14, 0, 60);
+        OrderDetail target = detail(2L, 0, 12L, 7L, 15, 0, 60);
+        OrderDetail blocker = detail(3L, 0, 12L, 8L, 14, 0, 60);
+        givenOccupiedBy(source, target);
+        when(mapper.findOverlapListByShopAndTime(eq(1L), any(), any()))
+                .thenReturn(Arrays.asList(source, target, blocker));
+        when(massagistService.findNameById(12L)).thenReturn("疗愈师乙");
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.updateDetail(1L, 7L, null, at(15, 0), 2L));
+
+        assertTrue(error.getMessage().contains("疗愈师乙"));
+        assertNoScheduleWrites();
+    }
+
+    @Test
+    void staleSwapNeverDegradesIntoSingleOrderMove() {
+        OrderDetail source = detail(1L, 0, 11L, 5L, 14, 0, 60);
+        when(mapper.selectById(1L)).thenReturn(source);
+
+        assertThrows(BusinessException.class,
+                () -> service.updateDetail(1L, 7L, null, at(15, 0), 2L));
+
+        assertEquals(5L, source.getBedId());
+        assertNoScheduleWrites();
+    }
+
+    @Test
+    void differentDurationsCannotOverlapEachOtherAfterSwap() {
+        OrderDetail source = detail(1L, 0, 11L, 5L, 14, 0, 30);
+        OrderDetail target = detail(2L, 0, 11L, 5L, 14, 30, 90);
+        givenOccupiedBy(source, target);
+
+        assertThrows(BusinessException.class,
+                () -> service.updateDetail(1L, 5L, null, at(14, 30), 2L));
+
+        assertNoScheduleWrites();
     }
 
     @Test
