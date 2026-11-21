@@ -48,13 +48,6 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDetail> {
-    /**
-     * 接待单是否计入轮次（默认计入，与现有门店口径一致）。
-     * 接待单每 15 分钟自动生成一张，也占一次上钟位置；门店若认为「接待不算轮次」，
-     * 把这个开关关掉即可，不用改代码。
-     */
-    @org.springframework.beans.factory.annotation.Value("${reception.queue.reception-counts-round:true}")
-    boolean receptionCountsRound = true;
     @Autowired
     ProductService productService;
     @Autowired
@@ -242,19 +235,23 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
 
     /**
      * 新单这条明细要不要计入轮次：
-     * 系统派单（前端没指定疗愈师，由排队算法按轮牌顺序派）默认计入轮次；只有后台手动指定疗愈师时，
-     * 前端开关才会传 false，「不计入轮次」才真正跳过该疗愈师的轮牌（指定/点钟单不占一轮）。
+     * 服务单只要前台没指定疗愈师（由排队算法按轮牌顺序派）就一律计入轮次，
+     * 接受不了的「不计入」只存在于「后台手动指定了疗愈师」的特殊调整场景——此时前端才给这个开关，
+     * 传 false 才真正跳过该疗愈师的轮牌（指定/点钟单不占一轮）。
      * 注意前端其它入口（小程序、接待单、后台加钟）不传该字段，这里不能按 false 处理，否则他们的单子会不进轮牌。
      */
     private Boolean resolveIsUpdateSort(OrderDetailDto orderDetailDto, Long massagistId) {
-        if (orderDetailDto.getIsUpdateSort() == null) {
+        //单子没派到人（无可用疗愈师）也无从占轮次
+        if (massagistId == null) {
             return true;
         }
-        if (!Boolean.TRUE.equals(orderDetailDto.getIsUpdateSort())) {
-            return false;
+        //这一位不是前台指定的人（系统按轮牌顺序派的）：固定计入，不接受「不计入」
+        List<Long> chosen = orderDetailDto.getMassagistIdList();
+        if (CollectionUtils.isEmpty(chosen) || !chosen.contains(massagistId)) {
+            return true;
         }
-        //单子没派到人（无可用疗愈师）也无从占轮次
-        return massagistId != null;
+        //只有手动指定了疗愈师的特殊调整，才允许前台关掉「计入轮次」
+        return !Boolean.FALSE.equals(orderDetailDto.getIsUpdateSort());
     }
 
     /**
@@ -2372,6 +2369,10 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
     /**
      * 构建订单详情
      *
+     * <p><b>接待单固定计入接待队轮次</b>（不提供开关，也不影响服务单轮次）：前台开接待单时不再让人选
+     * 「计不计入轮次」，系统生成接待单时也不传这个字段。唯一的例外是 {@code ReceptionScheduled}
+     * 每 15 分钟生成的那张系统占位接待——它显式传 false（没有真实客户，占了会把整队空推一轮）。</p>
+     *
      * @param orderDetailDto
      */
     public void createReceptionDetail(OrderDetailDto orderDetailDto) {
@@ -2389,10 +2390,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     .filter(d -> Boolean.TRUE.equals(d.getIsUpdateSort()))
                     .filter(d -> d.getMassagistId() != null && d.getId() != null)
                     .collect(Collectors.toList());
-            if (!receptionCountsRound) {
-                log.info("接待单不计入轮次（reception.queue.reception-counts-round=false）shop={} start={}", shopId, startTime);
-            }
-            if (receptionCountsRound && !CollectionUtils.isEmpty(assignedList)) {
+            if (!CollectionUtils.isEmpty(assignedList)) {
                 // 接待单推的是「接待单轮牌」那一队：服务单队的位置、结果编号不因为接待而变
                 roundScheduleService.updateByDetailList(assignedList, DateUtil.toYYYYMMDD(startTime), shopId, true,
                         ReceptionQueueService.KIND_RECEPTION);
@@ -2630,7 +2628,9 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             detail.setStartTime(startTime);
             detail.setEndTime(DateUtil.addTimeByMinutes(startTime, durationMinutes));
             detail.setOrderId(orderId);
-            detail.setIsUpdateSort(isUpdateSort);
+            // 接待单默认计入接待队轮次：调用方不传（老客户端/小程序）就按计入处理，
+            // 只有系统占位接待会显式传 false
+            detail.setIsUpdateSort(!Boolean.FALSE.equals(isUpdateSort));
             orderDetailList.add(detail);
         }
         return orderDetailList;

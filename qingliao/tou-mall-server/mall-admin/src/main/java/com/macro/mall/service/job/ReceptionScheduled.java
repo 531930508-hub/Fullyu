@@ -120,6 +120,8 @@ public class ReceptionScheduled {
                 orderDetailDto.setIsGift(false);
                 orderDetailDto.setQuantity(1);
                 orderDetailDto.setPayType(3);
+                // 系统占位接待（没真实客户、每 15 分钟补一张）是「接待单固定计入接待轮次」的唯一例外：
+                // 计进去等于把接待队空推一轮，前台开的接待单则一律计入（createReceptionDetail 里默认 true）
                 orderDetailDto.setIsUpdateSort(false);
                 try {
                     appointmentReceptionOrder(orderDetailDto);

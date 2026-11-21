@@ -56,14 +56,11 @@
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer" style="float: right">
-        <span class="m-r-10" :style="{'color':form.isUpdateSort ? '#13ce66' : '#909399'}">
-          {{ form.isUpdateSort ? '计入轮次' : '不计入轮次' }}
-        </span>
-        <el-switch class="m-r-10" v-model="form.isUpdateSort"
-                   active-color="#13ce66" inactive-color="#DCDFE6">
-        </el-switch>
-        <el-tooltip placement="top" content="接待单计入的是「接待队」轮次：改单后重新派单，该疗愈师排到接待队队尾；服务单队顺序不受影响">
-          <i class="el-icon-question m-r-10" style="color: #909399"></i>
+        <el-tooltip placement="top"
+                    content="接待单固定计入接待队轮次：改单后重新派单，该疗愈师排到接待队队尾；服务单队顺序不受影响">
+          <span class="m-r-10" style="color:#909399">
+            <i class="el-icon-info m-r-10"></i>接待固定计入接待轮次（不影响服务单轮次）
+          </span>
         </el-tooltip>
         <el-button @click="handleClose" class="btn-B m-r-10">取 消</el-button>
         <el-button type="primary" @click="onSubmit" class="btn-A">确 定</el-button>
@@ -133,8 +130,8 @@ export default {
             time,
             payType,
             state,
-            // 沿用这张接待单原来的口径；历史数据是 false 的保持 false，其余默认计入轮次
-            isUpdateSort: detail.isUpdateSort !== false
+            // 接待单固定计入接待队轮次，历史数据里被关掉的也一并纠正
+            isUpdateSort: true
           }
           await this.initDateToBeSelected()
           await this.fetchTimeList()
