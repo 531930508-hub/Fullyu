@@ -39,7 +39,7 @@ function fail(msg) {
 
 const envName = arg('--env', 'prod')
 if (!['prod', 'test'].includes(envName)) fail(`--env 只能是 prod 或 test，收到 ${envName}`)
-const baseApi = envName === 'prod' ? 'https://manage.fullytherapy.com/api' : '/api'
+const baseApi = envName === 'prod' ? 'https://cityretreat.fullyu.cn/api' : '/api'
 const outArg = arg('--out', '')
 
 // 先拉一次 origin/main，否则本地 ref 过期会把「刚合进来的修复」判成不存在

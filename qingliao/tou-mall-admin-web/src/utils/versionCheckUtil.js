@@ -9,7 +9,8 @@ export default {
         let vm = this
         if (vm.isRun) {
             axios({
-                url: 'https://manage.fullytherapy.com/static/version.json',
+                // 相对路径：跟着页面部署的域名走，换域名不用改这里
+                url: '/static/version.json',
                 method: 'get',
             }).then(res => {
                 let obj = res.data || {}
@@ -41,7 +42,8 @@ export default {
     },
     start() {
         let host = window.location.host
-        if (!host.includes('manage.fullytherapy.com')) {
+        // 过渡期两个域名都放行；manage 下线后可只留 cityretreat
+        if (!host.includes('cityretreat.fullyu.cn') && !host.includes('manage.fullytherapy.com')) {
             return
         }
         this.isRun = true
