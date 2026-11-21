@@ -523,3 +523,32 @@ cherry-pick 把 yml/pom 的 CRLF 改成 LF，已还原，避免整文件重写�
   测试机同时补齐 `PRINT_*`/`BAIDU_VOICE_*`（下次发测试后端才不会静默丢打印配置）。
 - **轻疗小程序**：`main` 含 `4afccb8` 的下单页改动，已用 devtools CLI 覆盖上传开发版 `1.0.22`（1.1 MB，AppID `wxeb4e8a99b7eeebf8`）。
 - **豆工/汇付核对**：生产 66 单 `pay_type` 只有 0/1/2；退款走 `BasePayClient` 请求体，不含本次改动的签名串。
+## 十八、2026-12-08：轮牌拆成两套队列（服务单 / 接待单）
+
+**改了什么**
+
+| 位置 | 改动 |
+|---|---|
+| 数据 | `sql/2026-12-08-reception-queue-two-kind.sql` → `s_reception_queue` 加 `queue_kind tinyint NOT NULL DEFAULT 0`、`duty_time datetime NULL`；唯一键 `uk_date_shop_massagist` → `uk_date_shop_kind_massagist(queue_date, shop_id, queue_kind, massagist_id)`；`s_reception_queue_log` 加 `queue_kind tinyint NOT NULL DEFAULT 0` |
+| 代码 | `ReceptionQueueService` 的 ensureDay / assign / finish / swap / switchDuty / pickNext / revert / grab 全部带 `kind`；上钟流水记 `queue_kind`，撤销回位与抢单按流水认队 |
+| 前端 | 轮牌看板/一键安排/值班/完成/调序/调店接口新增可选 `queueKind`（0 服务单、1 接待单，默认 0，老调用不受影响） |
+
+**性质**：纯加列 + 换唯一键。老数据 `queue_kind` 全为 0（服务单队），历史流水同理，
+「谁被推进」在拆分当天的口径与改动前完全一致；接待队的行在首次调用 `kind=1` 的接口/接待单上钟时惰性生成。
+
+**依赖顺序**：必须先跑 `2026-11-19-reception-queue.sql`（建表，按文件名顺序天然在前），否则本脚本的
+`ALTER ... DROP INDEX uk_date_shop_massagist` 会因表不存在而报错。守卫按 `information_schema.COLUMNS /
+STATISTICS` 判存量，可重复执行；`sql/prod/` 已由 `scripts/make-prod-sql.py` 生成，
+契约测试 `ReceptionQueueTwoKindContractTest` 覆盖「守卫 / 加列 / 唯一键口径 / 生产版无条件执行 / 实体与常量」。
+
+**口径**
+
+1. 服务单上钟只推服务单队，接待单上钟只推接待单队；接待不再挤掉正在排服务单的客人。
+2. 看板顺序 = 值班区分组在前（按 `duty_time` 先点在上，未记录的按 `seq` 兜底），休息区按 `seq`；`seq` / 结果编号两套队列各算各的，不跨队跳号。
+3. 接待单派单按接待队顺序取人（`RoundScheduleService.receptionOrder`）；队列当天还没起来时退回班次顺序。
+4. 值班意向事项（`s_reception_issue`）暂不分队：点值班时的抢单时限对两套队列同时有效。
+
+**回滚**：先停接待队相关入口（前端只传 `queueKind=0`），再
+`ALTER TABLE s_reception_queue DROP INDEX uk_date_shop_kind_massagist, ADD UNIQUE KEY uk_date_shop_massagist (queue_date, shop_id, massagist_id);`
+—— 执行前要先删掉 `queue_kind=1` 的行（`DELETE FROM s_reception_queue WHERE queue_kind=1`），否则旧唯一键建不起来。
+`queue_kind` / `duty_time` 两列可留可删（旧代码不读）。

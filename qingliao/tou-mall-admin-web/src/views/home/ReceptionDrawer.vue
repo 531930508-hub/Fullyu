@@ -63,18 +63,15 @@
       </el-form>
       <div v-loading="loading" class="drawer-footer justify-end" style="width:700px">
         <div class="flex justify-center align-center">
-          <!--          <span class="m-r-10"-->
-          <!--                :style="{'color':form.hiddenIsUpdateSortBtn?'#909399':form.isUpdateSort?'#13ce66':'#ff4949'}">-->
-          <!--            {{ form.isUpdateSort ? '计入轮次' : '不计入轮次' }}-->
-          <!--          </span>-->
-          <!--          <el-switch class="m-r-10" :disabled="form.hiddenIsUpdateSortBtn"-->
-          <!--                     style="display: block"-->
-          <!--                     v-model="form.isUpdateSort"-->
-          <!--                     inactive-color="#13ce66"-->
-          <!--                     active-color="#ff4949"-->
-          <!--                     :inactive-value="true"-->
-          <!--                     :active-value="false">-->
-          <!--          </el-switch>-->
+          <span class="m-r-10" :style="{'color':form.isUpdateSort ? '#13ce66' : '#909399'}">
+            {{ form.isUpdateSort ? '计入轮次' : '不计入轮次' }}
+          </span>
+          <el-switch class="m-r-10" v-model="form.isUpdateSort"
+                     active-color="#13ce66" inactive-color="#DCDFE6">
+          </el-switch>
+          <el-tooltip placement="top" content="接待单计入的是「接待队」轮次：接单后该疗愈师排到接待队队尾、结果编号 +1；服务单队顺序不受影响">
+            <i class="el-icon-question m-r-10" style="color: #909399"></i>
+          </el-tooltip>
           <el-button @click="handleClose" class="btn-B m-r-10">取 消</el-button>
           <el-button type="primary" @click="onSubmit" class="btn-A">确 定</el-button>
         </div>
@@ -144,7 +141,8 @@ export default {
       this.form = {
         payType: 3,
         shopId: this.shopId,
-        isUpdateSort: false,
+        // 接待默认计入轮次：消耗接待队 seq，与服务单队互不影响
+        isUpdateSort: true,
         massagistId: '',
         type: 2,
         ...form,

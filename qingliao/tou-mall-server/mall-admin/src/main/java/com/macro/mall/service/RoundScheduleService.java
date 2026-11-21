@@ -187,6 +187,13 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
      * @param advanceQueue 是否顺带把人排到队尾。抢单时位移由 grabAssign 落（要记成 GRAB），这里传 false，避免推两次
      */
     public void updateByDetailList(List<OrderDetail> detailList, String day, Long shopId, boolean advanceQueue) {
+        updateByDetailList(detailList, day, shopId, advanceQueue, ReceptionQueueService.KIND_SERVICE);
+    }
+
+    /**
+     * @param queueKind 推进哪一套轮牌：服务单走服务单队，接待单走接待单队，两套队列互不影响
+     */
+    public void updateByDetailList(List<OrderDetail> detailList, String day, Long shopId, boolean advanceQueue, int queueKind) {
         if (CollectionUtils.isEmpty(detailList) || day == null || shopId == null) {
             return;
         }
@@ -212,7 +219,7 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
         }
         // 上钟：队列把人移到队尾。按明细幂等，同一单重复调用不会把人往后推两次
         if (advanceQueue) {
-            assignList.forEach(d -> receptionQueueService.assign(day, shopId, d.getMassagistId(), d.getId(), null));
+            assignList.forEach(d -> receptionQueueService.assign(day, shopId, d.getMassagistId(), d.getId(), null, queueKind));
         }
     }
 
@@ -534,29 +541,38 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
 
     // ==================== 轮牌（接待排队）对外的动作 ====================
 
-    /** 轮牌看板：顺序 + 谁在忙 + 谁能抢 */
-    public List<ReceptionBoardItem> receptionBoard(Long shopId, String date) {
-        return receptionQueueService.board(date, shopId);
+    /** 轮牌看板：顺序 + 谁在忙 + 谁能抢（kind：0服务单轮牌 1接待单轮牌） */
+    public List<ReceptionBoardItem> receptionBoard(Long shopId, String date, int kind) {
+        return receptionQueueService.board(date, shopId, kind);
+    }
+
+    /** 轮牌顺序的疗愈师id（看板顺序：值班在前、seq 升序），接待单排单用接待队 */
+    public List<Long> receptionOrder(Long shopId, String date, int kind) {
+        List<ReceptionBoardItem> items = receptionQueueService.board(date, shopId, kind);
+        if (CollectionUtils.isEmpty(items)) {
+            return Collections.emptyList();
+        }
+        return items.stream().map(ReceptionBoardItem::getMassagistId).collect(Collectors.toList());
     }
 
     /** 值班 / 下值班（只换分组，不动位置） */
-    public ReceptionQueue switchDuty(Long shopId, String date, Long massagistId, boolean onDuty, String operator) {
-        return receptionQueueService.switchDuty(date, shopId, massagistId, onDuty, operator);
+    public ReceptionQueue switchDuty(Long shopId, String date, Long massagistId, boolean onDuty, String operator, int kind) {
+        return receptionQueueService.switchDuty(date, shopId, massagistId, onDuty, operator, kind);
     }
 
     /** 接待完成：回到休息区，位置保留 */
-    public void finishReception(Long shopId, String date, Long massagistId, String operator) {
-        receptionQueueService.finish(date, shopId, massagistId, operator);
+    public void finishReception(Long shopId, String date, Long massagistId, String operator, int kind) {
+        receptionQueueService.finish(date, shopId, massagistId, operator, kind);
     }
 
     /** 调店进店：插到队头 */
-    public void joinReceptionQueue(Long shopId, String date, Long massagistId, String operator) {
-        receptionQueueService.joinFromOtherShop(date, shopId, massagistId, operator);
+    public void joinReceptionQueue(Long shopId, String date, Long massagistId, String operator, int kind) {
+        receptionQueueService.joinFromOtherShop(date, shopId, massagistId, operator, kind);
     }
 
     /** 手工调序：交换两个人的顺序（只动位置，不动值班分组与结果编号） */
-    public void swapReceptionOrder(Long shopId, String date, Long massagistIdA, Long massagistIdB, String operator) {
-        receptionQueueService.swap(date, shopId, massagistIdA, massagistIdB, operator);
+    public void swapReceptionOrder(Long shopId, String date, Long massagistIdA, Long massagistIdB, String operator, int kind) {
+        receptionQueueService.swap(date, shopId, massagistIdA, massagistIdB, operator, kind);
     }
 
     /** 当天轮牌事项（值班意向/无值班可接待/超时未接待） */
@@ -565,9 +581,9 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
     }
 
     /** 一键安排预览：下一单该谁上 */
-    public ReceptionQueue nextMassagist(Long shopId, String date, LocalDateTime startTime, Integer durationMinutes) {
+    public ReceptionQueue nextMassagist(Long shopId, String date, LocalDateTime startTime, Integer durationMinutes, int kind) {
         LocalDateTime end = startTime == null ? null : startTime.plusMinutes(durationMinutes == null ? 60 : durationMinutes);
-        return receptionQueueService.pickNext(date, shopId, startTime, end, null);
+        return receptionQueueService.pickNext(date, shopId, startTime, end, null, kind);
     }
 
     /**
@@ -589,15 +605,17 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
             if (!AppointmentState.WAITING.getValue().equals(detail.getState())) {
                 throw new BusinessException("客人已经被接待了，抢不了");
             }
+            // 接待单抢的是接待队、服务单抢的是服务队：以这单当初上钟时记下的队列为准
+            int kind = receptionQueueService.kindOfDetail(date, shopId, detailId);
             Long fromMassagistId = detail.getMassagistId();
             if (Objects.equals(fromMassagistId, massagistId)) {
                 throw new BusinessException("这单本来就是你的");
             }
-            if (receptionQueueService.find(date, shopId, massagistId) == null) {
+            if (receptionQueueService.find(date, shopId, massagistId, kind) == null) {
                 throw new BusinessException("你不在今天的排班里");
             }
             // 接待确认时限没过，这单还轮不到别人抢
-            ReceptionQueue fromQueue = receptionQueueService.find(date, shopId, fromMassagistId);
+            ReceptionQueue fromQueue = receptionQueueService.find(date, shopId, fromMassagistId, kind);
             int window = receptionQueueService.grabWindowMinutes(shopId);
             if (fromQueue != null && fromQueue.getLastAssignTime() != null) {
                 LocalDateTime deadline = fromQueue.getLastAssignTime().plusMinutes(window);
@@ -620,8 +638,8 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
             orderDetailService.updateById(detail);
             // 排班行：原疗愈师的行释放、新疗愈师的行挂上；队列：原疗愈师回原位，抢到的人排到队尾（由 grabAssign 落）
             recoverByDetailList(Collections.singletonList(detailId), RoundScheduleState.UPDATE);
-            updateByDetailList(Collections.singletonList(detail), date, shopId, false);
-            receptionQueueService.grabAssign(date, shopId, massagistId, detailId, operator);
+            updateByDetailList(Collections.singletonList(detail), date, shopId, false, kind);
+            receptionQueueService.grabAssign(date, shopId, massagistId, detailId, operator, kind);
             receptionIssueService.grabbed(date, shopId, detailId, fromMassagistId,
                     "超过" + window + "分钟未接待，被" + massagistService.findNameById(massagistId) + "抢单",
                     massagistService.findNameById(massagistId));

@@ -45,9 +45,10 @@ public class RoundScheduleController {
     // ==================== 轮牌（接待排队） ====================
 
     @GetMapping("/queue/board")
-    @ApiOperation("轮牌看板：顺序、谁在忙、谁能抢单")
-    public CommonResult queueBoard(@RequestParam Long shopId, @RequestParam String date) {
-        return CommonResult.success(service.receptionBoard(shopId, date));
+    @ApiOperation("轮牌看板：顺序、谁在忙、谁能抢单（queueKind：0服务单轮牌 1接待单轮牌，不传按服务单）")
+    public CommonResult queueBoard(@RequestParam Long shopId, @RequestParam String date,
+                                   @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
+        return CommonResult.success(service.receptionBoard(shopId, date, queueKind));
     }
 
     @GetMapping("/queue/issues")
@@ -60,26 +61,29 @@ public class RoundScheduleController {
     @ApiOperation("一键安排预览：下一单该谁上")
     public CommonResult queueNext(@RequestParam Long shopId,
                                   @RequestParam String startTime,
-                                  @RequestParam(required = false, defaultValue = "60") Integer durationMinutes) {
+                                  @RequestParam(required = false, defaultValue = "60") Integer durationMinutes,
+                                  @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
         return CommonResult.success(service.nextMassagist(shopId, DateUtil.toYYYYMMDD(DateUtil.string2DateTime(startTime)),
-                DateUtil.string2DateTime(startTime), durationMinutes));
+                DateUtil.string2DateTime(startTime), durationMinutes, queueKind));
     }
 
     @PostMapping("/queue/duty")
-    @ApiOperation("值班/下值班")
+    @ApiOperation("值班/下值班（queueKind：0服务单轮牌 1接待单轮牌）")
     public CommonResult duty(@RequestParam Long shopId,
                              @RequestParam String date,
                              @RequestParam Long massagistId,
-                             @RequestParam Boolean onDuty) {
-        return CommonResult.success(service.switchDuty(shopId, date, massagistId, Boolean.TRUE.equals(onDuty), operator()));
+                             @RequestParam Boolean onDuty,
+                             @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
+        return CommonResult.success(service.switchDuty(shopId, date, massagistId, Boolean.TRUE.equals(onDuty), operator(), queueKind));
     }
 
     @PostMapping("/queue/finish")
     @ApiOperation("接待完成（下钟，回到休息区，位置不变）")
     public CommonResult finish(@RequestParam Long shopId,
                                @RequestParam String date,
-                               @RequestParam Long massagistId) {
-        service.finishReception(shopId, date, massagistId, operator());
+                               @RequestParam Long massagistId,
+                               @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
+        service.finishReception(shopId, date, massagistId, operator(), queueKind);
         return CommonResult.success(null);
     }
 
@@ -88,8 +92,9 @@ public class RoundScheduleController {
     public CommonResult swap(@RequestParam Long shopId,
                              @RequestParam String date,
                              @RequestParam Long massagistIdA,
-                             @RequestParam Long massagistIdB) {
-        service.swapReceptionOrder(shopId, date, massagistIdA, massagistIdB, operator());
+                             @RequestParam Long massagistIdB,
+                             @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
+        service.swapReceptionOrder(shopId, date, massagistIdA, massagistIdB, operator(), queueKind);
         return CommonResult.success(null);
     }
 
@@ -97,8 +102,9 @@ public class RoundScheduleController {
     @ApiOperation("调店进店：插到队头")
     public CommonResult join(@RequestParam Long shopId,
                              @RequestParam String date,
-                             @RequestParam Long massagistId) {
-        service.joinReceptionQueue(shopId, date, massagistId, operator());
+                             @RequestParam Long massagistId,
+                             @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
+        service.joinReceptionQueue(shopId, date, massagistId, operator(), queueKind);
         return CommonResult.success(null);
     }
 

@@ -60,7 +60,7 @@
                           v-model="form.time" format="HH:mm" value-format="HH:mm" :clearable="false"
                           :picker-options="{ start: clockInTime,step: '00:15',end: clockOutTime}">
           </el-time-select>
-          <el-radio-group v-model="form.time" size="mini" class="time m-t-10" @change="fetchMassagistAndBed">
+          <el-radio-group v-model="form.time" size="mini" class="time m-t-10" @change="clearTime">
             <el-radio-button v-for="(item,index) in  timeList|| []" :disabled="item.state==0"
                              :key="index" :label="item.time">
               {{ item.time }}
@@ -172,10 +172,13 @@
           <el-switch class="m-r-10" :disabled="form.hiddenIsUpdateSortBtn"
                      style="display: block" v-if="form.massagistIdList && form.massagistIdList.length"
                      v-model="form.isUpdateSort"
+                     @change="onUpdateSortChange"
                      active-color="#13ce66"
                      inactive-color="#ff4949">
           </el-switch>
           <el-button @click="handleClose" class="btn-B m-r-10">取 消</el-button>
+          <el-button class="m-r-10" v-if="form.massagistIdList && form.massagistIdList.length"
+                     @click="clearSelectedMassagist">改为系统派单</el-button>
           <el-button type="primary" @click="onSubmit" class="btn-A">确 定</el-button>
         </div>
       </div>
@@ -388,8 +391,8 @@ export default {
         productId: product.id,
         personCount: 1,
         shopId: this.shopId,
-        //选好疗愈师后默认「不计入轮次」(开关为红色),需要计入时由操作员手动打开
-        isUpdateSort: false,
+        //默认计入轮次；后台手动指定疗愈师时，只有操作员主动关掉才不计入
+        isUpdateSort: true,
         ...form,
       }
 
@@ -678,6 +681,22 @@ export default {
         }
       } catch (e) {
         this.timeList = []
+      }
+    },
+    //操作员手动切换「计入轮次」后，系统派单(未指定疗愈师)的可选疗愈师要按新口径刷新；
+    //已手动指定疗愈师时只是标记该人本单是否占轮牌，不影响可选项
+    onUpdateSortChange() {
+      const hasMassagist = this.form.massagistIdList && this.form.massagistIdList.length
+      if (!hasMassagist && this.form.time) {
+        this.fetchMassagistList()
+      }
+    },
+    //放弃已勾选的疗愈师，回到系统按轮牌顺序自动派单
+    clearSelectedMassagist() {
+      this.form.massagistIdList = []
+      this.form.isUpdateSort = true
+      if (this.form.time) {
+        this.fetchMassagistList()
       }
     },
     fetchMassagistAndBed() {

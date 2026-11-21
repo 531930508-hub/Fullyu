@@ -37,10 +37,18 @@ public class ReceptionQueue extends BaseEntity {
     @ApiModelProperty("门店id")
     private Long shopId;
 
+    /**
+     * 服务单轮牌和接待单轮牌是各自独立的一队，互不推进。
+     *
+     * @see com.macro.mall.service.ReceptionQueueService#KIND_SERVICE
+     */
+    @ApiModelProperty("轮牌类型 0服务单轮牌 1接待单轮牌")
+    private Integer queueKind;
+
     @ApiModelProperty("疗愈师id")
     private Long massagistId;
 
-    @ApiModelProperty("排序键，越小越靠前")
+    @ApiModelProperty("排序键，越小越靠前（派单唯一依据；点值班/下值班都不动它）")
     private Long seq;
 
     @ApiModelProperty("结果编号（展示用，1..n）")
@@ -48,6 +56,10 @@ public class ReceptionQueue extends BaseEntity {
 
     @ApiModelProperty("值班状态 1值班 0休息/未值班")
     private Integer onDuty;
+
+    @ApiModelProperty("最近一次点值班的时间（值班区按它排序：先点的在上）")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime dutyTime;
 
     @ApiModelProperty("1在轮牌中 0已退出")
     private Integer valid;

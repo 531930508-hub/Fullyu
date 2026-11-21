@@ -69,6 +69,16 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
     /** 手动 */
     public static final int SOURCE_MANUAL = 3;
 
+    /**
+     * 服务单轮牌（正常接单用的一队）。
+     *
+     * <p>接待单轮牌是另一队：接待单把人从接待队里往后排，服务单把人从服务队里往后排，
+     * 两边各走各的 seq / 结果编号 / 值班区，互不影响。</p>
+     */
+    public static final int KIND_SERVICE = 0;
+    /** 接待单轮牌（见 {@link #KIND_SERVICE}） */
+    public static final int KIND_RECEPTION = 1;
+
     private static final int DEFAULT_GRAB_WINDOW_MINUTES = 7;
 
     @Autowired
@@ -93,24 +103,30 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
      * 不初始化、不写库，纯读。
      */
     public List<ReceptionQueue> orderList(String day, Long shopId) {
+        return orderList(day, shopId, KIND_SERVICE);
+    }
+
+    public List<ReceptionQueue> orderList(String day, Long shopId, int kind) {
         if (day == null || shopId == null) {
             return Collections.emptyList();
         }
-        return sorted(rows(day, shopId));
+        return sorted(rows(day, shopId, kind));
     }
 
     /**
      * 营业前预生成当日队列（定时任务调）：幂等，已经有队列就只做补位。
      *
      * <p>以前是「谁先打开看板谁触发初始化」，顺序取决于那一刻的班次顺序，
-     * 同一天不同时段看可能不一样；改成每天固定预生成后，一天之内顺序稳定。</p>
+     * 同一天不同时段看可能不一样；改成每天固定预生成后，一天之内顺序稳定。
+     * 服务单、接待单两套队列同一天同一套班次顺序起队，之后各自走。</p>
      */
     public int prebuild(String day, Long shopId) {
         if (day == null || shopId == null) {
             return 0;
         }
         int size = ensureDay(day, shopId, null).size();
-        log.info("轮牌预生成 shop={} day={} 人数={}", shopId, day, size);
+        ensureDay(day, shopId, null, KIND_RECEPTION);
+        log.info("轮牌预生成 shop={} day={} 人数={}（服务单/接待单两套）", shopId, day, size);
         return size;
     }
 
@@ -119,14 +135,18 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
      * 有排班但不在队列里的人补到队尾（调店/临时加班/历史数据缺口）。
      */
     public List<ReceptionQueue> ensureDay(String day, Long shopId, Collection<Long> candidateIds) {
+        return ensureDay(day, shopId, candidateIds, KIND_SERVICE);
+    }
+
+    public List<ReceptionQueue> ensureDay(String day, Long shopId, Collection<Long> candidateIds, int kind) {
         if (day == null || shopId == null) {
             return Collections.emptyList();
         }
-        synchronized (lockKey(day, shopId)) {
-            List<ReceptionQueue> all = rows(day, shopId);
+        synchronized (lockKey(day, shopId, kind)) {
+            List<ReceptionQueue> all = rows(day, shopId, kind);
             if (all.isEmpty()) {
-                initDay(day, shopId, candidateIds);
-                all = rows(day, shopId);
+                initDay(day, shopId, candidateIds, kind);
+                all = rows(day, shopId, kind);
             }
             if (all.isEmpty()) {
                 return Collections.emptyList();
@@ -152,23 +172,27 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             for (Long massagistId : missing) {
                 seq++;
                 receiptNo++;
-                addRows.add(newRow(day, shopId, massagistId, seq, receiptNo, SOURCE_SUPPLEMENT));
-                addLogs.add(newLog(day, shopId, massagistId, ReceptionQueueAction.ADD, null,
+                addRows.add(newRow(day, shopId, massagistId, seq, receiptNo, SOURCE_SUPPLEMENT, kind));
+                addLogs.add(newLog(day, shopId, massagistId, kind, ReceptionQueueAction.ADD, null,
                         null, seq, null, DUTY_OFF, null, receiptNo, "补位", null));
             }
             saveBatch(addRows);
             saveLogs(addLogs);
-            log.info("轮牌补位 shop={} day={} 人数={}", shopId, day, addRows.size());
-            return sorted(rows(day, shopId));
+            log.info("轮牌补位 shop={} day={} kind={} 人数={}", shopId, day, kind, addRows.size());
+            return sorted(rows(day, shopId, kind));
         }
     }
 
     /** 单个人在队列里的行（可能为空） */
     public ReceptionQueue find(String day, Long shopId, Long massagistId) {
+        return find(day, shopId, massagistId, KIND_SERVICE);
+    }
+
+    public ReceptionQueue find(String day, Long shopId, Long massagistId, int kind) {
         if (day == null || shopId == null || massagistId == null) {
             return null;
         }
-        List<ReceptionQueue> list = rows(day, shopId);
+        List<ReceptionQueue> list = rows(day, shopId, kind);
         return list.stream().filter(r -> massagistId.equals(r.getMassagistId())).findFirst().orElse(null);
     }
 
@@ -177,7 +201,12 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
      * 值班的都排不上时才往休息区取，并留一条「无值班可接待」事项。
      */
     public ReceptionQueue pickNext(String day, Long shopId, LocalDateTime startTime, LocalDateTime endTime, Collection<Long> excludeIds) {
-        List<ReceptionQueue> list = ensureDay(day, shopId, null).stream()
+        return pickNext(day, shopId, startTime, endTime, excludeIds, KIND_SERVICE);
+    }
+
+    public ReceptionQueue pickNext(String day, Long shopId, LocalDateTime startTime, LocalDateTime endTime,
+                                   Collection<Long> excludeIds, int kind) {
+        List<ReceptionQueue> list = ensureDay(day, shopId, null, kind).stream()
                 .filter(q -> !CollectionUtils.isEmpty(excludeIds) ? !excludeIds.contains(q.getMassagistId()) : true)
                 .collect(Collectors.toList());
         if (list.isEmpty()) {
@@ -205,12 +234,26 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
 
     /**
      * 看板：队列顺序 + 谁在忙 + 谁的单已过接待确认时限可抢。
+     *
+     * <p>列表顺序即值班区口径：值班的人按「点值班的先后」排（先点的在上面），
+     * 休息的人按派单顺序垫后。派单本身只认 seq，所以每一行都带上 dispatchNo（派单顺序），
+     * 值班区第 1 位不一定是下一个接单的人 —— 这是店里确认过的口径。</p>
      */
     public List<ReceptionBoardItem> board(String day, Long shopId) {
-        List<ReceptionQueue> list = ensureDay(day, shopId, null);
+        return board(day, shopId, KIND_SERVICE);
+    }
+
+    public List<ReceptionBoardItem> board(String day, Long shopId, int kind) {
+        List<ReceptionQueue> list = ensureDay(day, shopId, null, kind);
         if (CollectionUtils.isEmpty(list)) {
             return Collections.emptyList();
         }
+        Map<Long, Integer> dispatchNo = new HashMap<>();
+        int no = 0;
+        for (ReceptionQueue q : list) {
+            dispatchNo.put(q.getMassagistId(), ++no);
+        }
+        List<ReceptionQueue> display = dutySorted(list);
         LocalDateTime now = LocalDateTime.now();
         List<OrderDetail> doing = orderDetailService.list(new LambdaQueryWrapper<OrderDetail>()
                 .eq(OrderDetail::getShopId, shopId)
@@ -223,13 +266,18 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                         (a, b) -> a.getEndTime().isAfter(b.getEndTime()) ? a : b));
         int window = grabWindowMinutes(shopId);
         List<ReceptionBoardItem> items = new ArrayList<>();
-        for (ReceptionQueue q : list) {
+        int dutyNo = 0;
+        for (ReceptionQueue q : display) {
             ReceptionBoardItem item = new ReceptionBoardItem();
+            item.setQueueKind(kind);
             item.setMassagistId(q.getMassagistId());
             item.setMassagistName(massagistName(q.getMassagistId()));
             item.setReceiptNo(q.getReceiptNo());
             item.setSeq(q.getSeq());
             item.setOnDuty(q.getOnDuty());
+            item.setDutyTime(q.getDutyTime());
+            item.setDutyNo(isOnDuty(q) ? ++dutyNo : null);
+            item.setDispatchNo(dispatchNo.get(q.getMassagistId()));
             item.setAssignCount(q.getAssignCount());
             item.setLastAssignTime(q.getLastAssignTime());
             OrderDetail current = doingMap.get(q.getMassagistId());
@@ -251,7 +299,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
 
     /**
      * 超时未接待扫描（定时任务每分钟跑）：约的时间到了、窗口内没人点接待，
-     * 就挂一条可抢单事项，看板上其他人能直接看到并抢。
+     * 就挂一条可抢单事项，看板上其他人能直接看到并抢。服务单、接待单两套队列都扫。
      */
     public int scanTimeout(String day, Long shopId) {
         if (day == null || shopId == null) {
@@ -270,7 +318,8 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                 .last("LIMIT 200"));
         int created = 0;
         for (OrderDetail d : waiting) {
-            ReceptionQueue q = find(day, shopId, d.getMassagistId());
+            int kind = kindOfDetail(day, shopId, d.getId());
+            ReceptionQueue q = find(day, shopId, d.getMassagistId(), kind);
             if (q == null || q.getLastAssignTime() == null) {
                 continue;
             }
@@ -289,6 +338,23 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         return created;
     }
 
+    /**
+     * 这一单推进的是哪一套队列：以上钟流水里记的 queue_kind 为准（接待单由接待流程写成接待队）。
+     * 没有流水（老数据 / 还没上过钟）按服务单算。
+     */
+    public int kindOfDetail(String day, Long shopId, Long detailId) {
+        if (detailId == null) {
+            return KIND_SERVICE;
+        }
+        try {
+            ReceptionQueueLog assignLog = latestAssignLog(day, shopId, detailId);
+            return assignLog == null ? KIND_SERVICE : kindOf(assignLog.getQueueKind());
+        } catch (Exception e) {
+            log.debug("轮牌：读取明细{}的轮牌类型失败，按服务单处理", detailId, e);
+            return KIND_SERVICE;
+        }
+    }
+
     // ==================== 写 ====================
     /**
      * 上钟：把这个人移到队尾、置为值班、结果编号往后延。
@@ -296,15 +362,20 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
      */
     @Transactional(rollbackFor = Exception.class)
     public void assign(String day, Long shopId, Long massagistId, Long detailId, String operator) {
+        assign(day, shopId, massagistId, detailId, operator, KIND_SERVICE);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void assign(String day, Long shopId, Long massagistId, Long detailId, String operator, int kind) {
         if (day == null || shopId == null || massagistId == null) {
             return;
         }
-        synchronized (lockKey(day, shopId)) {
-            if (detailId != null && assignedLogCount(day, shopId, detailId) > 0) {
+        synchronized (lockKey(day, shopId, kind)) {
+            if (detailId != null && assignedLogCount(day, shopId, detailId, kind) > 0) {
                 log.debug("轮牌：明细{}已记录过上钟，跳过", detailId);
                 return;
             }
-            doAssign(day, shopId, massagistId, detailId, ReceptionQueueAction.ASSIGN, operator);
+            doAssign(day, shopId, massagistId, detailId, ReceptionQueueAction.ASSIGN, operator, kind);
         }
     }
 
@@ -313,24 +384,30 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
      */
     @Transactional(rollbackFor = Exception.class)
     public void grabAssign(String day, Long shopId, Long massagistId, Long detailId, String operator) {
+        grabAssign(day, shopId, massagistId, detailId, operator, KIND_SERVICE);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void grabAssign(String day, Long shopId, Long massagistId, Long detailId, String operator, int kind) {
         if (day == null || shopId == null || massagistId == null) {
             return;
         }
-        synchronized (lockKey(day, shopId)) {
-            doAssign(day, shopId, massagistId, detailId, ReceptionQueueAction.GRAB, operator);
+        synchronized (lockKey(day, shopId, kind)) {
+            doAssign(day, shopId, massagistId, detailId, ReceptionQueueAction.GRAB, operator, kind);
         }
     }
 
-    private void doAssign(String day, Long shopId, Long massagistId, Long detailId, ReceptionQueueAction action, String operator) {
-        List<ReceptionQueue> all = rows(day, shopId);
+    private void doAssign(String day, Long shopId, Long massagistId, Long detailId, ReceptionQueueAction action,
+                          String operator, int kind) {
+        List<ReceptionQueue> all = rows(day, shopId, kind);
         if (all.isEmpty()) {
-            ensureDay(day, shopId, Collections.singletonList(massagistId));
-            all = rows(day, shopId);
+            ensureDay(day, shopId, Collections.singletonList(massagistId), kind);
+            all = rows(day, shopId, kind);
         }
         boolean dutyActive = isDutyActive(sorted(all));
         ReceptionQueue q = all.stream().filter(r -> massagistId.equals(r.getMassagistId())).findFirst().orElse(null);
         if (q == null) {
-            q = addRowAtTail(day, shopId, massagistId, "上钟补位", operator);
+            q = addRowAtTail(day, shopId, massagistId, "上钟补位", operator, kind);
         }
         long beforeSeq = nvl(q.getSeq());
         int beforeReceipt = nvl(q.getReceiptNo());
@@ -338,20 +415,21 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         boolean needNoDutyIssue = dutyActive && beforeDuty == DUTY_OFF;
         // 上钟留痕：排在前面的人为什么没轮到，直接写在日志里，前台/复盘不用再猜
         String reason = action == ReceptionQueueAction.GRAB ? "抢单成功"
-                : skipNote(day, shopId, detailId, massagistId);
+                : skipNote(day, shopId, detailId, massagistId, kind);
 
         q.setSeq(maxSeq(all) + 1);
         q.setOnDuty(DUTY_ON);
+        q.setDutyTime(LocalDateTime.now());
         q.setValid(VALID);
         q.setAssignCount(nvl(q.getAssignCount()) + 1);
         q.setLastAssignTime(LocalDateTime.now());
         q.setReceiptNo(maxReceiptNo(all) + 1);
         updateById(q);
-        saveLog(newLog(day, shopId, massagistId, action, detailId,
+        saveLog(newLog(day, shopId, massagistId, kind, action, detailId,
                 beforeSeq, q.getSeq(), beforeDuty, DUTY_ON, beforeReceipt, q.getReceiptNo(),
                 reason, operator));
-        log.info("轮牌上钟 shop={} massagist={} detail={} seq {}→{} receipt {}→{}{}", shopId, massagistId, detailId,
-                beforeSeq, q.getSeq(), beforeReceipt, q.getReceiptNo(),
+        log.info("轮牌上钟 shop={} kind={} massagist={} detail={} seq {}→{} receipt {}→{}{}", shopId, kind, massagistId,
+                detailId, beforeSeq, q.getSeq(), beforeReceipt, q.getReceiptNo(),
                 reason == null ? "" : " " + reason);
 
         if (needNoDutyIssue) {
@@ -360,7 +438,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         }
         // 接到活的人，之前挂着的值班意向就算兑现了
         issueService.closeIntent(parseDay(day), shopId, massagistId, operator);
-        maybeRenumber(day, shopId, beforeReceipt);
+        maybeRenumber(day, shopId, beforeReceipt, kind);
     }
 
     /**
@@ -372,18 +450,20 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         if (detailId == null || day == null || shopId == null) {
             return;
         }
-        synchronized (lockKey(day, shopId)) {
-            ReceptionQueueLog assignLog = latestAssignLog(day, shopId, detailId);
-            if (assignLog == null) {
-                return;
-            }
-            int assigns = assignedLogCount(day, shopId, detailId);
-            int reverts = countLog(day, shopId, detailId, ReceptionQueueAction.REVERT.getValue());
+        // 这一单当初推的是哪一队（服务单/接待单），就回哪一队
+        ReceptionQueueLog assignLog = latestAssignLog(day, shopId, detailId);
+        if (assignLog == null) {
+            return;
+        }
+        int kind = kindOf(assignLog.getQueueKind());
+        synchronized (lockKey(day, shopId, kind)) {
+            int assigns = assignedLogCount(day, shopId, detailId, kind);
+            int reverts = countLog(day, shopId, detailId, kind, ReceptionQueueAction.REVERT.getValue());
             if (reverts >= assigns) {
                 log.debug("轮牌：明细{}已回位过，跳过", detailId);
                 return;
             }
-            ReceptionQueue q = find(day, shopId, assignLog.getMassagistId());
+            ReceptionQueue q = find(day, shopId, assignLog.getMassagistId(), kind);
             if (q == null) {
                 return;
             }
@@ -407,9 +487,9 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             }
             q.setAssignCount(Math.max(0, nvl(q.getAssignCount()) - 1));
             updateById(q);
-            saveLog(newLog(day, shopId, q.getMassagistId(), ReceptionQueueAction.REVERT, detailId,
+            saveLog(newLog(day, shopId, q.getMassagistId(), kind, ReceptionQueueAction.REVERT, detailId,
                     beforeSeq, q.getSeq(), beforeDuty, q.getOnDuty(), beforeReceipt, q.getReceiptNo(), reason, operator));
-            log.info("轮牌回位 shop={} massagist={} seq {}→{} {}{}", shopId, q.getMassagistId(), beforeSeq, q.getSeq(),
+            log.info("轮牌回位 shop={} kind={} massagist={} seq {}→{} {}{}", shopId, kind, q.getMassagistId(), beforeSeq, q.getSeq(),
                     reason, stillLatest ? "" : "（不回退）");
         }
     }
@@ -417,15 +497,22 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
     /**
      * 值班 / 下值班：只改分组，不动 seq。
      * 点值班时如果这个人当下排不上（在服务/不在班），给一个限时抢单资格。
+     *
+     * <p>值班区按点值班的先后排（dutyTime），服务单/接待单两套队列各有各的值班区。</p>
      */
     @Transactional(rollbackFor = Exception.class)
     public ReceptionQueue switchDuty(String day, Long shopId, Long massagistId, boolean onDuty, String operator) {
+        return switchDuty(day, shopId, massagistId, onDuty, operator, KIND_SERVICE);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public ReceptionQueue switchDuty(String day, Long shopId, Long massagistId, boolean onDuty, String operator, int kind) {
         if (day == null || shopId == null || massagistId == null) {
             throw new BusinessException("请选择疗愈师");
         }
-        synchronized (lockKey(day, shopId)) {
-            ensureDay(day, shopId, Collections.singletonList(massagistId));
-            ReceptionQueue q = find(day, shopId, massagistId);
+        synchronized (lockKey(day, shopId, kind)) {
+            ensureDay(day, shopId, Collections.singletonList(massagistId), kind);
+            ReceptionQueue q = find(day, shopId, massagistId, kind);
             if (q == null) {
                 throw new BusinessException("该疗愈师今天没有排班，不能值班");
             }
@@ -433,8 +520,12 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             int target = onDuty ? DUTY_ON : DUTY_OFF;
             if (beforeDuty != target) {
                 q.setOnDuty(target);
+                if (onDuty) {
+                    // 值班区顺序 = 点值班的先后；重新点一次值班就排到值班区末尾
+                    q.setDutyTime(LocalDateTime.now());
+                }
                 updateById(q);
-                saveLog(newLog(day, shopId, massagistId,
+                saveLog(newLog(day, shopId, massagistId, kind,
                         onDuty ? ReceptionQueueAction.ON_DUTY : ReceptionQueueAction.OFF_DUTY, null,
                         q.getSeq(), q.getSeq(), beforeDuty, target, q.getReceiptNo(), q.getReceiptNo(),
                         onDuty ? null : "手动下值班", operator));
@@ -456,18 +547,23 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
     /** 接待完成（下钟）：回到休息区，位置不动 —— 下次点值班时按原来的位置排 */
     @Transactional(rollbackFor = Exception.class)
     public void finish(String day, Long shopId, Long massagistId, String operator) {
+        finish(day, shopId, massagistId, operator, KIND_SERVICE);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void finish(String day, Long shopId, Long massagistId, String operator, int kind) {
         if (day == null || shopId == null || massagistId == null) {
             return;
         }
-        synchronized (lockKey(day, shopId)) {
-            ReceptionQueue q = find(day, shopId, massagistId);
+        synchronized (lockKey(day, shopId, kind)) {
+            ReceptionQueue q = find(day, shopId, massagistId, kind);
             if (q == null) {
                 return;
             }
             int beforeDuty = nvl(q.getOnDuty());
             q.setOnDuty(DUTY_OFF);
             updateById(q);
-            saveLog(newLog(day, shopId, massagistId, ReceptionQueueAction.FINISH, null,
+            saveLog(newLog(day, shopId, massagistId, kind, ReceptionQueueAction.FINISH, null,
                     q.getSeq(), q.getSeq(), beforeDuty, DUTY_OFF, q.getReceiptNo(), q.getReceiptNo(),
                     "接待完成，回到休息区", operator));
             issueService.closeIntent(parseDay(day), shopId, massagistId, operator);
@@ -482,21 +578,26 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
      */
     @Transactional(rollbackFor = Exception.class)
     public void swap(String day, Long shopId, Long massagistIdA, Long massagistIdB, String operator) {
+        swap(day, shopId, massagistIdA, massagistIdB, operator, KIND_SERVICE);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void swap(String day, Long shopId, Long massagistIdA, Long massagistIdB, String operator, int kind) {
         if (day == null || shopId == null || massagistIdA == null || massagistIdB == null) {
             throw new BusinessException("请选择两名疗愈师");
         }
         if (Objects.equals(massagistIdA, massagistIdB)) {
             throw new BusinessException("不能和自己交换顺序");
         }
-        synchronized (lockKey(day, shopId)) {
-            ensureDay(day, shopId, Arrays.asList(massagistIdA, massagistIdB));
-            ReceptionQueue a = find(day, shopId, massagistIdA);
-            ReceptionQueue b = find(day, shopId, massagistIdB);
+        synchronized (lockKey(day, shopId, kind)) {
+            ensureDay(day, shopId, Arrays.asList(massagistIdA, massagistIdB), kind);
+            ReceptionQueue a = find(day, shopId, massagistIdA, kind);
+            ReceptionQueue b = find(day, shopId, massagistIdB, kind);
             if (a == null) {
-                a = addRowAtTail(day, shopId, massagistIdA, "调序补位", operator);
+                a = addRowAtTail(day, shopId, massagistIdA, "调序补位", operator, kind);
             }
             if (b == null) {
-                b = addRowAtTail(day, shopId, massagistIdB, "调序补位", operator);
+                b = addRowAtTail(day, shopId, massagistIdB, "调序补位", operator, kind);
             }
             if (Objects.equals(a.getValid(), INVALID) || Objects.equals(b.getValid(), INVALID)) {
                 throw new BusinessException("已退出轮牌的疗愈师不能参与调序");
@@ -506,13 +607,13 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             if (seqA == seqB) {
                 // 老数据可能没有 seq：按当前展示顺序重新铺一遍，再交换
                 long seq = 0;
-                for (ReceptionQueue q : sorted(rows(day, shopId))) {
+                for (ReceptionQueue q : sorted(rows(day, shopId, kind))) {
                     seq += 10;
                     q.setSeq(seq);
                 }
-                updateBatchById(rows(day, shopId));
-                a = find(day, shopId, massagistIdA);
-                b = find(day, shopId, massagistIdB);
+                updateBatchById(rows(day, shopId, kind));
+                a = find(day, shopId, massagistIdA, kind);
+                b = find(day, shopId, massagistIdB, kind);
                 if (a == null || b == null) {
                     throw new BusinessException("调序失败，请刷新后重试");
                 }
@@ -523,13 +624,13 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             b.setSeq(seqA);
             updateBatchById(Arrays.asList(a, b));
             saveLogs(Arrays.asList(
-                    newLog(day, shopId, massagistIdA, ReceptionQueueAction.SWAP, null,
+                    newLog(day, shopId, massagistIdA, kind, ReceptionQueueAction.SWAP, null,
                             seqA, seqB, a.getOnDuty(), a.getOnDuty(), a.getReceiptNo(), a.getReceiptNo(),
                             "与" + massagistName(massagistIdB) + "交换顺序", operator),
-                    newLog(day, shopId, massagistIdB, ReceptionQueueAction.SWAP, null,
+                    newLog(day, shopId, massagistIdB, kind, ReceptionQueueAction.SWAP, null,
                             seqB, seqA, b.getOnDuty(), b.getOnDuty(), b.getReceiptNo(), b.getReceiptNo(),
                             "与" + massagistName(massagistIdA) + "交换顺序", operator)));
-            log.info("轮牌调序 shop={} day={} {}<->{} seq {}<->{}", shopId, day,
+            log.info("轮牌调序 shop={} day={} kind={} {}<->{} seq {}<->{}", shopId, day, kind,
                     massagistIdA, massagistIdB, seqA, seqB);
         }
     }
@@ -537,22 +638,27 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
     /** 调店进店：插到队头，优先接客（与原来「调店人员排最前面」的口径一致） */
     @Transactional(rollbackFor = Exception.class)
     public void joinFromOtherShop(String day, Long shopId, Long massagistId, String operator) {
+        joinFromOtherShop(day, shopId, massagistId, operator, KIND_SERVICE);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void joinFromOtherShop(String day, Long shopId, Long massagistId, String operator, int kind) {
         if (day == null || shopId == null || massagistId == null) {
             return;
         }
-        synchronized (lockKey(day, shopId)) {
-            List<ReceptionQueue> all = rows(day, shopId);
+        synchronized (lockKey(day, shopId, kind)) {
+            List<ReceptionQueue> all = rows(day, shopId, kind);
             if (all.isEmpty()) {
-                ensureDay(day, shopId, Collections.singletonList(massagistId));
-                all = rows(day, shopId);
+                ensureDay(day, shopId, Collections.singletonList(massagistId), kind);
+                all = rows(day, shopId, kind);
             }
             ReceptionQueue q = all.stream().filter(r -> massagistId.equals(r.getMassagistId())).findFirst().orElse(null);
             if (q == null) {
                 long minSeq = all.stream().mapToLong(r -> nvl(r.getSeq())).min().orElse(1L);
                 int receiptNo = maxReceiptNo(all) + 1;
-                ReceptionQueue row = newRow(day, shopId, massagistId, minSeq - 1, receiptNo, SOURCE_TRANSFER);
+                ReceptionQueue row = newRow(day, shopId, massagistId, minSeq - 1, receiptNo, SOURCE_TRANSFER, kind);
                 save(row);
-                saveLog(newLog(day, shopId, massagistId, ReceptionQueueAction.JOIN, null,
+                saveLog(newLog(day, shopId, massagistId, kind, ReceptionQueueAction.JOIN, null,
                         null, row.getSeq(), null, DUTY_OFF, null, receiptNo, "调店进店", operator));
                 return;
             }
@@ -562,7 +668,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             q.setValid(VALID);
             q.setSource(SOURCE_TRANSFER);
             updateById(q);
-            saveLog(newLog(day, shopId, massagistId, ReceptionQueueAction.JOIN, null,
+            saveLog(newLog(day, shopId, massagistId, kind, ReceptionQueueAction.JOIN, null,
                     beforeSeq, q.getSeq(), q.getOnDuty(), q.getOnDuty(), q.getReceiptNo(), q.getReceiptNo(), "调店进店", operator));
         }
     }
@@ -573,18 +679,23 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
      */
     @Transactional(rollbackFor = Exception.class)
     public void leave(String day, Long shopId, Long massagistId, String reason, String operator) {
+        leave(day, shopId, massagistId, reason, operator, KIND_SERVICE);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void leave(String day, Long shopId, Long massagistId, String reason, String operator, int kind) {
         if (day == null || shopId == null || massagistId == null) {
             return;
         }
-        synchronized (lockKey(day, shopId)) {
-            ReceptionQueue q = find(day, shopId, massagistId);
+        synchronized (lockKey(day, shopId, kind)) {
+            ReceptionQueue q = find(day, shopId, massagistId, kind);
             if (q == null || Objects.equals(q.getValid(), INVALID)) {
                 return;
             }
             q.setValid(INVALID);
             q.setOnDuty(DUTY_OFF);
             updateById(q);
-            saveLog(newLog(day, shopId, massagistId, ReceptionQueueAction.LEAVE, null,
+            saveLog(newLog(day, shopId, massagistId, kind, ReceptionQueueAction.LEAVE, null,
                     q.getSeq(), q.getSeq(), DUTY_ON, DUTY_OFF, q.getReceiptNo(), q.getReceiptNo(), reason, operator));
         }
     }
@@ -606,7 +717,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
 
     // ==================== 内部 ====================
 
-    private void initDay(String day, Long shopId, Collection<Long> candidateIds) {
+    private void initDay(String day, Long shopId, Collection<Long> candidateIds, int kind) {
         // 当天在本店有班的人（本店班次 + 调进本店的班次），以及各自最早上班时间
         LinkedHashSet<Long> scheduled = new LinkedHashSet<>();
         Map<Long, LocalTime> shiftStart = new HashMap<>();
@@ -652,6 +763,10 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         if (!CollectionUtils.isEmpty(candidateIds)) {
             candidateIds.stream().filter(Objects::nonNull).forEach(order::add);
         }
+        if (kind == KIND_RECEPTION) {
+            // 接待队顺序 = 服务单队顺序反过来（服务队排最后的先接接待），两套队各自往后轮
+            order = reverseOrder(order);
+        }
         if (order.isEmpty()) {
             return;
         }
@@ -662,13 +777,25 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         for (Long massagistId : order) {
             seq++;
             receiptNo++;
-            addRows.add(newRow(day, shopId, massagistId, seq, receiptNo, SOURCE_INIT));
-            addLogs.add(newLog(day, shopId, massagistId, ReceptionQueueAction.INIT, null,
+            addRows.add(newRow(day, shopId, massagistId, seq, receiptNo, SOURCE_INIT, kind));
+            addLogs.add(newLog(day, shopId, massagistId, kind, ReceptionQueueAction.INIT, null,
                     null, seq, null, DUTY_OFF, null, receiptNo, "当日初始化", null));
         }
         saveBatch(addRows);
         saveLogs(addLogs);
-        log.info("轮牌初始化 shop={} day={} 人数={}", shopId, day, addRows.size());
+        log.info("轮牌初始化 shop={} day={} kind={} 人数={}", shopId, day, kind, addRows.size());
+    }
+
+    /**
+     * 倒序一份队列顺序：接待队用「服务队顺序反过来」的起始顺序。
+     */
+    private LinkedHashSet<Long> reverseOrder(Collection<Long> order) {
+        if (CollectionUtils.isEmpty(order)) {
+            return new LinkedHashSet<>();
+        }
+        List<Long> list = new ArrayList<>(order);
+        Collections.reverse(list);
+        return new LinkedHashSet<>(list);
     }
 
     /**
@@ -698,13 +825,13 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         return actual;
     }
 
-    private ReceptionQueue addRowAtTail(String day, Long shopId, Long massagistId, String reason, String operator) {
-        List<ReceptionQueue> all = rows(day, shopId);
+    private ReceptionQueue addRowAtTail(String day, Long shopId, Long massagistId, String reason, String operator, int kind) {
+        List<ReceptionQueue> all = rows(day, shopId, kind);
         long seq = maxSeq(all) + 1;
         int receiptNo = maxReceiptNo(all) + 1;
-        ReceptionQueue row = newRow(day, shopId, massagistId, seq, receiptNo, SOURCE_SUPPLEMENT);
+        ReceptionQueue row = newRow(day, shopId, massagistId, seq, receiptNo, SOURCE_SUPPLEMENT, kind);
         save(row);
-        saveLog(newLog(day, shopId, massagistId, ReceptionQueueAction.ADD, null,
+        saveLog(newLog(day, shopId, massagistId, kind, ReceptionQueueAction.ADD, null,
                 null, seq, null, DUTY_OFF, null, receiptNo, reason, operator));
         return row;
     }
@@ -713,8 +840,8 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
      * 结果编号重排：只有「全员都接待过一遍」且「刚才上钟的是队头」才重排回 1..n，
      * 否则一路往后延（3 号做了就变 6 号），跟店里的口径一致。
      */
-    private void maybeRenumber(String day, Long shopId, int assignedBeforeReceipt) {
-        List<ReceptionQueue> valid = sorted(rows(day, shopId));
+    private void maybeRenumber(String day, Long shopId, int assignedBeforeReceipt, int kind) {
+        List<ReceptionQueue> valid = sorted(rows(day, shopId, kind));
         if (valid.size() <= 1) {
             return;
         }
@@ -733,14 +860,14 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                 int before = nvl(q.getReceiptNo());
                 q.setReceiptNo((int) seqNo);
                 update.add(q);
-                logs.add(newLog(day, shopId, q.getMassagistId(), ReceptionQueueAction.RENO, null,
+                logs.add(newLog(day, shopId, q.getMassagistId(), kind, ReceptionQueueAction.RENO, null,
                         q.getSeq(), q.getSeq(), q.getOnDuty(), q.getOnDuty(), before, q.getReceiptNo(), "全员轮完，重排编号", null));
             }
         }
         if (!update.isEmpty()) {
             updateBatchById(update);
             saveLogs(logs);
-            log.info("轮牌编号重排 shop={} day={} 人数={}", shopId, day, update.size());
+            log.info("轮牌编号重排 shop={} day={} kind={} 人数={}", shopId, day, kind, update.size());
         }
     }
 
@@ -750,8 +877,8 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
      * <p>以前只有代码里 skipMassagist 的 debug 日志，库里查不到，
      * 于是「跳过 2 号派给 4 号」看起来就像系统乱排。现在直接落在上钟流水上。</p>
      */
-    private String skipNote(String day, Long shopId, Long detailId, Long massagistId) {
-        List<ReceptionQueue> ordered = sorted(rows(day, shopId));
+    private String skipNote(String day, Long shopId, Long detailId, Long massagistId, int kind) {
+        List<ReceptionQueue> ordered = sorted(rows(day, shopId, kind));
         int index = -1;
         for (int i = 0; i < ordered.size(); i++) {
             if (massagistId.equals(ordered.get(i).getMassagistId())) {
@@ -804,11 +931,12 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         return note.length() > 200 ? note.substring(0, 200) : note;
     }
 
-    private List<ReceptionQueue> rows(String day, Long shopId) {
+    private List<ReceptionQueue> rows(String day, Long shopId, int kind) {
         LocalDate date = parseDay(day);
         return list(new LambdaQueryWrapper<ReceptionQueue>()
                 .eq(ReceptionQueue::getQueueDate, date)
                 .eq(ReceptionQueue::getShopId, shopId)
+                .eq(ReceptionQueue::getQueueKind, kind)
                 .orderByAsc(ReceptionQueue::getSeq)
                 .orderByAsc(ReceptionQueue::getId));
     }
@@ -821,6 +949,27 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 值班区展示口径：值班的人按点值班的先后排（dutyTime，先点的在上），没点值班时间的按 seq 兜底；
+     * 休息的人按派单顺序垫在后面。派单不按这个顺序，派单只认 {@link #sorted}。
+     */
+    private List<ReceptionQueue> dutySorted(List<ReceptionQueue> list) {
+        List<ReceptionQueue> valid = list.stream()
+                .filter(q -> Objects.equals(q.getValid(), VALID))
+                .collect(Collectors.toList());
+        List<ReceptionQueue> duty = valid.stream()
+                .filter(this::isOnDuty)
+                .sorted(Comparator.comparing((ReceptionQueue q) -> q.getDutyTime() == null ? LocalDateTime.MAX : q.getDutyTime())
+                        .thenComparingLong(q -> nvl(q.getSeq())))
+                .collect(Collectors.toList());
+        List<ReceptionQueue> rest = sorted(valid).stream()
+                .filter(q -> !isOnDuty(q))
+                .collect(Collectors.toList());
+        List<ReceptionQueue> all = new ArrayList<>(duty);
+        all.addAll(rest);
+        return all;
+    }
+
     private boolean isDutyActive(List<ReceptionQueue> list) {
         // 一个人都没点值班时按旧口径全员轮（排班表顺序），点了之后才区分值班区/休息区
         return list.stream().anyMatch(this::isOnDuty);
@@ -830,10 +979,11 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         return Objects.equals(q.getOnDuty(), DUTY_ON);
     }
 
-    private ReceptionQueue newRow(String day, Long shopId, Long massagistId, long seq, int receiptNo, int source) {
+    private ReceptionQueue newRow(String day, Long shopId, Long massagistId, long seq, int receiptNo, int source, int kind) {
         ReceptionQueue row = new ReceptionQueue();
         row.setQueueDate(parseDay(day));
         row.setShopId(shopId);
+        row.setQueueKind(kind);
         row.setMassagistId(massagistId);
         row.setSeq(seq);
         row.setReceiptNo(receiptNo);
@@ -844,12 +994,13 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         return row;
     }
 
-    private ReceptionQueueLog newLog(String day, Long shopId, Long massagistId, ReceptionQueueAction action, Long detailId,
+    private ReceptionQueueLog newLog(String day, Long shopId, Long massagistId, int kind, ReceptionQueueAction action, Long detailId,
                                      Long beforeSeq, Long afterSeq, Integer beforeDuty, Integer afterDuty,
                                      Integer beforeReceiptNo, Integer afterReceiptNo, String reason, String operator) {
         ReceptionQueueLog logRow = new ReceptionQueueLog();
         logRow.setQueueDate(parseDay(day));
         logRow.setShopId(shopId);
+        logRow.setQueueKind(kind);
         logRow.setMassagistId(massagistId);
         logRow.setAction(action.getValue());
         logRow.setDetailId(detailId);
@@ -878,6 +1029,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         logs.forEach(queueLogMapper::insert);
     }
 
+    /** 这一单最新的一次上钟流水（不分轮牌类型：回位时要靠它判断推的是哪一队） */
     private ReceptionQueueLog latestAssignLog(String day, Long shopId, Long detailId) {
         List<ReceptionQueueLog> list = queueLogMapper.selectList(new LambdaQueryWrapper<ReceptionQueueLog>()
                 .eq(ReceptionQueueLog::getQueueDate, parseDay(day))
@@ -888,17 +1040,19 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         return CollectionUtils.isEmpty(list) ? null : list.get(0);
     }
 
-    private int assignedLogCount(String day, Long shopId, Long detailId) {
-        return countLog(day, shopId, detailId, ReceptionQueueAction.ASSIGN.getValue(), ReceptionQueueAction.GRAB.getValue());
+    private int assignedLogCount(String day, Long shopId, Long detailId, int kind) {
+        return countLog(day, shopId, detailId, kind,
+                ReceptionQueueAction.ASSIGN.getValue(), ReceptionQueueAction.GRAB.getValue());
     }
 
-    private int countLog(String day, Long shopId, Long detailId, String... actions) {
+    private int countLog(String day, Long shopId, Long detailId, int kind, String... actions) {
         if (detailId == null) {
             return 0;
         }
         return queueLogMapper.selectCount(new LambdaQueryWrapper<ReceptionQueueLog>()
                 .eq(ReceptionQueueLog::getQueueDate, parseDay(day))
                 .eq(ReceptionQueueLog::getShopId, shopId)
+                .eq(ReceptionQueueLog::getQueueKind, kind)
                 .eq(ReceptionQueueLog::getDetailId, detailId)
                 .in(ReceptionQueueLog::getAction, (Object[]) actions)).intValue();
     }
@@ -969,7 +1123,13 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         return day == null ? LocalDate.now() : LocalDate.parse(day);
     }
 
-    private String lockKey(String day, Long shopId) {
-        return ("receptionQueue:" + day + ":" + shopId).intern();
+    /** 两套队列各锁各的：接待单上钟不该挡住服务单上钟 */
+    private String lockKey(String day, Long shopId, int kind) {
+        return ("receptionQueue:" + day + ":" + shopId + ":" + kind).intern();
+    }
+
+    /** 老数据没有 queue_kind，按服务单算 */
+    private int kindOf(Integer kind) {
+        return kind == null ? KIND_SERVICE : kind;
     }
 }

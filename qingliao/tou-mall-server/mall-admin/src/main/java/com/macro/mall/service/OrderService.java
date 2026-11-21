@@ -4702,7 +4702,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         orderDetailDto.setCustomerId(curCustomerId);
         orderDetailDto.setPayType(OrderPayType.QR_CODE.getValue());
         orderDetailDto.setAppointmentType(AppointmentType.PHONE.getValue());
-        orderDetailDto.setIsUpdateSort(false);
+        //注意：这里不能置 false，否则小程序下单后系统派出的疗愈师不计入轮次、轮牌不会前进(保持默认计入口径)
         orderDetailDto.setCardimage("https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/file/miniImage/20260409/bba38cae-eff8-4c0b-b90c-bf77bb098c7c%28._.%29%E5%88%B8%E7%A7%8D%20%287%29.png");
 
         OrderDetailDto dto=new OrderDetailDto();

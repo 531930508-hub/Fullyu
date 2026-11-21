@@ -19,6 +19,9 @@ import java.time.LocalDateTime;
 @ApiModel(value = "ReceptionBoardItem", description = "轮牌看板")
 public class ReceptionBoardItem {
 
+    @ApiModelProperty("轮牌类型 0服务单轮牌 1接待单轮牌")
+    private Integer queueKind;
+
     @ApiModelProperty("疗愈师id")
     private Long massagistId;
 
@@ -28,11 +31,21 @@ public class ReceptionBoardItem {
     @ApiModelProperty("结果编号（给人看的号码）")
     private Integer receiptNo;
 
-    @ApiModelProperty("排序键")
+    @ApiModelProperty("排序键（派单的唯一依据）")
     private Long seq;
 
     @ApiModelProperty("1值班 0休息/未值班")
     private Integer onDuty;
+
+    @ApiModelProperty("值班区序号（1..n，按点值班先后；不在值班区为空）")
+    private Integer dutyNo;
+
+    @ApiModelProperty("派单顺序（1..n，按 seq；下一个接单的人 = 1）")
+    private Integer dispatchNo;
+
+    @ApiModelProperty("最近一次点值班的时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime dutyTime;
 
     @ApiModelProperty("是否在服务中")
     private Boolean busy;

@@ -221,7 +221,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     s.setFromOrderId(fromOrderId);
                 }
                 if (isCreate) {
-                    s.setIsUpdateSort(orderDetailDto.getIsUpdateSort());
+                    s.setIsUpdateSort(resolveIsUpdateSort(orderDetailDto, s.getMassagistId()));
                 }
                 //加钟是原单的延续，不占新一轮轮牌（视同指定疗愈师）
                 if (isAddService) {
@@ -238,6 +238,23 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 updateMassagistSort(detailList, DateUtil.toYYYYMMDD(startTime), shopId);//更新技师排序
             }
         }
+    }
+
+    /**
+     * 新单这条明细要不要计入轮次：
+     * 系统派单（前端没指定疗愈师，由排队算法按轮牌顺序派）默认计入轮次；只有后台手动指定疗愈师时，
+     * 前端开关才会传 false，「不计入轮次」才真正跳过该疗愈师的轮牌（指定/点钟单不占一轮）。
+     * 注意前端其它入口（小程序、接待单、后台加钟）不传该字段，这里不能按 false 处理，否则他们的单子会不进轮牌。
+     */
+    private Boolean resolveIsUpdateSort(OrderDetailDto orderDetailDto, Long massagistId) {
+        if (orderDetailDto.getIsUpdateSort() == null) {
+            return true;
+        }
+        if (!Boolean.TRUE.equals(orderDetailDto.getIsUpdateSort())) {
+            return false;
+        }
+        //单子没派到人（无可用疗愈师）也无从占轮次
+        return massagistId != null;
     }
 
     /**
@@ -2376,7 +2393,9 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 log.info("接待单不计入轮次（reception.queue.reception-counts-round=false）shop={} start={}", shopId, startTime);
             }
             if (receptionCountsRound && !CollectionUtils.isEmpty(assignedList)) {
-                roundScheduleService.updateByDetailList(assignedList, DateUtil.toYYYYMMDD(startTime), shopId);
+                // 接待单推的是「接待单轮牌」那一队：服务单队的位置、结果编号不因为接待而变
+                roundScheduleService.updateByDetailList(assignedList, DateUtil.toYYYYMMDD(startTime), shopId, true,
+                        ReceptionQueueService.KIND_RECEPTION);
             }
         }
     }
@@ -2509,8 +2528,6 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         }
 
         List<Long> availableMassagistIdList = availableMassagistList.stream().map(MassagistSchedules::getMassagistId).collect(Collectors.toList());
-        // 空闲疗愈师排序
-        List<Long> sortedMassagistIdList = sortMassagist(availableMassagistIdList, startTime, endTime, shopId, personCount);
 
         //疗愈师接待情况
         Map<Long, Integer> projectCountMap = detailList.stream().filter(s -> projectId.equals(s.getProjectId())).collect(Collectors.groupingBy(OrderDetail::getMassagistId, Collectors.collectingAndThen(Collectors.toList(), List::size)));
@@ -2519,8 +2536,11 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         List<Long> userJiedan=new ArrayList<>();
         //定义不可以接单的列表
         List<Long> userNotJiedan=new ArrayList<>();
-        //获取排班列表顺序
-        sortedMassagistIdList= massagistSchedulesService.getMassagistSchedulesList(date, shopId);
+        // 接待单按「接待单轮牌」的顺序取人：谁先轮到接待谁上，和服务单那一队互不影响；队列还没起来时退回班次顺序
+        List<Long> receptionOrder = roundScheduleService.receptionOrder(shopId, date, ReceptionQueueService.KIND_RECEPTION);
+        List<Long> schedulesOrder = CollectionUtils.isEmpty(receptionOrder)
+                ? massagistSchedulesService.getMassagistSchedulesList(date, shopId) : receptionOrder;
+        List<Long> sortedMassagistIdList = schedulesOrder;
         sortedMassagistIdList.forEach(id -> {
             if(availableMassagistIdList.contains(id)){
                 userJiedan.add(id);
@@ -3059,7 +3079,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 s.setOrderId(orderDetailDto.getOrderId());
                 s.setCustomerId(orderDetailDto.getCustomerId());
                 if (isCreate) {
-                    s.setIsUpdateSort(orderDetailDto.getIsUpdateSort());
+                    s.setIsUpdateSort(resolveIsUpdateSort(orderDetailDto, s.getMassagistId()));
                 }
             });
             if (CollectionUtils.isEmpty(detailList)) {
