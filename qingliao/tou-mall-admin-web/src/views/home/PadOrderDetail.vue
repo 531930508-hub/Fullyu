@@ -165,13 +165,15 @@
             class="btn-B"
             @click="sendMessageSMS(orderDetail.orderId)">发送取消短信
           </el-button>
+          <!-- 未付款（含仅退款后回到未付款的单）无论预约到哪一步都能取消；已付款的只在预约未完成前可取消 -->
           <el-button
-            v-if="orderDetail.order && (((orderDetail.order.state==1 || orderDetail.order.state==2) && orderDetail.order.appointmentState==1) || orderDetail.order.appointmentState==0 || (orderDetail.order.state==0 && orderDetail.order.appointmentState==1))"
+            v-if="orderDetail.order && (orderDetail.order.state==0 || ((orderDetail.order.state==1 || orderDetail.order.state==2) && (orderDetail.order.appointmentState==0 || orderDetail.order.appointmentState==1)))"
             class="btn-B"
             @click="cancelOrder(orderDetail.order)">取消订单
           </el-button>
+          <!-- 已退款单的钱已经退完，这里只补取消预约，所以只要预约还没取消就能点 -->
           <el-button
-            v-if="orderDetail.order && orderDetail.order.state==6 && (orderDetail.order.appointmentState==2 || orderDetail.order.appointmentState==1)"
+            v-if="orderDetail.order && orderDetail.order.state==6 && orderDetail.order.appointmentState!=3"
             class="btn-B"
             @click="cancelRefundOrder(orderDetail.order)">已退款取消
           </el-button>
