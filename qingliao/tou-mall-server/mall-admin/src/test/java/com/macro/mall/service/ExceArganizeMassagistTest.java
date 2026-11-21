@@ -98,8 +98,9 @@ class ExceArganizeMassagistTest {
 
         RoundSchedule pick = new RoundSchedule();
         pick.setMassagistId(11L);
+        // 只读排序（save=false）：新一轮落库/移位统一由 updateByDetailList 做（OrderDetailService.sortMassagist）
         RoundScheduleService roundScheduleService = mock(RoundScheduleService.class);
-        when(roundScheduleService.findSortMassagistIdList(anyString(), eq(1L), eq(1), anyList(), eq(true)))
+        when(roundScheduleService.findSortMassagistIdList(anyString(), eq(1L), eq(1), anyList(), eq(false)))
                 .thenReturn(Arrays.asList(pick));
         ReflectionTestUtils.setField(service, "roundScheduleService", roundScheduleService);
 
@@ -118,7 +119,7 @@ class ExceArganizeMassagistTest {
         // 系统指派不是点名，历史点钟标记要清掉
         assertEquals(0, detail.getSpecifyType());
         assertEquals(11L, detail.getMassagistId());
-        verify(roundScheduleService).updateByDetailList(anyList(), anyString(), eq(1L));
+        verify(roundScheduleService).updateByDetailList(anyList(), anyString(), eq(1L), eq(true));
     }
 
     @Test
@@ -203,7 +204,7 @@ class ExceArganizeMassagistTest {
         RoundSchedule dirty = new RoundSchedule();
         dirty.setMassagistId(0L);
         RoundScheduleService roundScheduleService = mock(RoundScheduleService.class);
-        when(roundScheduleService.findSortMassagistIdList(anyString(), eq(1L), eq(1), anyList(), eq(true)))
+        when(roundScheduleService.findSortMassagistIdList(anyString(), eq(1L), eq(1), anyList(), eq(false)))
                 .thenReturn(Arrays.asList(dirty));
         ReflectionTestUtils.setField(service, "roundScheduleService", roundScheduleService);
 
