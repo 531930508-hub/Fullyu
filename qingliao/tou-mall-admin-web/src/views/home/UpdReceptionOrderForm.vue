@@ -56,6 +56,12 @@
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer" style="float: right">
+        <el-tooltip placement="top"
+                    content="接待单固定计入接待队轮次：改单后重新派单，该疗愈师排到接待队队尾；服务单队顺序不受影响">
+          <span class="m-r-10" style="color:#909399">
+            <i class="el-icon-info m-r-10"></i>接待固定计入接待轮次（不影响服务单轮次）
+          </span>
+        </el-tooltip>
         <el-button @click="handleClose" class="btn-B m-r-10">取 消</el-button>
         <el-button type="primary" @click="onSubmit" class="btn-A">确 定</el-button>
       </div>
@@ -109,7 +115,8 @@ export default {
           let date = dateUtil.format(startTime, "YYYY-MM-DD")
           let time = dateUtil.format(startTime, "HH:mm")
           let shopId = res.data.shopId
-          let massagistId = res.data.orderDetailList[0].massagistId
+          let detail = (res.data.orderDetailList || [])[0] || {}
+          let massagistId = detail.massagistId
           let durationMinutes = res.data.duration
           let payType = res.data.payType
           let state = res.data.state
@@ -123,7 +130,8 @@ export default {
             time,
             payType,
             state,
-            isUpdateSort: false
+            // 接待单固定计入接待队轮次，历史数据里被关掉的也一并纠正
+            isUpdateSort: true
           }
           await this.initDateToBeSelected()
           await this.fetchTimeList()

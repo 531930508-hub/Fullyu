@@ -52,4 +52,49 @@ class AdminShopContextTest {
         assertEquals(2L,service.getAdminByUsername("test-only").getShopId());
         assertEquals(1L,account.getShopId());
     }
+
+    @Test void accountAuthorizedShopsAreMergedWithArchiveShop() {
+        account.setShopIdArr("[1,2,3]");
+        when(cache.getAdmin("test-only")).thenReturn(account);
+        UmsAdmin scoped = service.getAdminByUsername("test-only");
+        assertEquals(1L, scoped.getShopId());
+        assertEquals("[1,2,3]", scoped.getShopIdArr());
+    }
+
+    @Test void authorizedShopsIgnoreBlankAndIllegalValues() {
+        account.setShopIdArr("[ 1 , x ,0 ]");
+        when(cache.getAdmin("test-only")).thenReturn(account);
+        assertEquals("[1]", service.getAdminByUsername("test-only").getShopIdArr());
+    }
+
+    @Test void transferKeepsBothHomeAndTargetShops() {
+        when(cache.getAdmin("test-only")).thenReturn(account);
+        when(schedules.getOnlyOne(any(com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper.class))).thenReturn(transfer());
+        UmsAdmin scoped = service.getAdminByUsername("test-only");
+        assertEquals(2L, scoped.getShopId());
+        assertEquals("[1,2]", scoped.getShopIdArr());
+    }
+
+    @Test void transferOnlyAppliesInsideItsTimeWindow() {
+        MassagistSchedules t = transfer();
+        t.setStartTime(LocalTime.of(9, 0));
+        t.setEndTime(LocalTime.of(12, 0));
+        assertFalse(active(t, LocalTime.of(8, 59)));
+        assertTrue(active(t, LocalTime.of(9, 0)));
+        assertTrue(active(t, LocalTime.of(11, 59)));
+        assertFalse(active(t, LocalTime.of(12, 0)));
+        assertFalse(active(t, LocalTime.of(20, 0)));
+    }
+
+    @Test void transferWithoutWindowOrTargetIsNotSpecialCased() {
+        MassagistSchedules allDay = transfer(); allDay.setStartTime(null); allDay.setEndTime(null);
+        assertTrue(active(allDay, LocalTime.of(20, 0)));
+        MassagistSchedules noTarget = transfer(); noTarget.setTargetShopId(0L);
+        assertFalse(active(noTarget, LocalTime.of(10, 0)));
+        assertFalse(active((MassagistSchedules) null, LocalTime.of(10, 0)));
+    }
+
+    private boolean active(MassagistSchedules transfer, LocalTime now) {
+        return ReflectionTestUtils.invokeMethod(service, "isTransferActive", transfer, now);
+    }
 }

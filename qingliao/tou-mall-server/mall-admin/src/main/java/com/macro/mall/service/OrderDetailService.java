@@ -48,13 +48,6 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDetail> {
-    /**
-     * 接待单是否计入轮次（默认计入，与现有门店口径一致）。
-     * 接待单每 15 分钟自动生成一张，也占一次上钟位置；门店若认为「接待不算轮次」，
-     * 把这个开关关掉即可，不用改代码。
-     */
-    @org.springframework.beans.factory.annotation.Value("${reception.queue.reception-counts-round:true}")
-    boolean receptionCountsRound = true;
     @Autowired
     ProductService productService;
     @Autowired
@@ -221,7 +214,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     s.setFromOrderId(fromOrderId);
                 }
                 if (isCreate) {
-                    s.setIsUpdateSort(orderDetailDto.getIsUpdateSort());
+                    s.setIsUpdateSort(resolveIsUpdateSort(orderDetailDto, s.getMassagistId()));
                 }
                 //加钟是原单的延续，不占新一轮轮牌（视同指定疗愈师）
                 if (isAddService) {
@@ -238,6 +231,27 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 updateMassagistSort(detailList, DateUtil.toYYYYMMDD(startTime), shopId);//更新技师排序
             }
         }
+    }
+
+    /**
+     * 新单这条明细要不要计入轮次：
+     * 服务单只要前台没指定疗愈师（由排队算法按轮牌顺序派）就一律计入轮次，
+     * 接受不了的「不计入」只存在于「后台手动指定了疗愈师」的特殊调整场景——此时前端才给这个开关，
+     * 传 false 才真正跳过该疗愈师的轮牌（指定/点钟单不占一轮）。
+     * 注意前端其它入口（小程序、接待单、后台加钟）不传该字段，这里不能按 false 处理，否则他们的单子会不进轮牌。
+     */
+    private Boolean resolveIsUpdateSort(OrderDetailDto orderDetailDto, Long massagistId) {
+        //单子没派到人（无可用疗愈师）也无从占轮次
+        if (massagistId == null) {
+            return true;
+        }
+        //这一位不是前台指定的人（系统按轮牌顺序派的）：固定计入，不接受「不计入」
+        List<Long> chosen = orderDetailDto.getMassagistIdList();
+        if (CollectionUtils.isEmpty(chosen) || !chosen.contains(massagistId)) {
+            return true;
+        }
+        //只有手动指定了疗愈师的特殊调整，才允许前台关掉「计入轮次」
+        return !Boolean.FALSE.equals(orderDetailDto.getIsUpdateSort());
     }
 
     /**
@@ -1801,6 +1815,9 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
 
             // 已完成/已取消的明细只是运营动作的事后调整：只挪它自己，不校验冲突、不互换、不动别人的排期
             if (isFinishedState(orderDetail.getState())) {
+                if (swapWithId != null) {
+                    throw new BusinessException("本单已完成或已取消，本次未调整，请刷新看板");
+                }
                 if (bedId != null) {
                     orderDetail.setBedId(bedId);
                     orderDetail.setIsLockBed(true);
@@ -1824,7 +1841,12 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 }
                 //目标床位在该时段已经有单：本次拖动直接不生效，不去改原来那单
                 throwIfOccupied(conflicts, bedLabel(bedId));
-                applyBedSwitch(orderDetail, bedId);
+                if (oldMassagistId != null) {
+                    throwIfOccupied(findOverlappingSchedules(shopId, oldMassagistId, null,
+                            startDateTime, endDateTime, id), massagistLabel(oldMassagistId));
+                }
+                Project switchedProject = resolveBedSwitchProject(orderDetail, bedId);
+                applyBedSwitch(orderDetail, bedId, switchedProject);
             } else if (massagistId != null) {
                 String massagistName = massagistService.findNameById(massagistId);
                 List<OrderDetail> conflicts = findOverlappingSchedules(shopId, massagistId, null, startDateTime, endDateTime, id);
@@ -1871,17 +1893,17 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
      * 落点同时压着多条单时无从判断跟谁换，仍按"占用即失败"处理。
      */
     private OrderDetail findSwapTarget(List<OrderDetail> conflicts, Long swapWithId) {
-        if (swapWithId == null || CollectionUtils.isEmpty(conflicts)) {
+        if (swapWithId == null) {
             return null;
         }
-        OrderDetail target = null;
-        for (OrderDetail conflict : conflicts) {
-            if (!swapWithId.equals(conflict.getId())) {
-                return null;
-            }
-            target = conflict;
+        OrderDetail target = getById(swapWithId);
+        if (target != null && isFinishedState(target.getState())) {
+            throw new BusinessException("目标订单已完成或已取消，本次未调整，请刷新看板");
         }
-        return target;
+        if (conflicts.size() != 1 || !swapWithId.equals(conflicts.get(0).getId())) {
+            throw new BusinessException("目标排期已变化或存在其他预约，本次未调整，请刷新看板后重试");
+        }
+        return conflicts.get(0);
     }
 
     /**
@@ -1932,6 +1954,21 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     bedLabel(targetBedId));
             throwIfSwapBlocked(findOverlappingSchedules(shopId, null, sourceBedId, sourceStart, targetNewEnd, swapIds),
                     bedLabel(sourceBedId));
+            if (sourceMassagistId != null) {
+                throwIfSwapBlocked(findOverlappingSchedules(shopId, sourceMassagistId, null,
+                        targetStart, sourceNewEnd, swapIds), massagistLabel(sourceMassagistId));
+            }
+            if (target.getMassagistId() != null) {
+                throwIfSwapBlocked(findOverlappingSchedules(shopId, target.getMassagistId(), null,
+                        sourceStart, targetNewEnd, swapIds), massagistLabel(target.getMassagistId()));
+            }
+            boolean sameBed = Objects.equals(targetBedId, sourceBedId);
+            boolean sameMassagist = sourceMassagistId != null
+                    && Objects.equals(sourceMassagistId, target.getMassagistId());
+            if ((sameBed || sameMassagist)
+                    && BookingAvailability.overlaps(targetStart, sourceNewEnd, sourceStart, targetNewEnd, 0)) {
+                throw new BusinessException("两单时长不同，互换后床位或疗愈师时段重叠，本次未调整");
+            }
         } else if (targetMassagistId != null) {
             throwIfSwapBlocked(findOverlappingSchedules(shopId, targetMassagistId, null, targetStart, sourceNewEnd, swapIds),
                     massagistLabel(targetMassagistId));
@@ -1943,8 +1980,10 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
 
         List<OrderDetail> massagistChanged = Collections.emptyList();
         if (targetBedId != null) {
-            applyBedSwitch(source, targetBedId);
-            applyBedSwitch(target, sourceBedId);
+            Project sourceProject = resolveBedSwitchProject(source, targetBedId);
+            Project targetProject = resolveBedSwitchProject(target, sourceBedId);
+            applyBedSwitch(source, targetBedId, sourceProject);
+            applyBedSwitch(target, sourceBedId, targetProject);
         } else {
             //两人各自原来的床位回到对方时段后可能被第三方占着：能换同类型空床就换，换不了就不硬来
             relocateBedForSwap(source, targetStart, sourceNewEnd, shopId, swapIds);
@@ -1977,50 +2016,52 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         EarlyBirdPrice.assertNotEarlier(order.getPriceSource(), bookedDate, newStart.toLocalDate());
     }
 
-    /**
-     * 换床位：跨类型（湿区↔干区）等于换项目，沿用单次拖动时的口径——项目跟着换、原疗愈师清空、轮次位置回退。
-     * 单次拖动和互换都走这里，保证两条路径处理一致。
-     */
-    private void applyBedSwitch(OrderDetail detail, Long newBedId) {
-        Long oldBedId = detail.getBedId();
-        //手动拖过的单都标记床位已锁定，避免系统自动分配又把它挪走（同床换时段也照样标记）
+    private Project resolveBedSwitchProject(OrderDetail detail, Long newBedId) {
+        if (Objects.equals(newBedId, detail.getBedId())) {
+            return null;
+        }
+        Map<Long, Integer> types = bedService.findTypeMapByIdList(Arrays.asList(newBedId, detail.getBedId()));
+        Integer oldType = types.get(detail.getBedId());
+        Integer newType = types.get(newBedId);
+        if (oldType == null || newType == null || oldType.equals(newType)) {
+            return null;
+        }
+        Long projectId = projectService.findIdMapByTypeList(Arrays.asList(oldType, newType)).get(newType);
+        Project project = projectId == null ? null : projectService.getById(projectId);
+        if (project == null) {
+            throw new BusinessException("目标区域没有对应服务项目，本次未调整，请检查项目配置");
+        }
+        if (detail.getMassagistId() != null) {
+            // 原订单已经过门店授权，跨店排班的原疗愈师仅在此读取技能，不改变人员归属。
+            Massagist massagist = massagistService.getByIdAcrossShops(detail.getMassagistId());
+            List<Long> skills = massagist == null || ObjectUtils.isEmpty(massagist.getProjectArr())
+                    ? Collections.emptyList() : JSON.parseArray(massagist.getProjectArr(), Long.class);
+            if (skills == null || !skills.contains(projectId)) {
+                String name = massagist == null ? String.valueOf(detail.getMassagistId()) : massagist.getName();
+                throw new BusinessException("疗愈师「" + name + "」未认证「" + project.getTitle() + "」，本次未调整");
+            }
+        }
+        return project;
+    }
+
+    private void applyBedSwitch(OrderDetail detail, Long newBedId, Project project) {
         detail.setIsLockBed(true);
-        if (Objects.equals(newBedId, oldBedId)) {
+        detail.setBedId(newBedId);
+        if (project == null) {
             return;
         }
-        detail.setBedId(newBedId);
-        //换床位可能涉及到换项目
-        Map<Long, Integer> typeMap = bedService.findTypeMapByIdList(Arrays.asList(newBedId, oldBedId));
-        Integer oldType = typeMap.get(oldBedId);
-        Integer type = typeMap.get(newBedId);
-        if (oldType != null && type != null && !oldType.equals(type)) {
-            Map<Integer, Long> projectIdMap = projectService.findIdMapByTypeList(Arrays.asList(oldType, type));
-            detail.setProjectId(projectIdMap.getOrDefault(type, detail.getProjectId()));
-
-            if (detail.getMassagistId() != null) {
-                //换项目后原疗愈师技能未必匹配：清空疗愈师并回退轮次（updateById 不写 null，所以用 UpdateWrapper）
-                UpdateWrapper<OrderDetail> updateWrapper = new UpdateWrapper<>();
-                updateWrapper.eq("id", detail.getId())
-                        .set("massagist_id", null);
-                detail.setMassagistId(null);
-                update(detail, updateWrapper);
-                if (Boolean.TRUE.equals(detail.getIsUpdateSort())) {
-                    recoverSortId(Collections.singletonList(detail), RoundScheduleState.UPDATE);
-                }
+        detail.setProjectId(project.getId());
+        Order order = orderService.getById(detail.getOrderId());
+        if (order != null) {
+            if (project.getType() == 2) {
+                order.setProductId(5L);
+                order.setProductTitle("全感舒筋");
             }
-            //对订单order 中的产品id 进行修改
-            Order order = orderService.getById(detail.getOrderId());
-            if (order != null) {
-                if (type == 2) {
-                    order.setProductId(5L);
-                    order.setProductTitle("全感舒筋");
-                }
-                if (type == 1) {
-                    order.setProductId(4L);
-                    order.setProductTitle("头部水疗");
-                }
-                orderService.updateById(order);
+            if (project.getType() == 1) {
+                order.setProductId(4L);
+                order.setProductTitle("头部水疗");
             }
+            orderService.updateById(order);
         }
     }
 
@@ -2328,6 +2369,10 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
     /**
      * 构建订单详情
      *
+     * <p><b>接待单固定计入接待队轮次</b>（不提供开关，也不影响服务单轮次）：前台开接待单时不再让人选
+     * 「计不计入轮次」，系统生成接待单时也不传这个字段。唯一的例外是 {@code ReceptionScheduled}
+     * 每 15 分钟生成的那张系统占位接待——它显式传 false（没有真实客户，占了会把整队空推一轮）。</p>
+     *
      * @param orderDetailDto
      */
     public void createReceptionDetail(OrderDetailDto orderDetailDto) {
@@ -2345,11 +2390,10 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     .filter(d -> Boolean.TRUE.equals(d.getIsUpdateSort()))
                     .filter(d -> d.getMassagistId() != null && d.getId() != null)
                     .collect(Collectors.toList());
-            if (!receptionCountsRound) {
-                log.info("接待单不计入轮次（reception.queue.reception-counts-round=false）shop={} start={}", shopId, startTime);
-            }
-            if (receptionCountsRound && !CollectionUtils.isEmpty(assignedList)) {
-                roundScheduleService.updateByDetailList(assignedList, DateUtil.toYYYYMMDD(startTime), shopId);
+            if (!CollectionUtils.isEmpty(assignedList)) {
+                // 接待单推的是「接待单轮牌」那一队：服务单队的位置、结果编号不因为接待而变
+                roundScheduleService.updateByDetailList(assignedList, DateUtil.toYYYYMMDD(startTime), shopId, true,
+                        ReceptionQueueService.KIND_RECEPTION);
             }
         }
     }
@@ -2482,8 +2526,6 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         }
 
         List<Long> availableMassagistIdList = availableMassagistList.stream().map(MassagistSchedules::getMassagistId).collect(Collectors.toList());
-        // 空闲疗愈师排序
-        List<Long> sortedMassagistIdList = sortMassagist(availableMassagistIdList, startTime, endTime, shopId, personCount);
 
         //疗愈师接待情况
         Map<Long, Integer> projectCountMap = detailList.stream().filter(s -> projectId.equals(s.getProjectId())).collect(Collectors.groupingBy(OrderDetail::getMassagistId, Collectors.collectingAndThen(Collectors.toList(), List::size)));
@@ -2492,8 +2534,11 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         List<Long> userJiedan=new ArrayList<>();
         //定义不可以接单的列表
         List<Long> userNotJiedan=new ArrayList<>();
-        //获取排班列表顺序
-        sortedMassagistIdList= massagistSchedulesService.getMassagistSchedulesList(date, shopId);
+        // 接待单按「接待单轮牌」的顺序取人：谁先轮到接待谁上，和服务单那一队互不影响；队列还没起来时退回班次顺序
+        List<Long> receptionOrder = roundScheduleService.receptionOrder(shopId, date, ReceptionQueueService.KIND_RECEPTION);
+        List<Long> schedulesOrder = CollectionUtils.isEmpty(receptionOrder)
+                ? massagistSchedulesService.getMassagistSchedulesList(date, shopId) : receptionOrder;
+        List<Long> sortedMassagistIdList = schedulesOrder;
         sortedMassagistIdList.forEach(id -> {
             if(availableMassagistIdList.contains(id)){
                 userJiedan.add(id);
@@ -2583,7 +2628,9 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             detail.setStartTime(startTime);
             detail.setEndTime(DateUtil.addTimeByMinutes(startTime, durationMinutes));
             detail.setOrderId(orderId);
-            detail.setIsUpdateSort(isUpdateSort);
+            // 接待单默认计入接待队轮次：调用方不传（老客户端/小程序）就按计入处理，
+            // 只有系统占位接待会显式传 false
+            detail.setIsUpdateSort(!Boolean.FALSE.equals(isUpdateSort));
             orderDetailList.add(detail);
         }
         return orderDetailList;
@@ -3032,7 +3079,7 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 s.setOrderId(orderDetailDto.getOrderId());
                 s.setCustomerId(orderDetailDto.getCustomerId());
                 if (isCreate) {
-                    s.setIsUpdateSort(orderDetailDto.getIsUpdateSort());
+                    s.setIsUpdateSort(resolveIsUpdateSort(orderDetailDto, s.getMassagistId()));
                 }
             });
             if (CollectionUtils.isEmpty(detailList)) {

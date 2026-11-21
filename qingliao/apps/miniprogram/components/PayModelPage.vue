@@ -241,7 +241,8 @@
 					<button class="btn btn-modify flex justify-center items-center " style="font-size: 32rpx;"
 						@click="handleConfirm">
 						{{ t('确认支付') }}
-						<view class="countdown-timer">
+						<!-- 没有真实截止时刻就不挂角标：宁可少一个倒计时，也不编一个假的支付窗口 -->
+						<view class="countdown-timer" v-if="hasDeadline">
 							{{ formattedCountdown }}
 						</view>
 					</button>
@@ -268,9 +269,10 @@
 	import payGroupApi from "../api/payGroup";
 	import payUtils from "../utils/payUtils";
 	import moment from "moment";
-	import constant from '../consts/constant'
 	import cookie from "../utils/cookieUtil"
 	import productApi from "../api/product"
+	import { serverNow } from "../utils/serverClock"
+	import { formatCountdownClock } from "../utils/unpaidOrders"
 
 	const {
 		proxy
@@ -287,7 +289,9 @@
 			type: Boolean,
 			default: false
 		},
-		countdown: {
+		// 这一单可支付的截止时刻（毫秒时间戳）。倒计时只从这个绝对时刻派生：
+		// 算不出截止时刻就不显示倒计时（见 hasDeadline），不再退回「凭空 300 秒」的兜底。
+		deadline: {
 			type: Number,
 			default: 0
 		}
@@ -687,36 +691,51 @@
 	// Emits
 	const emit = defineEmits(['update:visible', 'confirm', 'cancel']);
 
+	// 倒计时只由「这一单的绝对截止时刻」派生：没有截止时刻就没有倒计时。
+	// 老实现缺 deadline 时拿 constant.payCutDownSeconds(300) 兜底，等于客户端自己造了一个支付窗口：
+	// 「仅退款打回未付款」这类根本没有倒计时的单，会白走 5 分钟后弹「已到支付时限」。
 	const countdown = ref(0);
+	// 有没有真实截止时刻：既决定角标显不显示，也决定每秒要不要重算
+	const hasDeadline = ref(false);
+	// 窗口到时的提示位：到点只是停止倒计时并提示「以服务端为准」，
+	// 不能像老实现那样直接把弹框关掉——后端取消订单走 MQ 延迟消息，常常比倒计时晚，
+	// 这时候关掉弹框等于把一张还能付的单从用户手里抢走。
+	const payWindowEnded = ref(false);
+	let deadlineMs = 0;
 	let timer = null;
 
 	const formattedCountdown = computed(() => {
-		const seconds = Math.max(0, Math.floor(Number(countdown.value) || 0));
-		let hours = Math.floor(seconds / 3600);
-		let min = Math.floor((seconds % 3600) / 60);
-		let second = seconds % 60;
-
-		hours = hours < 10 ? '0' + hours : hours;
-		min = min < 10 ? '0' + min : min;
-		second = second < 10 ? '0' + second : second;
-
-		return t('倒计时：') + hours + ':' + min + ':' + second;
+		if (payWindowEnded.value) return t('已到支付时限');
+		// 数字部分与首页卡片、订单列表共用同一把尺子，避免三处各自补零后格式漂移
+		return t('倒计时：') + formatCountdownClock(countdown.value);
 	});
 
+	// 每次都从截止时刻重算，不做自减：切后台/锁屏时 setInterval 会被限流，自减会永久落后于真实时间
+	const refreshCountdown = () => {
+		const left = Math.ceil((deadlineMs - serverNow()) / 1000);
+		countdown.value = left > 0 ? left : 0;
+		return countdown.value;
+	};
+
 	const startCountdown = () => {
-		if (props.countdown) {
-			countdown.value = Math.max(0, Math.floor(Number(props.countdown) || 0));
-		} else {
-			countdown.value = constant.payCutDownSeconds;
+		payWindowEnded.value = false;
+		stopCountdown();
+		const deadline = Number(props.deadline);
+		deadlineMs = Number.isFinite(deadline) && deadline > 0 ? deadline : 0;
+		hasDeadline.value = deadlineMs > 0;
+		if (!hasDeadline.value) {
+			countdown.value = 0;
+			return;
 		}
-		if (timer) clearInterval(timer);
+		// 打开弹框时窗口已经过了（后端关单比倒计时晚，用户还可能付）：直接停在提示位，不伪造倒计时
+		if (refreshCountdown() <= 0) {
+			payWindowEnded.value = true;
+			return;
+		}
 		timer = setInterval(() => {
-			if (countdown.value > 0) {
-				countdown.value--;
-			} else {
-				stopCountdown();
-				handleCancel();
-			}
+			if (refreshCountdown() > 0) return;
+			stopCountdown();
+			payWindowEnded.value = true;
 		}, 1000);
 	};
 

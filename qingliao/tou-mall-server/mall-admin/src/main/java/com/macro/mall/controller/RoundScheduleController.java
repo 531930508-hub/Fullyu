@@ -2,6 +2,7 @@ package com.macro.mall.controller;
 
 import com.macro.mall.bo.AdminUserDetails;
 import com.macro.mall.common.api.CommonResult;
+import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.service.RoundScheduleService;
 import com.macro.mall.utils.DateUtil;
 import io.swagger.annotations.Api;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
 
 /**
@@ -45,9 +48,10 @@ public class RoundScheduleController {
     // ==================== 轮牌（接待排队） ====================
 
     @GetMapping("/queue/board")
-    @ApiOperation("轮牌看板：顺序、谁在忙、谁能抢单")
-    public CommonResult queueBoard(@RequestParam Long shopId, @RequestParam String date) {
-        return CommonResult.success(service.receptionBoard(shopId, date));
+    @ApiOperation("轮牌看板：顺序、谁在忙、谁能抢单（queueKind：0服务单轮牌 1接待单轮牌，不传按服务单）")
+    public CommonResult queueBoard(@RequestParam Long shopId, @RequestParam String date,
+                                   @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
+        return CommonResult.success(service.receptionBoard(shopId, date, queueKind));
     }
 
     @GetMapping("/queue/issues")
@@ -57,29 +61,46 @@ public class RoundScheduleController {
     }
 
     @GetMapping("/queue/next")
-    @ApiOperation("一键安排预览：下一单该谁上")
+    @ApiOperation("一键安排预览：下一单该谁上（startTime 传 yyyy-MM-dd HH:mm:ss）")
     public CommonResult queueNext(@RequestParam Long shopId,
                                   @RequestParam String startTime,
-                                  @RequestParam(required = false, defaultValue = "60") Integer durationMinutes) {
-        return CommonResult.success(service.nextMassagist(shopId, DateUtil.toYYYYMMDD(DateUtil.string2DateTime(startTime)),
-                DateUtil.string2DateTime(startTime), durationMinutes));
+                                  @RequestParam(required = false, defaultValue = "60") Integer durationMinutes,
+                                  @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
+        LocalDateTime start = parseStartTime(startTime);
+        return CommonResult.success(service.nextMassagist(shopId, DateUtil.toYYYYMMDD(start),
+                start, durationMinutes, queueKind));
+    }
+
+    /** 日期控件常给到分钟（yyyy-MM-dd HH:mm）或带 T，统一补成 yyyy-MM-dd HH:mm:ss；格式不对报业务错而不是 500 */
+    private LocalDateTime parseStartTime(String startTime) {
+        String text = startTime == null ? "" : startTime.trim().replace('T', ' ');
+        if (text.length() == 16) {
+            text = text + ":00";
+        }
+        try {
+            return DateUtil.string2DateTime(text);
+        } catch (DateTimeParseException | NullPointerException e) {
+            throw new BusinessException("开始时间格式不对，应为 yyyy-MM-dd HH:mm:ss");
+        }
     }
 
     @PostMapping("/queue/duty")
-    @ApiOperation("值班/下值班")
+    @ApiOperation("值班/下值班（queueKind：0服务单轮牌 1接待单轮牌）")
     public CommonResult duty(@RequestParam Long shopId,
                              @RequestParam String date,
                              @RequestParam Long massagistId,
-                             @RequestParam Boolean onDuty) {
-        return CommonResult.success(service.switchDuty(shopId, date, massagistId, Boolean.TRUE.equals(onDuty), operator()));
+                             @RequestParam Boolean onDuty,
+                             @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
+        return CommonResult.success(service.switchDuty(shopId, date, massagistId, Boolean.TRUE.equals(onDuty), operator(), queueKind));
     }
 
     @PostMapping("/queue/finish")
     @ApiOperation("接待完成（下钟，回到休息区，位置不变）")
     public CommonResult finish(@RequestParam Long shopId,
                                @RequestParam String date,
-                               @RequestParam Long massagistId) {
-        service.finishReception(shopId, date, massagistId, operator());
+                               @RequestParam Long massagistId,
+                               @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
+        service.finishReception(shopId, date, massagistId, operator(), queueKind);
         return CommonResult.success(null);
     }
 
@@ -88,8 +109,9 @@ public class RoundScheduleController {
     public CommonResult swap(@RequestParam Long shopId,
                              @RequestParam String date,
                              @RequestParam Long massagistIdA,
-                             @RequestParam Long massagistIdB) {
-        service.swapReceptionOrder(shopId, date, massagistIdA, massagistIdB, operator());
+                             @RequestParam Long massagistIdB,
+                             @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
+        service.swapReceptionOrder(shopId, date, massagistIdA, massagistIdB, operator(), queueKind);
         return CommonResult.success(null);
     }
 
@@ -97,8 +119,9 @@ public class RoundScheduleController {
     @ApiOperation("调店进店：插到队头")
     public CommonResult join(@RequestParam Long shopId,
                              @RequestParam String date,
-                             @RequestParam Long massagistId) {
-        service.joinReceptionQueue(shopId, date, massagistId, operator());
+                             @RequestParam Long massagistId,
+                             @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
+        service.joinReceptionQueue(shopId, date, massagistId, operator(), queueKind);
         return CommonResult.success(null);
     }
 

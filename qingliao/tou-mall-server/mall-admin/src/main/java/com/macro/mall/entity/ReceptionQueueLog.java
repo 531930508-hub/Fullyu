@@ -64,4 +64,7 @@ public class ReceptionQueueLog extends BaseEntity {
     @ApiModelProperty("操作人")
     private String operatorName;
 
+    @ApiModelProperty("轮牌类型 0服务单轮牌 1接待单轮牌")
+    private Integer queueKind;
+
 }

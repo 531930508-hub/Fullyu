@@ -1277,6 +1277,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
                 throw new BusinessException("订单不存在");
             }
             Integer state = order.getState();
+            Integer appointmentState = order.getAppointmentState();
             if (!(OrderState.NOT_PAY.getValue().equals(state) || OrderState.PAID_NOT_COMMENT.getValue().equals(state) || OrderState.PAID_COMMENTED.getValue().equals(state))) {
                 throw new BusinessException("订单状态验证不通过，无法取消订单");
             }
@@ -1309,8 +1310,10 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             }
             //取消后该自然日可能已无有效订单，从这天起重排到店编号
             refreshVisitNoFrom(order.getCustomerId(), serviceDateOfOrder(id));
-            //仅退款回到未付款的单也有真实预约在客人手机上，取消同样要发取消通知
-            if (!OrderState.NOT_PAY.getValue().equals(state) || order.getPayTime() != null) {
+            //仅退款回到未付款的单也有真实预约在客人手机上，取消同样要发取消通知；
+            //但预约已经做完的单只是后台把账关掉，不能再给客人推「预约已取消」
+            if ((!OrderState.NOT_PAY.getValue().equals(state) || order.getPayTime() != null)
+                    && !AppointmentState.FINISHED.getValue().equals(appointmentState)) {
                 handleBookingCancelNotice(id);
             }
             if (!BigDecimal.ZERO.equals(order.getIntegrationAmount())) {
@@ -4702,7 +4705,7 @@ public class OrderService extends BaseService<OrderMapper, Order> {
         orderDetailDto.setCustomerId(curCustomerId);
         orderDetailDto.setPayType(OrderPayType.QR_CODE.getValue());
         orderDetailDto.setAppointmentType(AppointmentType.PHONE.getValue());
-        orderDetailDto.setIsUpdateSort(false);
+        //注意：这里不能置 false，否则小程序下单后系统派出的疗愈师不计入轮次、轮牌不会前进(保持默认计入口径)
         orderDetailDto.setCardimage("https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/fully/file/miniImage/20260409/bba38cae-eff8-4c0b-b90c-bf77bb098c7c%28._.%29%E5%88%B8%E7%A7%8D%20%287%29.png");
 
         OrderDetailDto dto=new OrderDetailDto();

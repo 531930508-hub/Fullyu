@@ -511,6 +511,8 @@ const dict = {
 	'到期': '',
 	'会员已到期 · 续费后继续享三店会员价': 'Expired — renew to keep member prices at all 3 stores',
 	'倒计时：': 'Time left ',
+	'已到支付时限': 'Payment window closed',
+	'待确认': 'Checking',
 	'7 天退款窗口截止：': 'Refund window closes: ',
 	'人数：': 'Guests: ',
 	'本单使用 Full愈券，现金支付 0 元': 'Paid with Full Yu coupons, ¥0 cash',
