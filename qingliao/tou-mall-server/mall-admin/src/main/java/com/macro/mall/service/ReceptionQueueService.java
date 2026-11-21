@@ -33,14 +33,16 @@ import java.util.stream.Collectors;
  *
  * <p>设计口径（和前端/店长对齐过的规则）：</p>
  * <ol>
- *   <li><b>顺序只增不减</b>：seq 越大越靠后。上钟 → seq = 队尾+1；撤销 → 回填上钟前的 seq。
+ *   <li><b>一轮之内顺序只增不减</b>：seq 越大越靠后。上钟 → seq = 队尾+1；撤销 → 回填上钟前的 seq。
  *       取消/改期只是把位置还原，不做「整轮删除重建」，所以不会再出现 7 号插到 3 号前面。</li>
- *   <li><b>值班只是分组，不动顺序</b>：on_duty 只管「在值班区还是休息区」，点值班/下值班都不改 seq。
- *       展示口径 = 值班在前、休息在后，组内按 seq。</li>
- *   <li><b>没点值班的人不会消失</b>：只要有值班的人，休息区的人就排在后面；值班的人都被占用时
- *       才会自动往休息区取（这正是「人数不够才自动调用」），并且留一条事项。</li>
- *   <li><b>结果编号</b>：receipt_no 按 seq 顺序编 1..n，上钟的人跳到队尾拿 n+1；
- *       只有「全员都接待过一遍、且刚才上钟的是队头」时才重排回 1..n。</li>
+ *   <li><b>一轮接待完就归一</b>：今天在班的人这一轮都上过钟，就把 seq 重排回班次顺序
+ *       （调店置前、每日轮换；接待队取倒序），结果编号从 1 重来 —— 这就是旧口径的「下一轮」。
+ *       轮内不重置（谁上钟谁回队尾），所以顺序不会因为一轮里的手工插单而一路带到下一轮。
+ *       轮次边界落在日志的 RENO 标记上，不建轮次表。</li>
+ *   <li><b>值班只是记号，既不动顺序也不管派单</b>：on_duty 只表示「人在值班区」，
+ *       点值班、下值班、上钟、下钟都不改 seq，也不会自动改值班状态（值班只由人手动点）。
+ *       顺序只有一条：seq；看板按 seq 排，第 1 行就是下一个接单人。</li>
+ *   <li><b>结果编号</b>：receipt_no 按 seq 顺序编 1..n，上钟的人跳到队尾拿 n+1；一轮结束时随归一重排回 1..n。</li>
  *   <li><b>可追</b>：每次换位置都写 s_reception_queue_log，需要人处理的问题写 s_reception_issue。</li>
  * </ol>
  *
@@ -99,7 +101,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
     // ==================== 读 ====================
 
     /**
-     * 当日队列（展示口径）：值班在前、休息在后，组内按 seq。
+     * 当日队列（展示口径）：纯队序 seq。
      * 不初始化、不写库，纯读。
      */
     public List<ReceptionQueue> orderList(String day, Long shopId) {
@@ -260,9 +262,8 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
     /**
      * 看板：队列顺序 + 谁在忙 + 谁的单已过接待确认时限可抢。
      *
-     * <p>列表顺序即值班区口径：值班的人按「点值班的先后」排（先点的在上面），
-     * 休息的人按派单顺序垫后。派单本身只认 seq，所以每一行都带上 dispatchNo（派单顺序），
-     * 值班区第 1 位不一定是下一个接单的人 —— 这是店里确认过的口径。</p>
+     * <p>列表顺序 = 队序 seq，第 1 行就是下一个接单的人，dispatchNo 与行号一致。
+     * 值班只是 on_duty 记号（哪几个人在值班区由前端按字段分组），不决定先后。</p>
      */
     public List<ReceptionBoardItem> board(String day, Long shopId) {
         return board(day, shopId, KIND_SERVICE);
@@ -273,13 +274,13 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         if (CollectionUtils.isEmpty(list)) {
             return Collections.emptyList();
         }
-        // 派单序号按 seq 排，不按展示顺序：值班区排第一的人不一定是下一个接单的人
+        // 派单序号按 seq 排，与展示顺序同源
         Map<Long, Integer> dispatchNo = new HashMap<>();
         int no = 0;
         for (ReceptionQueue q : dispatchOrder(day, shopId, kind)) {
             dispatchNo.put(q.getMassagistId(), ++no);
         }
-        List<ReceptionQueue> display = dutySorted(list);
+        List<ReceptionQueue> display = sorted(list);
         LocalDateTime now = LocalDateTime.now();
         List<OrderDetail> doing = orderDetailService.list(new LambdaQueryWrapper<OrderDetail>()
                 .eq(OrderDetail::getShopId, shopId)
@@ -383,7 +384,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
 
     // ==================== 写 ====================
     /**
-     * 上钟：把这个人移到队尾、置为值班、结果编号往后延。
+     * 上钟：把这个人移到队尾、结果编号往后延，一轮轮完再归一（不动值班状态）。
      * 按 detailId 幂等 —— 同一单重复调用不会把人往后推两次。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -442,15 +443,13 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                 : skipNote(day, shopId, detailId, massagistId, kind);
 
         q.setSeq(maxSeq(all) + 1);
-        q.setOnDuty(DUTY_ON);
-        q.setDutyTime(LocalDateTime.now());
         q.setValid(VALID);
         q.setAssignCount(nvl(q.getAssignCount()) + 1);
         q.setLastAssignTime(LocalDateTime.now());
         q.setReceiptNo(maxReceiptNo(all) + 1);
         updateById(q);
         saveLog(newLog(day, shopId, massagistId, kind, action, detailId,
-                beforeSeq, q.getSeq(), beforeDuty, DUTY_ON, beforeReceipt, q.getReceiptNo(),
+                beforeSeq, q.getSeq(), beforeDuty, q.getOnDuty(), beforeReceipt, q.getReceiptNo(),
                 reason, operator));
         log.info("轮牌上钟 shop={} kind={} massagist={} detail={} seq {}→{} receipt {}→{}{}", shopId, kind, massagistId,
                 detailId, beforeSeq, q.getSeq(), beforeReceipt, q.getReceiptNo(),
@@ -458,7 +457,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
 
         // 接到活的人，之前挂着的值班意向就算兑现了
         issueService.closeIntent(parseDay(day), shopId, massagistId, operator);
-        maybeRenumber(day, shopId, beforeReceipt, kind);
+        settleRound(day, shopId, kind);
     }
 
     /**
@@ -499,9 +498,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                 if (assignLog.getBeforeReceiptNo() != null) {
                     q.setReceiptNo(assignLog.getBeforeReceiptNo());
                 }
-                if (assignLog.getBeforeOnDuty() != null) {
-                    q.setOnDuty(assignLog.getBeforeOnDuty());
-                }
+                // 值班状态不回填：值班只由人手动点，撤销上钟不该顺手把人挪出/挪进值班区
             } else {
                 reason = "取消/改期：之后已有新上钟记录，位置不回退";
             }
@@ -515,10 +512,11 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
     }
 
     /**
-     * 值班 / 下值班：只改分组，不动 seq。
-     * 点值班时如果这个人当下排不上（在服务/不在班），给一个限时抢单资格。
+     * 值班 / 下值班：只打记号，不动 seq、不影响谁先接客。
      *
-     * <p>值班区按点值班的先后排（dutyTime），服务单/接待单两套队列各有各的值班区。</p>
+     * <p>值班是唯一写 on_duty 的入口（上钟/下钟都不再自动改），duty_time 只用来在事项里说明
+     * 「几点点的值班」。点值班时如果这个人当下在服务，仍给一个限时抢单资格——那是抢单功能，
+     * 不是靠值班插队：抢到之后照样走 {@link #grabAssign}，队列里留 GRAB 痕迹。</p>
      */
     @Transactional(rollbackFor = Exception.class)
     public ReceptionQueue switchDuty(String day, Long shopId, Long massagistId, boolean onDuty, String operator) {
@@ -541,7 +539,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             if (beforeDuty != target) {
                 q.setOnDuty(target);
                 if (onDuty) {
-                    // 值班区顺序 = 点值班的先后；重新点一次值班就排到值班区末尾
+                    // 只记「几点点的值班」，给看板和事项用；不再拿它当值班区的排序依据
                     q.setDutyTime(LocalDateTime.now());
                 }
                 updateById(q);
@@ -564,7 +562,12 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         }
     }
 
-    /** 接待完成（下钟）：回到休息区，位置不动 —— 下次点值班时按原来的位置排 */
+    /**
+     * 接待完成（下钟）：位置不动、值班状态不动 —— 值班是人自己点的记号，下钟不替他改。
+     *
+     * <p>以前下钟会顺手把 on_duty 置 0，看着像「系统把人从值班区踢出去」；
+     * 现在只有 {@link #switchDuty} 能改值班。</p>
+     */
     @Transactional(rollbackFor = Exception.class)
     public void finish(String day, Long shopId, Long massagistId, String operator) {
         finish(day, shopId, massagistId, operator, KIND_SERVICE);
@@ -580,12 +583,9 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             if (q == null) {
                 return;
             }
-            int beforeDuty = nvl(q.getOnDuty());
-            q.setOnDuty(DUTY_OFF);
-            updateById(q);
             saveLog(newLog(day, shopId, massagistId, kind, ReceptionQueueAction.FINISH, null,
-                    q.getSeq(), q.getSeq(), beforeDuty, DUTY_OFF, q.getReceiptNo(), q.getReceiptNo(),
-                    "接待完成，回到休息区", operator));
+                    q.getSeq(), q.getSeq(), q.getOnDuty(), q.getOnDuty(), q.getReceiptNo(), q.getReceiptNo(),
+                    "接待完成，位置不动", operator));
             issueService.closeIntent(parseDay(day), shopId, massagistId, operator);
         }
     }
@@ -595,6 +595,9 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
      *
      * <p>只交换 seq，不动值班分组、不动结果编号。不做「整轮重排」，其余人的相对顺序保持不变；
      * 队列里没有的人按「补位」先补到队尾，再参与交换。</p>
+     *
+     * <p>注意：手工调过的顺序只在<b>本轮</b>有效，一轮接待完队序会归一回到班次顺序（旧口径也是这样，
+     * 每一轮都从班次顺序重开）。要长期固定先后，应该调排班表，不是在看板上拖着换。</p>
      */
     @Transactional(rollbackFor = Exception.class)
     public void swap(String day, Long shopId, Long massagistIdA, Long massagistIdB, String operator) {
@@ -737,7 +740,12 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
 
     // ==================== 内部 ====================
 
-    private void initDay(String day, Long shopId, Collection<Long> candidateIds, int kind) {
+    /**
+     * 班次顺序：调店人员排最前 + 每日轮换（sequenceEnableDay），只留当天真有班的人。
+     *
+     * <p>当日初始化和「一轮接待完的顺序归一」都用这一份——旧口径里每一轮都是从班次顺序重开的。</p>
+     */
+    private LinkedHashSet<Long> shiftOrder(String day, Long shopId) {
         // 当天在本店有班的人（本店班次 + 调进本店的班次），以及各自最早上班时间
         LinkedHashSet<Long> scheduled = new LinkedHashSet<>();
         Map<Long, LocalTime> shiftStart = new HashMap<>();
@@ -771,6 +779,11 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                 .sorted(Comparator.comparing((Long id) -> shiftStart.getOrDefault(id, LocalTime.MAX))
                         .thenComparingLong(id -> id))
                 .forEach(order::add);
+        return order;
+    }
+
+    private void initDay(String day, Long shopId, Collection<Long> candidateIds, int kind) {
+        LinkedHashSet<Long> order = shiftOrder(day, shopId);
         LocalDate queueDate = parseDay(day);
         if (queueDate.isBefore(LocalDate.now())) {
             // 历史日期补建：按当天真实的上下钟顺序回填，别拿今天的班次顺序糊历史
@@ -857,42 +870,142 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
     }
 
     /**
-     * 结果编号重排：只有「全员都接待过一遍」且「刚才上钟的是队头」才重排回 1..n，
-     * 否则一路往后延（3 号做了就变 6 号），跟店里的口径一致。
+     * 一轮是否接待完：今天在班的人在这一轮里都上过钟，就算一轮结束，开始下一轮。
+     *
+     * <p>旧口径里「下一轮」是从班次顺序重开的（调店置前、每日轮换）。这里不建轮次表，
+     * 只把队序归一 —— 否则手工插单/抢单会把顺序一路带到下一轮：上一轮 C 先上钟，
+     * 下一轮就变成 C 排第一，越跑越偏。轮内仍是「谁上钟谁回队尾」。</p>
+     *
+     * <p>轮次边界用日志里的 RENO 标记切（见 {@link #servedSinceRoundStart}）。
+     * 只看「今天有班的人」：休假/调走的人没有班次，不能因为他们没接过单就把整队永远卡在一轮里。</p>
      */
-    private void maybeRenumber(String day, Long shopId, int assignedBeforeReceipt, int kind) {
+    private void settleRound(String day, Long shopId, int kind) {
         List<ReceptionQueue> valid = sorted(rows(day, shopId, kind));
         if (valid.size() <= 1) {
             return;
         }
-        boolean allServed = valid.stream().allMatch(q -> nvl(q.getAssignCount()) > 0);
-        int minReceipt = valid.stream().mapToInt(q -> nvl(q.getReceiptNo())).min().orElse(0);
-        boolean assignedWasHead = assignedBeforeReceipt <= minReceipt;
-        if (!allServed || !assignedWasHead) {
+        Map<Long, List<MassagistSchedules>> shifts = shiftMap(day, shopId);
+        List<ReceptionQueue> inPlay = CollectionUtils.isEmpty(shifts) ? valid
+                : valid.stream().filter(q -> shifts.containsKey(q.getMassagistId())).collect(Collectors.toList());
+        if (inPlay.isEmpty()) {
+            inPlay = valid;
+        }
+        Set<Long> served = servedSinceRoundStart(day, shopId, kind);
+        boolean roundDone = inPlay.stream().allMatch(q -> served.contains(q.getMassagistId()));
+        if (!roundDone) {
+            // 本轮还有人没轮到，顺序就该继续往后轮，不重排
             return;
         }
-        long seqNo = 0;
-        List<ReceptionQueue> update = new ArrayList<>();
-        List<ReceptionQueueLog> logs = new ArrayList<>();
-        for (ReceptionQueue q : valid) {
-            seqNo++;
-            if (!Objects.equals(q.getReceiptNo(), (int) seqNo)) {
-                int before = nvl(q.getReceiptNo());
-                q.setReceiptNo((int) seqNo);
-                update.add(q);
-                logs.add(newLog(day, shopId, q.getMassagistId(), kind, ReceptionQueueAction.RENO, null,
-                        q.getSeq(), q.getSeq(), q.getOnDuty(), q.getOnDuty(), before, q.getReceiptNo(), "全员轮完，重排编号", null));
-            }
-        }
-        if (!update.isEmpty()) {
-            updateBatchById(update);
-            saveLogs(logs);
-            log.info("轮牌编号重排 shop={} day={} kind={} 人数={}", shopId, day, kind, update.size());
-        }
+        normalizeRound(day, shopId, kind, valid);
     }
 
     /**
-     * 上钟留痕：写清楚「排在他前面的人为什么没轮到」——不在班 / 在服务 / 未值班。
+     * 本轮已经接待过的人 = 上一次轮次标记（RENO）之后的 ASSIGN/GRAB 记录里的人。
+     *
+     * <p>轮次边界不建表：日志 id 天然递增，比时间字段稳（同一秒写入也不会分不清先后）。</p>
+     */
+    private Set<Long> servedSinceRoundStart(String day, Long shopId, int kind) {
+        List<ReceptionQueueLog> reno = queueLogMapper.selectList(new LambdaQueryWrapper<ReceptionQueueLog>()
+                .eq(ReceptionQueueLog::getQueueDate, parseDay(day))
+                .eq(ReceptionQueueLog::getShopId, shopId)
+                .eq(ReceptionQueueLog::getQueueKind, kind)
+                .eq(ReceptionQueueLog::getAction, ReceptionQueueAction.RENO.getValue())
+                .orderByDesc(ReceptionQueueLog::getId));
+        long roundStart = CollectionUtils.isEmpty(reno) ? 0L : nvl(reno.get(0).getId());
+        List<ReceptionQueueLog> assigns = queueLogMapper.selectList(new LambdaQueryWrapper<ReceptionQueueLog>()
+                .eq(ReceptionQueueLog::getQueueDate, parseDay(day))
+                .eq(ReceptionQueueLog::getShopId, shopId)
+                .eq(ReceptionQueueLog::getQueueKind, kind)
+                .in(ReceptionQueueLog::getAction, ReceptionQueueAction.ASSIGN.getValue(), ReceptionQueueAction.GRAB.getValue())
+                .gt(ReceptionQueueLog::getId, roundStart));
+        return assigns.stream()
+                .map(ReceptionQueueLog::getMassagistId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * 队序归一：seq 重排回班次顺序（接待队取倒序），结果编号从 1 重来 —— 等价旧口径的「新一轮」。
+     * 班次顺序里没有的人（调店补位、手工加人）按当前队序接在后面，一个都不丢。
+     */
+    private void normalizeRound(String day, Long shopId, int kind, List<ReceptionQueue> valid) {
+        List<Long> orderedIds = roundOrder(new ArrayList<>(shiftOrder(day, shopId)), valid, kind);
+        List<Long> currentIds = valid.stream().map(ReceptionQueue::getMassagistId).collect(Collectors.toList());
+        if (orderedIds.equals(currentIds)) {
+            // 队序已经是下一轮该有的样子（没被插单打乱）：不重排，但要落一条轮次标记，
+            // 让下一轮从这一刻重新数「谁还没接待」——否则手工调序会在下一单被立刻抹掉。
+            saveLog(newLog(day, shopId, currentIds.isEmpty() ? null : currentIds.get(0), kind,
+                    ReceptionQueueAction.RENO, null, null, null, null, null, null, null,
+                    "一轮接待完，队序已是班次顺序", null));
+            return;
+        }
+        Map<Long, ReceptionQueue> byMassagist = new LinkedHashMap<>();
+        valid.forEach(q -> byMassagist.putIfAbsent(q.getMassagistId(), q));
+        long seq = 0;
+        int receiptNo = 0;
+        List<ReceptionQueue> update = new ArrayList<>();
+        List<ReceptionQueueLog> logs = new ArrayList<>();
+        for (Long massagistId : orderedIds) {
+            ReceptionQueue q = byMassagist.get(massagistId);
+            if (q == null) {
+                continue;
+            }
+            seq += 10;
+            receiptNo++;
+            boolean seqChanged = !Objects.equals(q.getSeq(), seq);
+            boolean receiptChanged = !Objects.equals(q.getReceiptNo(), receiptNo);
+            if (!seqChanged && !receiptChanged) {
+                continue;
+            }
+            long beforeSeq = nvl(q.getSeq());
+            int beforeReceipt = nvl(q.getReceiptNo());
+            q.setSeq(seq);
+            q.setReceiptNo(receiptNo);
+            update.add(q);
+            logs.add(newLog(day, shopId, q.getMassagistId(), kind, ReceptionQueueAction.RENO, null,
+                    beforeSeq, q.getSeq(), q.getOnDuty(), q.getOnDuty(), beforeReceipt, q.getReceiptNo(),
+                    "一轮接待完，队序回到班次顺序", null));
+        }
+        if (update.isEmpty()) {
+            return;
+        }
+        updateBatchById(update);
+        saveLogs(logs);
+        log.info("轮牌一轮归一 shop={} day={} kind={} 人数={}", shopId, day, kind, update.size());
+    }
+
+    /**
+     * 一轮结束时的目标队序：先班次顺序（接待队取倒序，和服务队口径对称），
+     * 班表上没有的人（调店补位、手工加人）按当前队序接在后面，一个都不丢。
+     *
+     * <p>纯函数，单独抽出来是为了能直接单测「手工插单打乱之后，下一轮是不是回到班次顺序」。</p>
+     */
+    static List<Long> roundOrder(List<Long> roster, List<ReceptionQueue> valid, int kind) {
+        List<Long> present = sortForDispatch(valid).stream()
+                .map(ReceptionQueue::getMassagistId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(present)) {
+            return new ArrayList<>();
+        }
+        Set<Long> presentSet = new LinkedHashSet<>(present);
+        List<Long> rosterOrder = new ArrayList<>();
+        if (!CollectionUtils.isEmpty(roster)) {
+            roster.stream().filter(presentSet::contains).distinct().forEach(rosterOrder::add);
+        }
+        if (kind == KIND_RECEPTION) {
+            // 接待队方向和服务队相反：服务队按上班时间从早到晚，接待队从晚到早
+            Collections.reverse(rosterOrder);
+        }
+        Set<Long> base = new LinkedHashSet<>(rosterOrder);
+        List<Long> ordered = new ArrayList<>(rosterOrder);
+        present.stream().filter(id -> !base.contains(id)).forEach(ordered::add);
+        return ordered;
+    }
+
+    /**
+     * 上钟留痕：写清楚「排在他前面的人为什么没轮到」——不在班 / 在服务。
      *
      * <p>以前只有代码里 skipMassagist 的 debug 日志，库里查不到，
      * 于是「跳过 2 号派给 4 号」看起来就像系统乱排。现在直接落在上钟流水上。</p>
@@ -958,33 +1071,12 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                 .orderByAsc(ReceptionQueue::getId));
     }
 
-    private List<ReceptionQueue> sorted(List<ReceptionQueue> list) {
-        return list.stream()
-                .filter(q -> Objects.equals(q.getValid(), VALID))
-                .sorted(Comparator.comparingInt((ReceptionQueue q) -> isOnDuty(q) ? 0 : 1)
-                        .thenComparingLong(q -> nvl(q.getSeq())))
-                .collect(Collectors.toList());
-    }
-
     /**
-     * 值班区展示口径：值班的人按点值班的先后排（dutyTime，先点的在上），没点值班时间的按 seq 兜底；
-     * 休息的人按派单顺序垫在后面。派单不按这个顺序，派单只认 {@link #sorted}。
+     * 队列顺序 = 队序 seq，就一条口径。值班不参与排序（点值班不插队），
+     * 前台想看「谁在值班区」用 on_duty 字段自己分组即可。
      */
-    private List<ReceptionQueue> dutySorted(List<ReceptionQueue> list) {
-        List<ReceptionQueue> valid = list.stream()
-                .filter(q -> Objects.equals(q.getValid(), VALID))
-                .collect(Collectors.toList());
-        List<ReceptionQueue> duty = valid.stream()
-                .filter(this::isOnDuty)
-                .sorted(Comparator.comparing((ReceptionQueue q) -> q.getDutyTime() == null ? LocalDateTime.MAX : q.getDutyTime())
-                        .thenComparingLong(q -> nvl(q.getSeq())))
-                .collect(Collectors.toList());
-        List<ReceptionQueue> rest = sorted(valid).stream()
-                .filter(q -> !isOnDuty(q))
-                .collect(Collectors.toList());
-        List<ReceptionQueue> all = new ArrayList<>(duty);
-        all.addAll(rest);
-        return all;
+    private List<ReceptionQueue> sorted(List<ReceptionQueue> list) {
+        return sortForDispatch(list);
     }
 
     private boolean isOnDuty(ReceptionQueue q) {

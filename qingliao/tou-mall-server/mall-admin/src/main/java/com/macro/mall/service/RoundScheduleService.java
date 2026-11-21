@@ -487,7 +487,7 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
     }
 
     /**
-     * 排班表显示顺序以轮牌队列为准：值班在前、seq 升序，round 重编为 1..n（展示用）。
+     * 排班表显示顺序以轮牌队列为准：seq 升序（值班不参与排序），round 重编为 1..n（展示用）。
      * 队列里还没有的人（当天没起过轮牌/休息未纳入）保持原顺序垫后，所以队列未生成时行为与老逻辑完全一致。
      */
     private void applyQueueOrder(Long shopId, String date, List<RoundSchedule> list) {
