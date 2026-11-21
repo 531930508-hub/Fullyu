@@ -93,19 +93,50 @@ public class UmsAdminServiceImpl extends BaseService<UmsAdminMapper, UmsAdmin> i
         Massagist person = massagistService.getByUmsAdminId(admin.getId());
         if (person != null) {
             scoped.setMassagistId(person.getId());
+            // 授权门店 = 档案归属店 ∪ 账号上配置的门店（员工管理里的“可多选门店”），
+            // 不能整段丢弃账号授权，否则多店店长只要挂了疗愈师档案就永远只能看一个店。
+            LinkedHashSet<Long> shopIds = new LinkedHashSet<>();
+            addShopId(shopIds, person.getShopId());
+            addShopIds(shopIds, admin.getShopIdArr());
             scoped.setShopId(person.getShopId());
-            scoped.setShopIdArr("[" + person.getShopId() + "]");
+            // 调店只在当天 startTime~endTime 时段内生效；生效期间原店与目标店都可看，默认落在目标店。
             MassagistSchedules transfer = massagistSchedulesService.getOnlyOne(new LambdaQueryWrapper<MassagistSchedules>()
                     .eq(MassagistSchedules::getMassagistId, person.getId())
                     .eq(MassagistSchedules::getSchedulesType, 1L)
                     .eq(MassagistSchedules::getDay, java.time.LocalDate.now())
                     .orderByDesc(MassagistSchedules::getId));
-            if (transfer != null && transfer.getTargetShopId() != null && transfer.getTargetShopId() > 0) {
+            if (isTransferActive(transfer, java.time.LocalTime.now())) {
+                addShopId(shopIds, transfer.getShopId());
+                addShopId(shopIds, transfer.getTargetShopId());
                 scoped.setShopId(transfer.getTargetShopId());
-                scoped.setShopIdArr("[" + transfer.getTargetShopId() + "]");
             }
+            scoped.setShopIdArr("[" + shopIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + "]");
         }
         return scoped;
+    }
+
+    /** 调店记录是否在当天生效时段内；时段缺失时按旧口径整天生效 */
+    private boolean isTransferActive(MassagistSchedules transfer, java.time.LocalTime now) {
+        if (transfer == null || transfer.getTargetShopId() == null || transfer.getTargetShopId() <= 0) return false;
+        if (transfer.getStartTime() == null || transfer.getEndTime() == null) return true;
+        return !now.isBefore(transfer.getStartTime()) && now.isBefore(transfer.getEndTime());
+    }
+
+    private void addShopId(Set<Long> target, Long shopId) {
+        if (shopId != null && shopId > 0) target.add(shopId);
+    }
+
+    /** 解析 "[1,2]" 形式的门店数组，非法项忽略 */
+    private void addShopIds(Set<Long> target, String raw) {
+        if (StrUtil.isEmpty(raw)) return;
+        for (String part : raw.replace("[", "").replace("]", "").replace(" ", "").split(",")) {
+            if (StrUtil.isEmpty(part)) continue;
+            try {
+                addShopId(target, Long.valueOf(part));
+            } catch (NumberFormatException ignored) {
+                LOGGER.warn("忽略非法的授权门店配置：{}", part);
+            }
+        }
     }
 
     @Override
