@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 默认昵称规则：「用户+手机号后四位」，手机号取不到后四位时退回「中文词+4位数字」。
+ * 默认昵称规则：「会员+手机号后四位」，手机号取不到后四位时退回「中文词+4位数字」。
  *
  * <p>后四位是业务确认过的取舍（店员靠它认人）；这里守住两件事：昵称只带四位数字、
  * 不出现完整号码，且与历史数据迁移脚本的规则一致。</p>
@@ -24,23 +24,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class NicknameGeneratorTest {
 
     private static final Path MIGRATION_SQL =
-            Paths.get("..", "sql", "2026-11-21-customer-nickname-phone-tail.sql");
+            Paths.get("..", "sql", "2026-11-22-customer-nickname-member-tail.sql");
 
-    private static final Pattern USER_TAIL = Pattern.compile("^用户\\d{4}$");
+    private static final Pattern MEMBER_TAIL = Pattern.compile("^会员\\d{4}$");
     private static final Pattern RANDOM_WORD = Pattern.compile("^[\\u4e00-\\u9fa5]{2}\\d{4}$");
 
     @Test
-    void defaultNicknameIsUserPlusPhoneTail() {
-        assertEquals("用户8000", NicknameGenerator.defaultNickname("13800138000"));
-        assertEquals("用户7996", NicknameGenerator.defaultNickname("+33688507996"));
-        assertEquals("用户2184", NicknameGenerator.defaultNickname("0031622462184"));
-        assertEquals("用户0000", NicknameGenerator.defaultNickname(" 13800130000 "));
-        assertTrue(USER_TAIL.matcher(NicknameGenerator.defaultNickname("13800138000")).matches());
+    void defaultNicknameIsMemberPlusPhoneTail() {
+        assertEquals("会员8000", NicknameGenerator.defaultNickname("13800138000"));
+        assertEquals("会员7996", NicknameGenerator.defaultNickname("+33688507996"));
+        assertEquals("会员2184", NicknameGenerator.defaultNickname("0031622462184"));
+        assertEquals("会员0000", NicknameGenerator.defaultNickname(" 13800130000 "));
+        assertTrue(MEMBER_TAIL.matcher(NicknameGenerator.defaultNickname("13800138000")).matches());
     }
 
     @Test
     void dirtyPhoneFallsBackToRandomNickname() {
-        // 脏手机号末尾不足四位数字：退回随机昵称，绝不生成「用户朱」「用户11」这种怪名字
+        // 脏手机号末尾不足四位数字：退回随机昵称，绝不生成「会员朱」「会员11」这种怪名字
         assertNull(NicknameGenerator.phoneTail("朱"));
         assertNull(NicknameGenerator.phoneTail("11"));
         assertNull(NicknameGenerator.phoneTail("852"));
@@ -77,7 +77,8 @@ class NicknameGeneratorTest {
         for (int i = 0; i < 2000; i++) {
             String nickname = NicknameGenerator.randomNickname();
             assertTrue(RANDOM_WORD.matcher(nickname).matches(), "unexpected nickname: " + nickname);
-            assertFalse(nickname.startsWith("用户"), "fallback must not look like a default nickname");
+            assertFalse(nickname.startsWith("会员"), "fallback must not look like a default nickname");
+            assertFalse(nickname.startsWith("用户"), "fallback must not look like an old default nickname");
         }
     }
 
@@ -95,10 +96,12 @@ class NicknameGeneratorTest {
     void migrationSqlKeepsSameRule() throws Exception {
         assertTrue(Files.exists(MIGRATION_SQL), "missing migration sql: " + MIGRATION_SQL.toAbsolutePath());
         String sql = new String(Files.readAllBytes(MIGRATION_SQL), StandardCharsets.UTF_8);
-        // 脚本必须用同一个前缀、同一个后四位口径，且不能把「用户xxxx」当成待改昵称反复改
+        // 脚本必须用同一个前缀、同一个后四位口径，且把「用户xxxx」等旧占位名一并收进来
         assertTrue(sql.contains(NicknameGenerator.DEFAULT_PREFIX), "迁移脚本前缀与代码不一致");
         assertTrue(sql.contains("RIGHT(`phone`, 4)") || sql.contains("RIGHT(`phone`,4)"),
                 "迁移脚本不是按手机号后四位生成");
-        assertTrue(sql.contains("NOT LIKE '用户%'"), "迁移脚本缺少「跳过已是用户xxxx」的条件");
+        assertTrue(sql.contains("用户"), "迁移脚本没有处理旧「用户xxxx」昵称");
+        assertTrue(sql.contains("CONCAT('会员', RIGHT(`phone`, 4))"),
+                "迁移脚本缺少「已是会员xxxx 就跳过」的幂等条件");
     }
 }

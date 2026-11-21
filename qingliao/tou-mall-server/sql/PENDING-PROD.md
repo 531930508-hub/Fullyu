@@ -523,3 +523,12 @@ cherry-pick 把 yml/pom 的 CRLF 改成 LF，已还原，避免整文件重写�
   测试机同时补齐 `PRINT_*`/`BAIDU_VOICE_*`（下次发测试后端才不会静默丢打印配置）。
 - **轻疗小程序**：`main` 含 `4afccb8` 的下单页改动，已用 devtools CLI 覆盖上传开发版 `1.0.22`（1.1 MB，AppID `wxeb4e8a99b7eeebf8`）。
 - **豆工/汇付核对**：生产 66 单 `pay_type` 只有 0/1/2；退款走 `BasePayClient` 请求体，不含本次改动的签名串。
+
+### 十八（2026-11-22）会员昵称统一「会员+后四位」
+
+- **SQL 已执行**：`sql/2026-11-22-customer-nickname-member-tail.sql`（备份表 `c_customer_nickname_bak_20261122`），
+  生产 `tou_mall_current` 执行结果 10,145 条 → `会员XXXX`、客户自取 68 条未动、`placeholder_left=0`；测试库 `tou_mall_test` 已演练幂等。
+  CRM 侧 `member_name_bak_20261122` 同批执行（10,150 条），顺序为 CRM 先、轻疗后。
+- **代码**：`NicknameGenerator.DEFAULT_PREFIX` 改「会员」；`BrandMemberProfileSync` 拉取/回推按 `nicknameRank` 只升不降，
+  能把本地 `用户xxxx` 升到 CRM 的 `会员xxxx`，也不会把 `会员xxxx` 降回 `用户xxxx`。
+- **待发布**：轻疗 jar 未重发（线上仍是 11-20 包），新注册客户的默认昵称要等发版才变「会员xxxx」；存量已回刷。

@@ -134,6 +134,41 @@ class BrandMemberProfileSyncTest {
     }
 
     @Test
+    void pullUpgradesUserTailToMemberTail() throws Exception {
+        when(client.isActive()).thenReturn(true);
+        // CRM 已经按新口径回填成「会员+后四位」：本地还是旧形状「用户+后四位」，跟着升级
+        when(client.me("7")).thenReturn(node("{\"member\":{\"profileVersion\":9,\"profile\":{"
+                + "\"nickname\":\"会员7229\"}}}"));
+
+        Customer customer = customer(7L);
+        customer.setNickname("用户7229");
+        sync.refreshQuietly(customer);
+
+        assertEquals("会员7229", customer.getNickname());
+        // 两边同为占位名，CRM 信息量不低，不需要回推
+        verify(client, never()).updateProfile(anyString(), anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void pullKeepsLocalMemberTailWhenCrmOnlyHasBareMember() throws Exception {
+        when(client.isActive()).thenReturn(true);
+        // CRM 里只有「会员」两个字：不许把本地的「会员+后四位」降级
+        when(client.me("7")).thenReturn(node("{\"member\":{\"profileVersion\":9,\"profile\":{"
+                + "\"nickname\":\"会员\"}}}"));
+        when(client.updateProfile("7", 9L, "会员7229", "avatars/2026/a.jpg", 1, "1990-01-01"))
+                .thenReturn(node("{\"member\":{\"profileVersion\":10,\"profile\":{\"nickname\":\"会员7229\"}}}"));
+
+        Customer customer = customer(7L);
+        customer.setNickname("会员7229");
+        sync.refreshQuietly(customer);
+
+        assertEquals("会员7229", customer.getNickname());
+        // 本地信息量更高就把名字补推上去，CRM 才不会一直停在「会员」
+        verify(client).updateProfile("7", 9L, "会员7229", "avatars/2026/a.jpg", 1, "1990-01-01");
+        assertEquals(10L, customer.getCrmProfileVersion());
+    }
+
+    @Test
     void pullAcceptsRealNicknameFromCrm() throws Exception {
         when(client.isActive()).thenReturn(true);
         when(client.me("7")).thenReturn(node("{\"member\":{\"profileVersion\":9,\"profile\":{"

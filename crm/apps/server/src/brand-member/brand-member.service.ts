@@ -25,6 +25,7 @@ import { newId } from '../common/ids';
 import { runIdempotent } from '../common/idempotency';
 import type { BrandMemberContext } from './brand-member.guard';
 import { buildProfileUpdate, type ProfilePatch } from '../members/profile-input';
+import { isPlaceholderName, placeholderMemberName } from '../common/member-name';
 import {
   issuePickupVouchers,
   liveCardConfigOf,
@@ -331,6 +332,11 @@ export class BrandMemberService {
     if (input.birthday !== undefined) patch.birthday = input.birthday;
     if (input.avatarUrl !== undefined) patch.avatarUrl = input.avatarUrl;
     const data = buildProfileUpdate(patch);
+    // 三端默认昵称（用户+号 / 茶客 / 会员）原样推上来时统一落成「会员+后四位」：
+    // CRM 是资料唯一归档，不能让各端的默认形状进库。
+    if (typeof data.name === 'string' && isPlaceholderName(data.name)) {
+      data.name = placeholderMemberName(member.phone);
+    }
 
     const updated = await this.prisma.member.update({
       where: { id: member.id },

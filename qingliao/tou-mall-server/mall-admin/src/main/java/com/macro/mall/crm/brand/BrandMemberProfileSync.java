@@ -156,11 +156,11 @@ public class BrandMemberProfileSync {
             if (remote.applyTo(customer)) {
                 persist(customer);
             }
-            // CRM 里只有占位名不算"有名字"：本地真名补推上去，
-            // 否则本地早就改过名的顾客，CRM 会一直停在别处建档时的「用户+手机号」。
+            // CRM 里的占位名（会员 / 会员+后四位 / 用户+手机号 / 茶客）不算"有名字"：
+            // 本地名字信息量更大就补推上去，否则本地早就改过名的顾客，
+            // CRM 会一直停在别处建档时的默认昵称。
             String localNickname = RemoteProfile.trimToNull(customer.getNickname());
-            if ((remote.nickname == null || isPlaceholderNickname(remote.nickname))
-                    && localNickname != null && !isPlaceholderNickname(localNickname)) {
+            if (nicknameRank(localNickname) > nicknameRank(remote.nickname)) {
                 try {
                     pushOrThrow(customer);
                 } catch (BrandMemberException e) {
@@ -285,13 +285,14 @@ public class BrandMemberProfileSync {
 
         /**
          * 只覆盖 CRM 给了值的字段：CRM 为空表示"没设"，不清掉本地已有资料。
-         * 昵称例外：CRM 里的占位名（会员 / 用户+手机号）不许盖掉本地真实昵称，
+         * 昵称例外：占位名只升不降（用户+号 → 会员+后四位 → 真名）。CRM 里的占位名
+         * 不许盖掉本地真实昵称，也不许把本地「会员+后四位」降回「用户+号」，
          * 否则 CRM 还没回填完时打开个人中心，顾客自己起的名字会被冲掉。
          */
         boolean applyTo(Customer customer) {
             boolean changed = false;
             if (nickname != null && !nickname.equals(trimToNull(customer.getNickname()))
-                    && !(isPlaceholderNickname(nickname) && !isPlaceholderNickname(customer.getNickname()))) {
+                    && nicknameRank(nickname) >= nicknameRank(customer.getNickname())) {
                 customer.setNickname(nickname);
                 changed = true;
             }
@@ -387,8 +388,8 @@ public class BrandMemberProfileSync {
     }
 
     /**
-     * 与 CRM 侧一致的占位名判定：空、「会员」、以及各业务端历史默认昵称
-     * 「用户+手机号/后四位」（含带国际区号落库成「用户+86…」的旧数据）。
+     * 与 CRM 侧一致的占位名判定：空、「会员」、「会员+后四位」、各业务端历史默认昵称
+     * 「用户+手机号/后四位」（含带国际区号落库成「用户+86…」的旧数据）、时叙旧默认名「茶客」。
      * 占位名只是没名字，不是顾客起的名字，不能拿它盖掉真实昵称。
      */
     static boolean isPlaceholderNickname(String nickname) {
@@ -396,6 +397,30 @@ public class BrandMemberProfileSync {
             return true;
         }
         String trimmed = nickname.trim();
-        return trimmed.isEmpty() || "会员".equals(trimmed) || trimmed.matches("用户\\+?\\d{4,15}");
+        return trimmed.isEmpty() || "会员".equals(trimmed) || "茶客".equals(trimmed)
+                || trimmed.matches("会员\\d{4}") || trimmed.matches("用户\\+?\\d{4,15}");
+    }
+
+    /**
+     * 占位名的信息量，用来「只升不降」地收敛各端昵称：
+     * 真名 3 &gt; 会员+后四位 2 &gt; 用户+号 1 &gt; 会员 / 茶客 / 空 0。
+     * 各端默认昵称形状不同，谁的信息更多就留谁，避免最后一个登录的端把好名字冲掉，
+     * 也避免本地「会员+后四位」被 CRM 里的旧形状「用户+号」降级。
+     */
+    static int nicknameRank(String nickname) {
+        if (nickname == null) {
+            return 0;
+        }
+        String trimmed = nickname.trim();
+        if (trimmed.isEmpty()) {
+            return 0;
+        }
+        if (!isPlaceholderNickname(trimmed)) {
+            return 3;
+        }
+        if (trimmed.matches("会员\\d{4}")) {
+            return 2;
+        }
+        return trimmed.matches("用户\\+?\\d{4,15}") ? 1 : 0;
     }
 }

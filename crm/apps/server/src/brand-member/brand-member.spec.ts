@@ -321,6 +321,50 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     expect(restored.body.member.nickname).toBe('林小满');
   });
 
+  it('PATCH profile 推上来的默认昵称统一落成「会员+后四位」', async () => {
+    const before = await me('sx-test', 'teahour', 'local-m-lin');
+    const base = before.body.member.profileVersion as number;
+
+    // 在场/时叙的默认昵称形状「用户+后四位」进库前归一
+    const userTail = await signed('patch', '/v1/brand-member/profile', {
+      key: 'sx-test',
+      body: {
+        business: 'teahour',
+        localUserId: 'local-m-lin',
+        profileVersion: base,
+        nickname: '用户6620'
+      }
+    });
+    expect(userTail.status).toBe(200);
+    expect(userTail.body.member.profile.nickname).toBe('会员6620');
+
+    // 老的「会员」占位名同样归一
+    const bare = await signed('patch', '/v1/brand-member/profile', {
+      key: 'sx-test',
+      body: {
+        business: 'teahour',
+        localUserId: 'local-m-lin',
+        profileVersion: userTail.body.member.profileVersion,
+        nickname: '会员'
+      }
+    });
+    expect(bare.status).toBe(200);
+    expect(bare.body.member.profile.nickname).toBe('会员6620');
+
+    // 真实昵称原样落库
+    const real = await signed('patch', '/v1/brand-member/profile', {
+      key: 'sx-test',
+      body: {
+        business: 'teahour',
+        localUserId: 'local-m-lin',
+        profileVersion: bare.body.member.profileVersion,
+        nickname: '青竹6620'
+      }
+    });
+    expect(real.status).toBe(200);
+    expect(real.body.member.profile.nickname).toBe('青竹6620');
+  });
+
   it('密钥与业务绑定：跨业务读取、跨业务本地用户均拒绝', async () => {
     const mismatch = await me('zc-test', 'teahour', 'local-m-su');
     expect(mismatch.status).toBe(403);

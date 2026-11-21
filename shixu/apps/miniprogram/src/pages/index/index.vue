@@ -1600,9 +1600,10 @@ const profileSub = computed(() => {
   if (!state.customer) return '';
   const phone = String(state.customer.phone || '');
   const masked = phone.length === 11 ? `${phone.slice(0, 3)}****${phone.slice(7)}` : phone;
-  return member.value
-    ? tt(`大会员 · ${masked}`, `Member · ${masked}`)
-    : tt(`会员 · ${masked}`, `Member · ${masked}`);
+  if (member.value) return tt(`大会员 · ${masked}`, `Member · ${masked}`);
+  // 默认昵称本身就是「会员+后四位」（会员7229），副标题再写一遍「会员」就重复了
+  if (/^会员\d{4}$/.test(String(state.customer.name || ''))) return masked;
+  return tt(`会员 · ${masked}`, `Member · ${masked}`);
 });
 
 /**

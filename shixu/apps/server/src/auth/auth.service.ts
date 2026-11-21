@@ -10,6 +10,7 @@ import { newId, dayStamp } from '../common/ids';
 import { logAction } from '../common/logs';
 import { mapCustomer, mapStaffSummary } from '../common/mappers';
 import { assetUrl } from '../common/assets';
+import { defaultMemberName, nameRank } from '../common/member-name';
 import { LoginAttemptLimiter } from './login-attempts';
 import { loginRateLimit } from '../config/config';
 import { CrmClient, type CrmIdentity, type CrmMember } from '../crm/crm.client';
@@ -190,7 +191,9 @@ export class AuthService {
       data: {
         id: newId('C'),
         memberCode: await this.generateMemberCode(),
-        name: name || '茶客',
+        // 默认昵称与 CRM 主档同口径：「会员+手机号后四位」，不再落「茶客」，
+        // 否则顾客资料页显示的是个看不出是谁的名字。
+        name: name || defaultMemberName(phone),
         phone,
         openId: profile.openId ?? null,
         unionId: profile.unionId ?? null,
@@ -428,7 +431,8 @@ export class AuthService {
   /**
    * 姓名以 CRM 统一账号为准：回源拿到姓名后写回本地快照，
    * 让小程序「我的」、店员扫码、小票等各处显示同一个名字。
-   * CRM 尚未取名（空值）时保留本地值，不把顾客的名字清空。
+   * CRM 尚未取名（空值）时保留本地值，不把顾客的名字清空；
+   * CRM 只有占位名（会员 / 会员+后四位 / 用户+号 / 茶客）时也不许盖掉本地真名。
    */
   private async adoptCrmName<T extends CrmCustomer>(customer: T, crmName?: string | null): Promise<T> {
     const name = String(crmName ?? '')
@@ -436,6 +440,7 @@ export class AuthService {
       .trim()
       .slice(0, 30);
     if (!name || name === customer.name) return customer;
+    if (nameRank(name) < nameRank(customer.name)) return customer;
     try {
       await this.prisma.customer.update({ where: { id: customer.id }, data: { name } });
     } catch {

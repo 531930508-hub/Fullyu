@@ -118,8 +118,8 @@ describe('CRM 1C：业务端签名接口、身份与积分', () => {
       body: { localUserId: 'zc-u-placeholder', phone: '13700007777', name: '用户7777' }
     });
     expect(zc.status).toBe(200);
-    // 新建不再落占位昵称
-    expect(zc.body.name).toBe('会员');
+    // 新建不再落各端默认昵称，统一落「会员+手机号后四位」
+    expect(zc.body.name).toBe('会员7777');
 
     // 模拟存量数据：老库里的名字是「用户+手机号后四位」
     await h.prisma.member.update({ where: { id: zc.body.memberId }, data: { name: '用户7777' } });
@@ -147,7 +147,7 @@ describe('CRM 1C：业务端签名接口、身份与积分', () => {
     const created = await signed('post', '/external/members/resolve', {
       body: { localUserId: 'ql-u-plus86', phone, name: legacy }
     });
-    expect(created.body.name).toBe('会员');
+    expect(created.body.name).toBe('会员5555');
 
     // 轻疗旧库确实存过「用户+86…」这种形状
     await h.prisma.member.update({ where: { id: created.body.memberId }, data: { name: legacy } });
@@ -159,12 +159,57 @@ describe('CRM 1C：业务端签名接口、身份与积分', () => {
     expect(real.body.name).toBe('青竹1234');
   });
 
+  it('「会员+后四位」也是占位名：只升不降，不会被别的端的用户+号降级', async () => {
+    const phone = '13700003121';
+    // 时叙先登录：默认名就是「会员+手机号后四位」
+    const sx = await signed('post', '/external/members/resolve', {
+      key: 'sx-test',
+      body: { localUserId: 'sx-u-tail', phone, name: '会员3121' }
+    });
+    expect(sx.status).toBe(200);
+    expect(sx.body.name).toBe('会员3121');
+
+    // 在场随后解析同一手机号，默认名形状是「用户+后四位」：后四位档位不能被降级
+    const zc = await signed('post', '/external/members/resolve', {
+      key: 'zc-test',
+      body: { localUserId: 'zc-u-tail', phone, name: '用户3121' }
+    });
+    expect(zc.status).toBe(200);
+    expect(zc.body.memberId).toBe(sx.body.memberId);
+    expect(zc.body.name).toBe('会员3121');
+
+    // 真实昵称仍然可以升级占位名
+    const real = await signed('post', '/external/members/resolve', {
+      body: { localUserId: 'ql-u-real-tail', phone, name: '青竹3121' }
+    });
+    expect(real.body.name).toBe('青竹3121');
+
+    // 回头再解析，占位名不能把真名盖回去
+    const again = await signed('post', '/external/members/resolve', {
+      key: 'sx-test',
+      body: { localUserId: 'sx-u-tail', phone, name: '会员3121' }
+    });
+    expect(again.body.name).toBe('青竹3121');
+  });
+
+  it('业务端把默认名推给资料回写接口时统一落成「会员+后四位」', async () => {
+    const phone = '13700003122';
+    await signed('post', '/external/members/resolve', {
+      body: { localUserId: 'ql-u-patch-default', phone, name: '小鹿3333' }
+    });
+    const patched = await signed('post', '/external/members/profile', {
+      body: { localUserId: 'ql-u-patch-default', name: '用户3122' }
+    });
+    expect(patched.status).toBe(200);
+    expect(patched.body.name).toBe('会员3122');
+  });
+
   it('新建会员不落占位昵称，真实名之间的改写只走资料回写', async () => {
     const created = await signed('post', '/external/members/resolve', {
       body: { localUserId: 'ql-u-defaultname', phone: '13700006666', name: '用户6666' }
     });
     expect(created.status).toBe(200);
-    expect(created.body.name).toBe('会员');
+    expect(created.body.name).toBe('会员6666');
 
     // 另一端解析带来的另一个真实名不改写（resolve 不裁决谁的名字更好）
     const other = await signed('post', '/external/members/resolve', {
