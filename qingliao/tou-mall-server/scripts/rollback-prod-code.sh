@@ -82,7 +82,7 @@ fi
 
 say "4 冒烟"
 if [ "$DRY" = 0 ]; then
-  for u in http://127.0.0.1:9929/health https://cityretreat.fullyu.cn/ https://manage.fullytherapy.com/; do
+  for u in http://127.0.0.1:9929/health https://cityretreat.fullyu.cn/; do
     printf '    %s -> ' "$u"; $SSH "curl -s -o /dev/null -w '%{http_code}\n' --max-time 8 '$u'"
   done
   echo "    线上 jar 现在: $($SSH "sha256sum $APP_DIR/$JAR_NAME | cut -d' ' -f1")"

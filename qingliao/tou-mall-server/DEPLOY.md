@@ -31,7 +31,7 @@ mvn -DskipTests clean package          # 产物：mall-admin/target/mall-admin-1
 
 cd ../tou-mall-admin-web
 npm install
-BASE_API=https://manage.fullytherapy.com/api npm run build   # 产物：dist/
+BASE_API=https://cityretreat.fullyu.cn/api npm run build   # 产物：dist/
 ```
 
 ## 部署（手工，尚未接入 CI workflow）

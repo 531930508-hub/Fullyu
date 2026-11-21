@@ -279,7 +279,7 @@ fi
 # ---------- 6 冒烟 ----------
 say "6/6 冒烟"
 FAIL=0
-for u in http://127.0.0.1:9929/health https://cityretreat.fullyu.cn/ https://cityretreat.fullyu.cn/api/product/list https://manage.fullytherapy.com/; do
+for u in http://127.0.0.1:9929/health https://cityretreat.fullyu.cn/ https://cityretreat.fullyu.cn/api/product/list; do
   c=$("${SSH_PROD[@]}" "curl -s -o /dev/null -w '%{http_code}' --max-time 8 '$u'")
   if [ "$c" = "200" ]; then echo "    PASS $u"; else echo "    FAIL $u -> $c"; FAIL=1; fi
 done

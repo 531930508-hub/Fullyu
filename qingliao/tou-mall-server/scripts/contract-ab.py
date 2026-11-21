@@ -17,7 +17,7 @@
 """
 import json, urllib.request, urllib.parse, sys, time, os
 
-A = "https://manage.fullytherapy.com/api"
+A = "https://cityretreat.fullyu.cn/api"
 B = "http://127.0.0.1:19399"
 PHONE = os.environ.get("AB_PHONE", "17608437399")
 ORDER = int(os.environ.get("AB_ORDER", "1601"))
