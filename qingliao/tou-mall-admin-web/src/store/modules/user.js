@@ -9,6 +9,24 @@ function normalizeShopId(value) {
   return Number(str)
 }
 
+// 登录后解析「当前门店」：cookie 里的门店只是"上次看的那家"，只有落在服务端授权范围内才算数。
+// - 全局角色、或老版本服务端没返回 authorizedShopIds 时：保持原来的 cookie 优先
+// - 受限账号：cookie 不在授权集合里（调店时段结束、被收回授权、账号换了门店）就切到服务端
+//   解析出的门店（档案归属店 / 调店目标店），否则页面会一直停在一家已经无权访问的店上
+// - 授权集合为空（未配置门店）：清空，交给页面提示"未配置门店"
+function resolveScopedShopId(cookieValue, serverValue, authorizedShopIds, isGlobal) {
+  const cookieShopId = normalizeShopId(cookieValue)
+  const serverShopId = normalizeShopId(serverValue)
+  if (isGlobal === true || !Array.isArray(authorizedShopIds)) {
+    return {shopId: cookieShopId || serverShopId}
+  }
+  const authorized = authorizedShopIds.map(normalizeShopId).filter(id => id !== '')
+  if (cookieShopId && authorized.indexOf(cookieShopId) > -1) {
+    return {shopId: cookieShopId}
+  }
+  return {shopId: serverShopId || authorized[0] || ''}
+}
+
 const user = {
   state: {
     token: getToken(),
@@ -101,18 +119,13 @@ const user = {
           commit('SET_AVATAR', data.icon)
           commit('SET_MASSAGIST_ID', data.massagistId)
           commit('SET_TRAINER', data.trainer)
-          const currentShopId = normalizeShopId(getShopId())
-          const infoShopId = normalizeShopId(data.shopId) ||
-            (Array.isArray(data.shopIdArr) && data.shopIdArr.length ? normalizeShopId(data.shopIdArr[0]) : '')
-          if (!currentShopId && infoShopId) {
-            commit('SET_SHOP_ID', infoShopId)
-            setShopId(infoShopId)
-          } else if (!currentShopId) {
-            commit('SET_SHOP_ID', '')
-            removeShopId()
+          // 门店上下文以服务端授权范围为准，cookie 只在授权内优先
+          const resolvedShopId = resolveScopedShopId(getShopId(), data.shopId, data.authorizedShopIds, data.isGlobal).shopId
+          commit('SET_SHOP_ID', resolvedShopId)
+          if (resolvedShopId) {
+            setShopId(resolvedShopId)
           } else {
-            commit('SET_SHOP_ID', currentShopId)
-            setShopId(currentShopId)
+            removeShopId()
           }
           resolve(response)
         }).catch(error => {

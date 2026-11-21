@@ -264,7 +264,9 @@ public class MassagistService extends BaseService<MassagistMapper, Massagist> {
                 umsAdmin.setNickName(massagist.getName());
                 if (!newShopId.equals(umsAdmin.getShopId())) {
                     umsAdmin.setShopId(newShopId);
-                    umsAdmin.setShopIdArr("["+ newShopId+"]");
+                    // 主门店跟着档案走，但账号上人工授权的其他门店（多店店长）不能在这里被重置掉，
+                    // 否则每次编辑档案都会把“可多选门店”洗成单店，登录后的授权门店并集也跟着缩回一个店。
+                    umsAdmin.setShopIdArr(mergeShopIdArr(umsAdmin.getShopIdArr(), newShopId));
                 }
                 if (JobStatus.QUIT.getValue().equals(massagist.getStatus())) {
                     umsAdmin.setStatus(0);
@@ -415,6 +417,30 @@ public class MassagistService extends BaseService<MassagistMapper, Massagist> {
         massagistIdList.remove(massagistId);
         massagistIdList.add(massagistId);
         rerank(day, shopId, massagistIdList);
+    }
+
+    /** 把 newShopId 并入已有的 "[1,2]" 门店数组，保留人工授权的其他门店，非法项忽略 */
+    private String mergeShopIdArr(String raw, Long newShopId) {
+        LinkedHashSet<Long> ids = new LinkedHashSet<>();
+        if (newShopId != null && newShopId > 0) {
+            ids.add(newShopId);
+        }
+        if (raw != null) {
+            for (String part : raw.replace("[", "").replace("]", "").replace(" ", "").split(",")) {
+                if (part.isEmpty()) {
+                    continue;
+                }
+                try {
+                    long id = Long.parseLong(part);
+                    if (id > 0) {
+                        ids.add(id);
+                    }
+                } catch (NumberFormatException ignored) {
+                    // 脏数据忽略
+                }
+            }
+        }
+        return "[" + ids.stream().map(String::valueOf).collect(Collectors.joining(",")) + "]";
     }
 
     /**

@@ -43,6 +43,7 @@ service.interceptors.response.use(
         type: 'error',
         duration: 3 * 1000
       })
+      resyncShopScope(res.message)
 
       // 401:未登录;
       if (res.code === 401) {
@@ -73,6 +74,28 @@ service.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+// 门店作用域被拒：登录时缓存的当前门店已经不在授权范围内（调店时段结束、账号被收回门店等）。
+// 这里重新拉一次用户信息让 GetInfo 自己纠正门店，纠正成功后刷新页面按新门店重拉数据；
+// 用标志位防止并发报错时反复重进。
+const SHOP_SCOPE_DENIED = '无权访问该门店'
+let shopScopeResyncing = false
+
+function resyncShopScope(message) {
+  if (shopScopeResyncing) return
+  if (!message || String(message).indexOf(SHOP_SCOPE_DENIED) === -1) return
+  shopScopeResyncing = true
+  const before = store.getters.shopId
+  store.dispatch('GetInfo').then(() => {
+    if (store.getters.shopId !== before) {
+      location.reload()
+      return
+    }
+    shopScopeResyncing = false
+  }).catch(() => {
+    shopScopeResyncing = false
+  })
+}
 
 function buildAuth(config) {
   const {params} = config
