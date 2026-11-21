@@ -37,13 +37,27 @@ export class WechatService {
     return this.config.get<string>('WECHAT_APP_SECRET')
   }
 
-  /** 获取（并缓存）接口调用凭证 access_token */
-  async getAccessToken(): Promise<string> {
-    const cached = await this.redis.get(ACCESS_TOKEN_CACHE_KEY)
-    if (cached) return cached
+  /**
+   * 获取（并缓存）接口调用凭证 access_token。
+   * 用「稳定版」stable_token 接口：正式机与测试机共用同一 appid，
+   * 旧的 /cgi-bin/token 每取一次会把对方的 token 顶掉（40001），不能两边同时用。
+   */
+  async getAccessToken(forceRefresh = false): Promise<string> {
+    if (!forceRefresh) {
+      const cached = await this.redis.get(ACCESS_TOKEN_CACHE_KEY)
+      if (cached) return cached
+    }
 
-    const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${this.appId}&secret=${this.appSecret}`
-    const res = await fetch(url)
+    const res = await fetch('https://api.weixin.qq.com/cgi-bin/stable_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'client_credential',
+        appid: this.appId,
+        secret: this.appSecret,
+        force_refresh: false,
+      }),
+    })
     const data: any = await res.json()
     if (!data.access_token) {
       this.logger.error(`获取 access_token 失败: ${JSON.stringify(data)}`)
@@ -140,30 +154,41 @@ export class WechatService {
     return buffer
   }
 
-  /** 下发订阅消息 */
+  /** 下发订阅消息；返回微信是否受理（errcode=0），未受理时调用方不应标记「已通知」 */
   async sendSubscribeMessage(params: {
     openid: string
     templateId: string
     data: Record<string, { value: string }>
     page?: string
-  }): Promise<void> {
-    const token = await this.getAccessToken()
-    const url = `https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${token}`
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        touser: params.openid,
-        template_id: params.templateId,
-        page: params.page,
-        data: params.data,
-        miniprogram_state: this.config.get('WECHAT_MP_STATE', 'formal'),
-      }),
-    })
-    const result: any = await res.json()
-    if (result.errcode !== 0) {
-      // 订阅消息失败不阻断主流程，仅记录
-      this.logger.warn(`订阅消息下发失败: ${JSON.stringify(result)}`)
+  }): Promise<boolean> {
+    const post = async (token: string): Promise<any> => {
+      const res = await fetch(
+        `https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${token}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            touser: params.openid,
+            template_id: params.templateId,
+            page: params.page,
+            data: params.data,
+            miniprogram_state: this.config.get('WECHAT_MP_STATE', 'formal'),
+          }),
+        },
+      )
+      return res.json()
     }
+    let result = await post(await this.getAccessToken())
+    // token 被并发刷新顶掉时清缓存重取一次（不带重试的 40001 会让消息彻底丢失）
+    if (result.errcode === 40001 || result.errcode === 42001) {
+      await this.redis.del(ACCESS_TOKEN_CACHE_KEY)
+      result = await post(await this.getAccessToken(true))
+    }
+    if (result.errcode !== 0) {
+      // 订阅消息失败不阻断主流程，仅记录（43101 用户未授权/次数用完，47003 字段不符）
+      this.logger.warn(`订阅消息下发失败: ${JSON.stringify(result)}`)
+      return false
+    }
+    return true
   }
 }

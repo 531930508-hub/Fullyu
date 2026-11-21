@@ -59,11 +59,11 @@ export class NotificationService {
       return false
     }
     try {
-      await this.wechat.sendSubscribeMessage({ openid, templateId, data, page })
+      return await this.wechat.sendSubscribeMessage({ openid, templateId, data, page })
     } catch (e) {
       this.logger.warn(`订阅消息下发异常: ${(e as Error).message}`)
+      return false
     }
-    return true
   }
 
   /**

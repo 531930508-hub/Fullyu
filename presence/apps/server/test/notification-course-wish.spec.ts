@@ -5,12 +5,12 @@ import { NotificationService } from '../src/common/notification/notification.ser
  * time3 活动开始时间 / thing5 温馨提示。字段名与微信模板不一致会整条被拒（47003）。
  */
 describe('课程心愿订阅消息字段', () => {
-  function build() {
+  function build(wxAccepted = true) {
     const config = {
       get: jest.fn((key: string) => (key === 'WECHAT_TMPL_COURSE_WISH' ? 'tmpl-wish' : '')),
     }
     const prisma: any = { user: { findUnique: jest.fn().mockResolvedValue({ openId: 'openid-1' }) } }
-    const wechat = { sendSubscribeMessage: jest.fn().mockResolvedValue(undefined) }
+    const wechat = { sendSubscribeMessage: jest.fn().mockResolvedValue(wxAccepted) }
     const service = new NotificationService(config as any, prisma, wechat as any)
     return { service, wechat }
   }
@@ -32,6 +32,17 @@ describe('课程心愿订阅消息字段', () => {
     expect(payload.data.time2.value).toBe('2026年11月21日 18:00')
     expect(payload.data.time3.value).toBe('2026年11月23日 10:30')
     expect(payload.data.thing5.value).toBe('你许愿的课程开新班了，名额有限')
+  })
+
+  it('微信拒发（如未授权 43101）时返回 false，心愿不被标记', async () => {
+    const { service } = build(false)
+    const delivered = await service.courseWishReleased('u1', {
+      courseName: '晨间瑜伽',
+      enrollAt: new Date(2026, 10, 21, 18, 0, 0),
+      startAt: new Date(2026, 10, 23, 10, 30, 0),
+      courseId: 'c1',
+    })
+    expect(delivered).toBe(false)
   })
 
   it('模板未配置时不下发、返回 false（心愿不被标记）', async () => {
