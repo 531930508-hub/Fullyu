@@ -378,3 +378,14 @@ E2 证据（测试环境，2026-11-08）：
 - 测试 CRM：`CRM_EXT_WEBHOOKS` 只配 `ql` / `sx` / `zc` 三个 test 域名，`CRM_OUTBOX_INTERVAL_MS=15000`。
 - 生产 CRM：移除 `retreat` webhook 与 `ql-mall-test` 密钥，仅保留 `presence` / `teahour`；轻疗批次 1 前不要加回。
 - 小程序：三端（在场/时叙/轻疗）统一按微信 `envVersion` **运行时**选后端——`release` 走生产、`trial`/`develop` 走测试，H5 走同源相对路径；测试构建不再需要单独脚本（原 `build:mp-weixin:test` / `build:mp:test` 已删除）。`VITE_API_BASE` 只在开发构建与 H5 特殊部署时生效，小程序生产构建会忽略它，避免体验版被钉死在某一环境。测试域名仍需在三个 appid 后台加入 request 合法域名。
+
+## 会员昵称统一「会员+后四位」（2026-11-22）
+
+- **规则**：三端默认昵称统一 `会员+手机号后四位`。CRM 占位名集合 `''`/`会员`/`茶客`/`会员XXXX`/`用户XXXX`/`用户+86…`，
+  信息量 真名 3 > `会员+四位` 2 > `用户+号` 1 > 其它 0，**只升不降**；客户自取昵称永不覆盖。
+- **代码**：`src/common/member-name.ts`（`isPlaceholderName` / `nameRank` / `resolvePlaceholderName`），`external.service.ts` 与
+  `brand-member.service.ts` 在落库前归一，别处推上来的 `用户7229` 存成 `会员7229`。
+- **存量回刷**：`prisma/member-name-20261122.sql`（备份表 `member_name_bak_20261122`）
+  **已于 2026-11-22 00:0x 在 CRM 生产执行**：10,150 条占位名 → `会员XXXX`，`placeholder_left=0`，客户自取 69 条未动，`profile_version+1`；
+  测试库 `crm_test` 已演练并验证幂等。
+- **待发布**：本批 CRM 代码尚未发生产（线上仍是 11-21 `main@7096b0d` 版本），发版后新写入才按新口径归一；SQL 已生效，不影响读。

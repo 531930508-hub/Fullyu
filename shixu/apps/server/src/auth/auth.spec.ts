@@ -91,6 +91,15 @@ describe('认证与会话', () => {
     expect(anonymous.body.message).toBe('请先建立顾客会话');
   });
 
+  it('没有昵称的顾客默认叫「会员+手机号后四位」', async () => {
+    const res = await h.api('post', '/customer/session', null, { phone: '13700000876' });
+    expect(res.status).toBe(201);
+    expect(res.body.customer.name).toBe('会员0876');
+    // 资料页副标题只在这种默认名下省略「会员」二字，避免和昵称重复
+    const me = await h.api('get', '/customer/me', res.body.token);
+    expect(me.body.customer.name).toBe('会员0876');
+  });
+
   it('会员等级由服务端核验：普通或过期会员没有折扣', async () => {
     const customer = await h.customer('等级测试');
     const base = await h.api('get', '/customer/me', customer.token);
