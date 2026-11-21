@@ -1,5 +1,6 @@
 package com.macro.mall.incentive.dto;
 
+import com.macro.mall.incentive.entity.ShopIncentiveTarget;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -17,6 +18,9 @@ public class ShopTargetView {
     private String shopName;
 
     private String monthCode;
+
+    /** 0=业绩目标（整店实收），1=复购目标（当月复购金额）。 */
+    private Integer metricType = ShopIncentiveTarget.METRIC_REVENUE;
 
     private BigDecimal targetRevenue = BigDecimal.ZERO;
 

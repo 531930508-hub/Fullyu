@@ -26,9 +26,17 @@ public class IncentiveDashboard {
 
     private String shopName;
 
+    /** 目标指标：0=业绩（整店实收），1=复购（当月复购金额）。未设门店目标时保持默认 0。 */
+    private Integer metricType = 0;
+
+    /** 门店目标值，含义由 metricType 决定。 */
     private BigDecimal targetRevenue = BigDecimal.ZERO;
 
+    /** 当月整店实收，业绩目标的实际值。 */
     private BigDecimal actualRevenue = BigDecimal.ZERO;
+
+    /** 当月复购金额，复购目标的实际值；未配置复购目标（未查询）时为 null。 */
+    private BigDecimal repeatAmount;
 
     private BigDecimal achievementRate = BigDecimal.ZERO;
 

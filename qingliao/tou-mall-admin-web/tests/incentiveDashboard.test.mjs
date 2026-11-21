@@ -90,3 +90,13 @@ test('state labels and sort description use actual cooperation and subtotal word
   assert.match(source, /已结束合作/); assert.match(source, /暂停合作/); assert.match(source, /按激励合计从高到低排序/);
   assert.match(source, /:loading="exporting"/);
 });
+test('repeat target strip shows repeat amount while revenue target keeps whole shop revenue', () => {
+  const {state, options} = setup();
+  const actual = options.computed.targetActual, title = options.computed.targetMetricTitle;
+  state.dashboard = {metricType: 1, repeatAmount: 12000, actualRevenue: 98000};
+  assert.equal(actual.call(state), 12000);
+  assert.match(title.call(state), /复购/);
+  state.dashboard = {metricType: 0, repeatAmount: 12000, actualRevenue: 98000};
+  assert.equal(actual.call(state), 98000);
+  assert.match(title.call(state), /业绩/);
+});

@@ -14,6 +14,7 @@ import com.macro.mall.incentive.entity.ShopIncentiveTarget;
 import com.macro.mall.incentive.mapper.*;
 import com.macro.mall.incentive.model.IncentiveBoard;
 import com.macro.mall.incentive.model.IncentiveRule;
+import com.macro.mall.incentive.model.ShopRepeatAmount;
 import com.macro.mall.incentive.model.TrainingProgress;
 import com.macro.mall.incentive.model.TrainingSection;
 import com.macro.mall.incentive.service.*;
@@ -205,6 +206,72 @@ class IncentiveExportTest {
     @Test void excessivePageNumberCannotOverflowIndex() {
         assertThrows(BusinessException.class, () -> service.dashboard("2026-11", null, 1, Integer.MAX_VALUE, 100));
         verifyNoInteractions(people, query);
+    }
+
+    @Test void repeatTargetIsJudgedByRepeatAmountNotWholeShopRevenue() {
+        ShopIncentiveTargetMapper targets = mock(ShopIncentiveTargetMapper.class);
+        when(targets.selectList(any())).thenReturn(Collections.singletonList(
+                target(ShopIncentiveTarget.METRIC_REPEAT, "10000", "1")));
+        ReflectionTestUtils.setField(service, "targetMapper", targets);
+        when(access.resolveShopId(5L)).thenReturn(5L);
+        when(query.selectShopRepeatAmounts(any(), any(), any()))
+                .thenReturn(Collections.singletonList(new ShopRepeatAmount(5L, new java.math.BigDecimal("12000"))));
+        IncentiveDashboard dashboard = service.dashboard("2026-11", 5L, 1, 1, 20);
+        assertEquals(ShopIncentiveTarget.METRIC_REPEAT, dashboard.getMetricType());
+        assertEquals(0, new java.math.BigDecimal("12000").compareTo(dashboard.getRepeatAmount()));
+        assertEquals(0, new java.math.BigDecimal("120").compareTo(dashboard.getAchievementRate()));
+        // 提点按复购金额计提：12000 × 1% = 120，而不是按（读不到的）整店实收。
+        assertEquals(0, new java.math.BigDecimal("120").compareTo(dashboard.getManagerAmount()));
+        verify(query).selectShopRepeatAmounts(eq(Collections.singletonList(5L)),
+                eq(LocalDate.of(2026, 11, 1)), any());
+    }
+
+    @Test void repeatTargetBelowTargetPaysNothingButStillShowsAchievement() {
+        ShopIncentiveTargetMapper targets = mock(ShopIncentiveTargetMapper.class);
+        when(targets.selectList(any())).thenReturn(Collections.singletonList(
+                target(ShopIncentiveTarget.METRIC_REPEAT, "10000", "1")));
+        ReflectionTestUtils.setField(service, "targetMapper", targets);
+        when(access.resolveShopId(5L)).thenReturn(5L);
+        when(query.selectShopRepeatAmounts(any(), any(), any()))
+                .thenReturn(Collections.singletonList(new ShopRepeatAmount(5L, new java.math.BigDecimal("9000"))));
+        IncentiveDashboard dashboard = service.dashboard("2026-11", 5L, 1, 1, 20);
+        assertEquals(0, new java.math.BigDecimal("90").compareTo(dashboard.getAchievementRate()));
+        assertEquals(0, java.math.BigDecimal.ZERO.compareTo(dashboard.getManagerAmount()));
+    }
+
+    @Test void revenueTargetSkipsRepeatAmountQuery() {
+        ShopIncentiveTargetMapper targets = mock(ShopIncentiveTargetMapper.class);
+        // 老数据 metric_type 为 0（甚至可能为 null），必须继续按整店实收判定，且不查复购。
+        ShopIncentiveTarget legacy = target(null, "100000", "1");
+        when(targets.selectList(any())).thenReturn(Collections.singletonList(legacy));
+        ReflectionTestUtils.setField(service, "targetMapper", targets);
+        when(access.resolveShopId(5L)).thenReturn(5L);
+        IncentiveDashboard dashboard = service.dashboard("2026-11", 5L, 1, 1, 20);
+        assertEquals(ShopIncentiveTarget.METRIC_REVENUE, dashboard.getMetricType());
+        assertNull(dashboard.getRepeatAmount());
+        verify(query, never()).selectShopRepeatAmounts(any(), any(), any());
+    }
+
+    @Test void unknownMetricTypeFallsBackToRevenue() {
+        ShopIncentiveTargetMapper targets = mock(ShopIncentiveTargetMapper.class);
+        when(targets.selectList(any())).thenReturn(Collections.singletonList(
+                target(99, "100000", "1")));
+        ReflectionTestUtils.setField(service, "targetMapper", targets);
+        when(access.resolveShopId(5L)).thenReturn(5L);
+        IncentiveDashboard dashboard = service.dashboard("2026-11", 5L, 1, 1, 20);
+        assertEquals(ShopIncentiveTarget.METRIC_REVENUE, dashboard.getMetricType());
+        verify(query, never()).selectShopRepeatAmounts(any(), any(), any());
+    }
+
+    private ShopIncentiveTarget target(Integer metricType, String targetRevenue, String rate) {
+        ShopIncentiveTarget target = new ShopIncentiveTarget();
+        target.setShopId(5L);
+        target.setMonthCode("2026-11");
+        target.setMetricType(metricType);
+        target.setTargetRevenue(new java.math.BigDecimal(targetRevenue));
+        target.setCommissionRate(new java.math.BigDecimal(rate));
+        target.setManagerMassagistId(1L);
+        return target;
     }
 
     @Test void httpExportForwardsStatusAndReturnsCsv() throws Throwable {

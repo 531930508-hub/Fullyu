@@ -518,7 +518,7 @@
                   店长奖励
                   <em class="status-tag" :class="managerAchievedCount ? 'done' : 'muted'">{{ managerAchievedCount }} / {{ manager.shops.length }} 家达成</em>
                 </b>
-                <small>整店实际业绩达到目标后，按全部实际业绩提点</small>
+                <small>门店目标（业绩 / 复购）达成后，按全部实际值提点</small>
               </span>
               <span class="toggle-side">
                 <strong class="toggle-amount">{{ cash(manager.totalAmount) }}</strong>
@@ -536,13 +536,13 @@
                   <i :style="{width: managerWidth(shop)}"></i>
                 </div>
                 <div class="manager-meta">
-                  <span>实际 {{ cash(shop.actualRevenue) }} / 目标 {{ cash(shop.targetRevenue) }}</span>
+                  <span>{{ shop.metricType === 1 ? '复购' : '实收' }} {{ cash(shop.actualRevenue) }} / 目标 {{ cash(shop.targetRevenue) }}</span>
                   <span>提点 {{ percent(shop.commissionRate, 0) }}</span>
                 </div>
                 <p class="card-note">
                   {{ shop.achieved
-                    ? '目标已达成，按整店实际业绩 ' + cash(shop.actualRevenue) + ' × ' + percent(shop.commissionRate, 0) + ' 计算。'
-                    : '目标尚未完成，当前为零；完成后按整店全部实际业绩提点，不只计算超出部分。' }}
+                    ? '目标已达成，按' + (shop.metricType === 1 ? '当月复购金额' : '整店实际业绩') + ' ' + cash(shop.actualRevenue) + ' × ' + percent(shop.commissionRate, 0) + ' 计算。'
+                    : '目标尚未完成，当前为零；完成后按全部' + (shop.metricType === 1 ? '复购金额' : '实际业绩') + '提点，不只计算超出部分。' }}
                 </p>
               </div>
             </div>

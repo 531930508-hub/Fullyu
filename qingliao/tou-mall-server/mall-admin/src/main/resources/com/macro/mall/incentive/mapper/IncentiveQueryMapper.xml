@@ -184,4 +184,79 @@
           AND od.massagist_id = #{massagistId}
     </select>
 
+    <!-- 门店当月复购金额。口径：
+         1) 订单级去重：一笔订单只计一次 pay_amount，服务日取该单已开始履约明细里最早的 end_time 日期，
+            避免多明细订单（多项目/多疗愈师）重复累加；
+         2) 「老客」按客户手机号在全平台判定：本单服务日之前有过到店（有效单，od.state=2）才算复购，
+            取 MIN(服务日) 天然把同一天多单算成一次到店；
+         3) 首单不计入；退款/取消的订单不再满足 state/appointment_state 条件，会从复购金额里自然剔除，
+            与看板其他指标（服务费、复购奖励、留存）保持同一订单口径；
+         4) first_visits 只用「当月有复购候选订单的手机号」回查历史，避免全表扫历史订单；
+            明细服务日先按订单聚合成派生表，别写成相关子查询（实测 2.3s → 0.12s）。 -->
+    <select id="selectShopRepeatAmounts" resultType="com.macro.mall.incentive.model.ShopRepeatAmount">
+        WITH month_orders AS (
+            SELECT o.id AS order_id,
+                   o.shop_id AS shop_id,
+                   o.pay_amount AS pay_amount,
+                   TRIM(c.phone) AS phone
+            FROM s_order o
+            INNER JOIN c_customer c ON c.id = o.customer_id
+            WHERE o.state IN (1, 2)
+              AND o.appointment_state IN (1, 2)
+              AND o.type = 0
+              AND o.pay_time IS NOT NULL
+              AND o.pay_amount IS NOT NULL
+              AND DATE(o.pay_time) &gt;= #{start}
+              AND DATE(o.pay_time) &lt;= #{end}
+              AND c.phone IS NOT NULL
+              AND TRIM(c.phone) &lt;&gt; ''
+              AND NOT EXISTS (
+                  SELECT 1 FROM s_stat_internal_account ia
+                  WHERE ia.enabled = 1
+                    AND ia.phone = CONVERT(TRIM(c.phone) USING utf8mb4) COLLATE utf8mb4_general_ci
+              )
+              <if test="shopIds != null and shopIds.size() > 0">
+                  AND o.shop_id IN
+                  <foreach collection="shopIds" item="shopId" open="(" separator="," close=")">
+                      #{shopId}
+                  </foreach>
+              </if>
+        ),
+        month_orders_with_visit AS (
+            SELECT m.order_id,
+                   m.shop_id,
+                   m.pay_amount,
+                   m.phone,
+                   MIN(DATE(od.end_time)) AS visit_date
+            FROM month_orders m
+            INNER JOIN oms_order_detail od
+                    ON od.order_id = m.order_id
+                   AND od.state = 2
+                   AND od.end_time IS NOT NULL
+            GROUP BY m.order_id, m.shop_id, m.pay_amount, m.phone
+        ),
+        first_visits AS (
+            SELECT TRIM(c2.phone) AS phone,
+                   MIN(DATE(od2.end_time)) AS first_date
+            FROM oms_order_detail od2
+            INNER JOIN s_order o2 ON o2.id = od2.order_id
+            INNER JOIN c_customer c2 ON c2.id = o2.customer_id
+            WHERE o2.state IN (1, 2)
+              AND o2.appointment_state IN (1, 2)
+              AND o2.type = 0
+              AND od2.state = 2
+              AND od2.end_time IS NOT NULL
+              AND c2.phone IS NOT NULL
+              AND TRIM(c2.phone) &lt;&gt; ''
+              AND TRIM(c2.phone) IN (SELECT phone FROM month_orders)
+            GROUP BY TRIM(c2.phone)
+        )
+        SELECT m.shop_id AS shop_id,
+               SUM(m.pay_amount) AS amount
+        FROM month_orders_with_visit m
+        INNER JOIN first_visits f ON f.phone = m.phone
+        WHERE m.visit_date &gt; f.first_date
+        GROUP BY m.shop_id
+    </select>
+
 </mapper>

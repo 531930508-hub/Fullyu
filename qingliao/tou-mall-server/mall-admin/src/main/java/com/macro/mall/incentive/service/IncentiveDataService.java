@@ -52,6 +52,7 @@ import com.macro.mall.incentive.model.RepurchaseMetrics;
 import com.macro.mall.incentive.model.SalaryDetailRow;
 import com.macro.mall.incentive.model.ServiceDetailRow;
 import com.macro.mall.incentive.model.SettlementResult;
+import com.macro.mall.incentive.model.ShopRepeatAmount;
 import com.macro.mall.incentive.model.TrainingOrder;
 import com.macro.mall.incentive.model.TrainingProgress;
 import com.macro.mall.incentive.model.TrainingProjectRule;
@@ -218,13 +219,17 @@ public class IncentiveDataService {
                 .filter(t -> shopId.equals(t.getShopId()))
                 .findFirst().orElse(null);
         if (target != null) {
-            BigDecimal actual = context.revenueByShop.getOrDefault(shopId, BigDecimal.ZERO);
+            int metricType = normalizeMetricType(target.getMetricType());
+            BigDecimal actual = targetActual(context, target);
             BigDecimal targetRevenue = target.getTargetRevenue() == null
                     ? BigDecimal.ZERO : target.getTargetRevenue();
             BigDecimal rate = target.getCommissionRate() == null
                     ? BigDecimal.ZERO : target.getCommissionRate();
+            dashboard.setMetricType(metricType);
             dashboard.setTargetRevenue(targetRevenue);
-            dashboard.setActualRevenue(actual);
+            dashboard.setActualRevenue(context.revenueByShop.getOrDefault(shopId, BigDecimal.ZERO));
+            dashboard.setRepeatAmount(metricType == ShopIncentiveTarget.METRIC_REPEAT
+                    ? actual : context.repeatByShop.get(shopId));
             dashboard.setAchievementRate(targetRevenue.compareTo(BigDecimal.ZERO) > 0
                     ? IncentiveMath.percent(actual, targetRevenue) : BigDecimal.ZERO);
             dashboard.setManagerAmount(target.getManagerMassagistId() == null
@@ -240,6 +245,7 @@ public class IncentiveDataService {
             dashboard.setManagerAmount(managerAmount);
             dashboard.setActualRevenue(context.revenueByShop.values().stream()
                     .reduce(BigDecimal.ZERO, BigDecimal::add));
+            // 全部门店总览没有单一门店目标，repeatByShop 只含复购目标门店，不能当汇总值展示。
         }
 
         dashboard.getTherapists().sort(Comparator
@@ -802,6 +808,7 @@ public class IncentiveDataService {
             Shop shop = shops.get(target.getShopId());
             view.setShopName(shop == null ? null : shop.getName());
             view.setMonthCode(target.getMonthCode());
+            view.setMetricType(normalizeMetricType(target.getMetricType()));
             view.setTargetRevenue(target.getTargetRevenue());
             view.setCommissionRate(target.getCommissionRate());
             view.setManagerMassagistId(target.getManagerMassagistId());
@@ -824,9 +831,10 @@ public class IncentiveDataService {
         if (shopService.getById(request.getShopId()) == null) {
             throw new BusinessException("门店不存在");
         }
+        int metricType = normalizeMetricType(request.getMetricType());
         if (request.getTargetRevenue() == null
                 || request.getTargetRevenue().compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessException("业绩目标不能为负");
+            throw new BusinessException(metricTypeLabel(metricType) + "不能为负");
         }
         if (request.getCommissionRate() == null
                 || request.getCommissionRate().compareTo(BigDecimal.ZERO) < 0
@@ -846,6 +854,7 @@ public class IncentiveDataService {
             existing = new ShopIncentiveTarget();
             existing.setShopId(request.getShopId());
             existing.setMonthCode(monthCode);
+            existing.setMetricType(metricType);
             existing.setCreateUserId(accessService.currentAdmin().getId());
             existing.setConfigId(configService.bundleForMonth(monthCode).getConfig().getId());
             existing.setTargetRevenue(request.getTargetRevenue());
@@ -854,6 +863,7 @@ public class IncentiveDataService {
             existing.setRemark(request.getRemark());
             targetMapper.insert(existing);
         } else {
+            existing.setMetricType(metricType);
             existing.setTargetRevenue(request.getTargetRevenue());
             existing.setCommissionRate(request.getCommissionRate());
             existing.setManagerMassagistId(request.getManagerMassagistId());
@@ -1030,6 +1040,7 @@ public class IncentiveDataService {
             }
         }
         loadRevenue(context);
+        loadRepeatAmounts(context);
 
         List<SalaryOtherAmount> otherAmounts = salaryOtherAmountService
                 .findSalaryOtherAmountList(month, null);
@@ -1135,6 +1146,54 @@ public class IncentiveDataService {
                 context.warnings.add("门店 " + shopId + " 实收款读取失败，店长奖励按 0 展示，请核对经营流水。");
             }
         }
+    }
+
+    /**
+     * 复购目标的实际值：当月复购金额（按支付日落在当月统计窗口内的有效订单）。
+     * 只有配置了复购目标的门店才查，业绩目标的门店不为它多付一次聚合开销。
+     */
+    private void loadRepeatAmounts(BoardContext context) {
+        List<Long> shopIds = context.targets.stream()
+                .filter(t -> t.getShopId() != null
+                        && normalizeMetricType(t.getMetricType()) == ShopIncentiveTarget.METRIC_REPEAT)
+                .map(ShopIncentiveTarget::getShopId)
+                .distinct()
+                .collect(Collectors.toList());
+        if (shopIds.isEmpty()) {
+            return;
+        }
+        try {
+            List<ShopRepeatAmount> rows = queryMapper.selectShopRepeatAmounts(
+                    shopIds, IncentiveMath.monthStart(context.month), context.cutoff);
+            for (ShopRepeatAmount row : rows == null ? new ArrayList<ShopRepeatAmount>() : rows) {
+                if (row == null || row.getShopId() == null) {
+                    continue;
+                }
+                context.repeatByShop.merge(row.getShopId(),
+                        row.getAmount() == null ? BigDecimal.ZERO : row.getAmount(), BigDecimal::add);
+            }
+            // 查询只返回有复购金额的门店，缺的门店补 0，前端不用再判空。
+            for (Long shopId : shopIds) {
+                context.repeatByShop.putIfAbsent(shopId, BigDecimal.ZERO);
+            }
+        } catch (RuntimeException e) {
+            for (Long shopId : shopIds) {
+                context.repeatByShop.put(shopId, BigDecimal.ZERO);
+            }
+            context.warnings.add("门店复购金额读取失败，复购目标的达成与店长奖励按 0 展示，请核对订单数据。");
+        }
+    }
+
+    /**
+     * 门店目标的实际值：业绩目标取整店实收，复购目标取当月复购金额。
+     */
+    private BigDecimal targetActual(BoardContext context, ShopIncentiveTarget target) {
+        if (target == null || target.getShopId() == null) {
+            return BigDecimal.ZERO;
+        }
+        return normalizeMetricType(target.getMetricType()) == ShopIncentiveTarget.METRIC_REPEAT
+                ? context.repeatByShop.getOrDefault(target.getShopId(), BigDecimal.ZERO)
+                : context.revenueByShop.getOrDefault(target.getShopId(), BigDecimal.ZERO);
     }
 
     private IncentiveBoard buildBoard(BoardContext context,
@@ -1374,7 +1433,7 @@ public class IncentiveDataService {
         result.setManager(true);
         BigDecimal total = BigDecimal.ZERO;
         for (ShopIncentiveTarget target : targets) {
-            BigDecimal actual = context.revenueByShop.getOrDefault(target.getShopId(), BigDecimal.ZERO);
+            BigDecimal actual = targetActual(context, target);
             BigDecimal targetRevenue = target.getTargetRevenue() == null
                     ? BigDecimal.ZERO : target.getTargetRevenue();
             BigDecimal rate = target.getCommissionRate() == null
@@ -1382,6 +1441,7 @@ public class IncentiveDataService {
             ManagerShopReward reward = new ManagerShopReward();
             reward.setShopId(target.getShopId());
             reward.setShopName(context.shopNames.get(target.getShopId()));
+            reward.setMetricType(normalizeMetricType(target.getMetricType()));
             reward.setActualRevenue(IncentiveMath.money(actual));
             reward.setTargetRevenue(targetRevenue);
             reward.setCommissionRate(rate);
@@ -1555,6 +1615,20 @@ public class IncentiveDataService {
         return value == null || value < 0 ? fallback : value;
     }
 
+    /**
+     * 目标指标只认两个值：0 业绩、1 复购。空值与未知值一律按业绩处理，
+     * 保证老数据与老前端（不传 metricType）行为不变。
+     */
+    private int normalizeMetricType(Integer value) {
+        return value != null && value == ShopIncentiveTarget.METRIC_REPEAT
+                ? ShopIncentiveTarget.METRIC_REPEAT
+                : ShopIncentiveTarget.METRIC_REVENUE;
+    }
+
+    private String metricTypeLabel(int metricType) {
+        return metricType == ShopIncentiveTarget.METRIC_REPEAT ? "复购目标" : "业绩目标";
+    }
+
     private String csv(String value) {
         if (value == null) {
             return "";
@@ -1625,6 +1699,8 @@ public class IncentiveDataService {
         private List<ShopIncentiveTarget> targets = new ArrayList<>();
         private Map<Long, List<ShopIncentiveTarget>> targetsByManager = new HashMap<>();
         private Map<Long, BigDecimal> revenueByShop = new HashMap<>();
+        /** 门店当月复购金额，只装复购目标的门店。 */
+        private Map<Long, BigDecimal> repeatByShop = new HashMap<>();
         private Map<Long, BigDecimal> otherAmounts = new HashMap<>();
         private Map<Long, List<SalaryRecord>> priorSalaryByMassagist = new HashMap<>();
         private List<String> warnings = new ArrayList<>();

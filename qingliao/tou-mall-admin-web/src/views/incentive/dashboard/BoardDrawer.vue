@@ -319,12 +319,12 @@
       <section v-if="board.manager && board.manager.manager" class="detail-section">
         <div class="section-title">
           <h3>店长奖励</h3>
-          <span>按整店实际业绩 × 提点</span>
+          <span>按门店目标实际值 × 提点（业绩 / 复购）</span>
         </div>
         <div v-for="shop in board.manager.shops" :key="shop.shopId" class="manager-row">
           <div>
             <b>{{ shop.shopName || ('门店 ' + shop.shopId) }}</b>
-            <small>实际 {{ money(shop.actualRevenue) }} / 目标 {{ money(shop.targetRevenue) }}，提点 {{ percent(shop.commissionRate, 0) }}</small>
+            <small>{{ shop.metricType === 1 ? '复购' : '实收' }} {{ money(shop.actualRevenue) }} / 目标 {{ money(shop.targetRevenue) }}，提点 {{ percent(shop.commissionRate, 0) }}</small>
           </div>
           <el-tag size="mini" :type="shop.achieved ? 'success' : 'info'" effect="plain">
             {{ shop.achieved ? '已达成' : '未达成' }}

@@ -346,8 +346,8 @@
       <el-tab-pane label="门店目标" name="targets">
         <div class="target-toolbar">
           <div>
-            <h3>门店月度业绩目标</h3>
-            <p>店长奖励 = 整店实际实收 × 提点比例；只有实际实收达到目标才计入。</p>
+            <h3>门店月度目标</h3>
+            <p>业绩目标按整店实际实收判定，复购目标按当月复购金额判定；店长奖励 = 实际值 × 提点比例，只有实际值达到目标才计入。</p>
           </div>
           <el-button
             size="small"
@@ -360,7 +360,14 @@
         </div>
         <el-table v-loading="loadingTargets" :data="targets" border stripe>
           <el-table-column label="门店" prop="shopName" min-width="150"/>
-          <el-table-column label="业绩目标" width="150" align="right">
+          <el-table-column label="指标" width="100" align="center">
+            <template slot-scope="scope">
+              <el-tag size="mini" :type="scope.row.metricType === 1 ? 'warning' : ''" effect="plain">
+                {{ metricLabel(scope.row.metricType) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="目标值" width="150" align="right">
             <template slot-scope="scope">¥{{ money(scope.row.targetRevenue) }}</template>
           </el-table-column>
           <el-table-column label="店长提点" width="110" align="right">
@@ -423,7 +430,7 @@
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog :visible.sync="targetDialogVisible" width="480px" title="门店业绩目标" @closed="resetTarget">
+    <el-dialog :visible.sync="targetDialogVisible" width="480px" title="门店月度目标" @closed="resetTarget">
       <el-form label-width="110px" size="small">
         <el-form-item label="门店" required>
           <el-select
@@ -436,7 +443,13 @@
             <el-option v-for="shop in shops" :key="shop.id" :label="shop.name" :value="shop.id"/>
           </el-select>
         </el-form-item>
-        <el-form-item label="业绩目标" required>
+        <el-form-item label="考核指标" required>
+          <el-radio-group v-model="targetForm.metricType">
+            <el-radio :label="0">业绩目标（整店实收）</el-radio>
+            <el-radio :label="1">复购目标（当月复购金额）</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item :label="targetLabel" required>
           <el-input-number v-model="targetForm.targetRevenue" :min="0" :step="10000" :precision="2" style="width: 100%"/>
         </el-form-item>
         <el-form-item label="店长提点" required>
@@ -456,7 +469,7 @@
           <el-input v-model="targetForm.remark" type="textarea" :rows="2" maxlength="500" show-word-limit/>
         </el-form-item>
       </el-form>
-      <div class="dialog-hint">按整店实际实收计算，不按超出目标部分计算。</div>
+      <div class="dialog-hint">{{ targetHint }}</div>
       <span slot="footer">
         <el-button size="small" @click="targetDialogVisible = false">取消</el-button>
         <el-button size="small" type="primary" :loading="savingTarget" @click="saveTarget">保存</el-button>
@@ -565,6 +578,7 @@ export default {
       targetForm: {
         id: null,
         shopId: null,
+        metricType: 0,
         targetRevenue: 0,
         commissionRate: 0,
         managerMassagistId: null,
@@ -614,6 +628,14 @@ export default {
     },
     previewAmount() {
       return numberValue(this.previewMinutes) * this.previewUnitPrice
+    },
+    targetLabel() {
+      return this.targetForm.metricType === 1 ? '复购目标' : '业绩目标'
+    },
+    targetHint() {
+      return this.targetForm.metricType === 1
+        ? '按当月复购金额计算：只统计客户在本单服务日之前已在本品牌到店的有效订单实付，不按超出目标部分计算。'
+        : '按整店实际实收计算，不按超出目标部分计算。'
     }
   },
   created() {
@@ -954,6 +976,7 @@ export default {
         this.targetForm = {
           id: row.id,
           shopId: row.shopId,
+          metricType: row.metricType === 1 ? 1 : 0,
           targetRevenue: numberValue(row.targetRevenue),
           commissionRate: numberValue(row.commissionRate),
           managerMassagistId: row.managerMassagistId || null,
@@ -964,6 +987,7 @@ export default {
         this.targetForm = {
           id: null,
           shopId: this.shops.length ? this.shops[0].id : null,
+          metricType: 0,
           targetRevenue: 0,
           commissionRate: 0,
           managerMassagistId: null,
@@ -993,7 +1017,7 @@ export default {
         return
       }
       if (numberValue(this.targetForm.targetRevenue) < 0) {
-        this.notifyWarning('业绩目标不能为负')
+        this.notifyWarning(`${this.targetLabel}不能为负`)
         return
       }
       if (numberValue(this.targetForm.commissionRate) < 0
@@ -1006,6 +1030,7 @@ export default {
         await incentiveApi.saveShopTarget({
           shopId: this.targetForm.shopId,
           monthCode: this.month,
+          metricType: this.targetForm.metricType,
           targetRevenue: this.targetForm.targetRevenue,
           commissionRate: this.targetForm.commissionRate,
           managerMassagistId: this.targetForm.managerMassagistId,
@@ -1023,11 +1048,15 @@ export default {
       this.targetForm = {
         id: null,
         shopId: null,
+        metricType: 0,
         targetRevenue: 0,
         commissionRate: 0,
         managerMassagistId: null,
         remark: ''
       }
+    },
+    metricLabel(metricType) {
+      return Number(metricType) === 1 ? '复购目标' : '业绩目标'
     },
     formatDateTime(value) {
       if (!value) {

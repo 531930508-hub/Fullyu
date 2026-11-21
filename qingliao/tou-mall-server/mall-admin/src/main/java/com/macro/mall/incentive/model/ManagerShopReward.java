@@ -14,8 +14,13 @@ public class ManagerShopReward {
 
     private String shopName;
 
+    /** 目标指标：0=业绩（actualRevenue 为整店实收），1=复购（actualRevenue 为当月复购金额）。 */
+    private Integer metricType = 0;
+
+    /** 指标实际值：业绩目标是整店实收，复购目标是当月复购金额。 */
     private BigDecimal actualRevenue = BigDecimal.ZERO;
 
+    /** 指标目标值，与 metricType 对应。 */
     private BigDecimal targetRevenue = BigDecimal.ZERO;
 
     private BigDecimal commissionRate = BigDecimal.ZERO;

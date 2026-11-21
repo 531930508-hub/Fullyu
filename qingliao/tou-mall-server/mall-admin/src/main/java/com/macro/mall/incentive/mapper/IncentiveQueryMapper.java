@@ -3,6 +3,7 @@ package com.macro.mall.incentive.mapper;
 import com.macro.mall.incentive.model.CustomerVisit;
 import com.macro.mall.incentive.model.SalaryDetailRow;
 import com.macro.mall.incentive.model.ServiceDetailRow;
+import com.macro.mall.incentive.model.ShopRepeatAmount;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
@@ -49,4 +50,12 @@ public interface IncentiveQueryMapper {
                                              @Param("end") LocalDateTime end);
 
     LocalDate selectEarliestServiceDate(@Param("massagistId") Long massagistId);
+
+    /**
+     * 门店当月复购金额：按支付日落在 [start, end] 的有效服务单，
+     * 客户在本单服务日之前已有到店记录的订单实付合计。
+     */
+    List<ShopRepeatAmount> selectShopRepeatAmounts(@Param("shopIds") List<Long> shopIds,
+                                                   @Param("start") LocalDate start,
+                                                   @Param("end") LocalDate end);
 }

@@ -73,13 +73,13 @@
       <div class="kpi-card">
         <small>店长奖励</small>
         <strong>¥{{ money(dashboard.totalManager) }}</strong>
-        <span>整店目标达成后按实收提点</span>
+        <span>门店目标达成后按实际值提点（业绩 / 复购）</span>
       </div>
     </div>
 
     <div v-if="dashboard.shopId" class="target-strip">
       <div class="target-title">
-        <span>门店业绩目标</span>
+        <span>{{ targetMetricTitle }}</span>
         <b>{{ dashboard.shopName }}</b>
       </div>
       <div class="target-metric">
@@ -87,8 +87,8 @@
         <span>¥{{ money(dashboard.targetRevenue) }}</span>
       </div>
       <div class="target-metric">
-        <small>实际实收</small>
-        <span>¥{{ money(dashboard.actualRevenue) }}</span>
+        <small>{{ dashboard.metricType === 1 ? '实际复购' : '实际实收' }}</small>
+        <span>¥{{ money(targetActual) }}</span>
       </div>
       <div class="target-metric">
         <small>达成率</small>
@@ -261,6 +261,15 @@ export default {
       // 导出接口在服务端要求运营/财务类角色，非全局账号不展示导出入口。
       const globalRoles = ['超级管理员', '总助', '运营', '财务', 'admin']
       return (this.roles || []).some(role => globalRoles.indexOf(role) >= 0)
+    },
+    targetMetricTitle() {
+      return this.dashboard.metricType === 1 ? '门店复购目标' : '门店业绩目标'
+    },
+    /** 复购目标看板的实际值取 repeatAmount，业绩目标仍取整店实收。 */
+    targetActual() {
+      return this.dashboard.metricType === 1
+        ? numberValue(this.dashboard.repeatAmount)
+        : numberValue(this.dashboard.actualRevenue)
     }
   },
   created() {
