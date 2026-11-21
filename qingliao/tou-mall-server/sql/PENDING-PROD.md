@@ -566,4 +566,7 @@ STATISTICS` 判存量，可重复执行；`sql/prod/` 已由 `scripts/make-prod-
   CRM 侧 `member_name_bak_20261122` 同批执行（10,150 条），顺序为 CRM 先、轻疗后。
 - **代码**：`NicknameGenerator.DEFAULT_PREFIX` 改「会员」；`BrandMemberProfileSync` 拉取/回推按 `nicknameRank` 只升不降，
   能把本地 `用户xxxx` 升到 CRM 的 `会员xxxx`，也不会把 `会员xxxx` 降回 `用户xxxx`。
-- **待发布**：轻疗 jar 未重发（线上仍是 11-20 包），新注册客户的默认昵称要等发版才变「会员xxxx」；存量已回刷。
+- **已发布（2026-11-22 00:40）**：`deploy-prod.sh` 换 jar（主目标 jar sha256 `ff4525c4…` → 新包），
+  备份 `/server/java/fully/mall-admin-1.0-SNAPSHOT.jar` 于 `/server/java/fully/backup/20261122-003959/`；
+  `/health`、`/`、`/api/product/list` 均 200（冒烟首轮的 503 是重启窗口内 `no live upstreams`，1 分钟后复测通过）。
+  tag `prod-qingliao-mall-20261122-0044`。

@@ -388,4 +388,6 @@ E2 证据（测试环境，2026-11-08）：
 - **存量回刷**：`prisma/member-name-20261122.sql`（备份表 `member_name_bak_20261122`）
   **已于 2026-11-22 00:0x 在 CRM 生产执行**：10,150 条占位名 → `会员XXXX`，`placeholder_left=0`，客户自取 69 条未动，`profile_version+1`；
   测试库 `crm_test` 已演练并验证幂等。
-- **待发布**：本批 CRM 代码尚未发生产（线上仍是 11-21 `main@7096b0d` 版本），发版后新写入才按新口径归一；SQL 已生效，不影响读。
+- **已发布（2026-11-22 00:40）**：生产 `/opt/fullyu-crm` 同步 `apps/server/src`、`prisma`、`packages/shared/src`（`main@dc2aa0e`），
+  跑 `npm run build:mysql` 重建 Prisma Client(mysql) + tsc，`systemctl restart fullyu-crm`；`/api/health` 200、启动日志 0 error。
+  备份 `crm-server-{dist,src}-20261122-0040.tar.gz`；tag `prod-crm-20261122-0044`。
