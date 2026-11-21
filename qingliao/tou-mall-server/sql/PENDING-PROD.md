@@ -541,6 +541,11 @@ cherry-pick 把 yml/pom 的 CRLF 改成 LF，已还原，避免整文件重写�
 STATISTICS` 判存量，可重复执行；`sql/prod/` 已由 `scripts/make-prod-sql.py` 生成，
 契约测试 `ReceptionQueueTwoKindContractTest` 覆盖「守卫 / 加列 / 唯一键口径 / 生产版无条件执行 / 实体与常量」。
 
+**生产执行状态**：**2026-11-21 23:09 已执行**（`tou_mall_current`，执行前 `mysqldump` 两表到测试机
+`/root/backups/tou_mall_current-queue-20261121-2309.sql`，56,067 B）。执行后复核：`s_reception_queue`
+列含 `queue_kind/duty_time`、唯一键 `uk_date_shop_kind_massagist`、`s_reception_queue_log` 含 `queue_kind`，
+当天 15 行数据原样保留。执行时跑的仍是老 jar（不查这两列），换 jar 在 23:24 完成。
+
 **口径**
 
 1. 服务单上钟只推服务单队，接待单上钟只推接待单队；接待不再挤掉正在排服务单的客人。
