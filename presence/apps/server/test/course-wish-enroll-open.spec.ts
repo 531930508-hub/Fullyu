@@ -50,7 +50,11 @@ describe('报名开放心愿通知', () => {
     expect(notification.courseWishReleased).toHaveBeenCalledTimes(2)
     expect(notification.courseWishReleased).toHaveBeenCalledWith(
       'u1',
-      expect.objectContaining({ courseId: 'c1', venue: '静安馆' }),
+      expect.objectContaining({
+        courseId: 'c1',
+        enrollAt: expect.any(Date),
+        startAt: expect.any(Date),
+      }),
     )
     expect(prisma.courseWish.update).toHaveBeenCalledTimes(2)
     expect(prisma.courseWish.update).toHaveBeenCalledWith({

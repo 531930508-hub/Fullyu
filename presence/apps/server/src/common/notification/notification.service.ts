@@ -3,6 +3,18 @@ import { ConfigService } from '@nestjs/config'
 import { PrismaService } from '../prisma.service'
 import { WechatService } from '../wechat/wechat.service'
 
+/** thing 类型字段微信限制 20 字，超长直接截断避免整条下发被拒（47003） */
+function clipThing(value: string, max = 20): string {
+  const text = String(value ?? '').trim()
+  return text.length > max ? text.slice(0, max) : text
+}
+
+/** 订阅消息 time 字段文案，取模板示例口径「2026年11月21日 18:00」 */
+function formatCnDateTime(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 /**
  * 订阅消息通知服务：
  * 统一封装模板 id 读取、openid 解析与下发，失败不阻断主业务流程。
@@ -122,21 +134,22 @@ export class NotificationService {
   }
 
   /**
-   * 课程心愿回访：课程重新开课/开放报名时提醒用户（模板字段同开课提醒：
-   * 课程名称 thing1 / 上课时间 time2 / 上课地点 thing3 / 温馨提示 thing4，thing 限 20 字内）。
+   * 课程心愿回访：课程开放报名/开新班时提醒用户。
+   * 微信模板「活动报名开始提醒」字段：活动名称 thing1 / 报名开始时间 time2 /
+   * 活动开始时间 time3 / 温馨提示 thing5；thing 限 20 字内。
    */
   async courseWishReleased(
     userId: string,
-    params: { courseName: string; startTime: string; venue: string; courseId: string; tip?: string },
+    params: { courseName: string; enrollAt: Date; startAt: Date; courseId: string; tip?: string },
   ) {
     return this.send(
       userId,
       'WECHAT_TMPL_COURSE_WISH',
       {
-        thing1: { value: params.courseName },
-        time2: { value: params.startTime },
-        thing3: { value: params.venue },
-        thing4: { value: params.tip ?? '你许愿的课程开新班了，名额有限' },
+        thing1: { value: clipThing(params.courseName) },
+        time2: { value: formatCnDateTime(params.enrollAt) },
+        time3: { value: formatCnDateTime(params.startAt) },
+        thing5: { value: clipThing(params.tip ?? '你许愿的课程开新班了，名额有限') },
       },
       `/pages/course-detail/index?id=${params.courseId}`,
     )

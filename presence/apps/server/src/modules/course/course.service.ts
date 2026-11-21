@@ -3,6 +3,7 @@ import { PrismaService } from '../../common/prisma.service'
 import { NotificationService } from '../../common/notification/notification.service'
 import { CourseStatus, CourseType, ScheduleType } from '@prisma/client'
 import {
+  combineCourseDateTime,
   courseEndAt,
   courseStartAt,
   decorateCourseLifecycle,
@@ -10,15 +11,6 @@ import {
   resolveCourseLifecycle,
 } from '@fullyu/shared'
 import { SettlementService } from '../settlement/settlement.service'
-
-/** 订阅消息里的开课时间文案：开课日 + 开课钟点（startDate 库里为当天 0 点） */
-function formatCourseStartText(startDate?: Date | null, startTime?: string | null): string {
-  if (!startDate) return '时间待确认'
-  const d = new Date(startDate)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const base = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-  return startTime ? `${base} ${startTime}` : base
-}
 
 @Injectable()
 export class CourseService {
@@ -543,11 +535,10 @@ export class CourseService {
   private async notifyWishers(course: {
     id: string
     title: string
-    venueId: string
     sourceCourseId: string | null
     startDate: Date
     startTime: string | null
-    endTime?: string | null
+    enrollStartAt: Date | null
   }) {
     if (!course.sourceCourseId) return
     const wishes = await this.prisma.courseWish.findMany({
@@ -557,18 +548,16 @@ export class CourseService {
       take: 500,
     })
     if (!wishes.length) return
-    const venue = await this.prisma.venue.findUnique({
-      where: { id: course.venueId },
-      select: { name: true },
-    })
-    const startTime = formatCourseStartText(course.startDate, course.startTime)
+    // 未配置报名开始时间时，发布即视为报名开放
+    const enrollAt = course.enrollStartAt ?? new Date()
+    const startAt = combineCourseDateTime(course.startDate, course.startTime)
     let sent = 0
     for (const wish of wishes) {
       const delivered = await this.notification
         .courseWishReleased(wish.userId, {
           courseName: course.title,
-          startTime,
-          venue: venue?.name || '待确认',
+          enrollAt,
+          startAt,
           courseId: course.id,
         })
         .catch((e: Error) => {

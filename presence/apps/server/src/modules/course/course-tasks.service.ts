@@ -161,14 +161,13 @@ export class CourseTasksService {
       })
       if (!wishes.length) continue
       const startAt = courseStartAt(course)
-      const pad = (n: number) => String(n).padStart(2, '0')
-      const startText = `${startAt.getFullYear()}-${pad(startAt.getMonth() + 1)}-${pad(startAt.getDate())} ${pad(startAt.getHours())}:${pad(startAt.getMinutes())}`
+      const enrollAt = course.enrollStartAt ?? now
       for (const wish of wishes) {
         try {
           const delivered = await this.notification.courseWishReleased(wish.userId, {
             courseName: course.title,
-            startTime: startText,
-            venue: course.venue?.name || '待确认',
+            enrollAt,
+            startAt,
             courseId: course.id,
             tip: '你许愿的课程已开放报名，别错过',
           })
