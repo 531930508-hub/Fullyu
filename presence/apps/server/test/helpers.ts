@@ -77,6 +77,7 @@ export function createNotificationMock() {
     waitlistPromoted: async () => undefined,
     paymentSuccess: async () => undefined,
     refundSuccess: async () => undefined,
+    courseWishReleased: async () => false,
   }
 }
 

@@ -3,7 +3,8 @@ import { INestApplication } from '@nestjs/common'
 import { PrismaService } from '../src/common/prisma.service'
 import { CourseService } from '../src/modules/course/course.service'
 import { SettlementService } from '../src/modules/settlement/settlement.service'
-import { Seeder } from './helpers'
+import { NotificationService } from '../src/common/notification/notification.service'
+import { Seeder, createNotificationMock } from './helpers'
 
 /**
  * 课程生命周期与场地占用 集成测试（真实 MySQL）。
@@ -21,7 +22,12 @@ describe('课程生命周期与场地占用', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      providers: [PrismaService, CourseService, SettlementService],
+      providers: [
+        PrismaService,
+        CourseService,
+        SettlementService,
+        { provide: NotificationService, useValue: createNotificationMock() },
+      ],
     }).compile()
     app = moduleRef.createNestApplication()
     await app.init()

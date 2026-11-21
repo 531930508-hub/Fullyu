@@ -15,7 +15,7 @@ describe('课程后台补充字段持久化 round-trip', () => {
   beforeAll(async () => {
     ctx = await buildTestContext()
     seeder = new Seeder(ctx.prisma)
-    service = new CourseService(ctx.prisma, {} as any, { courseWishReleased: jest.fn() } as any)
+    service = new CourseService(ctx.prisma, {} as any, { courseWishReleased: jest.fn().mockResolvedValue(true) } as any)
   })
 
   afterAll(async () => {

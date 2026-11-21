@@ -27,7 +27,7 @@ function buildService(rows: any[]) {
       groupBy: jest.fn().mockResolvedValue([]),
     },
   }
-  return new CourseService(prisma as any, {} as any, { courseWishReleased: jest.fn() } as any)
+  return new CourseService(prisma as any, {} as any, { courseWishReleased: jest.fn().mockResolvedValue(true) } as any)
 }
 
 describe('发现流课程生命周期过滤', () => {
