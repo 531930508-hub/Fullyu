@@ -49,6 +49,10 @@
       "style": { "navigationStyle": "custom" }
     },
     {
+      "path": "pages/my-wishes/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
       "path": "pages/profile-edit/index",
       "style": { "navigationStyle": "custom" }
     },
@@ -118,6 +122,10 @@
     },
     {
       "path": "pages/trainer-portal/profile/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/trainer-portal/reviews/index",
       "style": { "navigationStyle": "custom" }
     }
   ],

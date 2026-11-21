@@ -57,6 +57,9 @@ export interface PortalCourse {
   venue?: { id: string; name: string; city?: string; address?: string } | null
   /** 开课前 3 小时才解锁名单，后端与前端双重控制 */
   rosterUnlocked: boolean
+  /** 该课评价数与平均分（未评价过则为 0） */
+  reviewCount: number
+  avgRating: number
 }
 
 export interface RosterStudent {
@@ -80,6 +83,21 @@ export interface CourseRoster {
     venue?: { name: string; address?: string } | null
   }
   students: RosterStudent[]
+}
+
+export interface TrainerReview {
+  id: string
+  rating: number
+  content: string
+  createdAt: string
+  user: { nickname: string; avatar?: string | null }
+  course?: { id: string; title: string } | null
+}
+
+export interface TrainerReviewResult {
+  count: number
+  avgRating: number
+  reviews: TrainerReview[]
 }
 
 export interface ProposalListItem {
@@ -181,6 +199,9 @@ export const getCourseRoster = (courseId: string, silent = false) =>
   trainerGet<CourseRoster>(`/trainer-portal/courses/${courseId}/roster`, undefined, { silent })
 
 export const getProposals = () => trainerGet<ProposalListItem[]>('/trainer-portal/proposals')
+
+/** 我的评价（仅本人课程的评价，统计口径与后端一致） */
+export const getMyReviews = () => trainerGet<TrainerReviewResult>('/trainer-portal/reviews')
 
 export const getProposal = (id: string) => trainerGet<ProposalDetail>(`/trainer-portal/proposals/${id}`)
 

@@ -90,7 +90,10 @@ export class OrderService {
         course: {
           select: {
             title: true,
+            // endDate 供前端推导课程结束时刻（系列课结束日与开始日不同），
+            // 「已结束」判定必须用结束时刻，不能用开课时刻。
             startDate: true,
+            endDate: true,
             startTime: true,
             endTime: true,
             venue: { select: { name: true } },

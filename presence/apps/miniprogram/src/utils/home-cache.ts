@@ -13,6 +13,8 @@ export interface HomeCacheEntry<T = any> {
 
 export const homeCache: {
   courses?: HomeCacheEntry
+  /** 往期课程与进行中的发现流分开缓存，切回「进行中」时不必重新请求 */
+  historyCourses?: HomeCacheEntry
   venues?: HomeCacheEntry
   banners?: HomeCacheEntry
   communities?: HomeCacheEntry

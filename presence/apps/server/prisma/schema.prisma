@@ -51,6 +51,7 @@ model User {
   waitlistEntries  WaitlistEntry[]
   trainerProposals TrainerProposal[]
   courseProposals  CourseProposal[]
+  courseWishes     CourseWish[]
 
   @@map("users")
 }
@@ -284,6 +285,8 @@ model Course {
   reviewSeeds           Int?         @map("review_seeds") // 提交评价奖励
   syllabus              Json? // 课程大纲 [{title,content}]
   notice                String?      @db.Text // 学员须知
+  /// 复制来源课程：由哪节往期课程复制而来；该课程发布时通知原课程的心愿用户
+  sourceCourseId        String?      @map("source_course_id")
   createdAt             DateTime     @default(now()) @map("created_at")
   updatedAt             DateTime     @updatedAt @map("updated_at")
 
@@ -296,8 +299,32 @@ model Course {
   priceTiers      CoursePriceTier[]
   waitlistEntries WaitlistEntry[]
   reservation     VenueReservation?
+  wishes          CourseWish[]
+  // 复制来源（自关联）：副本指向原往期课程；原课程删除后副本保留
+  sourceCourse    Course?                @relation("CourseCopies", fields: [sourceCourseId], references: [id], onDelete: SetNull)
+  copies          Course[]               @relation("CourseCopies")
+  notifiedWishes  CourseWish[]           @relation("CourseWishNotified")
 
   @@map("courses")
+}
+
+/// 往期课程许愿：希望同类课程再开一场；管理员从该课程复制出新场次并发布时推送订阅消息
+model CourseWish {
+  id               String    @id @default(cuid())
+  courseId         String    @map("course_id")
+  userId           String    @map("user_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  notifiedAt       DateTime? @map("notified_at") // 已通知时间（同一心愿只通知一次）
+  notifiedCourseId String?   @map("notified_course_id") // 通知时指向的新场次
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // 通知时指向的新场次（副本被删除不影响心愿本身）
+  notifiedCourse Course? @relation("CourseWishNotified", fields: [notifiedCourseId], references: [id], onDelete: SetNull)
+
+  @@unique([courseId, userId])
+  @@index([userId, createdAt])
+  @@map("course_wishes")
 }
 
 enum CourseType {

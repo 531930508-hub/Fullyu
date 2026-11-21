@@ -44,6 +44,10 @@
             <text class="meta-label">{{ tr('课时', 'Duration') }}</text>
             <text class="meta-value">{{ durationText(c.startTime, c.endTime) }}</text>
           </view>
+          <view v-if="c.reviewCount" class="meta-row">
+            <text class="meta-label">{{ tr('评价', 'Reviews') }}</text>
+            <text class="meta-value">{{ tr(`${c.reviewCount} 条 · 均分 ${c.avgRating}`, `${c.reviewCount} · avg ${c.avgRating}`) }}</text>
+          </view>
         </view>
 
         <view class="roster-bar">

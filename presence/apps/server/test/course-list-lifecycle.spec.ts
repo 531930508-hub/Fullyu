@@ -22,8 +22,12 @@ function buildService(rows: any[]) {
     course: {
       findMany: jest.fn().mockResolvedValue(rows),
     },
+    // 后台列表附带心愿数聚合：本用例不关心，返回空即可
+    courseWish: {
+      groupBy: jest.fn().mockResolvedValue([]),
+    },
   }
-  return new CourseService(prisma as any, {} as any)
+  return new CourseService(prisma as any, {} as any, { courseWishReleased: jest.fn() } as any)
 }
 
 describe('发现流课程生命周期过滤', () => {

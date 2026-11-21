@@ -337,8 +337,23 @@ export class TrainerPortalService {
       },
     })
 
+    // 课程口碑：一次 groupBy 取回全部课程的评价数与均分，避免逐课回表
+    const stats = await this.prisma.review.groupBy({
+      by: ['courseId'],
+      where: { courseId: { in: courses.map((c) => c.id) } },
+      _avg: { rating: true },
+      _count: { _all: true },
+    })
+    const statMap = new Map(
+      stats.map((s) => [
+        s.courseId,
+        { count: s._count._all, avg: Number((s._avg.rating || 0).toFixed(1)) },
+      ]),
+    )
+
     const rows = courses.map((c) => {
       const lifecycle = resolveCourseLifecycle(c, now)
+      const stat = statMap.get(c.id)
       return {
         id: c.id,
         title: c.title,
@@ -354,6 +369,8 @@ export class TrainerPortalService {
         maxCapacity: c.maxCapacity,
         price: yuan(c.originalPrice),
         venue: c.venue,
+        reviewCount: stat?.count || 0,
+        avgRating: stat?.avg || 0,
         /** 开课前 3 小时到开课后，导师才能看名单 */
         rosterUnlocked:
           now.getTime() >= lifecycle.startAt.getTime() - 3 * 3600 * 1000 &&
@@ -368,6 +385,44 @@ export class TrainerPortalService {
       return rows.filter((r) => ['ENDED', 'COMPLETED', 'EXPIRED', 'CANCELLED'].includes(r.phase))
     }
     return rows
+  }
+
+  /**
+   * 我的评价：导师口碑页数据。
+   * trainerId 一律取自令牌上下文，不接受前端传参，避免越权查看他人评价。
+   */
+  async myReviews(ctx: TrainerContext) {
+    const where = { course: { trainerId: ctx.trainerId } }
+    const [reviews, agg] = await Promise.all([
+      this.prisma.review.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+        include: {
+          user: { select: { nickname: true, avatar: true } },
+          course: { select: { id: true, title: true } },
+        },
+      }),
+      // 只取最近 200 条做列表，统计口径必须按全量聚合，否则超过 200 条后均分会失真
+      this.prisma.review.aggregate({ where, _avg: { rating: true }, _count: { _all: true } }),
+    ])
+    const count = agg._count._all
+    const avg = agg._avg.rating || 0
+    return {
+      count,
+      avgRating: Number(avg.toFixed(1)),
+      reviews: reviews.map((r) => ({
+        id: r.id,
+        rating: r.rating,
+        content: r.content || '',
+        createdAt: r.createdAt.toISOString(),
+        user: {
+          nickname: r.user?.nickname || '',
+          avatar: this.signImage(r.user?.avatar, 'image/resize,w_120'),
+        },
+        course: r.course ? { id: r.course.id, title: r.course.title } : null,
+      })),
+    }
   }
 
   /** 学员名单：只对本人课程开放，且仅开课前 3 小时起可查看 */

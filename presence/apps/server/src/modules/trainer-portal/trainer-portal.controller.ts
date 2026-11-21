@@ -133,6 +133,14 @@ export class TrainerPortalController {
     return this.service.myCourses(req.user, { phase })
   }
 
+  @Get('reviews')
+  @UseGuards(AuthGuard('trainer-jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '我的评价与评分统计（仅本人课程）' })
+  async reviews(@Request() req: { user: TrainerContext }) {
+    return this.service.myReviews(req.user)
+  }
+
   @Get('courses/:id/roster')
   @UseGuards(AuthGuard('trainer-jwt'))
   @ApiBearerAuth()

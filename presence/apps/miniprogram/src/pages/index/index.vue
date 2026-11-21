@@ -57,19 +57,20 @@
 
       <template v-else>
         <button v-if="nextCourse" class="next-course" @tap="goBookings"><view class="next-icon"><PresenceIcon name="calendar" :size="40" /></view><view class="next-body"><text class="muted">{{ tr('下一场在场', 'Next session') }}</text><text class="entry-title">{{ nextCourse.course.title }}</text><text class="muted">{{ formatDate(nextCourse.course.startDate) }} {{ nextCourse.course.startTime }}</text></view><PresenceIcon name="arrow" :size="32" /></button>
-        <view class="section-head"><view><text class="section-title serif">{{ tr('发现好课', 'Find a class') }}</text><text class="section-caption latin">MAKE SPACE FOR YOURSELF</text></view><text class="muted">{{ tr(`${filteredCourses.length} 场课程`, `${filteredCourses.length} classes`) }}</text></view>
+        <view class="section-head"><view><text class="section-title serif">{{ tr('发现好课', 'Find a class') }}</text><text class="section-caption latin">MAKE SPACE FOR YOURSELF</text></view><view class="feed-head-right"><view class="feed-switch" role="tablist" :aria-label="tr('课程范围', 'Class range')"><button v-for="option in feedOptions" :key="String(option.value)" role="tab" :aria-selected="showHistory === option.value" class="feed-tab" :class="{ active: showHistory === option.value }" @tap="setHistory(option.value)">{{ option.label }}</button></view><text class="muted">{{ tr(`${filteredCourses.length} 场课程`, `${filteredCourses.length} classes`) }}</text></view></view>
         <view class="filter-panel">
           <scroll-view scroll-x class="category-scroll" :show-scrollbar="false"><view class="category-row"><button v-for="category in categories" :key="category" class="category-button" :class="{ active: selectedCategory === category }" @tap="selectedCategory = category">{{ category ? courseTagLabel(category) : tr('全部课程', 'All classes') }}</button></view></scroll-view>
-          <scroll-view scroll-x class="date-scroll" :show-scrollbar="false"><view class="date-row"><button class="date-button" :class="{ active: !selectedDate }" @tap="selectedDate = ''"><text>{{ tr('全部', 'All') }}</text><text class="date-number">{{ tr('日期', 'Date') }}</text></button><button v-for="day in days" :key="day.value" class="date-button" :class="{ active: selectedDate === day.value }" @tap="selectedDate = day.value"><text>{{ day.label }}</text><text class="date-number latin">{{ day.day }}</text></button></view></scroll-view>
-          <view class="filter-bottom"><picker mode="selector" :range="venues" range-key="name" :value="venueIndex" @change="venueIndex = Number($event.detail.value)"><view class="filter-picker">{{ venues[venueIndex]?.name || tr('全部场地', 'All venues') }}⌄</view></picker><picker mode="selector" :range="difficultyOptions" range-key="label" :value="difficultyIndex" @change="difficultyIndex = Number($event.detail.value)"><view class="filter-picker">{{ difficultyOptions[difficultyIndex].label }}⌄</view></picker><button class="availability" :class="{ selected: onlyAvailable }" @tap="onlyAvailable = !onlyAvailable"><PresenceIcon :name="onlyAvailable ? 'check' : 'users'" :size="26" />{{ tr('仅看有位', 'Available only') }}</button></view>
-          <picker mode="date" :value="selectedDate || today" @change="selectedDate = $event.detail.value"><view class="other-date">{{ selectedDate ? tr(`已选 ${selectedDate} · 更换日期`, `${selectedDate} selected · change`) : tr('选择其他日期', 'Choose another date') }}</view></picker>
+          <scroll-view v-if="!showHistory" scroll-x class="date-scroll" :show-scrollbar="false"><view class="date-row"><button class="date-button" :class="{ active: !selectedDate }" @tap="selectedDate = ''"><text>{{ tr('全部', 'All') }}</text><text class="date-number">{{ tr('日期', 'Date') }}</text></button><button v-for="day in days" :key="day.value" class="date-button" :class="{ active: selectedDate === day.value }" @tap="selectedDate = day.value"><text>{{ day.label }}</text><text class="date-number latin">{{ day.day }}</text></button></view></scroll-view>
+          <view class="filter-bottom"><picker mode="selector" :range="venues" range-key="name" :value="venueIndex" @change="venueIndex = Number($event.detail.value)"><view class="filter-picker">{{ venues[venueIndex]?.name || tr('全部场地', 'All venues') }}⌄</view></picker><picker mode="selector" :range="difficultyOptions" range-key="label" :value="difficultyIndex" @change="difficultyIndex = Number($event.detail.value)"><view class="filter-picker">{{ difficultyOptions[difficultyIndex].label }}⌄</view></picker><button v-if="!showHistory" class="availability" :class="{ selected: onlyAvailable }" @tap="onlyAvailable = !onlyAvailable"><PresenceIcon :name="onlyAvailable ? 'check' : 'users'" :size="26" />{{ tr('仅看有位', 'Available only') }}</button></view>
+          <picker v-if="!showHistory" mode="date" :value="selectedDate || today" @change="selectedDate = $event.detail.value"><view class="other-date">{{ selectedDate ? tr(`已选 ${selectedDate} · 更换日期`, `${selectedDate} selected · change`) : tr('选择其他日期', 'Choose another date') }}</view></picker>
+          <text v-else class="history-hint">{{ tr('往期课程仅供回顾，不能再报名；从「我的预约 › 已完成」可评价上过的课。', 'Past classes are for review only. Rate classes you attended under My bookings › Completed.') }}</text>
         </view>
         <PageState v-if="loading" state="loading" :title="tr('正在寻找好课', 'Finding classes')" />
         <PageState v-else-if="loadError" state="error" :message="tr('课程加载失败，请检查网络后重试。', 'Unable to load classes. Check your connection and try again.')" :action="tr('重新加载', 'Reload')" @action="loadCourses" />
-        <PageState v-else-if="!filteredCourses.length" state="empty" :title="tr('这次还没有合适的课程', 'No matching classes yet')" :message="tr('换个日期或筛选条件，再找找看。', 'Try another date or filter.')" :action="tr('清除筛选', 'Clear filters')" @action="clearFilters" />
+        <PageState v-else-if="!filteredCourses.length" state="empty" :title="showHistory ? tr('还没有往期课程', 'No past classes yet') : tr('这次还没有合适的课程', 'No matching classes yet')" :message="showHistory ? tr('上过的课会在这里留下记录。', 'Classes you have taken will be archived here.') : tr('换个日期或筛选条件，再找找看。', 'Try another date or filter.')" :action="tr('清除筛选', 'Clear filters')" @action="clearFilters" />
         <view v-else class="course-list"><view v-for="course in filteredCourses" :key="course.id" class="course-card" role="link" tabindex="0" @tap="goDetail(course.id)" @keydown.enter="goDetail(course.id)">
           <view class="card-cover" @tap.stop="previewImage(course.coverImage)"><image v-if="course.coverImage" class="card-cover-img" :src="course.coverImage" mode="aspectFill" :aria-label="course.title" lazy-load /><BrandCover v-else height="200rpx" :label="tr('在场', 'Presence')" /></view>
-          <view class="card-body"><view class="card-tags"><text class="course-tag">{{ typeLabel(course.type) }}</text><text v-if="course.phaseLabel" class="course-tag phase">{{ phaseLabel(course) }}</text><text v-if="course.difficulty" class="muted">{{ difficultyLabel(course.difficulty) }}</text></view><text class="card-title serif">{{ course.title }}</text><text class="card-meta">{{ formatDate(course.startDate) }} {{ course.startTime }}–{{ course.endTime }}</text><text class="card-meta">{{ course.venue?.name || tr('场地待确认', 'Venue TBC') }} · {{ course.trainer?.displayName || tr('导师待确认', 'Guide TBC') }}</text><view class="card-bottom"><text class="card-price latin">¥{{ toYuan(course.originalPrice) }}<text class="price-unit"> / {{ tr('人', 'person') }}</text></text><text class="seat-label" :class="{ full: course.currentEnrolled >= course.maxCapacity }">{{ course.currentEnrolled >= course.maxCapacity ? tr('已满员', 'Full') : tr(`余 ${Math.max(0, course.maxCapacity - course.currentEnrolled)} 位`, `${Math.max(0, course.maxCapacity - course.currentEnrolled)} seats left`) }}</text></view></view>
+          <view class="card-body"><view class="card-tags"><text class="course-tag">{{ typeLabel(course.type) }}</text><text v-if="course.phaseLabel" class="course-tag phase">{{ phaseLabel(course) }}</text><text v-if="course.difficulty" class="muted">{{ difficultyLabel(course.difficulty) }}</text></view><text class="card-title serif">{{ course.title }}</text><text class="card-meta">{{ formatDate(course.startDate) }} {{ course.startTime }}–{{ course.endTime }}</text><text class="card-meta">{{ course.venue?.name || tr('场地待确认', 'Venue TBC') }} · {{ course.trainer?.displayName || tr('导师待确认', 'Guide TBC') }}</text><view class="card-bottom"><text class="card-price latin">¥{{ toYuan(course.originalPrice) }}<text class="price-unit"> / {{ tr('人', 'person') }}</text></text><text class="seat-label" :class="{ full: course.phase === 'ENDED' || course.currentEnrolled >= course.maxCapacity }">{{ course.phase === 'ENDED' ? tr('已结束', 'Ended') : course.currentEnrolled >= course.maxCapacity ? tr('已满员', 'Full') : tr(`余 ${Math.max(0, course.maxCapacity - course.currentEnrolled)} 位`, `${Math.max(0, course.maxCapacity - course.currentEnrolled)} seats left`) }}</text></view></view>
         </view></view>
         <view class="section-head community-heading"><view><text class="section-title serif">{{ tr('与同路人相遇', 'Meet your community') }}</text><text class="section-caption latin">FIND YOUR COMMUNITY</text></view><button class="text-button" @tap="goCommunityList">{{ tr('全部社群', 'All communities') }} ›</button></view>
         <PageState v-if="communitiesLoading" state="loading" />
@@ -149,6 +150,12 @@ const selectedDate = ref('')
 const venueIndex = ref(0)
 const difficultyIndex = ref(0)
 const onlyAvailable = ref(false)
+/** 发现流范围：false=进行中（默认），true=往期已结束课程（只读回顾） */
+const showHistory = ref(false)
+const feedOptions = computed(() => [
+  { value: false, label: tr('进行中', 'Upcoming') },
+  { value: true, label: tr('往期', 'Past') },
+])
 const allVenues = ref<VenueItem[]>([])
 const venuesLoading = ref(false)
 const venuesError = ref(false)
@@ -171,11 +178,12 @@ const venues = computed(() => {
 })
 const filteredCourses = computed(() => filterCourseList(courses.value, {
   category: selectedCategory.value,
-  date: selectedDate.value,
+  // 往期课程不参与日期/有位筛选：历史场次一定「已满时间」，按日期筛只会得到空列表
+  date: showHistory.value ? '' : selectedDate.value,
   venueId: venues.value[venueIndex.value]?.id,
   venueIds: allVenues.value.length ? cityVenueIds.value : undefined,
   difficulty: difficultyOptions.value[difficultyIndex.value].value,
-  onlyAvailable: onlyAvailable.value,
+  onlyAvailable: showHistory.value ? false : onlyAvailable.value,
 }))
 function cityVenueCount(city: string) {
   return venueIdsForCity(allVenues.value, city).length
@@ -209,7 +217,10 @@ const days = computed(() => Array.from({ length: 7 }, (_, index) => {
 }))
 let courseRequest = 0
 async function loadCourses(force = false) {
-  const cached = homeCache.courses
+  const history = showHistory.value
+  // 进行中与往期分开缓存：切回另一档时先出缓存、再静默刷新
+  const cacheKey = history ? 'historyCourses' : 'courses'
+  const cached = homeCache[cacheKey]
   if (cached) courses.value = cached.data
   if (!force && cacheFresh(cached)) return
   const requestId = ++courseRequest
@@ -219,23 +230,38 @@ async function loadCourses(force = false) {
   loadError.value = false
   try {
     // 完整读取分页后再本地筛选，避免“仅看有位”等条件漏掉后续页。
-    const first = await listCourses({ page: 1, pageSize: 50 })
+    const fetchPage = (page: number) => listCourses({ page, pageSize: 50, ...(history ? { scope: 'history' as const } : {}) })
+    const first = await fetchPage(1)
     const rows = [...(first?.items || [])]
     for (let page = 2; page <= Number(first?.totalPages || 1); page++) {
       if (requestId !== courseRequest) return
-      const next = await listCourses({ page, pageSize: 50 })
+      const next = await fetchPage(page)
       rows.push(...(next?.items || []))
     }
     if (requestId === courseRequest) {
-      courses.value = rows
-      homeCache.courses = { data: rows, at: Date.now() }
-      if (!hadData) venueIndex.value = 0
+      // 返回时已切到另一档：本次结果只入缓存，不改当前列表
+      homeCache[cacheKey] = { data: rows, at: Date.now() }
+      if (showHistory.value === history) {
+        courses.value = rows
+        if (!hadData) venueIndex.value = 0
+      }
     }
   } catch {
-    if (requestId === courseRequest && !courses.value.length) loadError.value = true
+    if (requestId === courseRequest && showHistory.value === history && !courses.value.length) loadError.value = true
   } finally {
-    if (requestId === courseRequest && !hadData) loading.value = false
+    if (requestId === courseRequest && showHistory.value === history && !hadData) loading.value = false
   }
+}
+/** 切换「进行中 / 往期」：清掉只对进行中生效的筛选，避免往期被日期条件筛成空 */
+function setHistory(value: boolean) {
+  if (showHistory.value === value) return
+  showHistory.value = value
+  selectedDate.value = ''
+  onlyAvailable.value = false
+  courses.value = []
+  loadError.value = false
+  loading.value = false
+  void loadCourses(true)
 }
 async function loadVenues(force = false) {
   const cached = homeCache.venues
@@ -488,6 +514,11 @@ onShareTimeline(() => brandShareTimeline(shareTitle()))
 .availability { display: flex; gap: 8rpx; align-items: center; font-size: 24rpx; padding: 12rpx 0; margin: 0; background: transparent; color: var(--c-muted); }
 .availability.selected { color: var(--c-primary); font-weight: 600; }
 .other-date { color: var(--c-brown); font-size: 24rpx; padding: 12rpx 0; text-align: center; }
+.feed-head-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8rpx; }
+.feed-switch { display: flex; gap: 4rpx; padding: 4rpx; border-radius: 20rpx; background: var(--c-cream); }
+.feed-tab { margin: 0; padding: 6rpx 20rpx; border-radius: 16rpx; font-size: 22rpx; line-height: 1.5; color: var(--c-muted); background: transparent; }
+.feed-tab.active { background: var(--c-primary); color: white; }
+.history-hint { display: block; padding: 16rpx 0 8rpx; border-top: 1rpx solid var(--line-soft); margin-top: 20rpx; font-size: 22rpx; color: var(--c-muted); line-height: 1.6; }
 .course-card { display: flex; align-items: center; gap: 24rpx; background: var(--c-card); border-radius: var(--radius-card); padding: 24rpx; margin-bottom: 20rpx; box-shadow: var(--shadow-card); }
 .card-cover { width: 176rpx; flex-shrink: 0; height: 200rpx; border-radius: 24rpx; overflow: hidden; background: var(--c-card-2); }
 .card-cover-img { display: block; width: 100%; height: 100%; }

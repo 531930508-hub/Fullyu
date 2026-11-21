@@ -26,27 +26,32 @@ export class NotificationService {
     return user?.openId ?? null
   }
 
+  /**
+   * 下发订阅消息；返回是否真正发起（模板未配置或用户无 openid 时返回 false），
+   * 供「只通知一次」类业务决定是否标记已通知。
+   */
   private async send(
     userId: string,
     templateKey: string,
     data: Record<string, { value: string }>,
     page?: string,
-  ) {
+  ): Promise<boolean> {
     const templateId = this.config.get<string>(templateKey)
     if (!templateId) {
       this.logger.warn(`模板未配置: ${templateKey}，跳过下发`)
-      return
+      return false
     }
     const openid = await this.getOpenid(userId)
     if (!openid) {
       this.logger.warn(`用户 ${userId} 无 openid，跳过订阅消息`)
-      return
+      return false
     }
     try {
       await this.wechat.sendSubscribeMessage({ openid, templateId, data, page })
     } catch (e) {
       this.logger.warn(`订阅消息下发异常: ${(e as Error).message}`)
     }
+    return true
   }
 
   /**
@@ -113,6 +118,27 @@ export class NotificationService {
         phrase3: { value: '退款成功' },
       },
       `/pages/my-courses/index`,
+    )
+  }
+
+  /**
+   * 课程心愿回访：课程重新开课/开放报名时提醒用户（模板字段同开课提醒：
+   * 课程名称 thing1 / 上课时间 time2 / 上课地点 thing3 / 温馨提示 thing4，thing 限 20 字内）。
+   */
+  async courseWishReleased(
+    userId: string,
+    params: { courseName: string; startTime: string; venue: string; courseId: string; tip?: string },
+  ) {
+    return this.send(
+      userId,
+      'WECHAT_TMPL_COURSE_WISH',
+      {
+        thing1: { value: params.courseName },
+        time2: { value: params.startTime },
+        thing3: { value: params.venue },
+        thing4: { value: params.tip ?? '你许愿的课程开新班了，名额有限' },
+      },
+      `/pages/course-detail/index?id=${params.courseId}`,
     )
   }
 

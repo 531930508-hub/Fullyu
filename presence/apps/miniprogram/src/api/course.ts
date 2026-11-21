@@ -56,6 +56,8 @@ export interface CourseDetail extends CourseListItem {
   enrollDeadline?: string | null
   enrollStartAt?: string | null
   enrollEndAt?: string | null
+  /** 往期课程许愿人数（是否已许愿走 /course-wishes/summary） */
+  wishCount?: number
   trainer?: any
   venue?: any
 }
@@ -67,6 +69,8 @@ export interface CourseListQuery {
   category?: string
   sortPrice?: 'asc' | 'desc'
   memberOnly?: boolean
+  /** history = 往期已结束课程，只读回顾 */
+  scope?: 'history'
 }
 
 /** 课程列表（公开） */
@@ -82,5 +86,5 @@ export function getCourseDetail(id: string) {
 
 /** 报名/候补场景的订阅消息模板 id（与后端 env 同源；为空表示模板未配置） */
 export function fetchSubscribeTemplates() {
-  return get<{ courseReminder: string; waitlistPromoted: string }>('/courses/subscribe-templates', undefined, { auth: false, silent: true })
+  return get<{ courseReminder: string; waitlistPromoted: string; courseWish?: string }>('/courses/subscribe-templates', undefined, { auth: false, silent: true })
 }

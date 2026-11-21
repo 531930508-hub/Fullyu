@@ -5,7 +5,7 @@ import { PrismaService } from '../../common/prisma.service'
 import { PaymentService } from '../payment/payment.service'
 import { NotificationService } from '../../common/notification/notification.service'
 import { RedisService } from '../../common/redis.service'
-import { orderAmountToYuan, courseStartAt } from '@fullyu/shared'
+import { orderAmountToYuan, courseStartAt, resolveCourseLifecycle } from '@fullyu/shared'
 
 /**
  * 课程定时任务：
@@ -116,6 +116,75 @@ export class CourseTasksService {
     }
 
     this.logger.log(`课程「${course.title}」未成团自动取消，退款 ${paidOrders.length} 笔订单、${waitingEntries.length} 条候补`)
+  }
+
+  /**
+   * 每 5 分钟扫描：报名刚开放的课程 → 通知该课程「报名未开始/报名截止」时留下的心愿。
+   * - 只处理 enrollStartAt 落在最近 12 小时且当前仍可报名的课程，覆盖发布延迟与重启漏扫；
+   * - 每条心愿 notifiedAt 置空才发，发送成功才标记，重复扫描不会重复打扰；
+   * - 往期课程的心愿仍由「复制新场次并发布」触发（CourseService.notifyWishers）。
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async notifyWishEnrollmentOpened(): Promise<number> {
+    if (!tasksEnabled()) return 0
+    const now = new Date()
+    const lookback = new Date(now.getTime() - 12 * 3600 * 1000)
+    const courses = await this.prisma.course.findMany({
+      where: {
+        status: 'PUBLISHED',
+        enrollStartAt: { gte: lookback, lte: now },
+        wishes: { some: { notifiedAt: null } },
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        startTime: true,
+        endTime: true,
+        enrollStartAt: true,
+        enrollEndAt: true,
+        venueId: true,
+        venue: { select: { name: true } },
+      },
+    })
+    let total = 0
+    for (const course of courses) {
+      const lifecycle = resolveCourseLifecycle(course, now)
+      if (lifecycle.phase !== 'ENROLLING' && lifecycle.phase !== 'LATE_ENROLLING') continue
+      const wishes = await this.prisma.courseWish.findMany({
+        where: { courseId: course.id, notifiedAt: null },
+        select: { id: true, userId: true },
+        orderBy: { createdAt: 'asc' },
+        take: 500,
+      })
+      if (!wishes.length) continue
+      const startAt = courseStartAt(course)
+      const pad = (n: number) => String(n).padStart(2, '0')
+      const startText = `${startAt.getFullYear()}-${pad(startAt.getMonth() + 1)}-${pad(startAt.getDate())} ${pad(startAt.getHours())}:${pad(startAt.getMinutes())}`
+      for (const wish of wishes) {
+        try {
+          const delivered = await this.notification.courseWishReleased(wish.userId, {
+            courseName: course.title,
+            startTime: startText,
+            venue: course.venue?.name || '待确认',
+            courseId: course.id,
+            tip: '你许愿的课程已开放报名，别错过',
+          })
+          if (!delivered) continue
+          await this.prisma.courseWish.update({
+            where: { id: wish.id },
+            data: { notifiedAt: new Date(), notifiedCourseId: course.id },
+          })
+          total++
+        } catch (e) {
+          this.logger.warn(`报名开放心愿通知失败 [${wish.id}] ${(e as Error).message}`)
+        }
+      }
+    }
+    if (total > 0) this.logger.log(`报名开放心愿通知已下发 ${total} 条`)
+    return total
   }
 
   /**

@@ -66,7 +66,10 @@
               </div>
               <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span style="color: #6B463C; font-weight: 600;">¥{{ course.price }}</span>
-                <span style="color: #999; font-size: 12px;">{{ course.enrolled }}/{{ course.capacity }}人</span>
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <a-tag v-if="course.wishCount" color="volcano" style="margin: 0;">心愿 {{ course.wishCount }}</a-tag>
+                  <span style="color: #999; font-size: 12px;">{{ course.enrolled }}/{{ course.capacity }}人</span>
+                </span>
               </div>
               <a-progress :percent="Math.round(course.enrolled / course.capacity * 100)" :stroke-color="'#6B463C'" size="small" style="margin-top: 8px;" />
             </div>
@@ -763,6 +766,7 @@ function mapCourse(c: any) {
     price: (c.originalPrice ?? 0) / 100,
     capacity: c.maxCapacity ?? 0,
     enrolled: c.currentEnrolled ?? 0,
+    wishCount: Number(c.wishCount ?? 0),
     status: c.status,
     statusLabel: courseStatusLabel(c.status) || c.status,
     phase,
@@ -1227,6 +1231,8 @@ async function handleCopy(course: any) {
       internalNote: c.internalNote || '',
       trainerSeeds: c.trainerSeeds,
       allowDeduction: c.allowDeduction,
+      // 记录复制来源：新场次发布时自动通知原课程的心愿用户
+      sourceCourseId: c.id,
     }
     // 3. 创建副本课程
     const created: any = await createCourse(payload)
@@ -1236,7 +1242,9 @@ async function handleCopy(course: any) {
         await savePriceTiers(created.id, c.priceTiers.map((t: any) => ({ seatFrom: t.seatFrom, seatTo: t.seatTo, price: t.price })))
       }
     }
-    message.success('课程已复制为草稿，请设置日期后发布')
+    message.success(c.wishCount
+      ? `课程已复制为草稿，发布后将通知 ${c.wishCount} 位心愿用户`
+      : '课程已复制为草稿，请设置日期后发布')
     loadCourses()
   } catch (e: any) {
     message.error(e?.message || '复制失败')

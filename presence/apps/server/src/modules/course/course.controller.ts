@@ -20,6 +20,7 @@ export class CourseController {
       courseReminder: this.config.get<string>('WECHAT_TMPL_COURSE_REMINDER') || '',
       waitlistPromoted: this.config.get<string>('WECHAT_TMPL_WAITLIST_PROMOTED') || '',
       companionCancelled: this.config.get<string>('WECHAT_TMPL_COMPANION_CANCELLED') || '',
+      courseWish: this.config.get<string>('WECHAT_TMPL_COURSE_WISH') || '',
     }
   }
 
@@ -62,6 +63,7 @@ export class CourseController {
     @Query('category') category?: string,
     @Query('sortPrice') sortPrice?: 'asc' | 'desc',
     @Query('memberOnly') memberOnly?: boolean,
+    @Query('scope') scope?: 'history',
   ) {
     return this.courseService.findPublished({
       page: page || 1,
@@ -70,6 +72,7 @@ export class CourseController {
       category,
       sortPrice,
       memberOnly,
+      scope,
     })
   }
 

@@ -71,6 +71,11 @@
           <text class="action-title">{{ tr('对外资料', 'Public profile') }}</text>
           <text class="action-sub">{{ tr('学员看到的样子', 'What students see') }}</text>
         </button>
+        <button class="action" @tap="go('/pages/trainer-portal/reviews/index')">
+          <PresenceIcon name="star" :size="42" />
+          <text class="action-title">{{ tr('学员评价', 'Student reviews') }}</text>
+          <text class="action-sub">{{ tr(`均分 ${me.stats.rating || '—'} · ${me.stats.reviewCount} 条`, `Avg ${me.stats.rating || '—'} · ${me.stats.reviewCount} reviews`) }}</text>
+        </button>
         <button class="action" @tap="go('/pages/trainer-portal/apply/index')">
           <PresenceIcon name="info" :size="42" />
           <text class="action-title">{{ tr('入驻资料', 'Application') }}</text>

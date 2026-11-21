@@ -95,6 +95,27 @@
         <view v-for="(rule, index) in course.refundRules" :key="index" class="kv"><text>{{ formatRefundTime(rule) }}</text><text class="refund-value">{{ Number(rule.refundPercent) === 0 ? tr('不可退', 'Non-refundable') : tr(`退 ${rule.refundPercent}%`, `${rule.refundPercent}% refund`) }}</text></view>
         <text v-if="!course.refundRules.length" class="secondary">{{ tr('暂无退款规则。', 'No refund policy listed.') }}</text>
       </view>
+
+      <!-- 许愿入口：往期课程（等开新班）+ 即将会开但当前报不了的课程（等开售/补位） -->
+      <view v-if="showWishCard" class="card wish-card">
+        <view class="wish-head">
+          <view class="grow">
+            <text class="wish-title serif">{{ wishTitle }}</text>
+            <text class="secondary">{{ wishDesc }}</text>
+          </view>
+          <text v-if="wishCount > 0" class="wish-count">{{ tr(`${wishCount} 人许愿`, `${wishCount} wished`) }}</text>
+        </view>
+        <button
+          class="wish-btn"
+          :class="{ wished }"
+          :loading="wishBusy"
+          :disabled="wishBusy || loading"
+          @tap="toggleWish"
+        >
+          <PresenceIcon name="heart" :size="34" :filled="wished" :color="wished ? '#96581c' : '#8b7d72'" />
+          <text>{{ wished ? tr('已许愿 · 到时提醒我', 'Wished · notify me') : tr('许个心愿', 'Make a wish') }}</text>
+        </button>
+      </view>
     </view>
 
     <view v-if="showBookingBar" class="bottom-bar">
@@ -179,6 +200,7 @@ import { ref, computed } from 'vue'
 import { onLoad, onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { useUserStore } from '../../stores/user'
 import { getCourseDetail, fetchSubscribeTemplates } from '@/api/course'
+import { getCourseWishSummary, addCourseWish, removeCourseWish } from '@/api/courseWish'
 import { quoteEnroll, previewEnrollQuote, enrollCourse, type EnrollQuote } from '@/api/order'
 import { quoteWaitlist, joinWaitlist, listMyWaitlist, type WaitlistQuote, type WaitlistEntry } from '@/api/waitlist'
 import { loadBrandMember } from '@/api/brandMember'
@@ -213,6 +235,10 @@ const currentQuote = ref<BookingQuote | null>(null)
 /** 结算时选中的代金券；买一赠一同席券只能用于与邀请人同上的这节课 */
 const selectedVoucherId = ref('')
 const waitlistQuote = ref<QueueQuote | null>(null)
+/** 往期课程许愿：人数 + 自己是否已许愿（写操作需登录） */
+const wishCount = ref(0)
+const wished = ref(false)
+const wishBusy = ref(false)
 const pendingOrderId = ref('')
 const registrationComplete = ref(false)
 const myWaitlist = ref<WaitlistEntry | null>(null)
@@ -258,6 +284,26 @@ const phaseText = computed(() => {
 const isBookablePhase = computed(() => {
   if (typeof course.value?.bookable === 'boolean') return course.value.bookable
   return phase.value === 'ENROLLING' || phase.value === 'LATE_ENROLLING'
+})
+/** 可许愿阶段：往期课程，以及即将会开但当前报不了的课程；后端同样校验 */
+const WISHABLE_PHASES = new Set(['ENDED', 'COMPLETED', 'ENROLL_UPCOMING', 'ENROLL_CLOSED'])
+const showWishCard = computed(() => !!course.value?.id && WISHABLE_PHASES.has(phase.value))
+const wishTitle = computed(() => {
+  if (phase.value === 'ENROLL_UPCOMING') return tr('想上这节课？', 'Want to join this class?')
+  if (phase.value === 'ENROLL_CLOSED') return tr('没赶上这次报名？', 'Missed enrollment?')
+  return tr('这节课还想再上？', 'Want this class again?')
+})
+const wishDesc = computed(() => {
+  if (phase.value === 'ENROLL_UPCOMING') {
+    const opensAt = course.value?.enrollStartAt ? formatDateTime(course.value.enrollStartAt) : ''
+    return opensAt
+      ? tr(`报名将于 ${opensAt} 开放，留下心愿，开放时第一时间通知你。`, `Enrollment opens ${opensAt}. Leave a wish and we will notify you.`)
+      : tr('留下心愿，开放报名时第一时间通知你。', 'Leave a wish and we will notify you when enrollment opens.')
+  }
+  if (phase.value === 'ENROLL_CLOSED') {
+    return tr('留下心愿，下次开新班时第一时间通知你。', 'Leave a wish and we will tell you when the next session opens.')
+  }
+  return tr('留下心愿，开新班时第一时间通知你。', 'Leave a wish and we will tell you when a new session opens.')
 })
 const showBookingBar = computed(() => course.value && !loading.value && !loadError.value && (isBookablePhase.value || !!pendingOrderId.value || registrationComplete.value || !!myWaitlist.value))
 const waitlistCardTitle = computed(() => myWaitlist.value?.status === 'PENDING_PAYMENT'
@@ -404,6 +450,7 @@ async function loadDetail(id: string) {
     }
     course.value = detail
     coverFailed.value = false
+    void loadWishSummary()
   } catch {
     course.value = null
     loadError.value = true
@@ -458,6 +505,61 @@ async function refreshPreviewQuote() {
     if (course.value?.id === id) previewQuote.value = null
   }
 }
+/** 许愿数据：人数公开；是否已许愿依赖登录态，接口静默失败不阻断课程浏览。 */
+function applyWishSummary(res: { count?: number; wished?: boolean } | null) {
+  if (!res) return
+  wishCount.value = Number(res.count || 0)
+  wished.value = !!res.wished
+}
+async function loadWishSummary() {
+  const id = course.value?.id
+  wishCount.value = Number(course.value?.wishCount || 0)
+  wished.value = false
+  if (!id || !showWishCard.value) return
+  try {
+    const res = await getCourseWishSummary(id)
+    if (course.value?.id === id) applyWishSummary(res)
+  } catch {
+    // 许愿人数仅作参考，失败保持详情自带数量
+  }
+}
+async function toggleWish() {
+  const id = course.value?.id
+  if (!id || wishBusy.value || !showWishCard.value) return
+  if (!ensureLogin()) return
+  if (wished.value) {
+    // 取消许愿会失去开新班提醒，二次确认避免误触
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: tr('取消许愿', 'Remove wish'),
+        content: tr('取消后开新班将不再通知你', 'You will no longer be notified when this class returns'),
+        confirmText: tr('取消许愿', 'Remove'),
+        cancelText: tr('再想想', 'Keep it'),
+        success: (res) => resolve(!!res.confirm),
+        fail: () => resolve(false),
+      })
+    })
+    if (!confirmed) return
+  }
+  wishBusy.value = true
+  try {
+    if (wished.value) {
+      applyWishSummary(await removeCourseWish(id))
+      uni.showToast({ title: tr('已取消许愿', 'Wish removed'), icon: 'none' })
+      return
+    }
+    // 订阅消息须在点击手势内发起；模板未配置或用户拒绝都不阻断许愿
+    const t = await ensureSubscribeTemplates()
+    if (t.courseWish) await requestSubscribeMessage([t.courseWish]).catch(() => ({}))
+    applyWishSummary(await addCourseWish(id))
+    uni.showToast({ title: tr('已许愿，开新班时通知你', 'Wished. We will notify you.'), icon: 'none' })
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || tr('操作失败，请稍后重试', 'Action failed, please retry'), icon: 'none' })
+  } finally {
+    wishBusy.value = false
+  }
+}
+
 const shareVisible = ref(false)
 const sharePayload = ref<any>(null)
 const shareTargets = computed<ShareTargetOption[]>(() => course.value?.id
@@ -554,7 +656,7 @@ async function handleBook() {
   } finally { busy.value = false }
 }
 /** 订阅消息模板 id（会话内缓存；未配置时为空，授权步骤自动跳过） */
-let subscribeTemplates: { courseReminder?: string; waitlistPromoted?: string } | null = null
+let subscribeTemplates: { courseReminder?: string; waitlistPromoted?: string; courseWish?: string } | null = null
 async function ensureSubscribeTemplates() {
   if (subscribeTemplates) return subscribeTemplates
   try { subscribeTemplates = await fetchSubscribeTemplates() } catch { subscribeTemplates = {} }
@@ -788,4 +890,11 @@ button[disabled] { opacity: .55; }
 .member-link-action { color: var(--c-primary); font-size: 24rpx; }
 .member-benefit-body { margin-top: 16rpx; padding: 24rpx; border-radius: var(--radius-button); background: var(--c-cream); color: var(--c-ink); font-size: 26rpx; line-height: 1.6; }
 .member-benefit-cta { margin-top: 20rpx; padding: 16rpx; border-radius: var(--radius-button); background: var(--c-primary); color: var(--c-rice); font-size: 26rpx; text-align: center; }
+/* 往期课程许愿卡：暖底色 + 心愿按钮，与报名主流程视觉区分 */
+.wish-card { margin-top: 32rpx; background: linear-gradient(135deg, var(--c-card-2), var(--c-card)); }
+.wish-head { display: flex; align-items: flex-start; gap: 20rpx; }
+.wish-title { display: block; margin-bottom: 8rpx; font-size: 32rpx; color: var(--c-primary); }
+.wish-count { flex-shrink: 0; font-size: 24rpx; color: var(--c-gold-ink, #96581c); background: var(--c-gold); padding: 6rpx 16rpx; border-radius: 20rpx; }
+.wish-btn { display: flex; align-items: center; justify-content: center; gap: 12rpx; margin-top: 24rpx; padding: 22rpx; border-radius: var(--radius-button); background: var(--c-card); color: var(--c-brown); border: 1rpx solid var(--line-soft); font-size: 28rpx; }
+.wish-btn.wished { background: var(--c-gold); color: var(--c-primary); border-color: transparent; font-weight: 600; }
 </style>

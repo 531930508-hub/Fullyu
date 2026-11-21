@@ -1,5 +1,6 @@
-import { Injectable, BadRequestException } from '@nestjs/common'
+import { Injectable, BadRequestException, Logger } from '@nestjs/common'
 import { PrismaService } from '../../common/prisma.service'
+import { NotificationService } from '../../common/notification/notification.service'
 import { CourseStatus, CourseType, ScheduleType } from '@prisma/client'
 import {
   courseEndAt,
@@ -10,11 +11,23 @@ import {
 } from '@fullyu/shared'
 import { SettlementService } from '../settlement/settlement.service'
 
+/** 订阅消息里的开课时间文案：开课日 + 开课钟点（startDate 库里为当天 0 点） */
+function formatCourseStartText(startDate?: Date | null, startTime?: string | null): string {
+  if (!startDate) return '时间待确认'
+  const d = new Date(startDate)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const base = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  return startTime ? `${base} ${startTime}` : base
+}
+
 @Injectable()
 export class CourseService {
+  private readonly logger = new Logger('CourseService')
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly settlementService: SettlementService,
+    private readonly notification: NotificationService,
   ) {}
 
   /**
@@ -27,25 +40,28 @@ export class CourseService {
     category?: string
     memberOnly?: boolean
     sortPrice?: 'asc' | 'desc'
+    /** history = 往期已结束课程：只读回顾，按结束顺序倒序返回 */
+    scope?: 'history'
   }) {
-    const { page = 1, pageSize = 10, timeFilter, category, sortPrice } = query
+    const { page = 1, pageSize = 10, timeFilter, category, sortPrice, scope } = query
     const now = new Date()
+    const history = scope === 'history'
 
     const where: any = { status: CourseStatus.PUBLISHED }
 
-    // 时间筛选
-    if (timeFilter === 'today') {
+    // 时间筛选（往期回顾不按未来时间窗筛选，否则历史课会被一刀切掉）
+    if (!history && timeFilter === 'today') {
       const tomorrow = new Date(now)
       tomorrow.setDate(tomorrow.getDate() + 1)
       tomorrow.setHours(0, 0, 0, 0)
       const todayStart = new Date(now)
       todayStart.setHours(0, 0, 0, 0)
       where.startDate = { gte: todayStart, lt: tomorrow }
-    } else if (timeFilter === 'week') {
+    } else if (!history && timeFilter === 'week') {
       const weekEnd = new Date(now)
       weekEnd.setDate(weekEnd.getDate() + 7)
       where.startDate = { gte: now, lt: weekEnd }
-    } else if (timeFilter === 'month') {
+    } else if (!history && timeFilter === 'month') {
       const monthEnd = new Date(now)
       monthEnd.setMonth(monthEnd.getMonth() + 1)
       where.startDate = { gte: now, lt: monthEnd }
@@ -56,11 +72,16 @@ export class CourseService {
       where.categories = { array_contains: category }
     }
 
-    const orderBy: any = sortPrice ? { originalPrice: sortPrice } : { startDate: 'asc' }
+    const orderBy: any = history
+      ? { startDate: 'desc' }
+      : sortPrice
+        ? { originalPrice: sortPrice }
+        : { startDate: 'asc' }
 
     // 已结束课程不进入发现流（列表页、首页）。
     // 结束时刻由 startDate/endDate + startTime/endTime 推导，无法在数据库层精确比较，
     // 因此在服务端过滤后再分页，保证 totalPages 与用户实际看到的一致。
+    // scope=history 时口径反过来：只返回已结束课程，供「往期课程」回顾。
     const rows = await this.prisma.course.findMany({
       where,
       orderBy,
@@ -90,7 +111,9 @@ export class CourseService {
         venue: { select: { name: true, address: true } },
       },
     })
-    const visible = rows.filter((course) => isCourseDiscoverable(course, now))
+    const visible = history
+      ? rows.filter((course) => resolveCourseLifecycle(course, now).phase === 'ENDED')
+      : rows.filter((course) => isCourseDiscoverable(course, now))
     const total = visible.length
     const items = visible
       .slice((page - 1) * pageSize, page * pageSize)
@@ -144,9 +167,13 @@ export class CourseService {
         trainer: true,
         venue: true,
         priceTiers: true,
+        _count: { select: { wishes: true } },
       },
     })
-    return course ? decorateCourseLifecycle(course) : null
+    if (!course) return null
+    const { _count: count, ...rest } = course
+    // wishCount 供详情页展示往期课程许愿热度（是否已许愿走 /course-wishes/summary）
+    return { ...decorateCourseLifecycle(rest), wishCount: count.wishes }
   }
 
   /** 排期方式：前端值 → 数据库枚举（缺省兜底，非法值报错） */
@@ -237,6 +264,10 @@ export class CourseService {
     if (data.reviewSeeds !== undefined) payload.reviewSeeds = data.reviewSeeds === null ? null : Number(data.reviewSeeds)
     if (data.syllabus !== undefined) payload.syllabus = Array.isArray(data.syllabus) ? data.syllabus : null
     if (data.notice !== undefined) payload.notice = data.notice
+    // 复制课程时的来源标识：发布时会向该课程的心愿用户推送通知；仅后台创建入口可用
+    if (data.sourceCourseId !== undefined) {
+      payload.sourceCourseId = data.sourceCourseId ? String(data.sourceCourseId) : null
+    }
   }
 
   /**
@@ -341,7 +372,22 @@ export class CourseService {
     const filtered = phase ? decorated.filter((course) => course.phase === phase) : decorated
     const total = filtered.length
     const items = filtered.slice((page - 1) * pageSize, page * pageSize)
-    return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) }
+    // 心愿数随列表返回，后台卡片可提示复购需求；只聚合当前页，避免整表 count
+    const wishCounts = items.length
+      ? await this.prisma.courseWish.groupBy({
+          by: ['courseId'],
+          where: { courseId: { in: items.map((item) => item.id) } },
+          _count: { _all: true },
+        })
+      : []
+    const wishMap = new Map(wishCounts.map((row) => [row.courseId, row._count._all]))
+    return {
+      items: items.map((item) => ({ ...item, wishCount: wishMap.get(item.id) ?? 0 })),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    }
   }
 
   /**
@@ -431,7 +477,7 @@ export class CourseService {
       await this.assertNoActivePaidEnrollment(id)
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const updatedCourse = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.course.update({ where: { id }, data: { status: next } })
       if (next === CourseStatus.PUBLISHED) {
         // 自动登记场地占用（幂等：先清旧再建）
@@ -483,6 +529,60 @@ export class CourseService {
       }
       return updated
     })
+    // 发布后：若本课是某节往期课程的副本，通知那节课的心愿用户（事务外，失败不回滚发布）
+    if (next === CourseStatus.PUBLISHED) {
+      this.notifyWishers(updatedCourse).catch(() => {})
+    }
+    return updatedCourse
+  }
+
+  /**
+   * 往期课程开新班通知：找到源课程尚未通知的心愿用户，逐个下发订阅消息。
+   * 只有真正发起下发才标记已通知，避免模板未配/无 openid 时把心愿「烧掉」。
+   */
+  private async notifyWishers(course: {
+    id: string
+    title: string
+    venueId: string
+    sourceCourseId: string | null
+    startDate: Date
+    startTime: string | null
+    endTime?: string | null
+  }) {
+    if (!course.sourceCourseId) return
+    const wishes = await this.prisma.courseWish.findMany({
+      where: { courseId: course.sourceCourseId, notifiedAt: null },
+      select: { id: true, userId: true },
+      orderBy: { createdAt: 'asc' },
+      take: 500,
+    })
+    if (!wishes.length) return
+    const venue = await this.prisma.venue.findUnique({
+      where: { id: course.venueId },
+      select: { name: true },
+    })
+    const startTime = formatCourseStartText(course.startDate, course.startTime)
+    let sent = 0
+    for (const wish of wishes) {
+      const delivered = await this.notification
+        .courseWishReleased(wish.userId, {
+          courseName: course.title,
+          startTime,
+          venue: venue?.name || '待确认',
+          courseId: course.id,
+        })
+        .catch((e: Error) => {
+          this.logger.warn(`课程心愿通知失败 [${wish.id}] ${e.message}`)
+          return false
+        })
+      if (!delivered) continue
+      await this.prisma.courseWish.update({
+        where: { id: wish.id },
+        data: { notifiedAt: new Date(), notifiedCourseId: course.id },
+      })
+      sent++
+    }
+    if (sent > 0) this.logger.log(`课程 ${course.id} 发布，已通知 ${sent} 位心愿用户`)
   }
 
   /**

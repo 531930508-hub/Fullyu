@@ -181,6 +181,7 @@ const accountMenu = computed(() => [
   { page: 'assets', icon: 'leaf', label: t('profile.myAssets'), tab: false },
   { page: 'voucher-redeem', icon: 'ticket', label: tr('兑换代金券', 'Redeem voucher'), tab: false },
   { page: 'my-reviews', icon: 'star', label: t('profile.myReviews'), tab: false },
+  { page: 'my-wishes', icon: 'heart', label: tr('我的心愿', 'My wishes'), tab: false },
   { page: 'community-mine', icon: 'users', label: tr('我的社群', 'My communities'), tab: false },
   { page: 'brand-member', icon: 'card', label: tr('Full愈大会员', 'Full Yu Member'), tab: false },
 ])
