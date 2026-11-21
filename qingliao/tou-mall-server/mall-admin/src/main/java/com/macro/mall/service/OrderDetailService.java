@@ -1801,6 +1801,9 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
 
             // 已完成/已取消的明细只是运营动作的事后调整：只挪它自己，不校验冲突、不互换、不动别人的排期
             if (isFinishedState(orderDetail.getState())) {
+                if (swapWithId != null) {
+                    throw new BusinessException("本单已完成或已取消，本次未调整，请刷新看板");
+                }
                 if (bedId != null) {
                     orderDetail.setBedId(bedId);
                     orderDetail.setIsLockBed(true);
@@ -1824,7 +1827,12 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                 }
                 //目标床位在该时段已经有单：本次拖动直接不生效，不去改原来那单
                 throwIfOccupied(conflicts, bedLabel(bedId));
-                applyBedSwitch(orderDetail, bedId);
+                if (oldMassagistId != null) {
+                    throwIfOccupied(findOverlappingSchedules(shopId, oldMassagistId, null,
+                            startDateTime, endDateTime, id), massagistLabel(oldMassagistId));
+                }
+                Project switchedProject = resolveBedSwitchProject(orderDetail, bedId);
+                applyBedSwitch(orderDetail, bedId, switchedProject);
             } else if (massagistId != null) {
                 String massagistName = massagistService.findNameById(massagistId);
                 List<OrderDetail> conflicts = findOverlappingSchedules(shopId, massagistId, null, startDateTime, endDateTime, id);
@@ -1871,17 +1879,17 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
      * 落点同时压着多条单时无从判断跟谁换，仍按"占用即失败"处理。
      */
     private OrderDetail findSwapTarget(List<OrderDetail> conflicts, Long swapWithId) {
-        if (swapWithId == null || CollectionUtils.isEmpty(conflicts)) {
+        if (swapWithId == null) {
             return null;
         }
-        OrderDetail target = null;
-        for (OrderDetail conflict : conflicts) {
-            if (!swapWithId.equals(conflict.getId())) {
-                return null;
-            }
-            target = conflict;
+        OrderDetail target = getById(swapWithId);
+        if (target != null && isFinishedState(target.getState())) {
+            throw new BusinessException("目标订单已完成或已取消，本次未调整，请刷新看板");
         }
-        return target;
+        if (conflicts.size() != 1 || !swapWithId.equals(conflicts.get(0).getId())) {
+            throw new BusinessException("目标排期已变化或存在其他预约，本次未调整，请刷新看板后重试");
+        }
+        return conflicts.get(0);
     }
 
     /**
@@ -1932,6 +1940,21 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     bedLabel(targetBedId));
             throwIfSwapBlocked(findOverlappingSchedules(shopId, null, sourceBedId, sourceStart, targetNewEnd, swapIds),
                     bedLabel(sourceBedId));
+            if (sourceMassagistId != null) {
+                throwIfSwapBlocked(findOverlappingSchedules(shopId, sourceMassagistId, null,
+                        targetStart, sourceNewEnd, swapIds), massagistLabel(sourceMassagistId));
+            }
+            if (target.getMassagistId() != null) {
+                throwIfSwapBlocked(findOverlappingSchedules(shopId, target.getMassagistId(), null,
+                        sourceStart, targetNewEnd, swapIds), massagistLabel(target.getMassagistId()));
+            }
+            boolean sameBed = Objects.equals(targetBedId, sourceBedId);
+            boolean sameMassagist = sourceMassagistId != null
+                    && Objects.equals(sourceMassagistId, target.getMassagistId());
+            if ((sameBed || sameMassagist)
+                    && BookingAvailability.overlaps(targetStart, sourceNewEnd, sourceStart, targetNewEnd, 0)) {
+                throw new BusinessException("两单时长不同，互换后床位或疗愈师时段重叠，本次未调整");
+            }
         } else if (targetMassagistId != null) {
             throwIfSwapBlocked(findOverlappingSchedules(shopId, targetMassagistId, null, targetStart, sourceNewEnd, swapIds),
                     massagistLabel(targetMassagistId));
@@ -1943,8 +1966,10 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
 
         List<OrderDetail> massagistChanged = Collections.emptyList();
         if (targetBedId != null) {
-            applyBedSwitch(source, targetBedId);
-            applyBedSwitch(target, sourceBedId);
+            Project sourceProject = resolveBedSwitchProject(source, targetBedId);
+            Project targetProject = resolveBedSwitchProject(target, sourceBedId);
+            applyBedSwitch(source, targetBedId, sourceProject);
+            applyBedSwitch(target, sourceBedId, targetProject);
         } else {
             //两人各自原来的床位回到对方时段后可能被第三方占着：能换同类型空床就换，换不了就不硬来
             relocateBedForSwap(source, targetStart, sourceNewEnd, shopId, swapIds);
@@ -1977,50 +2002,52 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         EarlyBirdPrice.assertNotEarlier(order.getPriceSource(), bookedDate, newStart.toLocalDate());
     }
 
-    /**
-     * 换床位：跨类型（湿区↔干区）等于换项目，沿用单次拖动时的口径——项目跟着换、原疗愈师清空、轮次位置回退。
-     * 单次拖动和互换都走这里，保证两条路径处理一致。
-     */
-    private void applyBedSwitch(OrderDetail detail, Long newBedId) {
-        Long oldBedId = detail.getBedId();
-        //手动拖过的单都标记床位已锁定，避免系统自动分配又把它挪走（同床换时段也照样标记）
+    private Project resolveBedSwitchProject(OrderDetail detail, Long newBedId) {
+        if (Objects.equals(newBedId, detail.getBedId())) {
+            return null;
+        }
+        Map<Long, Integer> types = bedService.findTypeMapByIdList(Arrays.asList(newBedId, detail.getBedId()));
+        Integer oldType = types.get(detail.getBedId());
+        Integer newType = types.get(newBedId);
+        if (oldType == null || newType == null || oldType.equals(newType)) {
+            return null;
+        }
+        Long projectId = projectService.findIdMapByTypeList(Arrays.asList(oldType, newType)).get(newType);
+        Project project = projectId == null ? null : projectService.getById(projectId);
+        if (project == null) {
+            throw new BusinessException("目标区域没有对应服务项目，本次未调整，请检查项目配置");
+        }
+        if (detail.getMassagistId() != null) {
+            // 原订单已经过门店授权，跨店排班的原疗愈师仅在此读取技能，不改变人员归属。
+            Massagist massagist = massagistService.getByIdAcrossShops(detail.getMassagistId());
+            List<Long> skills = massagist == null || ObjectUtils.isEmpty(massagist.getProjectArr())
+                    ? Collections.emptyList() : JSON.parseArray(massagist.getProjectArr(), Long.class);
+            if (skills == null || !skills.contains(projectId)) {
+                String name = massagist == null ? String.valueOf(detail.getMassagistId()) : massagist.getName();
+                throw new BusinessException("疗愈师「" + name + "」未认证「" + project.getTitle() + "」，本次未调整");
+            }
+        }
+        return project;
+    }
+
+    private void applyBedSwitch(OrderDetail detail, Long newBedId, Project project) {
         detail.setIsLockBed(true);
-        if (Objects.equals(newBedId, oldBedId)) {
+        detail.setBedId(newBedId);
+        if (project == null) {
             return;
         }
-        detail.setBedId(newBedId);
-        //换床位可能涉及到换项目
-        Map<Long, Integer> typeMap = bedService.findTypeMapByIdList(Arrays.asList(newBedId, oldBedId));
-        Integer oldType = typeMap.get(oldBedId);
-        Integer type = typeMap.get(newBedId);
-        if (oldType != null && type != null && !oldType.equals(type)) {
-            Map<Integer, Long> projectIdMap = projectService.findIdMapByTypeList(Arrays.asList(oldType, type));
-            detail.setProjectId(projectIdMap.getOrDefault(type, detail.getProjectId()));
-
-            if (detail.getMassagistId() != null) {
-                //换项目后原疗愈师技能未必匹配：清空疗愈师并回退轮次（updateById 不写 null，所以用 UpdateWrapper）
-                UpdateWrapper<OrderDetail> updateWrapper = new UpdateWrapper<>();
-                updateWrapper.eq("id", detail.getId())
-                        .set("massagist_id", null);
-                detail.setMassagistId(null);
-                update(detail, updateWrapper);
-                if (Boolean.TRUE.equals(detail.getIsUpdateSort())) {
-                    recoverSortId(Collections.singletonList(detail), RoundScheduleState.UPDATE);
-                }
+        detail.setProjectId(project.getId());
+        Order order = orderService.getById(detail.getOrderId());
+        if (order != null) {
+            if (project.getType() == 2) {
+                order.setProductId(5L);
+                order.setProductTitle("全感舒筋");
             }
-            //对订单order 中的产品id 进行修改
-            Order order = orderService.getById(detail.getOrderId());
-            if (order != null) {
-                if (type == 2) {
-                    order.setProductId(5L);
-                    order.setProductTitle("全感舒筋");
-                }
-                if (type == 1) {
-                    order.setProductId(4L);
-                    order.setProductTitle("头部水疗");
-                }
-                orderService.updateById(order);
+            if (project.getType() == 1) {
+                order.setProductId(4L);
+                order.setProductTitle("头部水疗");
             }
+            orderService.updateById(order);
         }
     }
 

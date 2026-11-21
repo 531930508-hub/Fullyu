@@ -107,12 +107,12 @@
               </div>
             </div>
             <draggable v-model="item.orderDetailList" @start="onDragStart" @end="onDragEnd"
-                       :data-item-id="item.id" :disabled="isMassagist || item.type == 0"
-                       class="data-wrapper" group="schedule" animation="300" :scroll="true" chosenClass="check-item"
-                       :delay="200" :delayOnTouchStart="true" :touchStartThreshold="5" :forceFallback="true"
-                       :fallbackTolerance="3">
-              <transition-group>
-                <div v-for="detail in item.orderDetailList" :class="['item', { 'completed': detail.state === 2 }]"
+                       :data-item-id="item.id" :disabled="isMassagist || item.type == 0 || pendingMove"
+                       class="data-wrapper" group="schedule" :sort="false" animation="0" :scroll="true" chosenClass="check-item"
+                       :delay="200" :delayOnTouchOnly="true" :touchStartThreshold="5" :forceFallback="true"
+                       :fallbackTolerance="3" :style="isDragging ? {width: '100%', height: '100%'} : {}">
+              <transition-group tag="div" :style="isDragging ? {width: '100%', height: '100%'} : {}">
+                <div v-for="detail in item.orderDetailList" :data-detail-id="detail.id" :class="['item', { 'completed': detail.state === 2 }]"
                      :style="searchForm.type == 1 ? getStyle(detail, item.type) : getStyle(detail, detail.bedType)"
                      @click.stop="handleItemClick(detail, $event)"
                      @touchstart="handleTouchStart(detail, $event)"
@@ -237,6 +237,7 @@
 <script>
 import shopApi from '../../api/shop/shop'
 import orderDetailApi from '@/api/order/orderDetail';
+import projectApi from '@/api/goods/project';
 import dateUtil from '@/utils/dateUtil';
 import {formatDate} from '@/utils/date';
 import {mapGetters} from 'vuex';
@@ -286,6 +287,11 @@ export default {
       currentTime: new Date(),
       timer: null,
       isDragging: false,
+      pendingMove: false,
+      dragContext: null,
+      dragEndedAt: 0,
+      boardRequestId: 0,
+      locatedBoardKey: '',
       lastMouseX: 0,
       lastMouseY: 0,
       dragOffsetX: 0,
@@ -497,19 +503,17 @@ export default {
       return id !== null && id !== undefined && id !== '' && id !== 'null' && !isNaN(Number(id))
     },
     async fetchShopTimeList() {
-      if (!this.hasShopId()) return
-      const resendtime = await shopApi.timeShopEnd(this.searchForm.shopId)
-      console.log("resendtime======================")
-      console.log(resendtime.data)
-      this.shopEndTime = resendtime.data;
-      const res = await shopApi.timeList(this.searchForm.shopId)
-
-      console.log(this.searchForm)
-      const resNew = await shopApi.timeListNew(this.searchForm.shopId,this.searchForm.date)//获取人数和时间
-      console.log("resNew-------------------------")
-      console.log(resNew)
-      this.timeList = res.data || []
-      this.timeListPeople = resNew.data || []
+      if (!this.hasShopId() || this.isDragging || this.pendingMove) return
+      const {shopId, date} = this.searchForm
+      const requestId = this.boardRequestId
+      const [endTime, times, people] = await Promise.all([
+        shopApi.timeShopEnd(shopId), shopApi.timeList(shopId), shopApi.timeListNew(shopId, date)
+      ])
+      if (requestId !== this.boardRequestId || this.isDragging || this.pendingMove
+          || shopId !== this.searchForm.shopId || date !== this.searchForm.date) return
+      this.shopEndTime = endTime.data
+      this.timeList = times.data || []
+      this.timeListPeople = people.data || []
     },
     async fetchReceptionData() {
       if (!this.hasShopId()) return
@@ -533,34 +537,10 @@ export default {
       if (!timeList.length) {
         return {display: 'none'};
       }
-      let index = timeList.findIndex(t => t === startTime);
-
-      // 如果找不到精确匹配，尝试找到最接近的时间段
-      if (index < 0) {
-        const startHour = parseInt(startTime.split(':')[0]);
-        const startMinute = parseInt(startTime.split(':')[1]);
-
-        for (let i = 0; i < timeList.length; i++) {
-          const timeHour = parseInt(timeList[i].split(':')[0]);
-          const timeMinute = parseInt(timeList[i].split(':')[1]);
-
-          if (timeHour > startHour || (timeHour === startHour && timeMinute >= startMinute)) {
-            index = i;
-            break;
-          }
-        }
-
-        if (index < 0) index = 0;
-      }
-
-      // 计算精确位置：基础位置 + 分钟偏移
-      const baseTop = 80 * index + 8;
-      const startMinutes = parseInt(startTime.split(':')[1]);
-      const slotTime = timeList[index] || '';
-      const timeSlotMinutes = parseInt(slotTime.split(':')[1]) || 0;
-      const minuteOffset = (startMinutes - timeSlotMinutes) * (80 / 15); // 15分钟一个单位
-
-      const marginTop = baseTop + minuteOffset;
+      const [startHour, startMinute] = startTime.split(':').map(Number);
+      const [firstHour, firstMinute] = timeList[0].split(':').map(Number);
+      const minutes = (startHour - firstHour) * 60 + startMinute - firstMinute;
+      const marginTop = minutes * (80 / 15) + 8;
 
       // 检测重叠并计算水平偏移
       const {leftOffset, width, zIndex} = this.calculateOverlapOffset(item, type);
@@ -702,6 +682,8 @@ export default {
       if (!this.isMassagist) this.fetchReceptionData()
     },
     async updateData(showloading = false) {
+      if (this.isDragging || this.pendingMove) return
+      const requestId = ++this.boardRequestId
       if (this.isMassagist) {
         // 疗愈师看板全店可见、不限本人；视图（床位/疗愈师）由用户自己切换
         this.searchForm.massagistId = ''
@@ -725,16 +707,23 @@ export default {
           this.dataList = []
         }
       }
+      const query = {...this.searchForm}
       try {
-        let res = await orderDetailApi.schedulingMap(this.searchForm)
+        const res = await orderDetailApi.schedulingMap(query)
+        if (requestId !== this.boardRequestId || this.isDragging || this.pendingMove) return
         this.dataList = res.data || []
         if (this.searchForm.type == 2) {
           this.fetchMassagistRound()
         }
+        await this.fetchShopTimeList()
+        const boardKey = `${query.shopId}/${query.date}/${query.type}`
+        if (requestId === this.boardRequestId && !this.isDragging && !this.pendingMove && this.locatedBoardKey !== boardKey) {
+          this.locatedBoardKey = boardKey
+          this.scrollToCurrentTime()
+        }
       } finally {
-        this.listLoading = false
+        if (requestId === this.boardRequestId) this.listLoading = false
       }
-      this.fetchShopTimeList()
     },
     async openDetail(orderDetail) {
       this.$refs.refPadOrderDetail.open(orderDetail)
@@ -743,10 +732,7 @@ export default {
       this.$refs.refPadReceptionOrderDetail.open(orderDetail)
     },
     handleItemClick(detail, event) {
-      if (this.isDragging) {
-        this.isDragging = false;
-        return
-      }
+      if (this.isDragging || this.pendingMove || Date.now() - this.dragEndedAt < 250) return
       //疗愈师看板只读：允许打开订单详情查看，但接待单详情与任何写操作都不开放
       if (this.isMassagist) {
         if (detail.type == 2) {
@@ -793,7 +779,6 @@ export default {
     },
     updateTime() {
       this.currentTime = new Date();
-      this.scrollToCurrentTime();
     },
     scrollToCurrentTime() {
       this.$nextTick(() => {
@@ -842,161 +827,107 @@ export default {
       }
     },
     onDragStart(evt) {
-      // 检查是否为已完成状态的订单
-      // if (evt.item && evt.item.classList.contains('completed')) {
-      //   evt.preventDefault();
-      //   return false;
-      // }
-
-      this.isDragging = true;
-      this.clickPending = false;
-
-      // 记录拖拽元素和鼠标的相对偏移
-      const draggedElement = evt.item;
-      if (draggedElement && evt.originalEvent) {
-        const rect = draggedElement.getBoundingClientRect();
-        let clientX, clientY;
-
-        if (evt.originalEvent.touches && evt.originalEvent.touches[0]) {
-          clientX = evt.originalEvent.touches[0].clientX;
-          clientY = evt.originalEvent.touches[0].clientY;
-        } else {
-          clientX = evt.originalEvent.clientX || 0;
-          clientY = evt.originalEvent.clientY || 0;
-        }
-
-        // 计算鼠标相对于元素左上角的偏移
-        this.dragOffsetX = clientX - rect.left - 16;
-        this.dragOffsetY = clientY - rect.top - 8;
-
-        this.lastMouseX = clientX;
-        this.lastMouseY = clientY;
+      this.isDragging = true
+      this.clickPending = false
+      this.boardRequestId++
+      const id = evt.item.dataset.detailId
+      const detail = this.dataList.reduce((list, item) => list.concat(item.orderDetailList || []), [])
+        .find(item => String(item.id) === id)
+      this.dragContext = detail ? {detail: {...detail}, query: {...this.searchForm}} : null
+      const event = evt.originalEvent
+      if (event) {
+        const point = event.touches && event.touches[0] ? event.touches[0] : event
+        const rect = evt.item.getBoundingClientRect()
+        this.lastMouseX = point.clientX
+        this.lastMouseY = point.clientY
+        this.dragOffsetX = point.clientX - rect.left
+        this.dragOffsetY = point.clientY - rect.top
       }
     },
     async onDragEnd(evt) {
-      const {from, to, newIndex} = evt;
-      const mainWrapper = this.$refs.refMainWrapper;
-      if (!mainWrapper) {
-        this.isDragging = false;
-        this.updateData();
-        return;
-      }
-
-      // 计算元素左上角位置（减去鼠标偏移）
-      let elementX = this.lastMouseX - (this.dragOffsetX || 0);
-      let elementY = this.lastMouseY - (this.dragOffsetY || 0);
-
-      // 临时隐藏拖拽元素以获取底层元素
-      const draggingItems = document.querySelectorAll('.sortable-chosen, .sortable-ghost');
-      draggingItems.forEach(item => item.style.display = 'none');
-
-      const targetElement = document.elementFromPoint(elementX, elementY);
-
-      // 恢复拖拽元素显示
-      draggingItems.forEach(item => item.style.display = '');
-
-      const dataItem = targetElement ? targetElement.closest('.data-item') : null;
-
-      if (!dataItem) {
-        this.isDragging = false;
-        this.updateData();
-        return;
-      }
-
-      // 获取目标床位ID
-      const newBedId = dataItem.dataset.itemId;
-
-      // 计算时间位置 - 基于元素左上角位置
-      const mainRect = mainWrapper.getBoundingClientRect();
-      const scrollTop = mainWrapper.scrollTop;
-      const relativeY = elementY - mainRect.top + scrollTop; // 减去顶部边距
-
-      // 每个格子80px高度，计算时间索引
-      const timeIndex = Math.max(0, Math.min(Math.floor(relativeY / 80), this.timeList.length - 1));
-
-      const newTime = this.timeList[timeIndex] || this.timeList[0];
-
-      // 查找源数据
-      let bedId = to.dataset.itemId;
-      if (!bedId) {
-        let parent = to.closest('.data-item');
-        if (parent) bedId = parent.dataset.itemId;
-      }
-
-      const sourceData = this.dataList.find(d => d.id == bedId);
-      const sourceItem = sourceData && sourceData.orderDetailList[newIndex];
-      if (!sourceItem || !newBedId) {
-        this.isDragging = false;
-        return;
-      }
-      // 查找源数据
-      let fromItemId = from.dataset.itemId;
-      if (!fromItemId) {
-        let parent = from.closest('.data-item');
-        if (parent) fromItemId = parent.dataset.itemId;
-      }
-
-      // 验证是否移动，并显示确认弹框
-      const targetBed = this.dataList.find(d => d.id == newBedId);
-      if ((fromItemId != 0 && targetBed.name == '接待') || (fromItemId == 0 && targetBed.name != '接待')) {
-        this.isDragging = false
-        this.updateData()
-        return
-      }
-      const oldItemTime = dayjs(sourceItem.startTime).format('HH:mm:ss')
-      const newItemTime = dayjs(newTime, 'HH:mm').format('HH:mm:ss');
-      const changeTime = oldItemTime != newItemTime
-      const changeBed = (this.searchForm.type === 1 && newBedId != sourceItem.bedId) || (this.searchForm.type === 2 && newBedId != sourceItem.massagistId)
-      if (!changeTime && !changeBed) {
-        this.isDragging = false;
-        return
-      }
-      // 落点时段已被别的单占用时，改成两单互换档期，而不是要求运营先把目标时段空出来
-      const swapTarget = this.findSwapTarget(targetBed, sourceItem, newTime)
-      let confirmMessage = `确认将订单调整到 ${targetBed ? targetBed.name : '目标床位'} 的 ${newTime} 时间段吗？`;
-      let message = ''
-      if (sourceItem.specifyType == 1 && targetBed.phone) {
-        // 调整疗愈师
-        message = '本单已指定疗愈师，'
-      }
-      if (swapTarget) {
-        confirmMessage = message + this.buildSwapMessage(sourceItem, swapTarget)
-      } else if (changeBed && changeTime) {
-        confirmMessage = message + `确认将订单调整到 ${targetBed ? targetBed.name : '目标床位'} 的 ${newTime} 时间段吗？`;
-      } else if (changeBed) {
-        confirmMessage = message + `确认将订单调整到 ${targetBed ? targetBed.name : '目标床位'} 吗？`;
-      } else {
-        confirmMessage = `确认将订单调整到 ${newTime} 时间段吗？`;
-      }
-      this.$confirm(confirmMessage, swapTarget ? '确认互换排期' : '确认调整', {
-        confirmButtonText: '确认',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }).then(async () => {
-        try {
-          await orderDetailApi.updateOrderDetail({
-            id: sourceItem.id,
-            bedId: this.searchForm.type === 1 ? newBedId : null,
-            massagistId: this.searchForm.type === 1 ? null : newBedId,
-            startTime: `${this.searchForm.date} ${newTime}:00`,
-            // 落点已有别的单：把那条单的 id 带过去，后端才知道该和谁互换
-            swapWithId: swapTarget ? swapTarget.id : null
-          });
-          await this.updateData();
-          this.$message.success(swapTarget ? '互换成功' : '调整成功');
-        } catch (error) {
-          // 落点被占用等业务失败：后端已弹出具体原因，这里只把看板刷回原位
-          if (error !== 'error') {
-            this.$message.error('保存失败，请重试');
-          }
-          await this.updateData();
+      if (evt.originalEvent) this.trackPosition(evt.originalEvent)
+      const context = this.dragContext
+      this.isDragging = false
+      this.pendingMove = true
+      this.dragEndedAt = Date.now()
+      try {
+        if (!context || !this.$refs.refMainWrapper) return
+        const sourceItem = context.detail
+        const query = context.query
+        if (JSON.stringify(query) !== JSON.stringify(this.searchForm)) {
+          this.$message.warning('看板日期或视图已变化，本次未调整，请重试')
+          return
         }
-      }).catch(() => {
-        // 取消时刷新数据恢复原状态
-        this.updateData();
-      });
-
-      this.isDragging = false;
+        const hidden = Array.from(document.querySelectorAll('.sortable-fallback, .sortable-ghost'))
+          .map(item => ({item, display: item.style.display}))
+        hidden.forEach(({item}) => { item.style.display = 'none' })
+        const targetElement = document.elementFromPoint(this.lastMouseX, this.lastMouseY)
+        hidden.forEach(({item, display}) => { item.style.display = display })
+        const dataItem = targetElement && targetElement.closest('.data-item')
+        if (!dataItem) {
+          this.$message.warning('请将订单放到看板的床位或疗愈师列内，本次未调整')
+          return
+        }
+        const newId = dataItem.dataset.itemId
+        const target = this.dataList.find(item => String(item.id) === newId)
+        if (!target) return
+        if (query.type === 1 && (target.type === 0 || sourceItem.type === 2)) {
+          this.$message.warning('服务订单与接待位置不能互换，本次未调整')
+          return
+        }
+        if (query.type === 1 && target.status === 0) {
+          this.$message.warning('目标床位已关闭，本次未调整')
+          return
+        }
+        const relativeTop = this.lastMouseY - this.dragOffsetY - dataItem.getBoundingClientRect().top - 8
+        const timeIndex = Math.round(relativeTop / 80)
+        if (timeIndex < 0 || timeIndex >= this.timeList.length) {
+          this.$message.warning('目标时间超出看板范围，本次未调整')
+          return
+        }
+        const newTime = this.timeList[timeIndex]
+        const newStart = `${query.date} ${newTime}:00`
+        const oldId = query.type === 1 ? sourceItem.bedId : sourceItem.massagistId
+        if (String(oldId) === newId && dayjs(sourceItem.startTime).isSame(dayjs(newStart))) return
+        const swapTarget = this.findSwapTarget(target, sourceItem, newTime)
+        let projects = []
+        if (query.type === 1 && Number(sourceItem.state) < 2) {
+          const oldBed = this.dataList.find(item => item.id == sourceItem.bedId)
+          if (oldBed && oldBed.type !== target.type) {
+            projects = (await projectApi.list({category: 1})).data || []
+          }
+        }
+        if (JSON.stringify(query) !== JSON.stringify(this.searchForm)) {
+          this.$message.warning('看板日期或视图已变化，本次未调整，请重试')
+          return
+        }
+        let message = swapTarget ? this.buildSwapMessage(sourceItem, swapTarget, projects)
+          : this.buildMoveMessage(sourceItem, target, newStart, projects)
+        if (query.type === 2 && (sourceItem.specifyType || (swapTarget && swapTarget.specifyType))) {
+          message += '\n更换疗愈师会取消相应订单的原指定标记。'
+        }
+        await this.$confirm(this.$createElement('div', {style: {whiteSpace: 'pre-line'}}, message),
+          swapTarget ? '确认互换排期' : '确认调整', {
+            confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning', closeOnClickModal: false
+          })
+        await orderDetailApi.updateOrderDetail({
+          id: sourceItem.id,
+          bedId: query.type === 1 ? newId : null,
+          massagistId: query.type === 2 ? newId : null,
+          startTime: newStart,
+          swapWithId: swapTarget ? swapTarget.id : null
+        })
+        this.$message.success(swapTarget ? '互换成功' : '调整成功')
+      } catch (error) {
+        if (error !== 'cancel' && error !== 'close' && error !== 'error') {
+          this.$message.error(error.message || '调整失败，请刷新后重试')
+        }
+      } finally {
+        this.pendingMove = false
+        this.dragContext = null
+        this.dragEndedAt = Date.now()
+        await this.updateData()
+      }
     },
     // 落点时段已被别的单占用时，找出那条单：同一条时段只可能压着一单，压着多单就交回后端按撞单处理
     findSwapTarget(targetBed, sourceItem, newTime) {
@@ -1014,14 +945,31 @@ export default {
       })
       return candidates.length === 1 ? candidates[0] : null
     },
-    // 互换确认文案：把两单各自的新档期都写清楚，避免换完才发现换错人
-    buildSwapMessage(sourceItem, swapTarget) {
-      const rangeText = (start, duration) => `${dayjs(start).format('HH:mm')}~${dayjs(start).add(duration || 0, 'minute').format('HH:mm')}`
-      const customer = swapTarget.customer && swapTarget.customer.phone ? `尾号${swapTarget.customer.phone.substr(-4)}` : '另一单'
-      const action = this.searchForm.type === 2 ? '互换疗愈师和时段' : '互换床位和时段'
-      return `该时段已有【${swapTarget.projectTitle || '订单'} ${customer}】的预约，确认${action}吗？` +
-        `本单 ${rangeText(sourceItem.startTime, sourceItem.duration)}→${rangeText(swapTarget.startTime, sourceItem.duration)}，` +
-        `对方 ${rangeText(swapTarget.startTime, swapTarget.duration)}→${rangeText(sourceItem.startTime, swapTarget.duration)}。`
+    buildMoveMessage(detail, target, newStart, projects = []) {
+      const range = start => `${dayjs(start).format('HH:mm')}~${dayjs(start).add(detail.duration || 0, 'minute').format('HH:mm')}`
+      const oldBed = this.searchForm.type === 1 ? this.dataList.find(item => item.id == detail.bedId) : null
+      const oldBedName = detail.bedName || (oldBed && oldBed.name) || '未分配床位'
+      const therapist = (detail.massagist && detail.massagist.name) || '未分配疗愈师'
+      let project = detail.projectTitle || '原项目'
+      if (this.searchForm.type === 1 && Number(detail.state) < 2 && oldBed && oldBed.type !== target.type) {
+        const matches = projects.filter(item => Number(item.type) === Number(target.type)
+          && Number(item.category) === 1 && Number(item.id) !== 4)
+        if (matches.length !== 1) throw new Error('目标区域项目配置不明确，本次未调整，请检查项目配置')
+        project = matches[0].title
+      }
+      const newBed = this.searchForm.type === 1 ? target.name : `${oldBedName}（占用时调整到同区空床）`
+      const newTherapist = this.searchForm.type === 1 ? `${therapist}（保留）` : target.name
+      return `原：${detail.projectTitle || '原项目'} · ${oldBedName} · ${range(detail.startTime)} · ${therapist}\n` +
+        `新：${project} · ${newBed} · ${range(newStart)} · ${newTherapist}`
+    },
+    buildSwapMessage(sourceItem, swapTarget, projects = []) {
+      const field = this.searchForm.type === 1 ? 'bedId' : 'massagistId'
+      const sourceResource = this.dataList.find(item => item.id == sourceItem[field])
+      const targetResource = this.dataList.find(item => item.id == swapTarget[field])
+      return '确认互换以下两单的排期？\n本单\n' +
+        this.buildMoveMessage(sourceItem, targetResource, swapTarget.startTime, projects) + '\n另一单\n' +
+        this.buildMoveMessage(swapTarget, sourceResource, sourceItem.startTime, projects) +
+        '\n金额、时长不变；校验不通过则整次不调整。'
     },
     trackPosition(e) {
       // 优先使用触摸事件的坐标
