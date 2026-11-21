@@ -43,6 +43,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -320,6 +321,60 @@ class OrderRefundOnlyTest {
         assertEquals(AppointmentState.FINISHED.getValue(), order.getAppointmentState(),
                 "客人做完才退款的单，重收不能把预约改回在店");
         assertEquals(OrderState.PAID_NOT_COMMENT.getValue(), order.getState());
+    }
+
+    @Test
+    @DisplayName("仅退款回到未付款：客人不再重收时门店还能把这一单取消掉")
+    void cancelOrderAllowedForNotPayOrderAfterRefundOnly() {
+        // 已付款的单退完钱回到未付款，预约可能还停在已到店/已完成，这里必须还能正常取消，
+        // 否则这一单永远挂在看板上既不能收钱也不能关单
+        Order order = order(OrderState.NOT_PAY.getValue(), OrderPayType.CASH.getValue());
+        order.setRefundState(RefundState.SUCCESS.getValue());
+        order.setHasRefundAmount(PAY_AMOUNT);
+        order.setAppointmentState(AppointmentState.FINISHED.getValue());
+        stubOrder(order);
+        when(orderMapper.selectList(any())).thenReturn(Collections.singletonList(order));
+
+        service.cancelOrder(ORDER_ID, "退款后客人不做了");
+
+        assertEquals(OrderState.CANCELED.getValue(), order.getState());
+        assertEquals(AppointmentState.CANCELED.getValue(), order.getAppointmentState());
+        assertEquals("退款后客人不做了", order.getCancelReason());
+        assertEquals(Integer.valueOf(0), order.getCancelOrderType(), "后台取消要记下来源");
+        verify(orderDetailService).refundOrder(ORDER_ID, true);
+    }
+
+    @Test
+    @DisplayName("仅退款后取消：预约还没做的单照旧给客人推取消通知")
+    void cancelNotPayOrderStillNotifiesCustomerBeforeAppointment() {
+        Order order = order(OrderState.NOT_PAY.getValue(), OrderPayType.CASH.getValue());
+        order.setRefundState(RefundState.SUCCESS.getValue());
+        order.setHasRefundAmount(PAY_AMOUNT);
+        order.setAppointmentState(AppointmentState.WAITING.getValue());
+        stubOrder(order);
+        when(orderMapper.selectList(any())).thenReturn(Collections.singletonList(order));
+        OrderService cancelSpy = spy(service);
+
+        cancelSpy.cancelOrder(ORDER_ID, "退款后客人不做了");
+
+        verify(cancelSpy).handleBookingCancelNotice(ORDER_ID);
+    }
+
+    @Test
+    @DisplayName("仅退款后取消：服务已经做完的单只关账，不推「预约已取消」")
+    void cancelNotPayOrderSkipsNoticeAfterServiceDone() {
+        Order order = order(OrderState.NOT_PAY.getValue(), OrderPayType.CASH.getValue());
+        order.setRefundState(RefundState.SUCCESS.getValue());
+        order.setHasRefundAmount(PAY_AMOUNT);
+        order.setAppointmentState(AppointmentState.FINISHED.getValue());
+        stubOrder(order);
+        when(orderMapper.selectList(any())).thenReturn(Collections.singletonList(order));
+        OrderService cancelSpy = spy(service);
+
+        cancelSpy.cancelOrder(ORDER_ID, "退款后客人不做了");
+
+        assertEquals(OrderState.CANCELED.getValue(), order.getState());
+        verify(cancelSpy, never()).handleBookingCancelNotice(anyLong());
     }
 
     @Test

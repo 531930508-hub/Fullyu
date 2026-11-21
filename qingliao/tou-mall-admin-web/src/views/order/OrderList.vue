@@ -266,7 +266,7 @@
                          @click="updForm(scope.row,scope.$index)">修改
               </el-button>
               <el-button size="mini" type="text"
-                         v-if="(type==0 && (((scope.row.state==1 || scope.row.state==2) && scope.row.appointmentState==1) || scope.row.appointmentState==0 || (scope.row.state==0 && scope.row.appointmentState==1))) || (type==1 && scope.row.appointmentState==0)"
+                         v-if="(type==0 && (scope.row.state==0 || ((scope.row.state==1 || scope.row.state==2) && (scope.row.appointmentState==0 || scope.row.appointmentState==1)))) || (type==1 && scope.row.appointmentState==0)"
                          @click="cancelOrder(scope.row,scope.$index)">取消
               </el-button>
               <el-button size="mini"
@@ -280,7 +280,7 @@
                          @click="refund(scope.row,scope.$index)">仅退款
               </el-button>
               <el-button
-                v-if="scope.row.state==6 && (scope.row.appointmentState==2 || scope.row.appointmentState==1)"
+                v-if="scope.row.state==6 && scope.row.appointmentState!=3"
                 type="text" size="mini"
                 @click="cancelRefundOrder(scope.row)">已退款取消
               </el-button>
