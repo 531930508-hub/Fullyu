@@ -101,10 +101,25 @@ export class OrderService {
       },
     })
 
+    // 学员端「已完成」订单需要展示真实签到结果；CheckIn 只记录已签到，没有记录即未签到。
+    // 一次按课程批量查询，避免逐单回表。
+    const courseIds = [...new Set(orders.map((order) => order.courseId).filter((id): id is string => !!id))]
+    const checkedCourseIds = courseIds.length
+      ? new Set(
+          (
+            await this.prisma.checkIn.findMany({
+              where: { userId, courseId: { in: courseIds } },
+              select: { courseId: true },
+            })
+          ).map((checkIn) => checkIn.courseId),
+        )
+      : new Set<string>()
+
     // 待支付订单返回支付截止时间，前端据此倒计时；超时后由定时任务取消
     const lockMs = SEAT_LOCK_DURATION_MINUTES * 60 * 1000
     return orders.map((order) => ({
       ...order,
+      checkedIn: order.courseId ? checkedCourseIds.has(order.courseId) : null,
       expireAt:
         order.status === 'PENDING_PAYMENT'
           ? new Date(order.createdAt.getTime() + lockMs)

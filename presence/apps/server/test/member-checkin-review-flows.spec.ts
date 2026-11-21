@@ -66,6 +66,11 @@ describe('签到/评价非资金流程', () => {
     expect(roster[0]).toMatchObject({ checkedIn: false })
     expect(roster[0].user.id).toBe(user.id)
 
+    // 学员端订单列表也必须回读真实签到状态，否则已完成订单永远显示「待同步」
+    const memberOrder = async () =>
+      (await ctx.order.findByUser(user.id)).find((o) => o.courseId === course!.id)
+    expect((await memberOrder())?.checkedIn).toBe(false)
+
     await expect(checkin.manualCheckIn(course!.id, cancelledUser.id)).rejects.toBeInstanceOf(
       BusinessException,
     )
@@ -73,9 +78,11 @@ describe('签到/评价非资金流程', () => {
     expect(record.method).toBe('MANUAL')
     await expect(checkin.manualCheckIn(course!.id, user.id)).rejects.toBeInstanceOf(BusinessException)
     expect((await checkin.courseRoster(course!.id))[0].checkedIn).toBe(true)
+    expect((await memberOrder())?.checkedIn).toBe(true)
 
     await checkin.cancelCheckIn(course!.id, user.id)
     expect((await checkin.courseRoster(course!.id))[0].checkedIn).toBe(false)
+    expect((await memberOrder())?.checkedIn).toBe(false)
     await checkin.cancelCheckIn(course!.id, user.id)
     expect((await checkin.manualCheckIn(course!.id, user.id)).id).toBeTruthy()
 

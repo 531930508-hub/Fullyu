@@ -96,7 +96,6 @@ function mapOrder(o: OrderItem) {
   const course = o.course || {}
   const date = new Date(course.startDate)
   const validDate = Number.isFinite(date.getTime())
-  const raw = o as OrderItem & { checkedIn?: boolean }
   // 候补中的已支付订单展示真实位次，避免误以为已经报名成功
   const queue = o.orderType === 'WAITLIST' && o.status === 'PAID' ? waitlistQueues.value.get(o.courseId || '') : null
   const statusLabel = queue
@@ -127,7 +126,7 @@ function mapOrder(o: OrderItem) {
     status: o.status,
     statusLabel,
     waitlistAhead: queue ? queue.ahead : null,
-    checkedIn: typeof raw.checkedIn === 'boolean' ? raw.checkedIn : undefined,
+    checkedIn: typeof o.checkedIn === 'boolean' ? o.checkedIn : undefined,
     reviewed: !reviewsLoaded.value || reviewedIds.value.has(o.courseId || ''),
   }
 }

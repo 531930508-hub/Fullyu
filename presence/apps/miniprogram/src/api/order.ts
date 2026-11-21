@@ -40,6 +40,8 @@ export interface OrderItem {
   actualPaid: number
   status: string
   createdAt: string
+  /** 课程订单是否已签到；服务端无记录即 false，非课程订单为 null */
+  checkedIn?: boolean | null
   /** 待支付订单的支付截止时间（服务端按席位锁定计算），非待支付为 null */
   expireAt?: string | null
   course?: any
