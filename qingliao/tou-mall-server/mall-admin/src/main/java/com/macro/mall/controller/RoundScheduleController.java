@@ -2,6 +2,7 @@ package com.macro.mall.controller;
 
 import com.macro.mall.bo.AdminUserDetails;
 import com.macro.mall.common.api.CommonResult;
+import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.service.RoundScheduleService;
 import com.macro.mall.utils.DateUtil;
 import io.swagger.annotations.Api;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
 
 /**
@@ -58,13 +61,27 @@ public class RoundScheduleController {
     }
 
     @GetMapping("/queue/next")
-    @ApiOperation("一键安排预览：下一单该谁上")
+    @ApiOperation("一键安排预览：下一单该谁上（startTime 传 yyyy-MM-dd HH:mm:ss）")
     public CommonResult queueNext(@RequestParam Long shopId,
                                   @RequestParam String startTime,
                                   @RequestParam(required = false, defaultValue = "60") Integer durationMinutes,
                                   @RequestParam(required = false, defaultValue = "0") Integer queueKind) {
-        return CommonResult.success(service.nextMassagist(shopId, DateUtil.toYYYYMMDD(DateUtil.string2DateTime(startTime)),
-                DateUtil.string2DateTime(startTime), durationMinutes, queueKind));
+        LocalDateTime start = parseStartTime(startTime);
+        return CommonResult.success(service.nextMassagist(shopId, DateUtil.toYYYYMMDD(start),
+                start, durationMinutes, queueKind));
+    }
+
+    /** 日期控件常给到分钟（yyyy-MM-dd HH:mm）或带 T，统一补成 yyyy-MM-dd HH:mm:ss；格式不对报业务错而不是 500 */
+    private LocalDateTime parseStartTime(String startTime) {
+        String text = startTime == null ? "" : startTime.trim().replace('T', ' ');
+        if (text.length() == 16) {
+            text = text + ":00";
+        }
+        try {
+            return DateUtil.string2DateTime(text);
+        } catch (DateTimeParseException | NullPointerException e) {
+            throw new BusinessException("开始时间格式不对，应为 yyyy-MM-dd HH:mm:ss");
+        }
     }
 
     @PostMapping("/queue/duty")

@@ -95,8 +95,9 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
      */
     public List<RoundSchedule> findSortMassagistIdList(String day, Long shopId, Integer personCount, List<Long> availableMassagistIdList, Boolean save) {
         boolean persist = Boolean.TRUE.equals(save);
-        // 顺序只认轮牌队列；队列还没生成就按班次顺序（调店置前、每日轮换）惰性生成
-        List<ReceptionQueue> queue = receptionQueueService.ensureDay(day, shopId, availableMassagistIdList);
+        // 顺序只认轮牌队列的队序(seq)；队列还没生成就按班次顺序（调店置前、每日轮换）惰性生成
+        List<ReceptionQueue> queue = receptionQueueService.dispatchOrder(day, shopId, availableMassagistIdList,
+                ReceptionQueueService.KIND_SERVICE);
         if (CollectionUtils.isEmpty(queue)) {
             log.info("轮牌队列为空，当天无人可排 shop={} day={}", shopId, day);
             return Collections.emptyList();
@@ -546,13 +547,10 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
         return receptionQueueService.board(date, shopId, kind);
     }
 
-    /** 轮牌顺序的疗愈师id（看板顺序：值班在前、seq 升序），接待单排单用接待队 */
+    /** 派单顺序的疗愈师id（只看队序 seq，不看值班分组），接待单排单用接待队 */
     public List<Long> receptionOrder(Long shopId, String date, int kind) {
-        List<ReceptionBoardItem> items = receptionQueueService.board(date, shopId, kind);
-        if (CollectionUtils.isEmpty(items)) {
-            return Collections.emptyList();
-        }
-        return items.stream().map(ReceptionBoardItem::getMassagistId).collect(Collectors.toList());
+        return receptionQueueService.dispatchOrder(date, shopId, kind).stream()
+                .map(ReceptionQueue::getMassagistId).collect(Collectors.toList());
     }
 
     /** 值班 / 下值班（只换分组，不动位置） */

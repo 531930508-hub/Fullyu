@@ -197,8 +197,39 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
     }
 
     /**
-     * 下一位该谁：按展示口径走一遍，跳过被排除的、不在班的、这个时段在忙的。
-     * 值班的都排不上时才往休息区取，并留一条「无值班可接待」事项。
+     * 派单顺序：只认 seq 升序（队序），不看值班分组。
+     *
+     * <p>值班/休息只影响看板怎么分组展示，不影响派单。派单口径就是
+     * 「按队序找第一个在这个时段有空的」——忙不忙只看这一单的时段里有没有
+     * 已占用的明细（服务单、接待单都算），其余一律算闲。</p>
+     */
+    public List<ReceptionQueue> dispatchOrder(String day, Long shopId, int kind) {
+        return dispatchOrder(day, shopId, null, kind);
+    }
+
+    public List<ReceptionQueue> dispatchOrder(String day, Long shopId, Collection<Long> candidateIds, int kind) {
+        return sortForDispatch(ensureDay(day, shopId, candidateIds, kind));
+    }
+
+    /**
+     * 派单排序本体：只按 seq 升序，作废行剔掉。
+     *
+     * <p>刻意不碰 on_duty / duty_time —— 值班只决定看板分组，不决定谁先接单。
+     * 这是店里确认过的口径，改这里之前先看 {@code ReceptionQueueDispatchOrderTest}。</p>
+     */
+    static List<ReceptionQueue> sortForDispatch(List<ReceptionQueue> list) {
+        if (CollectionUtils.isEmpty(list)) {
+            return Collections.emptyList();
+        }
+        return list.stream()
+                .filter(q -> Objects.equals(q.getValid(), VALID))
+                .sorted(Comparator.comparingLong((ReceptionQueue q) -> q.getSeq() == null ? 0L : q.getSeq()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 下一位该谁：按队序走一遍，跳过被排除的、不在班的、这一单的时段已有单的人。
+     * 值班与否不作为派单条件。
      */
     public ReceptionQueue pickNext(String day, Long shopId, LocalDateTime startTime, LocalDateTime endTime, Collection<Long> excludeIds) {
         return pickNext(day, shopId, startTime, endTime, excludeIds, KIND_SERVICE);
@@ -206,7 +237,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
 
     public ReceptionQueue pickNext(String day, Long shopId, LocalDateTime startTime, LocalDateTime endTime,
                                    Collection<Long> excludeIds, int kind) {
-        List<ReceptionQueue> list = ensureDay(day, shopId, null, kind).stream()
+        List<ReceptionQueue> list = dispatchOrder(day, shopId, kind).stream()
                 .filter(q -> !CollectionUtils.isEmpty(excludeIds) ? !excludeIds.contains(q.getMassagistId()) : true)
                 .collect(Collectors.toList());
         if (list.isEmpty()) {
@@ -214,18 +245,12 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         }
         Map<Long, List<MassagistSchedules>> shifts = shiftMap(day, shopId);
         Map<Long, Boolean> busy = busyMap(shopId, startTime, endTime);
-        boolean dutyActive = isDutyActive(list);
         for (ReceptionQueue q : list) {
             if (!inShift(shifts, q.getMassagistId(), startTime, endTime)) {
                 continue;
             }
             if (Boolean.TRUE.equals(busy.get(q.getMassagistId()))) {
                 continue;
-            }
-            if (dutyActive && !isOnDuty(q)) {
-                // 值班的都占用了，只能启用休息区的人：这是「人数不够」的场景，留痕给店长看
-                issueService.noDutyAssigned(day, shopId, null,
-                        "值班疗愈师均已被占用，自动启用休息区：" + massagistName(q.getMassagistId()));
             }
             return q;
         }
@@ -248,9 +273,10 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         if (CollectionUtils.isEmpty(list)) {
             return Collections.emptyList();
         }
+        // 派单序号按 seq 排，不按展示顺序：值班区排第一的人不一定是下一个接单的人
         Map<Long, Integer> dispatchNo = new HashMap<>();
         int no = 0;
-        for (ReceptionQueue q : list) {
+        for (ReceptionQueue q : dispatchOrder(day, shopId, kind)) {
             dispatchNo.put(q.getMassagistId(), ++no);
         }
         List<ReceptionQueue> display = dutySorted(list);
@@ -404,7 +430,6 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             ensureDay(day, shopId, Collections.singletonList(massagistId), kind);
             all = rows(day, shopId, kind);
         }
-        boolean dutyActive = isDutyActive(sorted(all));
         ReceptionQueue q = all.stream().filter(r -> massagistId.equals(r.getMassagistId())).findFirst().orElse(null);
         if (q == null) {
             q = addRowAtTail(day, shopId, massagistId, "上钟补位", operator, kind);
@@ -412,7 +437,6 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         long beforeSeq = nvl(q.getSeq());
         int beforeReceipt = nvl(q.getReceiptNo());
         int beforeDuty = nvl(q.getOnDuty());
-        boolean needNoDutyIssue = dutyActive && beforeDuty == DUTY_OFF;
         // 上钟留痕：排在前面的人为什么没轮到，直接写在日志里，前台/复盘不用再猜
         String reason = action == ReceptionQueueAction.GRAB ? "抢单成功"
                 : skipNote(day, shopId, detailId, massagistId, kind);
@@ -432,10 +456,6 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                 detailId, beforeSeq, q.getSeq(), beforeReceipt, q.getReceiptNo(),
                 reason == null ? "" : " " + reason);
 
-        if (needNoDutyIssue) {
-            issueService.noDutyAssigned(day, shopId, detailId,
-                    "值班疗愈师均已被占用，本单排给休息区：" + massagistName(massagistId));
-        }
         // 接到活的人，之前挂着的值班意向就算兑现了
         issueService.closeIntent(parseDay(day), shopId, massagistId, operator);
         maybeRenumber(day, shopId, beforeReceipt, kind);
@@ -878,7 +898,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
      * 于是「跳过 2 号派给 4 号」看起来就像系统乱排。现在直接落在上钟流水上。</p>
      */
     private String skipNote(String day, Long shopId, Long detailId, Long massagistId, int kind) {
-        List<ReceptionQueue> ordered = sorted(rows(day, shopId, kind));
+        List<ReceptionQueue> ordered = sortForDispatch(rows(day, shopId, kind));
         int index = -1;
         for (int i = 0; i < ordered.size(); i++) {
             if (massagistId.equals(ordered.get(i).getMassagistId())) {
@@ -907,7 +927,6 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         Map<Long, Boolean> busy = startTime == null
                 ? busyMap(shopId, LocalDateTime.now(), LocalDateTime.now().plusMinutes(1))
                 : busyMap(shopId, startTime, endTime);
-        boolean dutyActive = isDutyActive(ordered);
         List<String> notes = new ArrayList<>();
         for (int i = 0; i < index && notes.size() < 3; i++) {
             ReceptionQueue q = ordered.get(i);
@@ -916,8 +935,6 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                 why = "不在班";
             } else if (Boolean.TRUE.equals(busy.get(q.getMassagistId()))) {
                 why = "在服务";
-            } else if (dutyActive && !isOnDuty(q)) {
-                why = "未值班";
             } else {
                 // 确实该轮到他却被跳过了：不硬编原因，交给人工核对，日志里不写误导信息
                 continue;
@@ -968,11 +985,6 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
         List<ReceptionQueue> all = new ArrayList<>(duty);
         all.addAll(rest);
         return all;
-    }
-
-    private boolean isDutyActive(List<ReceptionQueue> list) {
-        // 一个人都没点值班时按旧口径全员轮（排班表顺序），点了之后才区分值班区/休息区
-        return list.stream().anyMatch(this::isOnDuty);
     }
 
     private boolean isOnDuty(ReceptionQueue q) {
