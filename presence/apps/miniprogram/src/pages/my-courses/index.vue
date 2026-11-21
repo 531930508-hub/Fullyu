@@ -127,7 +127,9 @@ function mapOrder(o: OrderItem) {
     statusLabel,
     waitlistAhead: queue ? queue.ahead : null,
     checkedIn: typeof o.checkedIn === 'boolean' ? o.checkedIn : undefined,
-    reviewed: !reviewsLoaded.value || reviewedIds.value.has(o.courseId || ''),
+    // 评价列表拉取失败时按「未评价」处理：宁可多给一次入口（服务端 upsert 覆盖），
+    // 也不要把没评价的课程误标成「已评价」、把入口藏起来。
+    reviewed: reviewsLoaded.value && reviewedIds.value.has(o.courseId || ''),
   }
 }
 const courseOrders = computed(() => allOrders.value.filter(o => o.orderType === 'COURSE' || o.orderType === 'WAITLIST').map(mapOrder))
