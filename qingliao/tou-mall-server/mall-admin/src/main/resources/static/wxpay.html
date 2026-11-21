@@ -197,7 +197,9 @@
   //   getPayInfo: 'http://proxy.oahnus.top/open/dgpay/wxWapPay',
   // }
 
-  const Base = 'https://manage.fullytherapy.com'
+  // 与 wx.html 一致：跟着页面所在域名走，不硬编码
+  const Base = window.location.origin
+  // TODO(域名下线)：接口仍走第三方代理 proxy.oahnus.top，归属待确认后一并收口
   const Base2 = 'https://proxy.oahnus.top'
 
   const Apis = {

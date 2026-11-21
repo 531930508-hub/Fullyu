@@ -69,8 +69,10 @@
 <!--    </script>-->
 <!--  上线注释掉console  -->
     <script>
-  const Base = 'https://manage.fullytherapy.com'
-  const Base2 = 'https://manage.fullytherapy.com'
+  // 用当前页面的 origin：页面在哪个域名被打开，就回哪个域名取接口/做 OAuth 回调。
+  // 不再硬编码域名，换域名不需要改这个文件（公众号「网页授权域名」需包含该域名）。
+  const Base = window.location.origin
+  const Base2 = window.location.origin
   // const Base2 = 'https://proxy.sanliu.top'
 
   const Apis = {

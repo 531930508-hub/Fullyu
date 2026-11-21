@@ -53,8 +53,10 @@ public class DouGongPayClient implements IPayClient {
     private static Snowflake snowflake = new Snowflake(1, 2);
 
 
-//    private static String baseNotifyUrl = "https://proxy.sanliu.top/admin/open/dgpay/refund/notify?orderId=";
-    private static String baseNotifyUrl = "https://fullytherapy.com/admin/open/dgpay/refund/notify";
+// 退款异步通知地址：改为「不在此处指定」，由汇付商户后台的默认回调地址决定。
+    // 原值写死 https://fullytherapy.com/...（该域仅剩 301 且目标无业务路由，回调会 404）。
+    // 商户后台应配 https://cityretreat.fullyu.cn/admin/open/dgpay/refund/notify
+    // ——2026-11-22 核实：该路径在本域与 manage 均 200，在 fullyu.cn 为 404。
 
     /***
      * @Description: 初始化设置商户公共参数（全局只需设置一次）
@@ -375,16 +377,12 @@ public class DouGongPayClient implements IPayClient {
     public Map<String, String> genWxPayQrCode(String mchOrderNo) {
         String wpAppId = PayCert.wxWpAppId;
         /*上线时需要修改地址-------------------------------------------------------------------------------------------------------*/
-        String url = String.format("https://manage.fullytherapy.com/wxWapPay/wx.html?orderSn=%s&appId=%s&timestamp=%s",
+        String url = String.format("https://cityretreat.fullyu.cn/wxWapPay/wx.html?orderSn=%s&appId=%s&timestamp=%s",
                 mchOrderNo,
                 wpAppId,
                 System.currentTimeMillis()
         );
-        /*String url = String.format("https://test.fullytherapy.com/wxWapPay/wx.html?orderSn=%s&appId=%s&timestamp=%s",
-                mchOrderNo,
-                wpAppId,
-                System.currentTimeMillis()
-        );*/
+        // 旧值（已废弃）：manage.fullytherapy.com / test.fullytherapy.com 均为待下线旧名
         try {
             Map<String, String> retMap = new HashMap<>();
             retMap.put("orderSn", mchOrderNo);
@@ -579,7 +577,9 @@ public class DouGongPayClient implements IPayClient {
         } catch (Exception e) {
             throw new ApiException("生成签名失败");
         }
-        String notifyUrl = String.format("%s?orderId=%s&sign=%s", baseNotifyUrl, order.getId(), sign);
+        // notifyUrl 已移除：原先拼的是死地址（下面 dataMap.put 本来就是注释的），
+        // 真正生效的是汇付商户后台配置。上面的 sign 保留原样——它现在虽无处使用，
+        // 但连带"验签失败即中断退款"的行为一起删属于改动退款路径，不在域名下线范围内。
 
         // 退款金额
         LocalDateTime payTime = order.getPayTime();
@@ -589,7 +589,7 @@ public class DouGongPayClient implements IPayClient {
         dataMap.put("org_hf_seq_id", order.getHfSeqId());
         dataMap.put("org_req_date", payTimeStr);
 
-//        dataMap.put("notify_url", notifyUrl);
+// notify_url 不再由代码下发（原为注释状态），以汇付商户后台配置为准
 
         Map<String, Object> transRefundInfo = new HashMap<>();
         try {

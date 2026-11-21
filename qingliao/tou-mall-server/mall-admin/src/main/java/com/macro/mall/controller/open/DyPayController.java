@@ -479,7 +479,7 @@ public class DyPayController {
             }
 
             //        String codeUrl = "https://qr.alipay.com/bax00990tv4j7w7ysrcj00d6";
-            //        String codeUrl = "https://manage.fullytherapy.com/wxWapPay/wx.html";
+            //        String codeUrl = "https://cityretreat.fullyu.cn/wxWapPay/wx.html";
 
             ServletOutputStream out = response.getOutputStream();
             response.setContentType("image/png");
