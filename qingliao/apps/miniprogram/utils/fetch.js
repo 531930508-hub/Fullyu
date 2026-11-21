@@ -3,6 +3,7 @@ import {API_BASE_URL} from '@/utils/appConfig.js'
 import cookie from '../utils/cookieUtil'
 import cache from "./cache"
 import { t } from './locale'
+import { syncServerClock } from './serverClock'
 
 const requestInstance = new Request()
 
@@ -87,6 +88,15 @@ requestInstance.interceptor.request((config, cancel) => {
 
 // 响应拦截器
 requestInstance.interceptor.response((response) => {
+    // 用服务端给的 Date 头顺带校准设备时钟：支付倒计时只有 5 分钟，
+    // 手机时钟偏几十秒就足以让支付入口提前消失或延后放行。
+    // 只是顺手校准，失败不影响请求本身的成败。
+    try {
+        const headers = (response && response.header) || {}
+        syncServerClock(headers.Date || headers.date)
+    } catch (e) {
+        // 校准失败保持原时钟，不影响业务
+    }
     const res = response.data
     if (response.statusCode !== 200 || res.code !== 200) {
         if (res.code == 401) {

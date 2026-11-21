@@ -13,7 +13,7 @@
       @cancel="handlePaymentCancel"/>
 	  -->
 		<!-- 支付 -->
-		<PayModelPage :visible="showPaymentModal" :countdown="countdown" ref="payModelPageRef"
+		<PayModelPage :visible="showPaymentModal" :deadline="payDeadline" ref="payModelPageRef"
 			@confirm="handlePaymentConfirm" @cancel="handlePaymentCancel" />
 		<!-- 聊天内容区域 -->
 		<scroll-view class="chat-container" scroll-y="true" :scroll-into-view="scrollToViewId">
@@ -177,12 +177,15 @@
 	import {
 		API_BASE_URL
 	} from '../../utils/appConfig.js'
-	import constant from '@/consts/constant'
 	import customerApi from "../../api/customer"
+	import { payDeadlineMs } from "../../utils/unpaidOrders"
+	import { serverNow } from "../../utils/serverClock"
 
 	const projectList = ref(cookie.getProjectList())
 
 	const countdown = ref(0)
+	// 支付弹框的绝对截止时刻（毫秒）；倒计时由弹框按它每秒重算，避免设备时钟/切后台带来的偏差
+	const payDeadline = ref(0)
 
 	const nickname = ref(cookie.getNickname() || '微信用户');
 	const vipLevel = ref(cookie.getVipLevel() || null);
@@ -384,20 +387,12 @@
 			});
 			closePaymentButton(oid)
 		} else {
-			const createTime = Date.parse(orderInfo.value.createTime) / 1000
-			const currentTime = Date.parse(new Date()) / 1000
-			countdown.value = constant.payCutDownSeconds - (currentTime - createTime);
-			if (countdown.value > 0) {
-				showPaymentModal.value = true; //支付弹出框弹出
-				if (payModelPageRef) {
-					payModelPageRef.value.fetchData(orderId.value)
-				}
-			} else {
-				countdown.value = 0
-				uni.showToast({
-					title: t('订单已取消'),
-					icon: 'none'
-				});
+			// state 已是未支付就进支付：本地倒计时只是显示，不能用来否决服务端给的状态。
+			// 原来的 Date.parse(createTime) 在 iOS 上直接 NaN，会让这里永远走「订单已取消」。
+			payDeadline.value = payDeadlineMs(order.value)
+			showPaymentModal.value = true; //支付弹出框弹出
+			if (payModelPageRef) {
+				payModelPageRef.value.fetchData(orderId.value)
 			}
 		}
 	};
@@ -448,16 +443,15 @@
 			});
 			closePaymentButton(oid)
 		} else {
-			const createTime = Date.parse(order.value.createTime) / 1000
-			const currentTime = Date.parse(new Date()) / 1000
-			countdown.value = constant.payCutDownSeconds - (currentTime - createTime);
-			if (countdown.value > 0) {
+			// 改约窗口同样是「下单后 5 分钟内」，但时间要按服务器时间算：
+			// 原来那句 Date.parse(createTime)（带横杠+空格）在 iOS 上是 NaN，改约入口永远进不去。
+			const leftMs = payDeadlineMs(order.value) - serverNow()
+			if (leftMs > 0) {
 				showModifyModal.value = true;
 				modalTitle.value = '修改预约';
 				modalConfirmText.value = '确认修改';
 				therapist.value = order.value.orderDetailList.map(s => s.massagist.id)
 			} else {
-				countdown.value = 0
 				uni.showToast({
 					title: t('订单已取消'),
 					icon: 'none'

@@ -286,7 +286,7 @@
 
 		<!-- 支付 -->
 		<!-- key 会在连续支付切换订单时自增：换单必须重建弹框，否则会带着上一单的优惠方案/卡券去付新单 -->
-		<PayModelPage :key="payModalKey" :visible="showPaymentModal" :countdown="countdown" ref="payModelPageRef"
+		<PayModelPage :key="payModalKey" :visible="showPaymentModal" :deadline="payDeadline" ref="payModelPageRef"
 			@confirm="handlePaymentConfirm" @cancel="handlePaymentCancel" />
 
 		<!-- uni-popup 组件 -->
@@ -329,7 +329,7 @@
 	import customerMassagistRelationApi from '../../api/customerMassagistRelation'
 	import customerMassagistBlockApi from '../../api/customerMassagistBlock'
 	import customerNoticeApi from '../../api/customerNotice'
-	import { applyUnpaidCountdowns, buildUnpaidQueue, tickUnpaidCountdowns, unpaidSecondsLeft } from '../../utils/unpaidOrders'
+	import { applyUnpaidCountdowns, buildUnpaidQueue, tickUnpaidCountdowns, payDeadlineMs, formatCountdownClock } from '../../utils/unpaidOrders'
 	import { storeName, storeShortAddress } from '../../utils/storeLocale'
 	import constant from '@/consts/constant'
 	import {
@@ -380,7 +380,7 @@
 	let showCommoneModal = ref(false)
 	//预约弹出框初始值
 	const showAddServiceAllModal = ref(false);
-	let countdown = ref(0);
+	let payDeadline = ref(0);
 	const {
 		proxy
 	} = getCurrentInstance()
@@ -692,18 +692,30 @@
 	// 连续支付排队中的续付定时器：用户自己又付了一次时要能作废
 	let payChainTimer = null
 	const handleToPay = async (record) => {
-		// 和卡片上的倒计时同源：优先用订单自己的支付超时秒数，没有则用兜底值
-		countdown.value = unpaidSecondsLeft(record, constant.payCutDownSeconds)
-		if (countdown.value <= 0) {
-			// 倒计时已结束：订单已被自动取消，刷新卡片让状态回到正确档位
-			countdown.value = 0
+		if (!record || !record.id) return
+		// 能不能付只信服务端的 state。本地倒计时是「设备时钟 + 服务器时区」推出来的估计值，
+		// 而后端关单走 MQ 延迟消息（同一队列排队，会被队头更长的 TTL 阻塞），
+		// 常常晚于倒计时几十秒到几分钟。以前这里倒计时一到 0 就直接弹「订单已超时取消」，
+		// 把一张服务端还能付的单挡掉了，用户只能重新预约。
+		// 现在点支付时先向服务端确认一次：已关单就明说并刷新，还开着就照常进支付。
+		let latest = null
+		try {
+			latest = await orderApi.infoWithDetail(record.id)
+		} catch (e) {
+			// 网络异常不改变结论：交给结算接口兜底，用户重试即可
+			latest = null
+		}
+		if (latest && latest.id && Number(latest.state) !== 0) {
+			payDeadline.value = 0
 			getLastOrderInfo()
 			uni.showToast({
-				title: tt('订单已超时取消，请重新预约', 'This order expired, please rebook'),
+				title: tt('订单已关闭，请重新预约', 'This order is closed, please rebook'),
 				icon: 'none'
 			})
 			return
 		}
+		// 弹框里的倒计时用绝对截止时刻，切后台回来也不会算错
+		payDeadline.value = payDeadlineMs(latest && latest.createTime ? latest : record)
 		// 先把结算数据取回来再开弹窗：原来的实现是先弹窗后拉数据，
 		// 弹窗会先用上一单的价格/券数渲染，用户可能对着旧金额直接点"确认支付"
 		// 连续支付换单时弹框会被重建，这里等一帧确保 ref 已经指到新实例
@@ -914,32 +926,21 @@
 				icon: 'none'
 			});
 		} else {
-			const createTime = Date.parse(orderInfo.value.createTime) / 1000
-			const currentTime = Date.parse(new Date()) / 1000
-			countdown.value = constant.payCutDownSeconds - (currentTime - createTime);
-			console.log(createTime)
-			console.log(currentTime)
-			console.log(countdown.value)
-			console.log(constant.payCutDownSeconds)
-			if (countdown.value > 0) {
-				// 和「立即支付」同一条规矩：先把这张加钟单的结算数据取回来再弹窗，
-				// 否则弹框会先拿上一单的金额/券数渲染，用户对着旧金额就能点确认
-				await nextTick()
-				if (payModelPageRef.value && payModelPageRef.value.fetchData) {
-					try {
-						await payModelPageRef.value.fetchData(orderId)
-					} catch (e) {
-						return
-					}
+			// 加钟单是刚创建的，state 已经确认是未支付，这里不再用本地时间二次裁决：
+			// 原来那句 Date.parse(createTime) 直接用带横杠+空格的串，iOS 上解析成 NaN，
+			// 于是 countdown 变成 NaN、判定恒为「已取消」，加钟的支付入口在 iOS 上根本进不去。
+			payDeadline.value = payDeadlineMs(orderInfo.value)
+			// 和「立即支付」同一条规矩：先把这张加钟单的结算数据取回来再弹窗，
+			// 否则弹框会先拿上一单的金额/券数渲染，用户对着旧金额就能点确认
+			await nextTick()
+			if (payModelPageRef.value && payModelPageRef.value.fetchData) {
+				try {
+					await payModelPageRef.value.fetchData(orderId)
+				} catch (e) {
+					return
 				}
-				showPaymentModal.value = true; //支付弹出框弹出
-			} else {
-				countdown.value = 0
-				uni.showToast({
-					title: tt('订单已取消', 'Order cancelled'),
-					icon: 'none'
-				});
 			}
+			showPaymentModal.value = true; //支付弹出框弹出
 		}
 	}
 
@@ -1005,11 +1006,13 @@
 		const appointmentState = Number(raw.appointmentState)
 		const detail = (raw.orderDetailList || [])[0] || {}
 		const unpaid = state === 0
-		// 倒计时归零的未支付单：在接口刷新回来之前先按「已超时」展示，避免留下一个点不动的支付按钮
-		const expired = unpaid && !(Number(raw.cutdown) > 0)
+		// 倒计时归零只说明「本地估计的支付窗口结束了」，不等于订单已关闭：
+		// 关单由服务端 state 决定，而它通常比本地倒计时晚（MQ 延迟消息会被队头阻塞）。
+		// 所以这里不再据此隐藏支付入口，只把文案换成「等确认」，点支付时再向服务端核对。
+		const payWindowEnded = unpaid && !(Number(raw.cutdown) > 0)
 		let title = tt('您的上次预约', 'Your last visit')
-		if (expired) {
-			title = tt('预约已超时，请重新预约', 'This booking expired')
+		if (payWindowEnded) {
+			title = tt('支付时间已到，正在确认订单状态', 'Payment window ended — confirming order status')
 		} else if (unpaid) {
 			title = tt('订单待支付，超时自动取消', 'Awaiting payment')
 		} else if (appointmentState === 1) {
@@ -1029,13 +1032,13 @@
 			productTitle: raw.productTitle || detail.productTitle || '',
 			duration: raw.duration || detail.duration || '',
 			shopName: lastOrderShopInfo.value.length > 0 ? storeName(lastOrderShopInfo.value[0]) : '',
-			canPay: unpaid && !expired,
+			canPay: unpaid,
 			canExtend: state === 1 && appointmentState === 1,
 			// 已支付、还没到服务时间：卡片上给个详情入口，否则只能去订单列表翻
 			canView: state === 1 && appointmentState === 0,
 			canReview: state === 1 && appointmentState === 2,
 			reviewed: state === 2 && appointmentState === 2,
-			canRebook: state === 3 || appointmentState === 2 || expired
+			canRebook: state === 3 || appointmentState === 2
 		}
 	})
 	const heroMassagist = computed(() => {
@@ -1065,9 +1068,9 @@
 	}
 	const getLastOrderInfo = async () => {
 		let list = await orderApi.getLastOrderInfo()
-		applyUnpaidCountdowns(list, constant.payCutDownSeconds)
+		applyUnpaidCountdowns(list)
 		list.forEach(o => {
-			if (Number(o.state) === 0 && Number(o.cutdown) > 0) {
+			if (Number(o.state) === 0) {
 				o.cutDownDes = getCutDown(o)
 			}
 		})
@@ -1179,30 +1182,25 @@
 	const startCountdown = () => {
 		if (cutDownTimer) clearInterval(cutDownTimer);
 		cutDownTimer = setInterval(() => {
-			// 未付单的倒计时推进与到期标记统一走 utils，页面这里只管文案和刷新
-			const expiredOne = tickUnpaidCountdowns(lastOrderInfo.value)
+			// 未付单的倒计时每秒从截止时刻重算（不是自减），窗口结束时只上报一次，页面这里只管文案和刷新
+			const ended = tickUnpaidCountdowns(lastOrderInfo.value)
 			lastOrderInfo.value.forEach(o => {
-				if (Number(o.state) === 0 && Number(o.cutdown) > 0) {
+				if (Number(o.state) === 0) {
 					o.cutDownDes = getCutDown(o)
 				}
 			})
-			// 多笔未付单同时到期时只刷新一次，避免一秒内并发拉多次订单
-			if (expiredOne) {
+			// 多笔未付单同时到期时只刷新一次，避免一秒内并发拉多次订单。
+			// 刷新后如果服务端仍是未付（后端关单会被 MQ 排队延后），卡片保留支付入口，等用户点或下次进来再看。
+			if (ended.length) {
 				getLastOrderInfo()
 			}
 		}, 1000);
 	};
 	const getCutDown = (item) => {
 		const seconds = Math.max(0, Math.floor(Number(item.cutdown) || 0));
-		let hours = Math.floor(seconds / 3600);
-		let min = Math.floor((seconds % 3600) / 60);
-		let second = seconds % 60;
-
-		hours = hours < 10 ? '0' + hours : hours;
-		min = min < 10 ? '0' + min : min;
-		second = second < 10 ? '0' + second : second;
-
-		return tt('倒计时：', 'Time left: ') + hours + ':' + min + ':' + second;
+		// 倒计时归零不代表订单已关闭：服务端关单更慢，这段时间还能付，别显示 00:00:00 让人以为结束了
+		if (seconds <= 0) return tt('待确认', 'Checking')
+		return tt('倒计时：', 'Time left: ') + formatCountdownClock(seconds);
 	}
 
 	//获取用户第一个未失效的卡劵信息
@@ -1271,7 +1269,7 @@
 		showCommoneModal.value = false; //关闭评价弹出框
 		showAddServiceModal.value = false; //关闭加钟弹出框
 		showAddServiceAllModal.value = false; //关闭预约评价弹出框
-		countdown.value = 0
+		payDeadline.value = 0
 
 	};
 	const go_any_page = (path) => {

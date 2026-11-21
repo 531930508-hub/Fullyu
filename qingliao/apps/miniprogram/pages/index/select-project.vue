@@ -132,7 +132,7 @@
 		</view>
 
 
-		<PayModelPage v-model:visible="showPaymentModal" :countdown="countdown" ref="payModelPageRef"
+		<PayModelPage v-model:visible="showPaymentModal" :deadline="payDeadline" ref="payModelPageRef"
 			@confirm="handlePaymentConfirm" @cancel="handleModifyCancel" />
 
 		<!-- 预约入口先选门店：独立底部弹层，层级高于页面固定底栏，避免内容透出与遮挡 -->
@@ -209,7 +209,7 @@
 	import { canConfirmBooking, bookingFailureMessage } from '../../utils/bookingSelection';
 	import orderApi from "../../api/order";
 	import productApi from "../../api/product";
-	import constant from '../../consts/constant'
+	import { payDeadlineMs } from '../../utils/unpaidOrders'
 	import customerMassagistBlockApi from "../../api/customerMassagistBlock"
 	import { pickDefaultStore, nearestStore, distanceText } from '../../utils/storeSelection';
 	import { storeName, storeShortAddress } from '../../utils/storeLocale';
@@ -525,7 +525,8 @@
 		return true
 	}
 	const orderInfo = ref([])
-	const countdown = ref(0)
+	// 支付弹框的绝对截止时刻（毫秒），弹框按它每秒重算倒计时
+	const payDeadline = ref(0)
 	const statusShow = ref(null)
 	const openPayModelPage = async () => {
 		if (isSubmitting.value || !checkLogin()) return;
@@ -558,14 +559,11 @@
 			} else if ([3, 4, 5, 6].includes(Number(orderInfo.value.state))) {
 				uni.showToast({ title: t('订单已结束，请重新预约'), icon: 'none' });
 			} else {
-				const created = Date.parse(orderInfo.value.createTime) / 1000;
-				countdown.value = Math.max(0, constant.payCutDownSeconds - (Date.now() / 1000 - created));
-				if (countdown.value > 0) {
-					showPaymentModal.value = true;
-					if (payModelPageRef.value) await payModelPageRef.value.fetchData(orderId);
-				} else {
-					uni.showToast({ title: t('订单已超时，请重新预约'), icon: 'none' });
-				}
+				// 这一单刚由本次请求创建、state 已确认未支付，直接用服务端刚给的状态开支付，
+				// 不再用设备时钟二次裁决（原来的 Date.parse 串 + Date.now() 在 iOS/时区不对时会算出负数，把新单判成超时）
+				payDeadline.value = payDeadlineMs(orderInfo.value);
+				showPaymentModal.value = true;
+				if (payModelPageRef.value) await payModelPageRef.value.fetchData(orderId);
 			}
 		} catch (error) {
 			selectedTime.value = null;

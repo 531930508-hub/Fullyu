@@ -100,7 +100,7 @@
 							v-if="record.state == 1 && record.appointmentState == 1 && isUpdButtonVisible(record)">修改
 						</view> -->
 						<view class="btn btn-modify pay" @click.stop="handleToPay(record)" v-if="record.state == 0">{{ t('立即支付') }}
-							<view class="countdown-timer" v-if="record.state == 0 && record.cutdown">
+							<view class="countdown-timer" v-if="record.state == 0">
 								{{ record.cutDownDes }}
 							</view>
 						</view>
@@ -238,7 +238,7 @@
 				:orderId="String(currentCommentRecord?.id || '')" :showLotteryAfterSubmit="true"
 				@cancel="hideCommentModal" @submit="handleCommentSubmit" />
 			<!-- 支付 -->
-			<PayModelPage :visible="showPaymentModal" :countdown="countdown" ref="payModelPageRef"
+			<PayModelPage :visible="showPaymentModal" :deadline="payDeadline" ref="payModelPageRef"
 				@confirm="handlePaymentConfirm" @cancel="handlePaymentCancel" />
 
 			<!-- 会员卡自助退款：打开时重新向服务端试算，金额与是否可退只认 CRM 结果 -->
@@ -325,6 +325,7 @@
 	import PayModelPage from '@/components/PayModelPage';
 	import { loadBrandOrders, previewBrandRefund, refundBrandCard, isMock as brandIsMock, formatYuan as brandFormatYuan } from "../../../api/brandMember";
 	import { normalizeRefundQuote } from "../../../utils/brandMemberPayload";
+	import { applyUnpaidCountdowns, tickUnpaidCountdowns, payDeadlineMs, formatCountdownClock } from "../../../utils/unpaidOrders";
 
 	const {
 		proxy
@@ -475,27 +476,16 @@
 	}
 	//去支付按钮
 	const handleToPay = async (record) => {
+		if (!record || !record.id) return
 		// 付过款又被「仅退款」打回未付款的单：预约还留着等重收，没有下单倒计时，不能当超时单挡掉
-		if (!record.payTime) {
-			const createTime = Date.parse(record.createTime) / 1000
-			const currentTime = Date.parse(new Date()) / 1000
-			if (record.overTimeSeconds) {
-				countdown.value = Math.max(0, Math.floor(record.overTimeSeconds - (currentTime - createTime)));
-			} else {
-				countdown.value = constant.payCutDownSeconds;
-			}
-			if (countdown.value <= 0) {
-				// 倒计时结束：订单已自动取消，刷新列表即可
-				countdown.value = 0
-				searchData()
-				uni.showToast({
-					title: t('订单已超时取消，请重新预约'),
-					icon: 'none'
-				})
-				return
-			}
+		if (record.payTime) {
+			payDeadline.value = 0
 		} else {
-			countdown.value = 0
+			// 能不能付以服务端 state 为准：这一单是列表里取回来的，按钮只在 state=0 时渲染；
+			// 本地倒计时（设备时钟 + 服务器时区推算）归零不代表订单已关闭——
+			// 后端关单走 MQ 延迟消息，常比倒计时晚，以前这里一到点就弹「订单已超时取消」，
+			// 把还能付的单挡掉了。真关闭了结算接口会明确报错，弹窗内会提示。
+			payDeadline.value = payDeadlineMs(record)
 		}
 		// 先取结算数据再开弹窗，避免弹窗用上一单的价格/券数渲染后被误确认
 		if (payModelPageRef.value && payModelPageRef.value.fetchData) {
@@ -508,7 +498,7 @@
 		showPaymentModal.value = true; //支付弹出框弹出
 	}
 	//加钟模块
-	const countdown = ref(0)
+	const payDeadline = ref(0)
 	const showAddServiceModel = ref(false)
 	const payModelPageRef = ref(null)
 	// 支付弹框显示状态
@@ -611,24 +601,13 @@
 				icon: 'none'
 			});
 		} else {
-			const createTime = Date.parse(orderInfo.value.createTime) / 1000
-			const currentTime = Date.parse(new Date()) / 1000
-			countdown.value = constant.payCutDownSeconds - (currentTime - createTime);
-			console.log(createTime)
-			console.log(currentTime)
-			console.log(countdown.value)
-			console.log(constant.payCutDownSeconds)
-			if (countdown.value > 0) {
-				showPaymentModal.value = true; //支付弹出框弹出
-				if (payModelPageRef) {
-					payModelPageRef.value.fetchData(orderId)
-				}
-			} else {
-				countdown.value = 0
-				uni.showToast({
-					title: t('订单已取消'),
-					icon: 'none'
-				});
+			// 加钟单是刚创建的、state 已确认未支付，不再用本地时间二次裁决：
+			// 原来那句 Date.parse(createTime) 拿带横杠+空格的串直接解析，iOS 上是 NaN，
+			// 判定恒为「已取消」，加钟支付在 iOS 上永远进不去。
+			payDeadline.value = payDeadlineMs(orderInfo.value)
+			showPaymentModal.value = true; //支付弹出框弹出
+			if (payModelPageRef) {
+				payModelPageRef.value.fetchData(orderId)
 			}
 		}
 	}
@@ -721,16 +700,11 @@
 		})
 		await brandPromise
 		
-		const currentTimeNew = new Date();
+		// 倒计时统一按「服务器时间 + 订单自己的超时窗」从绝对截止时刻算，不再用设备时钟硬减
+		applyUnpaidCountdowns(list)
 		list.forEach(o => {
 			if (o.state == 0) {
-				const createTime = Date.parse(o.createTime) / 1000
-				const currentTime = Date.parse(currentTimeNew) / 1000
-				const payCutDownSeconds = o.overTimeSeconds || constant.payCutDownSeconds
-				o.cutdown = Math.max(0, Math.floor(payCutDownSeconds - (currentTime - createTime)))
-				if (o.cutdown > 0) {
-					o.cutDownDes = getCutDown(o)
-				}
+				o.cutDownDes = getCutDown(o)
 			}
 			o.startTime = moment(o.startTime).format('YYYY-MM-DD HH:mm')
 		})
@@ -868,14 +842,13 @@
 	const startCountdown = () => {
 		if (cutDownTimer) clearInterval(cutDownTimer);
 		cutDownTimer = setInterval(() => {
+			// 每秒从截止时刻重算，而不是把上次的值减 1：
+			// setInterval 切后台/锁屏会被限流，靠自减会永久落后于真实时间（回到前台还剩 4 分钟，服务端早关单了）。
+			// 同时不再本地改写 state：订单是否关闭只由服务端决定。
+			tickUnpaidCountdowns(data.tableData)
 			data.tableData.forEach(o => {
-				if (o.state == 0 && o.cutdown > 0) {
-					o.cutdown = Math.max(0, o.cutdown - 1)
+				if (o.state == 0) {
 					o.cutDownDes = getCutDown(o)
-					if (o.cutdown == 0) {
-						o.state = 3
-						o.appointmentState=3
-					}
 				}
 			})
 		}, 1000);
@@ -883,15 +856,9 @@
 
 	const getCutDown = (item) => {
 		const seconds = Math.max(0, Math.floor(Number(item.cutdown) || 0));
-		let hours = Math.floor(seconds / 3600);
-		let min = Math.floor((seconds % 3600) / 60);
-		let second = seconds % 60;
-
-		hours = hours < 10 ? '0' + hours : hours;
-		min = min < 10 ? '0' + min : min;
-		second = second < 10 ? '0' + second : second;
-
-		return t('倒计时：') + hours + ':' + min + ':' + second;
+		// 倒计时归零不代表订单已关闭：后端关单更慢，这段时间还能付，别显示 00:00:00 让人以为结束了
+		if (seconds <= 0) return t('待确认')
+		return t('倒计时：') + formatCountdownClock(seconds);
 	}
 
 	//列表内快捷收藏/暂别：一次性加载关系与暂别名单
