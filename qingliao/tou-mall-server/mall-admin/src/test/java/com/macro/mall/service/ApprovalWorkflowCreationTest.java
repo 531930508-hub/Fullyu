@@ -133,7 +133,7 @@ class ApprovalWorkflowCreationTest {
     @Test void leaveIsRejectedAndNothingSavedWhenShopHasNoManager() {
         category.setCode(FlowCategoryCode.ASK_FOR_LEAVE.getCode());
         when(service.approvalFlowNodeService.resolveLeaveChain(8L, 1L, false))
-                .thenThrow(new BusinessException("本店还没有在岗店长"));
+                .thenThrow(new BusinessException("本店还没有可用店长"));
         assertThrows(BusinessException.class,
                 () -> service.addLeave(null, null, 8L, FlowCategoryCode.ASK_FOR_LEAVE, 1L, 1));
         verify(service.approvalService, never()).save(any());

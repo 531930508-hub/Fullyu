@@ -47,7 +47,7 @@
           <span class="builtin-step">提前请假：店长审批</span>
           <span class="builtin-step">当天请假：店长审批 → 总部CEO审批（二级）</span>
           <span class="builtin-step">店长本人请假：直接由总部CEO审批</span>
-          <span class="muted">店长按本店在职的“店长”身份自动派单，本店没有在岗店长时请假会被拦下提示去配置；二级审批人为总部 CEO 账号（系统配置项指定）。点“配置”可改成自定义节点。</span>
+          <span class="muted">店长按本店在职或暂挂的“店长”身份自动派单（离职不算），本店没有可用店长时请假会被拦下提示去配置；二级审批人为总部 CEO 账号（系统配置项指定）。点“配置”可改成自定义节点。</span>
         </div>
         当前审批人：{{ legacyText(item) }}
         <span class="muted">（旧版逐级审批，点“配置”可改为流程节点）</span>

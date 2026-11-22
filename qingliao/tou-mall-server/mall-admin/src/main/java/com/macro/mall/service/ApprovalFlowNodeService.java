@@ -155,7 +155,7 @@ public class ApprovalFlowNodeService extends BaseService<ApprovalFlowNodeMapper,
             }
             if (adminIds.isEmpty()) {
                 for (String identity : emptyIdentities) {
-                    skipReasons.add("节点「" + nodeName + "」的岗位" + identity + "没有在职且已关联后台账号的人员");
+                    skipReasons.add("节点「" + nodeName + "」的岗位" + identity + "没有在职或暂挂且已关联后台账号的人员");
                 }
                 continue;
             }
@@ -218,14 +218,14 @@ public class ApprovalFlowNodeService extends BaseService<ApprovalFlowNodeMapper,
      *     <li>当天请假：店长审批 → 二级审批人（总部CEO，配置项 approval.leave.second-approver-admin-id 指定账号）。</li>
      * </ul>
      *
-     * <p>店长取的是疗愈师身份里的“店长”，只算本店在职且后台账号启用的；取不到直接拦下，
-     * 免得请假落不到人、单据自动完成。</p>
+     * <p>店长取的是疗愈师身份里的“店长”，算本店在职或暂挂且后台账号启用的（暂挂的店长仍在处理门店事务，
+     * 不能因此卡住全店请假；离职不算）；取不到直接拦下，免得请假落不到人、单据自动完成。</p>
      */
     public List<ApprovalResolvedNode> resolveLeaveChain(Long shopId, Long requesterAdminId, boolean sameDayLeave) {
         List<Long> shopManagers = massagistIdentityService.resolveAdminIds(MassagistIdentityCode.SHOP_MANAGER,
                 ApprovalTargetScope.SHOP, shopId, null);
         if (CollectionUtils.isEmpty(shopManagers)) {
-            throw new BusinessException("本店还没有在岗店长（未在「疗愈师管理」里配置店长身份），请假无法提交，请联系管理员配置");
+            throw new BusinessException("本店还没有可用店长（在职或暂挂，未在「疗愈师管理」里配置店长身份或未关联启用账号），请假无法提交，请联系管理员配置");
         }
         List<ApprovalResolvedNode> chain = new ArrayList<>();
         // 店长本人请假：本店没有更高层级，直接交总部CEO

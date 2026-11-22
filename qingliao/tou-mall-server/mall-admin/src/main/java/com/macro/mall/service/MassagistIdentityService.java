@@ -141,7 +141,9 @@ public class MassagistIdentityService extends BaseService<MassagistIdentityMappe
     }
 
     /**
-     * 把岗位解析为可接收审批的后台账号：在职疗愈师 + 已关联且启用的后台账号。
+     * 把岗位解析为可接收审批的后台账号：未离职（在职/暂挂）疗愈师 + 已关联且启用的后台账号。
+     *
+     * <p>暂挂也派单：店里唯一的店长暂挂时，全店请假不能因此提交不了；离职（QUIT）一律不参与审批。</p>
      *
      * @param excludeAdminId 需要排除的账号，传 null 表示不排除（审批允许自己提交自己审批）
      */
@@ -153,7 +155,7 @@ public class MassagistIdentityService extends BaseService<MassagistIdentityMappe
         if (massagistIds.isEmpty()) return Collections.emptyList();
         LambdaQueryWrapper<Massagist> mqw = new LambdaQueryWrapper<Massagist>()
                 .in(Massagist::getId, massagistIds)
-                .eq(Massagist::getStatus, JobStatus.JOB_ING.getValue());
+                .in(Massagist::getStatus, JobStatus.JOB_ING.getValue(), JobStatus.PENDING.getValue());
         if (effectiveScope == ApprovalTargetScope.SHOP) mqw.eq(Massagist::getShopId, shopId);
         List<Long> adminIds = massagistService.list(mqw).stream()
                 .map(Massagist::getUmsAdminId)
