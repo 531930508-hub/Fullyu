@@ -2359,6 +2359,8 @@ function RefundModal({
     .filter((line) => line.qty > 0);
   const amount = selected.reduce((sum, line) => sum + line.item.unitPriceCents * line.qty, 0);
   const prepared = order.status === 'ready' || order.cupScanned > 0;
+  // 现金单在收银渠道没有原交易，系统只登记退款，钱由店员当面交还（与后端 refundChannelOf 同口径）。
+  const isCash = order.paymentMethod === 'cash' || (order.paymentRef || '').startsWith('CASH-');
   // 金额是否走审批由服务端按配置阈值决定，前端只按自身权限标注按钮，不重复维护阈值（UI-05）
   const needsApproval = !canDirect;
 
@@ -2378,8 +2380,17 @@ function RefundModal({
         items: selected.map((line) => ({ itemId: line.item.id, qty: line.qty })),
         reason: reason.trim() || '顾客需求'
       });
+      // 以服务端口径为准（老版本服务端不回 channel 时按订单支付方式兜底）。
+      const channel = result.channel || (isCash ? 'cash' : 'gateway');
       if (result.mode === 'approval') {
-        notify('退款金额超过直接退款上限，已提交总部审批，审批通过后自动执行', 'ok');
+        notify(
+          channel === 'cash'
+            ? '现金退款已提交总部审批，通过后请将现金交还顾客'
+            : '退款金额超过直接退款上限，已提交总部审批，审批通过后自动执行',
+          'ok'
+        );
+      } else if (channel === 'cash') {
+        notify(`已登记现金退款 ${money(result.refundedCents || amount)}，请将现金交还顾客`, 'ok');
       } else {
         notify(`已退款 ${money(result.refundedCents || amount)}`, 'ok');
       }
@@ -2401,7 +2412,7 @@ function RefundModal({
         <>
           <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
           <button type="button" className="btn btn-danger" disabled={busy || !selected.length} onClick={submit}>
-            {busy ? '正在提交…' : needsApproval ? '提交审批' : `确认退款 ${money(amount)}`}
+            {busy ? '正在提交…' : needsApproval ? '提交审批' : isCash ? `确认现金退款 ${money(amount)}` : `确认退款 ${money(amount)}`}
           </button>
         </>
       }
@@ -2436,9 +2447,15 @@ function RefundModal({
         <div className="notice">
           <Icon name="info" size={15} />
           <span>
-            本次退款金额 <strong>{money(amount)}</strong>。{needsApproval
-              ? '当前账号无直接退款权限，将提交总部审批，审批通过后原路退回。'
-              : '超过直接退款上限的金额会自动转总部审批。未制作且未出餐的杯数会同时退回原料库存；已制作订单保留原料成本。'}
+            本次退款金额 <strong>{money(amount)}</strong>。
+            {isCash
+              ? needsApproval
+                ? '现金支付订单：提交后由总部审批，通过后系统登记退款，请门店将现金交还顾客。'
+                : '现金支付订单：确认后系统登记退款，请当场将现金交还顾客。'
+              : needsApproval
+                ? '当前账号无直接退款权限，将提交总部审批，审批通过后原路退回。'
+                : '超过直接退款上限的金额会自动转总部审批。'}
+            未制作且未出餐的杯数会同时退回原料库存；已制作订单保留原料成本。
             {prepared ? ' 该订单已有出餐记录，退款不退回原料库存。' : ''}
           </span>
         </div>
@@ -3478,7 +3495,7 @@ function DevicesSection({ store }: { store: Store }) {
           <div className="stack">
             <div className="notice"><Icon name="printer" size={15} /><span><strong>云标签打印</strong>：杯贴与订单标签。驱动负责把杯号、商品、温度、冰量映射到厂商模板。</span></div>
             <div className="notice"><Icon name="scan" size={15} /><span><strong>扫码器</strong>：蓝牙 HID 键盘模式，iPad 配对即用，等同于键盘输入；营业台开启「扫码枪常驻」后即可直接出餐，无需服务端接入。</span></div>
-            <div className="notice"><Icon name="card" size={15} /><span><strong>支付网关</strong>：下单收款与退款。微信、支付宝等通道共用同一支付引用与退款幂等键。</span></div>
+            <div className="notice"><Icon name="card" size={15} /><span><strong>支付网关</strong>：下单收款与退款。微信、支付宝等通道共用同一支付引用与退款幂等键；现金单不经过渠道，由门店当面退还并在系统登记。</span></div>
             <div className="notice"><Icon name="bag" size={15} /><span><strong>外卖平台 / 会员</strong>：平台拉单回执与会员权益校验。未配置通道时，对应操作在门店侧不可用。</span></div>
           </div>
         </Panel>

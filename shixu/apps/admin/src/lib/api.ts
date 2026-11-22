@@ -190,6 +190,8 @@ export const api = {
   storeRefund: (orderId: string, body: { items?: Array<{ itemId: string; qty: number }>; reason?: string } = {}) =>
     request<{
       mode: 'refunded' | 'approval';
+      /** 退款去向：gateway=原路退回，cash=门店现金退还（系统只登记，钱当面交还）。 */
+      channel?: 'gateway' | 'cash';
       refundedCents?: number;
       approval?: import('./types').Approval;
       order?: import('./types').Order;

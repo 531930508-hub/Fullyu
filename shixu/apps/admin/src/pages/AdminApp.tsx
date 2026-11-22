@@ -1610,7 +1610,7 @@ function ApprovalsPage({ onChanged }: { onChanged: () => void }) {
         {decision?.approval.kind === 'REFUND' ? (
           <div className="notice" style={{ marginTop: 12 }}>
             <Icon name="info" size={15} />
-            <span>通过后将按申请的杯数执行退款：已制作杯数不计成本回冲，未制作部分退回原料库存。驳回不会产生退款。</span>
+            <span>通过后将按申请的杯数执行退款：已制作杯数不计成本回冲，未制作部分退回原料库存。驳回不会产生退款。现金支付的订单由门店当面退还并交还顾客，系统只登记退款。</span>
           </div>
         ) : (
           <div className="notice" style={{ marginTop: 12 }}>

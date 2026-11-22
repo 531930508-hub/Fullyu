@@ -247,7 +247,9 @@ export class ApprovalsService {
       });
       resultNote = result.error
         ? `审批通过但退款执行失败：${result.error}`
-        : `已退款 ¥${(result.refundedCents / 100).toFixed(2)}`;
+        : result.channel === 'cash'
+          ? `已登记现金退款 ¥${(result.refundedCents / 100).toFixed(2)}，请门店将现金交还顾客`
+          : `已退款 ¥${(result.refundedCents / 100).toFixed(2)}`;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       // 事务内条件认领失败 = 并发决定的败者：不落批准态，让胜者的决定生效。

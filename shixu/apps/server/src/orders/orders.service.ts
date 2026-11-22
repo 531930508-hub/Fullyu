@@ -12,6 +12,7 @@ import { FinanceService, saleMethod } from '../finance/finance.service';
 import { PrintingService } from '../printing/printing.service';
 import { CouponsService, type ResolvedCoupon } from '../coupons/coupons.service';
 import { loadByoCupPolicy } from './byo-cup.policy';
+import { refundChannelOf, type RefundChannel } from './refund-channel';
 import { ICE_OPTIONS } from '@teahour/shared';
 import type { PaymentGateway, PaymentState } from '@teahour/integrations';
 
@@ -2062,7 +2063,8 @@ export class OrdersService {
         decidedBy: staff.name
       });
       if (result.error) throw conflict(result.error);
-      return { mode: 'refunded' as const, ...result, order: await this.getOrder(orderId) };    }
+      return { mode: 'refunded' as const, ...result, order: await this.getOrder(orderId) };
+    }
     const id = newId('AP');
     const now = new Date();
     const storeId = order.business === 'retail' ? order.pickupStoreId || 'brand' : order.storeId;
@@ -2115,6 +2117,8 @@ export class OrdersService {
           }
         : null,
       amountCents: quote.amount,
+      // 审批通过后由总部代门店执行，门店要按渠道做后续动作（现金需当面交还）。
+      channel: refundChannelOf(order),
       order: await this.getOrder(orderId)
     };
   }
@@ -2245,7 +2249,14 @@ export class OrdersService {
       approvalId: string | null;
       decidedBy: string;
     }
-  ): Promise<{ refundedCents: number; providerRef: string | null; refundIntentId: string; pending?: boolean; error?: string }> {
+  ): Promise<{
+    refundedCents: number;
+    providerRef: string | null;
+    refundIntentId: string;
+    channel: RefundChannel;
+    pending?: boolean;
+    error?: string;
+  }> {
     const { order, quote, prepared } = input;
     const intentId = await this.occupyRefund(order, quote, {
       reason: input.reason,
@@ -2257,23 +2268,38 @@ export class OrdersService {
 
     // 2) 外部 + 3) 确认/释放。
     const intent = (await this.prisma.refundIntent.findUnique({ where: { id: intentId } }))!;
-    const result = await this.runGatewayRefund(intent, order, prepared, input.decidedBy);
+    const channel = refundChannelOf(order);
+    const result = await this.runRefund(intent, order, prepared, input.decidedBy, channel);
     if (!result.ok) {
-      return { refundedCents: 0, providerRef: null, refundIntentId: intentId, error: result.error };
+      return { refundedCents: 0, providerRef: null, refundIntentId: intentId, channel, error: result.error };
     }
     if (result.pending) {
-      return { refundedCents: 0, providerRef: result.providerRef, refundIntentId: intentId, pending: true };
+      return {
+        refundedCents: 0,
+        providerRef: result.providerRef,
+        refundIntentId: intentId,
+        channel,
+        pending: true
+      };
     }
-    return { refundedCents: quote.amount, providerRef: result.providerRef, refundIntentId: intentId };
+    return { refundedCents: quote.amount, providerRef: result.providerRef, refundIntentId: intentId, channel };
   }
 
-  /** 外部退款 + 确认/释放；供 executeRefund 与 retryRefundIntent 复用。 */
-  private async runGatewayRefund(
+  /**
+   * 渠道退款 + 确认/释放；供 executeRefund 与 retryRefundIntent 复用。
+   * 现金单没有渠道原交易（TX-04 的「外部」一步本就不存在），直接进入确认落账。
+   */
+  private async runRefund(
     intent: RefundIntent,
     order: Order,
     prepared: boolean,
-    decidedBy: string
+    decidedBy: string,
+    channel: RefundChannel = refundChannelOf(order)
   ): Promise<{ ok: true; providerRef: string | null; pending?: boolean } | { ok: false; error: string }> {
+    if (channel === 'cash') {
+      await this.confirmRefund(intent, null, order, prepared, decidedBy);
+      return { ok: true, providerRef: null };
+    }
     let gateway: Awaited<ReturnType<HardwareService['payment']['refund']>>;
     try {
       gateway = await this.hardware.payment.refund({
@@ -2372,6 +2398,9 @@ export class OrdersService {
     decidedBy: string
   ): Promise<void> {
     const now = new Date();
+    // 落账时标明退款去向：现金单没有渠道回执，财务与门店据此对现金交接。
+    const channel = refundChannelOf(order);
+    const method = channel === 'cash' ? '现金退还' : '原路退回';
     // false = 并发没抢到退款单（事务内快照读看不到赢家的提交，事务结束后再回读定性）。
     const confirmed = await this.prisma.$transaction(async (tx): Promise<boolean> => {
       const fresh = await tx.refundIntent.findUnique({ where: { id: intent.id } });
@@ -2437,7 +2466,7 @@ export class OrdersService {
           storeId: order.business === 'retail' ? 'brand' : orderRow.storeId,
           type: 'REFUND',
           amountCents: -fresh.amountCents,
-          method: '原路退回',
+          method,
           settlement: 'settled',
           memo: `退款 · ${fresh.reason || '顾客需求'} · ${fresh.id}`,
           costCents: prepared ? 0 : -lines.reduce((n, x) => n + x.costCents, 0),
@@ -2453,7 +2482,7 @@ export class OrdersService {
         actorId: null,
         actorName: decidedBy,
         action: '执行退款',
-        detail: `${orderRow.number} · ¥${(fresh.amountCents / 100).toFixed(2)} · ${fresh.id}${prepared ? ' · 已制作，保留原料成本' : ' · 未制作，成本冲回'}${fresh.approvalId ? ` · 审批 ${fresh.approvalId}` : ''}`,
+        detail: `${orderRow.number} · ¥${(fresh.amountCents / 100).toFixed(2)} · ${fresh.id}${prepared ? ' · 已制作，保留原料成本' : ' · 未制作，成本冲回'}${channel === 'cash' ? ' · 现金退款，请门店交还顾客' : ''}${fresh.approvalId ? ` · 审批 ${fresh.approvalId}` : ''}`,
         type: 'refund',
         storeId: order.business === 'retail' ? 'brand' : orderRow.storeId,
         orderId: orderRow.id,
@@ -2468,7 +2497,7 @@ export class OrdersService {
     throw conflict(`退款单已处于 ${again?.status ?? '未知'} 状态，不能重复确认，请人工核对`);
   }
 
-  /** 未知/处理中退款单的重试入口（TX-04 可重试收敛）：复用同一 RF 单号调渠道。 */
+  /** 未知/处理中退款单的重试入口（TX-04 可重试收敛）：复用同一 RF 单号调渠道，现金单本地落账。 */
   async retryRefundIntent(
     staff: StaffContext,
     refundIntentId: string
@@ -2505,7 +2534,7 @@ export class OrdersService {
       const freshIntent = (await this.prisma.refundIntent.findUnique({
         where: { id: newIntentId }
       }))!;
-      const retried = await this.runGatewayRefund(freshIntent, freshOrder, prepared, staff.name);
+      const retried = await this.runRefund(freshIntent, freshOrder, prepared, staff.name);
       if (!retried.ok) {
         return { ok: false, status: 'unknown', refundedCents: 0, error: retried.error };
       }
@@ -2514,7 +2543,7 @@ export class OrdersService {
       }
       return { ok: true, status: 'succeeded', refundedCents: quote.quote.amount };
     }
-    const result = await this.runGatewayRefund(intent, order, await this.isPrepared(order), staff.name);
+    const result = await this.runRefund(intent, order, await this.isPrepared(order), staff.name);
     if (!result.ok) return { ok: false, status: 'unknown', refundedCents: 0, error: result.error };
     if (result.pending) return { ok: true, status: 'processing', refundedCents: 0 };
     return { ok: true, status: 'succeeded', refundedCents: intent.amountCents };
