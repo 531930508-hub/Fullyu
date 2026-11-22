@@ -560,6 +560,9 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
      * <p>看板疗愈师卡片要知道「排第几个、今天接了几单」：卡片列是按班次顺序排的，跟队序无关，
      * 所以只能单独取。刻意走只读的 orderList 而不是 board()——翻到还没起队的日期就返回空，
      * 前端整块不显示，免得看一眼前面的号就把那天（哪怕是过去）的队列建出来。</p>
+     *
+     * <p>队序读队列，单数读订单明细（{@link OrderDetailService#servedCountByMassagist}）：
+     * 队列里的 assign_count 只是「这一队推了几次」，不能当单数用。</p>
      */
     public List<MassagistQueuePosition> queuePositions(Long shopId, String date) {
         if (shopId == null || date == null) {
@@ -568,6 +571,18 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
         Map<Long, MassagistQueuePosition> map = new LinkedHashMap<>();
         putPositions(map, receptionQueueService.orderList(date, shopId, ReceptionQueueService.KIND_SERVICE), true);
         putPositions(map, receptionQueueService.orderList(date, shopId, ReceptionQueueService.KIND_RECEPTION), false);
+        // 已接单数按订单明细算：队列的 assign_count 只记「这一队推了几次」，手工改技师/互换、
+        // 改期后重新排回来都会让它漏记或错减（线上就出现过做 8 单显示 1 单）
+        orderDetailService.servedCountByMassagist(shopId, DateUtil.stringToLocalDate(date)).forEach((massagistId, c) -> {
+            MassagistQueuePosition p = map.get(massagistId);
+            if (p == null) {
+                p = new MassagistQueuePosition();
+                p.setMassagistId(massagistId);
+                map.put(massagistId, p);
+            }
+            p.setServiceCount(c.getServiceCount() == null ? 0 : c.getServiceCount());
+            p.setReceptionCount(c.getReceptionCount() == null ? 0 : c.getReceptionCount());
+        });
         return new ArrayList<>(map.values());
     }
 
@@ -585,13 +600,10 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
                 p.setMassagistId(q.getMassagistId());
                 map.put(q.getMassagistId(), p);
             }
-            int assigned = q.getAssignCount() == null ? 0 : q.getAssignCount();
             if (service) {
                 p.setServiceNo(no);
-                p.setServiceAssigned(assigned);
             } else {
                 p.setReceptionNo(no);
-                p.setReceptionAssigned(assigned);
             }
         }
     }

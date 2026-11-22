@@ -23,6 +23,12 @@ test('疗愈师卡片只讲队序和今日接单数，旧的轮次口径不再�
   assert.doesNotMatch(lineTemplate, /当前轮次|已排轮次|预估排班优先级/);
 });
 
+test('已接单数读订单明细口径的 serviceCount/receptionCount，不再读队列计数器', () => {
+  assert.match(lineTemplate, /queuePosition\.serviceCount/);
+  assert.match(lineTemplate, /queuePosition\.receptionCount/);
+  assert.doesNotMatch(lineTemplate, /serviceAssigned|receptionAssigned/);
+});
+
 test('队序按「队里有位置才有号」显示，不在队里不显示成第 0 位', () => {
   const {queueNoText} = lineMethods();
   assert.equal(queueNoText(3), '第 3 位');

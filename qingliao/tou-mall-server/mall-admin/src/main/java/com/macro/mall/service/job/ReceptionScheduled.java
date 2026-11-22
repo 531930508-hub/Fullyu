@@ -57,6 +57,10 @@ public class ReceptionScheduled {
     OrderDetailService orderDetailService;
 
     private Integer RECEPTION_DURATION = 45;//接待时长30分钟
+
+    /** 系统占位接待的备注标记：没有真实客户，只为占住接待位；统计「今日已接接待单数」时要剔掉 */
+    public static final String PLACEHOLDER_COMMENT = "系统占位接待";
+
     @Autowired
     private OrderPrintRecordService orderPrintRecordService;
 
@@ -142,10 +146,15 @@ public class ReceptionScheduled {
             BeanUtils.copyProperties(orderDetailDto, order);
             order.setProductTitle("接待");
             String yearMonth = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-            String orderCode = "S" + yearMonth + String.format("%07d", order.getId());
-            order.setCode(orderCode);
+            // 单号要等落库拿到 id 才能拼，先给个占位再补（以前是拿还没落库的 id 拼，单号里会留一段 "null"）
+            order.setCode("S" + yearMonth);
+            // 打标记：这是一张没有真实客户的占位接待。看板「今日已接接待单数」按明细数单时会把它剔掉，
+            // 口径见 OrderDetailMapper#countServedByMassagist —— 改这段文案要连着那边一起改
+            order.setComment(PLACEHOLDER_COMMENT);
 
             orderService.save(order);
+            order.setCode("S" + yearMonth + String.format("%07d", order.getId()));
+            orderService.updateById(order);
             orderService.finishPay(order);
             orderId = order.getId();
             orderDetailDto.setOrderId(orderId);

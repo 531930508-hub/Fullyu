@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.macro.mall.common.exception.BusinessException;
+import com.macro.mall.dto.MassagistServedCount;
 import com.macro.mall.dto.OrderDetailDto;
 import com.macro.mall.dto.SchedulingParam;
 import com.macro.mall.entity.*;
@@ -1581,6 +1582,26 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         List<OrderDetail> orderDetails = list(queryWrapper);
         orderDetails.forEach(e -> e.setState(AppointmentState.WAITING.getValue()));
         updateBatchById(orderDetails);
+    }
+
+    /**
+     * 当天每人已接了几单（服务单 / 接待单分开），给看板疗愈师卡片显示用。
+     *
+     * <p>直接数订单明细，不数轮牌队列里的 assign_count：那个计数器只在「推进这一队」时 +1，
+     * 手工改技师/互换、改期后重新排回来都会漏记或错减，和实际做了几单对不上。</p>
+     *
+     * <p>窗口与看板列表（{@link SchedulingParam#getEndDateTime()}）保持一致：到次日 01:59:59，
+     * 跨零点的单算在前一天。</p>
+     */
+    public Map<Long, MassagistServedCount> servedCountByMassagist(Long shopId, LocalDate day) {
+        if (shopId == null || day == null) {
+            return Collections.emptyMap();
+        }
+        LocalDateTime start = day.atStartOfDay();
+        LocalDateTime end = day.atTime(LocalTime.MAX).plusMinutes(120);
+        return baseMapper.countServedByMassagist(shopId, start, end).stream()
+                .filter(c -> c.getMassagistId() != null)
+                .collect(Collectors.toMap(MassagistServedCount::getMassagistId, Function.identity(), (a, b) -> a));
     }
 
     public List<?> schedulingMap(SchedulingParam schedulingParam) {

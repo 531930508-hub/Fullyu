@@ -66,7 +66,9 @@
       <div v-if="queuePosition" style="margin-top: 10px;font-size: 12px;line-height: 20px">
         <div>{{ '服务队序：' + queueNoText(queuePosition.serviceNo) }}</div>
         <div>{{ '接待队序：' + queueNoText(queuePosition.receptionNo) }}</div>
-        <div>{{ '今日已接：服务 ' + (queuePosition.serviceAssigned || 0) + ' 单 / 接待 ' + (queuePosition.receptionAssigned || 0) + ' 单' }}</div>
+        <div :title="'按订单明细算：今天已到店/已完成的单才算；未到店、已取消、系统占位接待都不算'">
+          {{ '今日已接：服务 ' + (queuePosition.serviceCount || 0) + ' 单 / 接待 ' + (queuePosition.receptionCount || 0) + ' 单' }}
+        </div>
       </div>
     </div>
     <div slot="reference" class="bed-item">
