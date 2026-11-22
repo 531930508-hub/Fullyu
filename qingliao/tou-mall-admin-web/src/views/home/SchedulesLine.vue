@@ -63,8 +63,10 @@
           </div>
         </div>
       </div>
-      <div v-if="massagistRound && sortIndex" class="flex align-center m-t-10">
-        {{ '当前轮次：' + massagistRound + '，已排轮次：' + massagistRoundCount + '，预估排班优先级：' + sortIndex }}
+      <div v-if="queuePosition" style="margin-top: 10px;font-size: 12px;line-height: 20px">
+        <div>{{ '服务队序：' + queueNoText(queuePosition.serviceNo) }}</div>
+        <div>{{ '接待队序：' + queueNoText(queuePosition.receptionNo) }}</div>
+        <div>{{ '今日已接：服务 ' + (queuePosition.serviceAssigned || 0) + ' 单 / 接待 ' + (queuePosition.receptionAssigned || 0) + ' 单' }}</div>
       </div>
     </div>
     <div slot="reference" class="bed-item">
@@ -73,9 +75,10 @@
         <div class="flex align-center" style="width: 100%;">
           <div v-if="isSelf" class="self-tag">我</div>
           <div style="width: 75%">{{ name }}</div>
-          <div v-if="massagistRoundCount"
+          <div v-if="queuePosition && queuePosition.serviceNo"
+               :title="'服务队序：第 ' + queuePosition.serviceNo + ' 位（第 1 位就是下一个接服务单的人）'"
                style="font-size: 12px; width: 16px; height: 16px; border: 1px solid #333; border-radius: 50%; text-align: center; ">
-            {{ massagistRoundCount }}
+            {{ queuePosition.serviceNo }}
           </div>
         </div>
         <div style="background-color: #f5f4f4;border-radius: 4px;margin-top: 10px" class="flex">
@@ -135,9 +138,7 @@ export default {
         return []
       }
     },
-    massagistRound: null,
-    sortIndex: null,
-    massagistRoundCount: null,
+    queuePosition: {type: Object, default: null},
     //当前列是否为本登录疗愈师本人（看板全店可见后用于区分「我的列」）
     isSelf: {type: Boolean, default: false},
   },
@@ -168,6 +169,10 @@ export default {
     console.log(this.shop)
   },
   methods: {
+    //队列里没有这个人（休息、调店还没入队）时别显示成第 0 位
+    queueNoText(no) {
+      return no ? '第 ' + no + ' 位' : '未在队'
+    },
     getWidth(startTime, endTime, clockInTime, clockOutTime) {
 
       let time1 = dayjs(this.shop.clockInTime, 'HH:mm');

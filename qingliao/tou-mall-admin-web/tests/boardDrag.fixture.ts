@@ -40,7 +40,7 @@ const dateUtil={getCurrentDateCode:()=>date,format:(v,p)=>dayjs(v).format(p),for
 const blank={template:'<div hidden></div>',methods:{open(){f.opened++}}};
 const ShopSelector={props:['value'],template:'<span>合成测试店 · 仅本地</span>'};
 const SchedulesLine={props:['name'],template:'<div><span>{{name}}</span></div>'};
-const context={mapGetters,shopApi,orderDetailApi,projectApi:{list:async()=>({data:projects})},dateUtil,formatDate:(v,p)=>dayjs(v).format(p.replace('hh','HH')),dayjs,draggable:vuedraggable,orderApi:{bookingDates:async()=>({data:[]})},roundScheduleApi:{findMassagistRound:async()=>({data:[]})},massagistSchedulesApi:{myDay:async()=>({data:{hasSchedule:true,shopId:1,shops:[{shopId:1,label:'合成测试店'}]}})},ShopSelector,SchedulesLine};
+const context={mapGetters,shopApi,orderDetailApi,projectApi:{list:async()=>({data:projects})},dateUtil,formatDate:(v,p)=>dayjs(v).format(p.replace('hh','HH')),dayjs,draggable:vuedraggable,orderApi:{bookingDates:async()=>({data:[]})},roundScheduleApi:{queuePositions:async()=>({data:[]})},massagistSchedulesApi:{myDay:async()=>({data:{hasSchedule:true,shopId:1,shops:[{shopId:1,label:'合成测试店'}]}})},ShopSelector,SchedulesLine};
 for(const name of ['PadOrderDetail','AppointmentDrawer','PasswordForm','ReceptionDiv','ReceptionDrawer','PadReceptionOrderDetail','Hamburger','AdminTodoCard'])context[name]=blank;
 const options=new Function(...Object.keys(context),${literal(script)})(...Object.values(context));options.template=${literal(template)};Vue.component('board',options);
 window.app=new Vue({el:'#app'});f.page=()=>app.$refs.board;

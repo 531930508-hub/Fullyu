@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.github.pagehelper.PageInfo;
 import com.macro.mall.common.exception.BusinessException;
+import com.macro.mall.dto.MassagistQueuePosition;
 import com.macro.mall.dto.ReceptionBoardItem;
 import com.macro.mall.entity.MassagistSchedules;
 import com.macro.mall.entity.OrderDetail;
@@ -551,6 +552,48 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
     public List<Long> receptionOrder(Long shopId, String date, int kind) {
         return receptionQueueService.dispatchOrder(date, shopId, kind).stream()
                 .map(ReceptionQueue::getMassagistId).collect(Collectors.toList());
+    }
+
+    /**
+     * 队序 + 今日接单数（只读，不建队列）：服务队、接待队各算一份，按人合并。
+     *
+     * <p>看板疗愈师卡片要知道「排第几个、今天接了几单」：卡片列是按班次顺序排的，跟队序无关，
+     * 所以只能单独取。刻意走只读的 orderList 而不是 board()——翻到还没起队的日期就返回空，
+     * 前端整块不显示，免得看一眼前面的号就把那天（哪怕是过去）的队列建出来。</p>
+     */
+    public List<MassagistQueuePosition> queuePositions(Long shopId, String date) {
+        if (shopId == null || date == null) {
+            return Collections.emptyList();
+        }
+        Map<Long, MassagistQueuePosition> map = new LinkedHashMap<>();
+        putPositions(map, receptionQueueService.orderList(date, shopId, ReceptionQueueService.KIND_SERVICE), true);
+        putPositions(map, receptionQueueService.orderList(date, shopId, ReceptionQueueService.KIND_RECEPTION), false);
+        return new ArrayList<>(map.values());
+    }
+
+    /** 服务队/接待队各刷一遍：顺序号就是派单顺序（seq 升序，作废行已剔掉）里的第几个 */
+    private void putPositions(Map<Long, MassagistQueuePosition> map, List<ReceptionQueue> order, boolean service) {
+        int no = 0;
+        for (ReceptionQueue q : order) {
+            if (q.getMassagistId() == null) {
+                continue;
+            }
+            no++;
+            MassagistQueuePosition p = map.get(q.getMassagistId());
+            if (p == null) {
+                p = new MassagistQueuePosition();
+                p.setMassagistId(q.getMassagistId());
+                map.put(q.getMassagistId(), p);
+            }
+            int assigned = q.getAssignCount() == null ? 0 : q.getAssignCount();
+            if (service) {
+                p.setServiceNo(no);
+                p.setServiceAssigned(assigned);
+            } else {
+                p.setReceptionNo(no);
+                p.setReceptionAssigned(assigned);
+            }
+        }
     }
 
     /** 值班 / 下值班（只换分组，不动位置） */

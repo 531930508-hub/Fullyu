@@ -77,11 +77,11 @@
             <span class="name">{{ item.name }}</span>
             <span v-if="item.type != 0" class="sub-name">{{ item.type == 1 ? '湿' : '干' }}区</span>
           </div>
-          <schedules-line v-for="(item,index) in dataList" :massagist-round="getMassagistRound(item.id)"
+          <schedules-line v-for="(item,index) in dataList" :queue-position="getQueuePosition(item.id)"
                           :key="index" :avatar-url="item.avatarUrl" :name="item.name"
                           :is-self="isMassagist && massagistId && item.id == massagistId"
-                          :order-detail-list="item.orderDetailList" :sort-index="getMassagistSortIndex(item.id)"
-                          :schedules-list="item.schedulesList" :massagist-round-count="getMassagistRoundCount(item.id)"
+                          :order-detail-list="item.orderDetailList"
+                          :schedules-list="item.schedulesList"
                           class="bed-item" v-if="searchForm.type==2"></schedules-line>
         </div>
         <div class="main-wrapper" ref="refMainWrapper">
@@ -303,7 +303,8 @@ export default {
       winHeight: window.innerHeight,
       winWidth: window.innerWidth,
       contentHeight: window.innerHeight,
-      massagistRound: [],
+      // 疗愈师列的服务队/接待队队序与今日接单数（按人索引，取不到就不显示这块）
+      queuePositions: [],
       listLoading: true,
       // 疗愈师看板：所选日期本人所在门店（含调店），用来决定看哪家店的看板
       therapistDay: null,
@@ -461,31 +462,8 @@ export default {
     showWeek() {
       return this.winWidth >= 550
     },
-    getMassagistRound() {
-      console.log('getMassagistRound++++++++++++++');
-      return (massagistId) => {
-        if (this.massagistRound && this.massagistRound.length) {
-          return (this.massagistRound.find(s => massagistId == s.massagistId) || {round: ''}).round
-        }
-        return ''
-      }
-    },
-    getMassagistRoundCount() {
-      return (massagistId) => {
-        if (this.massagistRound && this.massagistRound.length) {
-          return (this.massagistRound.find(s => massagistId == s.massagistId) || {roundCount: ''}).roundCount
-        }
-        return ''
-      }
-    },
-    getMassagistSortIndex() {
-      return (massagistId) => {
-        if (this.massagistRound && this.massagistRound.length) {
-          let sortIndex = this.massagistRound.findIndex(s => massagistId == s.massagistId)
-          return ++sortIndex
-        }
-        return null
-      }
+    getQueuePosition() {
+      return (massagistId) => this.queuePositions.find(s => massagistId == s.massagistId) || null
     },
   },
   methods: {
@@ -692,7 +670,7 @@ export default {
         if (!hasSchedule) {
           // 这天没有排班：不拿账号门店去顶，直接空态，避免"无权查看该门店"
           this.dataList = []
-          this.massagistRound = []
+          this.queuePositions = []
           this.listLoading = false
           return
         }
@@ -713,7 +691,7 @@ export default {
         if (requestId !== this.boardRequestId || this.isDragging || this.pendingMove) return
         this.dataList = res.data || []
         if (this.searchForm.type == 2) {
-          this.fetchMassagistRound()
+          this.fetchQueuePositions()
         }
         await this.fetchShopTimeList()
         const boardKey = `${query.shopId}/${query.date}/${query.type}`
@@ -1078,9 +1056,10 @@ export default {
     toggleSideBar() {
       this.$store.dispatch('ToggleSideBar')
     },
-    async fetchMassagistRound() {
-      const res = await roundScheduleApi.findMassagistRound(this.searchForm)
-      this.massagistRound = res.data || []
+    //队序和接单数跟看板数据分开取：队列当天没起来时接口返回空，卡片上就不显示这块
+    async fetchQueuePositions() {
+      const res = await roundScheduleApi.queuePositions(this.searchForm)
+      this.queuePositions = res.data || []
     },
     changeShop() {
       this.fetchShopTimeList()

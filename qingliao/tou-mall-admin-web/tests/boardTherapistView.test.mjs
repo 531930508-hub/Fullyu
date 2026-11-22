@@ -28,7 +28,7 @@ function setup(roles) {
     massagistSchedulesApi: {
       myDay: async () => ({data: {hasSchedule: true, shopId: 5, shops: [{shopId: 5, label: '排班门店'}]}})
     },
-    roundScheduleApi: {findMassagistRound: async () => ({data: []})}
+    roundScheduleApi: {queuePositions: async () => ({data: []})}
   });
   vm.runInContext(toScript(scriptSource, context), context);
   const state = Object.assign(context.options.data(), context.options.methods);

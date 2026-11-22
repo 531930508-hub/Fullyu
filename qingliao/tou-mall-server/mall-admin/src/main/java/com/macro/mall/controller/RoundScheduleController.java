@@ -60,6 +60,12 @@ public class RoundScheduleController {
         return CommonResult.success(service.receptionIssues(shopId, date));
     }
 
+    @GetMapping("/queue/positions")
+    @ApiOperation("队序与今日接单数（只读，不生成队列）；队列当天没起来返回空列表")
+    public CommonResult queuePositions(@RequestParam Long shopId, @RequestParam String date) {
+        return CommonResult.success(service.queuePositions(shopId, date));
+    }
+
     @GetMapping("/queue/next")
     @ApiOperation("一键安排预览：下一单该谁上（startTime 传 yyyy-MM-dd HH:mm:ss）")
     public CommonResult queueNext(@RequestParam Long shopId,

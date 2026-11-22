@@ -1,9 +1,10 @@
 import request from '@/utils/request'
 
 export default {
-  findMassagistRound(params) {
+  //队序 + 今日接单数（服务队/接待队各一份，只读不建队列）
+  queuePositions(params) {
     return request({
-      url: '/roundSchedule/get/massagist/round',
+      url: '/roundSchedule/queue/positions',
       method: 'get',
       params: params
     })
