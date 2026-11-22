@@ -58,7 +58,12 @@ public class ReceptionScheduled {
 
     private Integer RECEPTION_DURATION = 45;//接待时长30分钟
 
-    /** 系统占位接待的备注标记：没有真实客户，只为占住接待位；统计「今日已接接待单数」时要剔掉 */
+    /**
+     * 系统占位接待的备注标记：每 15 分钟补的 45 分钟占位块，没人用就只是个占位。
+     * 统计「今日已接接待单数」时，只有「没被前台改过（is_update_sort 仍是 0）且带这个标记」的才剔掉
+     * （前台改过的占位单已经变成真接待）；老单没有备注，靠单号里的 "null" 认。
+     * 改这个文案要连着 OrderDetailMapper#countServedByMassagist 一起改。
+     */
     public static final String PLACEHOLDER_COMMENT = "系统占位接待";
 
     @Autowired

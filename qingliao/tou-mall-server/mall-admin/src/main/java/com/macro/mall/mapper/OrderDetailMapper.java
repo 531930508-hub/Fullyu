@@ -64,9 +64,12 @@ public interface OrderDetailMapper extends BaseMapper<OrderDetail> {
      * <p>口径与看板列表一致：订单在 (0,1,2)、明细在 (1,2)——已到店和已完成才算接过，
      * 未到店和已取消不算；窗口按明细起止时间落在 [startTime, endTime] 内，跨零点的单跟着前一天走。</p>
      *
-     * <p>系统占位接待（{@code ReceptionScheduled#PLACEHOLDER_COMMENT}，没有真实客户、每 15 分钟
-     * 自动补一张占着接待位）不算接过：新单靠备注标记认，老单的 code 里还留着落库前拼出来的 "null"。
-     * 改那边的标记文案要连着这里一起改。</p>
+     * <p>接待单要剔掉「没人用的系统占位」。占位单是 {@code ReceptionScheduled} 每 15 分钟补的 45 分钟
+     * 占位块，没客户也会到点自动完成，不能当接待：识别见下（新单靠备注标记，老单的 code 里还留着
+     * 落库前拼出来的 "null"）。但占位单一旦被前台改过（改时长 / 换人 / 加人），
+     * {@code is_update_sort} 会从 0 变 1——那张单就是真接待了（2026-11-22 柠萌 15:15、16:15
+     * 两场各 60 分钟的接待就是这种，曾被误剔）。所以只在 {@code is_update_sort} 仍为 0 时才剔。
+     * 前台新建的接待单不带这些标记，一律算接过。</p>
      */
     @Select("SELECT d.massagist_id AS massagistId, " +
             "SUM(CASE WHEN o.type = 2 THEN 1 ELSE 0 END) AS receptionCount, " +
@@ -75,7 +78,8 @@ public interface OrderDetailMapper extends BaseMapper<OrderDetail> {
             "WHERE o.type IN (0,2) AND o.state IN (0,1,2) AND d.state IN (1,2) " +
             "AND d.massagist_id IS NOT NULL AND d.shop_id = #{shopId} " +
             "AND d.start_time >= #{startTime} AND d.end_time <= #{endTime} " +
-            "AND NOT (o.type = 2 AND (COALESCE(o.comment, '') = '系统占位接待' OR COALESCE(o.code, '') LIKE '%null%')) " +
+            "AND NOT (o.type = 2 AND COALESCE(d.is_update_sort, 0) = 0 " +
+            "AND (COALESCE(o.comment, '') = '系统占位接待' OR COALESCE(o.code, '') LIKE '%null%')) " +
             "GROUP BY d.massagist_id")
     List<MassagistServedCount> countServedByMassagist(@Param("shopId") Long shopId,
                                                       @Param("startTime") LocalDateTime startTime,
