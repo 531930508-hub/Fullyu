@@ -86,8 +86,14 @@ if [ "$SKIP_PF" = 0 ] && ! DRY_RUN; then
   # 2026-11-20 实测 NO-GO），结果所有人都得加 --skip-preflight，等于把整套预检废掉。
   # 2026-11-22 修订：preflight 的 --sql-dir 默认是相对路径 `sql/prod`，在仓库根跑就找不到脚本、
   # 「库结构对账」误报 FAIL（§14 实测）。这里显式传绝对路径，与 CWD 无关。
+  # 同日晚再修：生产机 120.55 没装 mysql 客户端，`--mysql-opts` 指向的 cnf 也只在执行 mysql 的那台
+  # 机器上找得到 → 库对账/库连通必 FAIL。用 PF_DB_HOST 把库检查指到有客户端+凭据的机器（测试机 8.133）：
+  #   PF_DB_HOST=test-cityretreat PF_DB_CNF=/opt/fullyu-mall-test/.rds.cnf ./scripts/deploy-prod.sh <jar>
   PF_DB_CNF=${PF_DB_CNF:-/etc/fullyu/qingliao-backup.cnf}
-  "$REPO/scripts/preflight.sh" --mysql-opts "--defaults-extra-file=$PF_DB_CNF" --sql-dir "$REPO/sql/prod" || die "preflight 有 FAIL 项"
+  pf_db_args=()
+  [ -n "${PF_DB_HOST:-}" ] && pf_db_args+=(--db-host "$PF_DB_HOST")
+  "$REPO/scripts/preflight.sh" --mysql-opts "--defaults-extra-file=$PF_DB_CNF" \
+    --sql-dir "$REPO/sql/prod" "${pf_db_args[@]}" || die "preflight 有 FAIL 项"
 elif [ "$SKIP_PF" = 1 ]; then
   say "1/6 前置检查（已跳过）"
 fi

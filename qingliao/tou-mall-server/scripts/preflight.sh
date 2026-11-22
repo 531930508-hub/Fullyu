@@ -7,6 +7,11 @@
 #     --host root@120.55.36.3 --db tou_mall_current --sql-dir sql/prod \
 #     --mysql-opts=--defaults-extra-file=/etc/fullyu/qingliao-backup.cnf
 #
+# 库检查换台机器跑（生产机没装 mysql 客户端时用这个）：
+#   scripts/preflight.sh --host root@120.55.36.3 --db-host test-cityretreat \
+#     --mysql-opts=--defaults-extra-file=/opt/fullyu-mall-test/.rds.cnf --sql-dir sql/prod
+#   --db-host 默认等于 --host；--mysql-opts 里的 cnffile 必须在「执行 mysql 的那台机器」上存在。
+#
 # 常用可选项：
 #   --strict-collations     对账含排序规则。生产预期有 1 处已知漂移（phone，见手册 §2.5），
 #                           加了它这一项会被判 FAIL，属"已知且已 waiver"，不影响其它项。
@@ -15,6 +20,8 @@
 set -uo pipefail
 
 HOST=root@120.55.36.3
+# 执行 mysql 的主机（库对账/库连通）；默认与 HOST 相同
+DB_HOST=""
 DB=tou_mall_current
 SQL_DIR=sql/prod
 OPTS=""
@@ -32,6 +39,7 @@ while [ $# -gt 0 ]; do
   fi
   case "$1" in
     --host) HOST=$2; shift 2 ;;
+    --db-host) DB_HOST=$2; shift 2 ;;
     --db) DB=$2; shift 2 ;;
     --sql-dir) SQL_DIR=$2; shift 2 ;;
     --mysql-opts) OPTS=$2; shift 2 ;;
@@ -40,10 +48,12 @@ while [ $# -gt 0 ]; do
     --app-dir) APP=$2; shift 2 ;;
     --port) PORT=$2; shift 2 ;;
     --min-free-gb) MIN_GB=$2; shift 2 ;;
-    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
     *) echo "未知参数：$1" >&2; exit 2 ;;
   esac
 done
+
+DB_HOST=${DB_HOST:-$HOST}
 
 here=$(cd "$(dirname "$0")" && pwd)
 fails=0
@@ -51,9 +61,10 @@ rows=()
 
 add() { rows+=("$1|$2|$3"); [ "$3" = "FAIL" ] && fails=$((fails+1)); return 0; }
 rsh() { ssh -o BatchMode=yes -o ConnectTimeout=8 "$HOST" "$1" 2>/dev/null; }
+rsh_db() { ssh -o BatchMode=yes -o ConnectTimeout=8 "$DB_HOST" "$1" 2>/dev/null; }
 
 # 1) 库结构对账
-audit_args=(--host "$HOST" --db "$DB" --sql-dir "$SQL_DIR")
+audit_args=(--host "$DB_HOST" --db "$DB" --sql-dir "$SQL_DIR")
 [ -n "$OPTS" ] && audit_args+=("--mysql-opts=$OPTS")
 [ -n "$STRICT" ] && audit_args+=("$STRICT")
 out=$(python3 "$here/sql-audit.py" "${audit_args[@]}" 2>&1); rc=$?
@@ -86,8 +97,8 @@ avail=${avail:-0}
 [ "$avail" -ge "$MIN_GB" ] && add "磁盘余量" "${avail}G（下限 ${MIN_GB}G）" PASS \
                            || add "磁盘余量" "${avail}G < ${MIN_GB}G" FAIL
 
-# 5) 目标库连通与表数
-tables=$(rsh "mysql ${OPTS:+$OPTS} -N -e \"select count(*) from information_schema.tables where table_schema='$DB'\"")
+# 5) 目标库连通与表数（在 DB_HOST 上跑 mysql，cnf 也得在那台机器上）
+tables=$(rsh_db "mysql ${OPTS:+$OPTS} -N -e \"select count(*) from information_schema.tables where table_schema='$DB'\"")
 if [ -n "$tables" ] && [ "$tables" -gt 0 ]; then
   add "库连通（$DB）" "$tables 张表" PASS
 else
