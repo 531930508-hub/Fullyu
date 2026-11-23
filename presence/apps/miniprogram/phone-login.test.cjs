@@ -28,7 +28,7 @@ function loadPhoneAuth() {
 }
 
 /** 只替换平台/网络边界，其余执行真实页面脚本 */
-function loadProfile(overrides = {}) {
+function loadProfile(overrides = {}, { consent = true } = {}) {
   const source = parse(profileSource).descriptor.scriptSetup.content
   const ast = ts.createSourceFile('page.ts', source, ts.ScriptTarget.Latest, true)
   const names = []
@@ -58,26 +58,51 @@ function loadProfile(overrides = {}) {
     loadBrandMember: async () => null, listMyOrders: async () => [], listMyVouchers: async () => [],
     ...overrides,
   }
-  const uni = new Proxy({ getStorageSync: () => store.token, setStorageSync: () => {} }, {
+  // 协议确认框：默认按「同意并登录」（模拟顾客同意），个别用例传 consent:false 模拟点取消
+  const uni = new Proxy({
+    getStorageSync: () => store.token,
+    setStorageSync: () => {},
+    showModal: opts => {
+      calls.push(['showModal', opts])
+      opts?.success?.({ confirm: consent, cancel: !consent })
+    },
+  }, {
     get(target, prop) { return target[prop] || (args => { calls.push([prop, args]); return '' }) },
   })
   const exports = {}
-  vm.runInNewContext(compiled, {
+  const sandbox = {
     exports, uni, console: { ...console, warn: (...a) => warns.push(a) }, setTimeout: fn => fn(), getCurrentPages: () => [],
-    require(id) {
-      if (id === 'vue') return vue
-      if (id === '@dcloudio/uni-app') return { onShow: () => {}, onLoad: () => {} }
-      if (id === 'pinia') return { storeToRefs: s => vue.toRefs(s) }
-      if (id.includes('stores/user')) return { useUserStore: () => store }
-      if (id.includes('utils/phone-auth')) return loadPhoneAuth()
-      if (id.includes('locale')) return { t: key => key, tr: zh => zh, isEnglish: () => false, updateTabBarLanguage: () => {} }
-      if (id.includes('utils/capsule')) return { readCapsuleLayout: () => ({ statusBarHeight: 0, headerTop: 16, capsuleRight: 0, navBarHeight: 44, hasCapsule: false }) }
-      if (id.includes('utils/share')) return { consumeShareJump: () => '' }
-      if (id.includes('utils/trainer-request')) return { getTrainerToken: () => '' }
-      if (id.endsWith('.vue')) return {}
-      return api
-    },
-  })
+  }
+  const context = vm.createContext(sandbox)
+  let composableModule = null
+  // 登录页与「我的」登录弹层共用 usePhoneLogin，页面用例必须跑真实组合式函数，不能再拿空对象糊过去
+  const loadComposable = () => {
+    if (composableModule) return composableModule.exports
+    const source = fs.readFileSync(path.join(__dirname, 'src/composables/usePhoneLogin.ts'), 'utf8')
+    const cjs = ts.transpileModule(source, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+    }).outputText
+    const module = { exports: {} }
+    vm.runInContext(`(function(require, module, exports){${cjs}\n})`, context)(requireShim, module, module.exports)
+    composableModule = module
+    return module.exports
+  }
+  const requireShim = id => {
+    if (id === 'vue') return vue
+    if (id === '@dcloudio/uni-app') return { onShow: () => {}, onLoad: () => {} }
+    if (id === 'pinia') return { storeToRefs: s => vue.toRefs(s) }
+    if (id.includes('stores/user')) return { useUserStore: () => store }
+    if (id.includes('utils/phone-auth')) return loadPhoneAuth()
+    if (id.includes('composables/usePhoneLogin')) return loadComposable()
+    if (id.includes('locale')) return { t: key => key, tr: zh => zh, isEnglish: () => false, updateTabBarLanguage: () => {} }
+    if (id.includes('utils/capsule')) return { readCapsuleLayout: () => ({ statusBarHeight: 0, headerTop: 16, capsuleRight: 0, navBarHeight: 44, hasCapsule: false }) }
+    if (id.includes('utils/share')) return { consumeShareJump: () => '' }
+    if (id.includes('utils/trainer-request')) return { getTrainerToken: () => '' }
+    if (id.endsWith('.vue')) return {}
+    return api
+  }
+  sandbox.require = requireShim
+  vm.runInContext(compiled, context, { filename: 'profile.js' })
   const toasts = () => calls.filter(c => c[0] === 'showToast').map(c => c[1].title)
   return { page: exports, calls, logins, warns, toasts, store }
 }
@@ -170,10 +195,28 @@ test('profile: 服务端换号失败要把后端原因留在弹层里，而不�
   assert.equal(page.loggingIn.value, false)
 })
 
-test('profile: 授权按钮用静态 open-type，且只在勾选协议后渲染', () => {
+test('profile: 授权按钮用静态 open-type，协议闸门放在 usePhoneLogin 里', () => {
   assert.match(profileSource, /open-type="getPhoneNumber"/)
   assert.doesNotMatch(profileSource, /:open-type=/, 'open-type 不能在已有节点上动态切换')
-  assert.match(profileSource, /v-if="!agreed"[\s\S]{0,400}?@tap="onTapLogin"/, '未勾选时点按只给行内提示')
-  assert.match(profileSource, /v-else[\s\S]{0,400}?open-type="getPhoneNumber"/, '勾选后才创建带授权的按钮')
   assert.match(profileSource, /@getphonenumber="onGetPhone"/)
+  // 旧版未勾选时把按钮换成普通按钮、只在弹层里标一行红字，现场反馈「点了没反应」；
+  // 现在按钮常驻，未勾选点按先弹系统协议确认框（见下一条用例）
+  assert.doesNotMatch(profileSource, /v-if="!agreed"/, '按钮不再按勾选状态切换')
+})
+
+test('profile: 未勾选点按先弹协议确认，取消则明确提示且不登录', async () => {
+  const { page, toasts, logins, calls } = loadProfile({}, { consent: false })
+  assert.equal(page.agreed.value, false)
+  await page.onGetPhone(okEvent)
+  assert.equal(calls.filter(c => c[0] === 'showModal').length, 1, '未勾选时先弹协议确认框')
+  assert.deepEqual(toasts(), ['需同意用户协议后才能登录'], '点取消也要有回音')
+  assert.deepEqual(logins, [], '未同意协议不能请求后端')
+  assert.equal(page.agreed.value, false)
+})
+
+test('profile: 同意并登录后不再二次确认，成功后协议勾选重置', async () => {
+  const { page, calls } = loadProfile()
+  await page.onGetPhone(okEvent)
+  assert.equal(calls.filter(c => c[0] === 'showModal').length, 1, '点一次同意就直接继续登录')
+  assert.equal(page.agreed.value, false, '登录成功后重置，下次登录重新征求同意')
 })
