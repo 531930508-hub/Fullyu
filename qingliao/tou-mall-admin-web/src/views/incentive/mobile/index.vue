@@ -273,6 +273,11 @@
                   </em>
                 </div>
                 <div class="compose-row">
+                  <span>本月在岗</span>
+                  <b>{{ count(base.scheduleMinutes) }} 分</b>
+                  <em>按排班统计至 {{ asOfText }}；接待上限 = 在岗时长 × 门店比例（默认 20%），在岗不计入折算分钟</em>
+                </div>
+                <div class="compose-row">
                   <span>工时/排班调整</span>
                   <b>{{ signedMinutes(base.adjustMinutes) }} 分</b>
                   <em>补单、请假等人力调整，可为负数</em>

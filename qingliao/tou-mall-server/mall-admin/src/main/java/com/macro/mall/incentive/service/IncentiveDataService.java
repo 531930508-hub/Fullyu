@@ -1286,20 +1286,35 @@ public class IncentiveDataService {
             context.salaryDetailsByMassagist
                     .computeIfAbsent(row.getMassagistId(), k -> new ArrayList<>()).add(row);
         }
-        if (context.salaryDetailsByMassagist.isEmpty()) {
+        context.shopCapPercent = shopCapPercentMap();
+        if (massagistSchedulesService == null || CollectionUtils.isEmpty(massagistIds)) {
             return;
         }
-        for (Long massagistId : massagistIds) {
-            if (!context.salaryDetailsByMassagist.containsKey(massagistId)) {
+        // 一次查出全部疗愈师的排班分钟；没有订单的疗愈师也需要，用于展示本月在岗时长。
+        Map<String, Integer> scheduleByKey = massagistSchedulesService.periodWorkMinutesByShop(
+                monthStart.toString(), context.cutoff.toString(), massagistIds);
+        if (scheduleByKey == null) {
+            return;
+        }
+        for (Map.Entry<String, Integer> entry : scheduleByKey.entrySet()) {
+            // key = yyyy-MM|massagistId|shopId
+            if (entry.getKey() == null || entry.getValue() == null) {
                 continue;
             }
-            Map<Long, Integer> minutes = massagistSchedulesService == null
-                    ? new HashMap<>()
-                    : massagistSchedulesService.workMinutesByShop(
-                    monthStart.toString(), context.cutoff.toString(), massagistId);
-            context.scheduleMinutesByMassagist.put(massagistId, minutes == null ? new HashMap<>() : minutes);
+            String[] parts = entry.getKey().split("\\|");
+            if (parts.length != 3) {
+                continue;
+            }
+            try {
+                Long massagistId = Long.valueOf(parts[1]);
+                Long shopId = Long.valueOf(parts[2]);
+                context.scheduleMinutesByMassagist
+                        .computeIfAbsent(massagistId, k -> new HashMap<>())
+                        .merge(shopId, entry.getValue(), Integer::sum);
+            } catch (NumberFormatException ignored) {
+                // 非法 key 直接跳过，排班缺失时按不封顶处理
+            }
         }
-        context.shopCapPercent = shopCapPercentMap();
     }
 
     /** 门店接待工时上限百分比，未配置的门店使用默认 20%。 */
@@ -1324,9 +1339,11 @@ public class IncentiveDataService {
     }
 
     private BaseIncentive baseIncentive(BoardContext context, Massagist massagist) {
+        Map<Long, Integer> schedules = context.scheduleMinutesByMassagist
+                .getOrDefault(massagist.getId(), new HashMap<>());
         BaseMinutes detail = BaseMinutesCalculator.calculate(
                 context.salaryDetailsByMassagist.getOrDefault(massagist.getId(), new ArrayList<>()),
-                context.scheduleMinutesByMassagist.getOrDefault(massagist.getId(), new HashMap<>()),
+                schedules,
                 context.shopCapPercent);
         BigDecimal adjustment = context.adjustmentsByMassagist
                 .getOrDefault(massagist.getId(), BigDecimal.ZERO);
@@ -1352,6 +1369,13 @@ public class IncentiveDataService {
         base.setReceptionCapApplied(detail.getReceptionCapApplied());
         base.setReceptionOrderCount(detail.getReceptionOrderCount());
         base.setAdjustMinutes(IncentiveMath.money(adjustment));
+        int scheduleMinutes = 0;
+        for (Integer value : schedules.values()) {
+            if (value != null) {
+                scheduleMinutes += value;
+            }
+        }
+        base.setScheduleMinutes(BigDecimal.valueOf(scheduleMinutes));
 
         CoefficientBand current = ladder.currentBand(minutes);
         CoefficientBand next = ladder.nextBand(minutes);

@@ -63,6 +63,9 @@ public class BaseIncentive {
     /** 时长调整：加/减的分钟数。 */
     private BigDecimal adjustMinutes = BigDecimal.ZERO;
 
+    /** 本月排班在岗分钟数（截至统计截止日，含所有门店），用于核对接待工时上限。 */
+    private BigDecimal scheduleMinutes = BigDecimal.ZERO;
+
     /** 调店等门店名，仅在接待封顶按门店拆分时展示。 */
     private String receptionCapHint;
 }
