@@ -6,7 +6,10 @@
  * 也只有一句英文 errMsg。页面若把它当成「用户取消」，顾客会对着同一个按钮反复点，
  * 门店与研发也拿不到任何线索，所以这里把原因分档，并保留原文供日志与现场排查。
  */
-export type PhoneAuthReason = 'cancelled' | 'privacy' | 'permission' | 'legacy' | 'unknown'
+export type PhoneAuthReason = 'cancelled' | 'privacy' | 'permission' | 'quota' | 'legacy' | 'unknown'
+
+/** 微信官方错误码：手机号快速验证查询额度不足（errorCode 1400001） */
+const ERRNO_NO_QUOTA = 1400001
 
 export interface PhoneAuthEvent {
   /** 手机号快速验证返回的动态令牌；服务端 getuserphonenumber 换号必须用它 */
@@ -35,6 +38,8 @@ export function readPhoneAuthEvent(event: any): PhoneAuthEvent {
   // 基础库 < 2.21.2 只有 encryptedData/iv，errMsg 仍是 ok：这不是取消，是微信版本太旧。
   if (raw.indexOf(':ok') !== -1) return { code: '', reason: 'legacy', raw, errno }
   if (/deny|cancel|取消/i.test(raw)) return { code: '', reason: 'cancelled', raw, errno }
+  // 额度不足时 errMsg 里没有关键词，只有 errno；此时微信已在用户侧弹过「次数已达上限」
+  if (errno === ERRNO_NO_QUOTA) return { code: '', reason: 'quota', raw, errno }
   if (/api scope is not declared|privacy agreement|privacy/i.test(raw)) return { code: '', reason: 'privacy', raw, errno }
   if (/no permission|not authorized|access denied|permission|未开通|未认证|1400001|banned/i.test(raw)) {
     return { code: '', reason: 'permission', raw, errno }
@@ -54,8 +59,13 @@ export function phoneAuthMessage(event: { reason: PhoneAuthReason | null; raw?: 
       }
     case 'permission':
       return {
-        zh: '当前小程序还未开通手机号快速验证，暂不能一键登录，请联系门店伙伴',
+        zh: '小程序的手机号快速验证还没开通或未通过认证，暂不能一键登录，请联系门店伙伴',
         en: 'Phone number verification is not enabled for this mini program yet. Please contact a store partner.',
+      }
+    case 'quota':
+      return {
+        zh: '一键登录次数已用完（微信侧额度限制），请稍后再试或联系门店伙伴',
+        en: 'The daily quota for one-tap login has run out. Please sign in with your phone number manually.',
       }
     case 'legacy':
       return { zh: '微信版本过低，请升级微信后重试', en: 'Please update WeChat and try again.' }

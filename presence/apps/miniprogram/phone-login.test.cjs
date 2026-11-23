@@ -85,7 +85,9 @@ function loadProfile(overrides = {}) {
 const okEvent = { detail: { errMsg: 'getPhoneNumber:ok', code: 'phone-code-1' } }
 const denyEvent = { detail: { errMsg: 'getPhoneNumber:fail user deny' } }
 const privacyEvent = { detail: { errMsg: 'getPhoneNumber:fail api scope is not declared in the privacy agreement' } }
-const permissionEvent = { detail: { errMsg: 'getPhoneNumber:fail no permission', errno: 1400001 } }
+const permissionEvent = { detail: { errMsg: 'getPhoneNumber:fail no permission' } }
+// 官方文档：额度不足时 errMsg 没有关键词，只有 errno 1400001
+const quotaEvent = { detail: { errMsg: 'getPhoneNumber:fail', errno: 1400001 } }
 
 test('phone-auth: 成功事件取到 code，失败事件不当作成功', () => {
   const { readPhoneAuthEvent } = loadPhoneAuth()
@@ -100,11 +102,12 @@ test('phone-auth: 只有用户拒绝算取消，配置类失败单独分档', ()
   assert.equal(readPhoneAuthEvent(denyEvent).reason, 'cancelled')
   assert.equal(readPhoneAuthEvent(privacyEvent).reason, 'privacy')
   assert.equal(readPhoneAuthEvent(permissionEvent).reason, 'permission')
+  assert.equal(readPhoneAuthEvent(quotaEvent).reason, 'quota')
   assert.equal(readPhoneAuthEvent({ detail: { errMsg: 'getPhoneNumber:fail 该小程序未开通手机号快速验证' } }).reason, 'permission')
   assert.equal(readPhoneAuthEvent({ detail: { errMsg: 'getPhoneNumber:ok' } }).reason, 'legacy')
   assert.equal(readPhoneAuthEvent({ detail: { errMsg: 'getPhoneNumber:fail unknown thing' } }).reason, 'unknown')
   // 原始 errMsg 与 errno 必须保留，否则线上只能看到「已取消登录」这句无信息量的话
-  assert.equal(readPhoneAuthEvent(permissionEvent).errno, 1400001)
+  assert.equal(readPhoneAuthEvent(quotaEvent).errno, 1400001)
   assert.match(readPhoneAuthEvent(privacyEvent).raw, /api scope is not declared/)
 })
 
@@ -112,15 +115,17 @@ test('phone-auth: 每档失败都有自己的可执行文案', () => {
   const { phoneAuthMessage } = loadPhoneAuth()
   const cancelled = phoneAuthMessage({ reason: 'cancelled', raw: denyEvent.detail.errMsg, errno: null })
   const privacy = phoneAuthMessage({ reason: 'privacy', raw: privacyEvent.detail.errMsg, errno: null })
-  const permission = phoneAuthMessage({ reason: 'permission', raw: permissionEvent.detail.errMsg, errno: 1400001 })
+  const permission = phoneAuthMessage({ reason: 'permission', raw: permissionEvent.detail.errMsg, errno: null })
+  const quota = phoneAuthMessage({ reason: 'quota', raw: quotaEvent.detail.errMsg, errno: 1400001 })
   const unknown = phoneAuthMessage({ reason: 'unknown', raw: 'getPhoneNumber:fail weird', errno: null })
-  for (const message of [cancelled, privacy, permission, unknown]) {
+  for (const message of [cancelled, privacy, permission, quota, unknown]) {
     assert.ok(message.zh && message.en, 'zh/en 文案都要有')
   }
-  const unique = new Set([cancelled.zh, privacy.zh, permission.zh, unknown.zh])
-  assert.equal(unique.size, 4, '四档文案不能复用同一句')
+  const unique = new Set([cancelled.zh, privacy.zh, permission.zh, quota.zh, unknown.zh])
+  assert.equal(unique.size, 5, '五档文案不能复用同一句')
   assert.doesNotMatch(privacy.zh, /已取消/)
   assert.doesNotMatch(permission.zh, /已取消/)
+  assert.doesNotMatch(quota.zh, /已取消/)
   // 未知档要把微信原文带上，门店/研发才能据此定位
   assert.match(unknown.zh, /weird/)
 })
