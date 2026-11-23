@@ -128,7 +128,8 @@ class BaseMinutesCalculatorTest {
         BaseMinutes minutes = BaseMinutesCalculator.calculate(rows, schedules, capByPercent(20, 30));
 
         assertMoney("150.00", minutes.getReceptionCapMinutes());
-        assertMoney("60.00", minutes.getReceptionCountedMinutes());
+        // A 店 120 分钟里只计入自己的 60 分钟上限；B 店 60 分钟全额计入（自己的上限 90）
+        assertMoney("120.00", minutes.getReceptionCountedMinutes());
         assertMoney("60.00", minutes.getReceptionExcessMinutes());
     }
 
