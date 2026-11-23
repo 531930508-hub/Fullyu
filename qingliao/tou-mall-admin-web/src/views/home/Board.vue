@@ -180,6 +180,12 @@
                       <span>{{ customerTitle(detail.customer) }}</span>
                       <span>{{ detail.customer.gender == 2 ? '♀' : detail.customer.gender == 1 ? '♂' : '' }}</span>
                       <span v-show="detail.customer.vipLevel">{{ detail.customer.vipLevel }}</span>
+                      <span class="brand-card-tag" v-if="detail.customer.brandCardType"
+                            :title="brandCardTitle(detail.customer)">大会员</span>
+                      <span class="brand-card-days-tag" v-if="isBrandCardExpiring(detail.customer)"
+                            :title="brandCardTitle(detail.customer)">{{
+                              detail.customer.brandCardDaysLeft > 0 ? '剩' + detail.customer.brandCardDaysLeft + '天' : '今天到期'
+                            }}</span>
                       <span>{{ detail.customer.phone.substr(-4) }}</span>
                     </div>
                     <div class="flex" style="width: 100%;margin-top: 6px">
@@ -990,6 +996,24 @@ export default {
         location.reload();
       });
     },
+    //大会员统一叫「Full愈大会员」，年卡/月卡只作卡期区分，卡面上不单独露卡型
+    brandCardTitle(customer) {
+      if (!customer || !customer.brandCardType) {
+        return ''
+      }
+      const typeName = customer.brandCardType === 'year' ? '年卡'
+          : customer.brandCardType === 'month' ? '月卡' : '会员卡'
+      const endText = customer.brandCardEndDate ? `${customer.brandCardEndDate} 到期` : ''
+      return [`Full愈大会员（${typeName}）`, endText].filter(Boolean).join('，')
+    },
+    //快到期才追加「剩N天」，提醒窗口跟着会员卡配置走：年卡30天、月卡7天
+    isBrandCardExpiring(customer) {
+      if (!customer || customer.brandCardDaysLeft == null) {
+        return false
+      }
+      const remindDays = customer.brandCardRemindDays || 30
+      return customer.brandCardDaysLeft <= remindDays
+    },
     customerTitle(customer) {
       if (!customer) {
         return
@@ -1499,6 +1523,34 @@ export default {
             padding: 2px 4px;
             border-radius: 4px;
             margin-left: 8px;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+          }
+
+          // 大会员标识：跟着客户信息行显示，字号压到 10px 以免挤掉手机尾号
+          .brand-card-tag {
+            display: inline-block;
+            font-size: 10px;
+            line-height: 14px;
+            padding: 0 3px;
+            margin-left: 2px;
+            border-radius: 3px;
+            color: #fff;
+            background: linear-gradient(to right, #2a4824, #5c411f);
+            user-select: none !important;
+            -webkit-user-select: none !important;
+          }
+
+          // 临近到期单独一个标，暖色提醒前台顺势续费
+          .brand-card-days-tag {
+            display: inline-block;
+            font-size: 10px;
+            line-height: 14px;
+            padding: 0 3px;
+            margin-left: 2px;
+            border-radius: 3px;
+            border: 1px solid currentColor;
+            color: #c0741a;
             user-select: none !important;
             -webkit-user-select: none !important;
           }

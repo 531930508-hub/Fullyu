@@ -1209,6 +1209,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             return;
         }
         customerService.buildCustomerVipLevel(customerList);
+        //看板要显示「大会员」标识，一次批量查完，避免按卡片逐个查会员卡
+        customerService.buildCustomerMemberCard(customerList);
         Map<Long, Customer> customerMap = customerList.stream().collect(Collectors.toMap(Customer::getId, Function.identity()));
         list.forEach(e -> e.setCustomer(customerMap.get(e.getCustomerId())));
     }

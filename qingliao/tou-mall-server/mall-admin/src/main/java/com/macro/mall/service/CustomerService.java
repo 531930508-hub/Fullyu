@@ -14,8 +14,10 @@ import com.macro.mall.consts.RedisKey;
 import com.macro.mall.dto.CustomerExportDto;
 import com.macro.mall.crm.brand.BrandMemberProfileSync;
 import com.macro.mall.entity.Customer;
+import com.macro.mall.entity.CustomerMemberCard;
 import com.macro.mall.entity.CustomerTag;
 import com.macro.mall.entity.Integration;
+import com.macro.mall.entity.MemberCardConfig;
 import com.macro.mall.enums.CustomerCouponType;
 import com.macro.mall.mapper.CustomerMapper;
 import com.macro.mall.security.util.JwtTokenUtil;
@@ -47,7 +49,9 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -91,6 +95,15 @@ public class CustomerService extends BaseService<CustomerMapper, Customer> imple
     @Autowired
     @Lazy
     com.macro.mall.crm.brand.BrandMemberProfileSync brandMemberProfileSync;
+    @Autowired
+    @Lazy
+    com.macro.mall.mapper.CustomerMemberCardMapper customerMemberCardMapper;
+    @Autowired
+    @Lazy
+    com.macro.mall.mapper.MemberCardConfigMapper memberCardConfigMapper;
+
+    /** 读不到会员卡配置时的兜底提醒天数（与年卡默认配置一致） */
+    private static final int DEFAULT_BRAND_CARD_REMIND_DAYS = 30;
 
     @Override
     protected QueryWrapper<Customer> buildWrapper(Map<String, Object> params, QueryWrapper<Customer> queryWrapper) {
@@ -645,6 +658,82 @@ public class CustomerService extends BaseService<CustomerMapper, Customer> imple
                 s.setVipLevel(customerVipLevelMap.getOrDefault(s.getId(), null));
             }
         });
+    }
+
+    /**
+     * 批量补「大会员」权益期，供看板/接诊处显示会员标识。
+     *
+     * <p>判定口径与结算比价一致：status 不是已退款、且当前时间落在 [startTime, endTime) 内。
+     * 按时间判定而不是看 status 有没有被定时任务刷成「生效」，否则会出现看板说会员、
+     * 结算却不给会员价。同一客户叠加多张卡时取结束时间最晚的那张——权益延续到最后一张到期为止。</p>
+     */
+    public void buildCustomerMemberCard(List<Customer> customerList) {
+        if (CollectionUtils.isEmpty(customerList)) {
+            return;
+        }
+        List<Long> idList = customerList.stream()
+                .map(Customer::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(idList)) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LambdaQueryWrapper<CustomerMemberCard> lqw = new LambdaQueryWrapper<>();
+        lqw.in(CustomerMemberCard::getCustomerId, idList);
+        lqw.ne(CustomerMemberCard::getStatus, CustomerMemberCard.STATUS_REFUNDED);
+        lqw.le(CustomerMemberCard::getStartTime, now);
+        lqw.gt(CustomerMemberCard::getEndTime, now);
+        lqw.orderByDesc(CustomerMemberCard::getEndTime);
+        List<CustomerMemberCard> cardList = customerMemberCardMapper.selectList(lqw);
+        if (CollectionUtils.isEmpty(cardList)) {
+            return;
+        }
+
+        //已按结束时间倒序，每个客户的第一张就是还在生效、到期最晚的那张
+        Map<Long, CustomerMemberCard> cardMap = new HashMap<>();
+        cardList.forEach(card -> cardMap.putIfAbsent(card.getCustomerId(), card));
+
+        Map<String, Integer> remindDaysMap = brandCardRemindDaysMap();
+        LocalDate today = now.toLocalDate();
+        customerList.forEach(customer -> {
+            CustomerMemberCard card = cardMap.get(customer.getId());
+            if (card == null || card.getEndTime() == null) {
+                return;
+            }
+            LocalDate endDate = card.getEndTime().toLocalDate();
+            long daysLeft = ChronoUnit.DAYS.between(today, endDate);
+            customer.setBrandCardType(card.getCardType());
+            customer.setBrandCardEndDate(endDate);
+            customer.setBrandCardDaysLeft((int) Math.max(daysLeft, 0));
+            customer.setBrandCardRemindDays(remindDaysMap.getOrDefault(card.getCardType(), DEFAULT_BRAND_CARD_REMIND_DAYS));
+        });
+    }
+
+    /**
+     * 续费提醒窗口跟着会员卡配置走：年卡默认 30 天、月卡默认 7 天。
+     * 月卡有效期只有 30 天，若统一按 30 天提醒，等于月卡客户天天挂一个「剩 N 天」。
+     * 配置读不到时退回兜底值，不影响看板展示。
+     */
+    private Map<String, Integer> brandCardRemindDaysMap() {
+        try {
+            List<MemberCardConfig> configList = memberCardConfigMapper.selectList(null);
+            if (CollectionUtils.isEmpty(configList)) {
+                return Collections.emptyMap();
+            }
+            Map<String, Integer> remindDaysMap = new HashMap<>();
+            configList.forEach(config -> {
+                if (config.getCardType() != null && config.getRenewalRemindDays() != null) {
+                    remindDaysMap.put(config.getCardType(), config.getRenewalRemindDays());
+                }
+            });
+            return remindDaysMap;
+        } catch (Exception e) {
+            log.warn("读取会员卡续费提醒天数失败，按兜底天数展示", e);
+            return Collections.emptyMap();
+        }
     }
 
     /**

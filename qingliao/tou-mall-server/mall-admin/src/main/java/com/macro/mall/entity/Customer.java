@@ -100,6 +100,23 @@ public class Customer extends BaseEntity {
     @ApiModelProperty("vip等级")
     private String vipLevel;
 
+    @TableField(exist = false)
+    @ApiModelProperty("有效大会员卡类型 month月卡 year年卡，为空表示当前不是大会员")
+    private String brandCardType;
+
+    @TableField(exist = false)
+    @ApiModelProperty("大会员卡到期日")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate brandCardEndDate;
+
+    @TableField(exist = false)
+    @ApiModelProperty("大会员卡剩余天数（自然日，按到期日算）")
+    private Integer brandCardDaysLeft;
+
+    @TableField(exist = false)
+    @ApiModelProperty("大会员卡续费提醒天数（年卡30、月卡7，取会员卡配置）")
+    private Integer brandCardRemindDays;
+
     public String getInvitationQrImage() {
         if (Strings.isNotBlank(invitationQrImage) && !invitationQrImage.startsWith("https://fullytherapy")) {
             return "https://fullytherapy.oss-cn-hangzhou.aliyuncs.com/" + invitationQrImage;
