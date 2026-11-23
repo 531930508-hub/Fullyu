@@ -101,8 +101,10 @@
       <template #actions>
         <view v-if="sheet === 'signin'" class="signin-actions">
           <!-- #ifndef H5 -->
-          <!-- 未勾选时按钮不带授权 open-type，点按给行内红字提示；勾选后同一次手势完成授权登录 -->
-          <button class="primary-button sheet-button signin-button" :open-type="agreed ? 'getPhoneNumber' : ''" :loading="loggingIn" :disabled="loggingIn" @tap="onTapLogin" @getphonenumber="onGetPhone">{{ loggingIn ? tr('正在登录…', 'Signing in…') : tr('手机号一键登录', 'Continue with phone number') }}</button>
+          <!-- 两态各用一个按钮：微信按钮的 open-type 在节点创建后改值并不可靠，
+               勾选后才新建带 open-type 的按钮，授权能力才真的挂上；未勾选时点按只给行内提示 -->
+          <button v-if="!agreed" class="primary-button sheet-button signin-button" :disabled="loggingIn" @tap="onTapLogin">{{ tr('手机号一键登录', 'Continue with phone number') }}</button>
+          <button v-else class="primary-button sheet-button signin-button" open-type="getPhoneNumber" :loading="loggingIn" :disabled="loggingIn" @getphonenumber="onGetPhone">{{ loggingIn ? tr('正在登录…', 'Signing in…') : tr('手机号一键登录', 'Continue with phone number') }}</button>
           <!-- #endif -->
           <!-- #ifdef H5 -->
           <button class="primary-button sheet-button signin-button" :disabled="loggingIn" @tap="onTapDevLogin">{{ loggingIn ? tr('正在登录…', 'Signing in…') : tr('手机号一键登录', 'Continue with phone number') }}</button>
@@ -126,6 +128,7 @@ import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import { t, tr, isEnglish, updateTabBarLanguage } from '@/locale'
 import { readCapsuleLayout } from '@/utils/capsule'
+import { readPhoneAuthEvent, phoneAuthMessage } from '@/utils/phone-auth'
 import { consumeShareJump } from '@/utils/share'
 import { getTrainerToken } from '@/utils/trainer-request'
 import { getPoints } from '@/api/user'
@@ -242,11 +245,25 @@ function onTapLogin() {
 }
 async function onGetPhone(e: any) {
   if (loggingIn.value) return
-  const code = e?.detail?.code
-  if (!code) { uni.showToast({ title: tr('已取消登录', 'Login cancelled'), icon: 'none' }); return }
+  const auth = readPhoneAuthEvent(e)
+  if (!auth.code) {
+    // 微信把「用户取消」和「手机号快速验证不可用（隐私指引未声明手机号 / 未开通 / 未认证 / 额度不足）」
+    // 都从这个回调返回，且都没有 code。所有情况都报「已取消登录」= 当场断案成用户的问题，
+    // 顾客只会反复点同一个按钮，门店也拿不到线索；这里必须分档，并把微信原文写进日志。
+    console.warn('[login] getPhoneNumber 未返回 code', auth.reason, auth.errno ?? '', auth.raw)
+    const message = phoneAuthMessage(auth)
+    if (auth.reason === 'cancelled') {
+      uni.showToast({ title: tr(message.zh, message.en), icon: 'none' })
+      return
+    }
+    // 配置类失败停在弹层里给原因，勾选与按钮都保留，修好后可直接重试
+    loginError.value = tr(message.zh, message.en)
+    return
+  }
+  loginError.value = ''
   loggingIn.value = true
   try {
-    await userStore.login(code)
+    await userStore.login(auth.code)
     agreed.value = false
     consentHint.value = false
     sheet.value = ''
@@ -254,7 +271,11 @@ async function onGetPhone(e: any) {
     await loadUserData()
     resumePendingShare()
     void resumePendingGift()
-  } catch { uni.showToast({ title: tr('登录未完成，请重试', 'Login was not completed. Please retry.'), icon: 'none' }) }
+  } catch (error: any) {
+    // 服务端已按微信 errcode 归类（微信登录失败 / 获取手机号失败 / 会员身份冲突），
+    // 这里再糊成一句「登录未完成」会把唯一可执行的线索也丢掉；弹层保持打开，可直接重试。
+    loginError.value = (error && error.message) || tr('登录未完成，请重试', 'Login was not completed. Please retry.')
+  }
   finally { loggingIn.value = false }
 }
 // #ifdef H5
