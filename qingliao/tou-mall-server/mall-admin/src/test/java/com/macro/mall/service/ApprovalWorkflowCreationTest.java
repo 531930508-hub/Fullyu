@@ -97,7 +97,7 @@ class ApprovalWorkflowCreationTest {
     @Test void earlyLeaveOnlyCreatesShopManagerNodeAndIgnoresLegacyApprovers() {
         category.setCode(FlowCategoryCode.ASK_FOR_LEAVE.getCode());
         category.setApprovalIds("[20]");
-        when(service.approvalFlowNodeService.resolveLeaveChain(8L, 1L, false))
+        when(service.approvalFlowNodeService.resolveLeaveChain(8L, 1L, false, null))
                 .thenReturn(new ArrayList<>(java.util.Collections.singletonList(resolvedNode("店长审批", 7L))));
         service.addLeave(null, null, 8L, FlowCategoryCode.ASK_FOR_LEAVE, 1L, 1);
         verify(service).saveBatch(argThat((Collection<ApprovalDetail> rows) -> {
@@ -114,7 +114,9 @@ class ApprovalWorkflowCreationTest {
     @Test void sameDayLeaveAddsHqCeoAsSecondLevel() {
         category.setCode(FlowCategoryCode.ASK_FOR_LEAVE.getCode());
         category.setApprovalIds("[20]");
-        when(service.approvalFlowNodeService.resolveLeaveChain(8L, 1L, true))
+        // 二级审批人取自审批配置（「审批设置 → 请假」里指定的总部CEO），提交时原样带进内置规则
+        category.setSecondApproverAdminId(20L);
+        when(service.approvalFlowNodeService.resolveLeaveChain(8L, 1L, true, 20L))
                 .thenReturn(new ArrayList<>(java.util.Arrays.asList(
                         resolvedNode("店长审批", 7L), resolvedNode("总部CEO审批", 20L))));
         service.addLeave(null, null, 8L, FlowCategoryCode.ASK_FOR_LEAVE, 1L, 2);
@@ -132,7 +134,7 @@ class ApprovalWorkflowCreationTest {
 
     @Test void leaveIsRejectedAndNothingSavedWhenShopHasNoManager() {
         category.setCode(FlowCategoryCode.ASK_FOR_LEAVE.getCode());
-        when(service.approvalFlowNodeService.resolveLeaveChain(8L, 1L, false))
+        when(service.approvalFlowNodeService.resolveLeaveChain(8L, 1L, false, null))
                 .thenThrow(new BusinessException("本店还没有可用店长"));
         assertThrows(BusinessException.class,
                 () -> service.addLeave(null, null, 8L, FlowCategoryCode.ASK_FOR_LEAVE, 1L, 1));

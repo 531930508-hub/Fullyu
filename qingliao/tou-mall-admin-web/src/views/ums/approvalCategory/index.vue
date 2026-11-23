@@ -45,12 +45,16 @@
         <div class="builtin-rule" v-if="item.code === 'askForLeave'">
           <span class="builtin-tag">系统内置请假规则</span>
           <span class="builtin-step">提前请假：店长审批</span>
-          <span class="builtin-step">当天请假：店长审批 → 总部CEO审批（二级）</span>
-          <span class="builtin-step">店长本人请假：直接由总部CEO审批</span>
-          <span class="muted">店长按本店在职或暂挂的“店长”身份自动派单（离职不算），本店没有可用店长时请假会被拦下提示去配置；二级审批人为总部 CEO 账号（系统配置项指定）。点“配置”可改成自定义节点。</span>
+          <span class="builtin-step">当天请假：店长审批 → {{ secondApproverName(item) }}（二级）</span>
+          <span class="builtin-step">店长本人请假：直接由 {{ secondApproverName(item) }} 审批</span>
+          <span class="builtin-warn" v-if="!item.secondApproverAdminId">二级审批人（总部CEO）未指定：当天请假、店长本人请假会提交失败，点“配置”选人</span>
+          <span class="muted">店长按本店在职或暂挂的“店长”身份自动派单（离职不算），本店没有可用店长时请假会被拦下提示去配置；二级审批人在“配置”里指定总部 CEO 账号，换人不用改配置文件。点“配置”也可改成自定义节点。</span>
         </div>
-        当前审批人：{{ legacyText(item) }}
-        <span class="muted">（旧版逐级审批，点“配置”可改为流程节点）</span>
+        <!-- 请假没配节点就是走内置规则，旧版审批人不参与，别展示“未配置”误导管理员 -->
+        <template v-if="item.code !== 'askForLeave'">
+          当前审批人：{{ legacyText(item) }}
+          <span class="muted">（旧版逐级审批，点“配置”可改为流程节点）</span>
+        </template>
       </div>
 
       <div class="cc-line" v-if="parseIds(item.ccIds).length">
@@ -147,6 +151,10 @@ export default {
     legacyText(item) {
       const ids = this.parseIds(item.approvalIds)
       return ids.length ? ids.map(id => this.adminName(id)).join(' → ') : '未配置'
+    },
+    // 内置请假规则的二级审批人（总部CEO）存在审批配置上，管理员在“配置”里换人
+    secondApproverName(item) {
+      return item.secondApproverAdminId ? this.adminName(item.secondApproverAdminId) : '总部CEO（未指定）'
     },
     ccText(item) {
       return this.parseIds(item.ccIds).map(id => this.adminName(id)).join('、')
@@ -320,6 +328,13 @@ export default {
 
 .builtin-step {
   color: #4b3f72;
+}
+
+.builtin-warn {
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: #fff4e5;
+  color: #b26a00;
 }
 
 .cc-line {

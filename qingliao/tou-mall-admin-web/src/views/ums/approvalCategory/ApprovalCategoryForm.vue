@@ -22,17 +22,42 @@
           <span class="section-tip">按节点顺序依次流转；节点内可混合“指定人员”和“按身份”，身份会解析为本店或全部门店当前在职人员。</span>
         </div>
 
-        <flow-node-card v-for="(node, index) in form.nodes"
-                        :key="index"
-                        :node="node"
-                        :index="index"
-                        :total="form.nodes.length"
-                        :identity-options="identityOptions"
-                        @move-up="moveNode(index, -1)"
-                        @move-down="moveNode(index, 1)"
-                        @remove="removeNode(index)"></flow-node-card>
+        <template v-if="form.code === 'askForLeave'">
+          <el-form-item label="请假审批方式">
+            <el-radio-group v-model="form.builtinRule" @change="onBuiltinRuleChange">
+              <el-radio :label="true">系统内置规则</el-radio>
+              <el-radio :label="false">自定义流程节点</el-radio>
+            </el-radio-group>
+            <span class="field-tip">内置规则：提前请假只到店长；当天请假、店长本人请假由店长 → 总部CEO 两级审批。</span>
+          </el-form-item>
+          <el-form-item v-if="form.builtinRule" label="二级审批人（总部CEO）" required>
+            <el-select v-model="form.secondApproverAdminId"
+                       filterable
+                       clearable
+                       placeholder="当天请假、店长本人请假时的二审人"
+                       style="width: 100%">
+              <el-option v-for="item in adminUserList"
+                         :key="item.id"
+                         :label="adminLabel(item)"
+                         :value="item.id"></el-option>
+            </el-select>
+            <span class="field-tip">必须是已启用的后台账号；换人只改这里，不用动配置文件。</span>
+          </el-form-item>
+        </template>
 
-        <el-button type="primary" plain icon="el-icon-plus" class="add-node" @click="addNode">添加审批节点</el-button>
+        <template v-if="showNodes">
+          <flow-node-card v-for="(node, index) in form.nodes"
+                          :key="index"
+                          :node="node"
+                          :index="index"
+                          :total="form.nodes.length"
+                          :identity-options="identityOptions"
+                          @move-up="moveNode(index, -1)"
+                          @move-down="moveNode(index, 1)"
+                          @remove="removeNode(index)"></flow-node-card>
+
+          <el-button type="primary" plain icon="el-icon-plus" class="add-node" @click="addNode">添加审批节点</el-button>
+        </template>
 
         <el-form-item label="抄送人（可选）" class="cc-item">
           <el-select v-model="form.ccIdList" multiple filterable placeholder="审批结束后抄送，可多选" style="width: 100%">
@@ -70,6 +95,8 @@ export default {
       form: {
         nodes: [],
         ccIdList: [],
+        builtinRule: false,
+        secondApproverAdminId: null,
       },
       identityOptions: FALLBACK_IDENTITIES.slice(),
       dialogVisible: false,
@@ -77,7 +104,11 @@ export default {
     }
   },
   computed: {
-    ...mapGetters(['adminUserList'])
+    ...mapGetters(['adminUserList']),
+    // 请假选了「内置规则」就不用配节点；后端拿到空 nodes 会按内置规则流转
+    showNodes() {
+      return !(this.form.code === 'askForLeave' && this.form.builtinRule)
+    }
   },
   created() {
     this.$store.dispatch('setAdminUserList')
@@ -95,6 +126,10 @@ export default {
     open(form = {}) {
       this.form = {shopId: null, ...form}
       this.$set(this.form, 'ccIdList', this.parseIds(form.ccIds))
+      this.$set(this.form, 'secondApproverAdminId', form.secondApproverAdminId || null)
+      // 请假没配过节点 = 一直在走内置规则，默认停在内置规则上，别逼管理员为了改个审批人重配整套节点
+      this.$set(this.form, 'builtinRule', form.code === 'askForLeave'
+        && !(Array.isArray(form.nodes) && form.nodes.length))
       this.$set(this.form, 'nodes', this.buildNodes(form))
       this.dialogVisible = true
     },
@@ -164,13 +199,32 @@ export default {
     },
     handleClose() {
       this.dialogVisible = false
-      this.form = {nodes: [], ccIdList: []}
+      this.form = {nodes: [], ccIdList: [], builtinRule: false, secondApproverAdminId: null}
     },
     changeCode(code) {
       let findIndex = this.constant.approvalCategory.findIndex(e => e.value == code)
       if (findIndex < 0) return
       this.$set(this.form, 'code', this.constant.approvalCategory[findIndex].value)
       this.$set(this.form, 'title', this.constant.approvalCategory[findIndex].label)
+      // 新配的请假默认用内置规则（店长 → 总部CEO），要自定义节点的再切过去
+      this.$set(this.form, 'builtinRule', code === 'askForLeave' && !this.form.id)
+    },
+    /**
+     * 切成「内置规则」保存时会把已有节点清空（后端按传参整体覆盖），已有节点时先确认一次，取消就退回自定义。
+     */
+    onBuiltinRuleChange(builtin) {
+      if (!builtin || !this.form.nodes.length) return
+      this.$confirm(`改成系统内置规则后，已配置的 ${this.form.nodes.length} 个审批节点会在保存时清空，确定吗？`,
+        '清空自定义节点', {type: 'warning', confirmButtonText: '确定改成内置规则', cancelButtonText: '保留自定义节点'})
+        .then(() => {})
+        .catch(() => { this.$set(this.form, 'builtinRule', false) })
+    },
+    validatePayload() {
+      // 请假走内置规则时必须选二级审批人，否则当天请假提交会被后端拦下
+      if (this.form.code === 'askForLeave' && this.form.builtinRule) {
+        return this.form.secondApproverAdminId ? null : '请选择二级审批人（总部CEO）：当天请假、店长本人请假需要它审批'
+      }
+      return this.validateNodes()
     },
     validateNodes() {
       if (!this.form.nodes.length) return '请至少配置一个审批节点'
@@ -191,7 +245,7 @@ export default {
     },
     async onSubmit() {
       if (this.submitting) return
-      const message = this.validateNodes()
+      const message = this.validatePayload()
       if (message) {
         this.$message.warning(message)
         return
@@ -206,13 +260,17 @@ export default {
           shopId: this.form.shopId,
           processingTime: this.form.processingTime,
           ccIdList: this.form.ccIdList || [],
-          nodes: this.form.nodes.map((node, index) => ({
+          // 内置规则的请假不传节点（后端按空节点走内置规则），二级审批人单独存
+          secondApproverAdminId: this.form.code === 'askForLeave'
+            ? (this.form.secondApproverAdminId || null)
+            : null,
+          nodes: this.showNodes ? this.form.nodes.map((node, index) => ({
             nodeName: (node.nodeName || '').trim() || `审批节点${index + 1}`,
             approveMode: node.approveMode === 'ALL' ? 'ALL' : 'ANY',
             targets: node.targets.map(target => target.type === 'IDENTITY'
               ? {type: 'IDENTITY', code: target.code, scope: target.scope}
               : {type: 'USER', adminId: target.adminId}),
-          })),
+          })) : [],
         }
         this.showFullLoading()
         loadingShown = true
@@ -252,6 +310,14 @@ export default {
     font-weight: 400;
     color: #909399;
     letter-spacing: 0.05em;
+  }
+
+  .field-tip {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #909399;
   }
 
   .add-node {

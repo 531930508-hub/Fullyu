@@ -91,8 +91,9 @@ public class ApprovalCategoryService extends BaseService<ApprovalCategoryMapper,
         if (existing == null) throw new BusinessException("审批配置不存在");
         // 客户端只能改处理人配置，不能改业务bean、类别、原始门店归属。
         boolean hasNodes = input.getNodes() != null && !input.getNodes().isEmpty();
+        boolean builtinLeave = applySecondApprover(existing, input.getSecondApproverAdminId(), hasNodes);
         existing.setBeanId(beanFor(existing.getCode()));
-        existing.setApprovalIds(JSON.toJSONString(normalizeUsers(input.getApprovalIdList(), !hasNodes)));
+        existing.setApprovalIds(JSON.toJSONString(normalizeUsers(input.getApprovalIdList(), !hasNodes && !builtinLeave)));
         existing.setCcIds(JSON.toJSONString(normalizeUsers(input.getCcIdList(), false)));
         existing.setProcessingTime(input.getProcessingTime());
         if (!updateById(existing)) throw new BusinessException("审批配置保存失败");
@@ -103,7 +104,8 @@ public class ApprovalCategoryService extends BaseService<ApprovalCategoryMapper,
         if (config == null) throw new BusinessException("审批配置不能为空");
         boolean hasNodes = config.getNodes() != null && !config.getNodes().isEmpty();
         config.setBeanId(beanFor(config.getCode()));
-        config.setApprovalIds(JSON.toJSONString(normalizeUsers(config.getApprovalIdList(), !hasNodes)));
+        boolean builtinLeave = applySecondApprover(config, config.getSecondApproverAdminId(), hasNodes);
+        config.setApprovalIds(JSON.toJSONString(normalizeUsers(config.getApprovalIdList(), !hasNodes && !builtinLeave)));
         config.setCcIds(JSON.toJSONString(normalizeUsers(config.getCcIdList(), false)));
         LambdaQueryWrapper<ApprovalCategory> query = new LambdaQueryWrapper<>();
         query.eq(ApprovalCategory::getCode, config.getCode());
@@ -113,6 +115,30 @@ public class ApprovalCategoryService extends BaseService<ApprovalCategoryMapper,
         config.setId(null);
         if (!save(config)) throw new BusinessException("审批配置保存失败");
         if (config.getNodes() != null) approvalFlowNodeService.replaceNodes(config.getId(), config.getNodes());
+    }
+
+    /**
+     * 请假的内置规则是「店长 → 二级审批人（总部CEO）」，二级审批人存在审批配置上，
+     * 管理员在「审批设置 → 请假」里就能换人，不再走配置文件写死的账号。
+     *
+     * <p>没配流程节点（走内置规则）时必须指定二级审批人，否则当天请假、店长本人请假一定提交失败；
+     * 配了自定义节点的只校验填了就存在且启用。非请假的类别一律清空该字段。</p>
+     *
+     * @return true 表示保存后请假走内置规则
+     */
+    private boolean applySecondApprover(ApprovalCategory target, Long secondApproverAdminId, boolean hasNodes) {
+        boolean leave = FlowCategoryCode.ASK_FOR_LEAVE.getCode().equals(target.getCode());
+        target.setSecondApproverAdminId(leave ? secondApproverAdminId : null);
+        if (!leave) return false;
+        boolean builtinLeave = !hasNodes;
+        if (ObjUtil.isEmpty(secondApproverAdminId)) {
+            if (builtinLeave) {
+                throw new BusinessException("请假走内置审批规则时需要指定二级审批人（总部CEO）：当天请假、店长本人请假都要它审批");
+            }
+            return false;
+        }
+        approvalFlowNodeService.validateSecondApprover(secondApproverAdminId);
+        return builtinLeave;
     }
 
     private String beanFor(String code) {

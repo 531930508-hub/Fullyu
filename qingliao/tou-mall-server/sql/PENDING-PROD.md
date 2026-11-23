@@ -570,3 +570,18 @@ STATISTICS` 判存量，可重复执行；`sql/prod/` 已由 `scripts/make-prod-
   备份 `/server/java/fully/mall-admin-1.0-SNAPSHOT.jar` 于 `/server/java/fully/backup/20261122-003959/`；
   `/health`、`/`、`/api/product/list` 均 200（冒烟首轮的 503 是重启窗口内 `no live upstreams`，1 分钟后复测通过）。
   tag `prod-qingliao-mall-20261122-0044`。
+
+### 二十（2026-11-23）请假二级审批人（总部CEO）改由「审批设置」指定
+
+- **SQL 待执行**：`sql/2026-11-23-approval-leave-second-approver.sql`（生产版已生成，加列可重复执行）——
+  `f_approval_category ADD COLUMN second_approver_admin_id bigint NULL`。MyBatis-Plus 会把这一列拼进审批设置的每条查询，
+  **不跑脚本就换 jar，审批设置页会 Unknown column**；执行后跑 `./scripts/sql-audit.py` 复核。
+- **代码**：请假没配流程节点时的内置规则（提前 → 店长；当天 / 店长本人 → 店长 → 总部CEO）原来读配置项
+  `approval.leave.second-approver-admin-id`，现在读审批配置上的 `second_approver_admin_id`；保存审批设置时校验账号必须存在且启用，
+  走内置规则却没指定二审人直接拦下。前端「审批设置 → 请假」多一个「请假审批方式：系统内置规则 / 自定义流程节点」和二审人下拉。
+- **上线顺序**：先跑 SQL，再换 jar + 前端。
+- **旧配置项**：生产 `application-prod.yml` 里若手工设过 `approval.leave.second-approver-admin-id`，留着无害（新 jar 不读），
+  想清理可以删掉；不要指望它兜底。
+- **上线后必做**：到「设置 → 审批设置 → 请假 → 配置」里指定二级审批人（总部CEO 账号）。不指定时当天请假、店长本人请假会报
+  「「审批设置 → 请假」里还没指定」并被拦下（不会静默生成无审批人的单据）；提前请假不受影响。
+- **回滚**：旧 jar 不读新列，回滚代码即可；`second_approver_admin_id` 可留可删。

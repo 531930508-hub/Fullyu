@@ -54,6 +54,9 @@ public class ApprovalCategory extends BaseEntity {
 
     private Long shopId;
 
+    @ApiModelProperty("请假内置规则里的二级审批人（总部CEO）后台账号id：当天请假、店长本人请假时生效")
+    private Long secondApproverAdminId;
+
     @ApiModelProperty("审批流程节点（按顺序执行）")
     @TableField(exist = false)
     private List<ApprovalFlowNode> nodes;

@@ -198,7 +198,7 @@ class ApprovalFlowNodeResolutionTest {
         when(service.massagistIdentityService.resolveAdminIds(
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Arrays.asList(7L, 8L));
-        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, false);
+        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, false, null);
         assertEquals(1, chain.size());
         assertEquals("店长审批", chain.get(0).getNodeName());
         assertEquals(ApprovalNodeMode.ANY.getCode(), chain.get(0).getApproveMode());
@@ -210,9 +210,8 @@ class ApprovalFlowNodeResolutionTest {
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Collections.singletonList(7L));
         adminAccounts(admin(20L, 1));
-        service.leaveSecondApproverAdminId = 20L;
 
-        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, true);
+        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, true, 20L);
         assertEquals(2, chain.size());
         assertEquals("店长审批", chain.get(0).getNodeName());
         assertEquals(Arrays.asList("7"), adminIds(chain.get(0)));
@@ -226,9 +225,8 @@ class ApprovalFlowNodeResolutionTest {
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Collections.singletonList(5L));
         adminAccounts(admin(20L, 1));
-        service.leaveSecondApproverAdminId = 20L;
 
-        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, false);
+        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, false, 20L);
         assertEquals(1, chain.size());
         assertEquals("总部CEO审批", chain.get(0).getNodeName());
         assertEquals(Arrays.asList("20"), adminIds(chain.get(0)));
@@ -239,9 +237,8 @@ class ApprovalFlowNodeResolutionTest {
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Collections.singletonList(20L));
         adminAccounts(admin(20L, 1));
-        service.leaveSecondApproverAdminId = 20L;
         // 允许自己提交自己审批：CEO 请假时二级审批人就是本人，不再拦下
-        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 20L, false);
+        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 20L, false, 20L);
         assertEquals(1, chain.size());
         assertEquals("总部CEO审批", chain.get(0).getNodeName());
         assertEquals(Collections.singletonList("20"), adminIds(chain.get(0)));
@@ -251,7 +248,7 @@ class ApprovalFlowNodeResolutionTest {
         when(service.massagistIdentityService.resolveAdminIds(
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Collections.emptyList());
-        BusinessException e = assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 5L, false));
+        BusinessException e = assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 5L, false, null));
         assertTrue(e.getMessage().contains("店长"));
     }
 
@@ -259,9 +256,10 @@ class ApprovalFlowNodeResolutionTest {
         when(service.massagistIdentityService.resolveAdminIds(
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Collections.singletonList(7L));
-        service.leaveSecondApproverAdminId = 0L;
-        BusinessException e = assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 5L, true));
+        BusinessException e = assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 5L, true, null));
         assertTrue(e.getMessage().contains("二级审批人"));
+        // 报错要能把管理员指到页面上改，而不是让人去改配置文件
+        assertTrue(e.getMessage().contains("审批设置"));
     }
 
     @Test void sameDayLeaveRejectedWhenSecondApproverDisabled() {
@@ -269,8 +267,7 @@ class ApprovalFlowNodeResolutionTest {
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Collections.singletonList(7L));
         adminAccounts(admin(20L, 0));
-        service.leaveSecondApproverAdminId = 20L;
-        BusinessException e = assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 5L, true));
+        BusinessException e = assertThrows(BusinessException.class, () -> service.resolveLeaveChain(9L, 5L, true, 20L));
         assertTrue(e.getMessage().contains("停用"));
     }
 
@@ -279,8 +276,7 @@ class ApprovalFlowNodeResolutionTest {
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Collections.singletonList(7L));
         adminAccounts(admin(7L, 1));
-        service.leaveSecondApproverAdminId = 7L;
-        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, true);
+        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 5L, true, 7L);
         assertEquals(1, chain.size());
         assertEquals("店长审批", chain.get(0).getNodeName());
     }
@@ -290,11 +286,20 @@ class ApprovalFlowNodeResolutionTest {
                 MassagistIdentityCode.SHOP_MANAGER, ApprovalTargetScope.SHOP, 9L, null))
                 .thenReturn(Arrays.asList(7L, 20L));
         adminAccounts(admin(20L, 1));
-        service.leaveSecondApproverAdminId = 20L;
         // CEO 兼店长自己请假：允许自己审批自己，落到本人这一级
-        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 20L, false);
+        List<ApprovalResolvedNode> chain = service.resolveLeaveChain(9L, 20L, false, 20L);
         assertEquals(1, chain.size());
         assertEquals("总部CEO审批", chain.get(0).getNodeName());
         assertEquals(Collections.singletonList("20"), adminIds(chain.get(0)));
+    }
+
+    @Test void savingSecondApproverRequiresAnEnabledAdmin() {
+        adminAccounts(admin(20L, 0));
+        // 没填不拦（配了自定义节点的请假可以不填，置空也允许）
+        assertDoesNotThrow(() -> service.validateSecondApprover(null));
+        BusinessException disabled = assertThrows(BusinessException.class, () -> service.validateSecondApprover(20L));
+        assertTrue(disabled.getMessage().contains("停用"));
+        BusinessException missing = assertThrows(BusinessException.class, () -> service.validateSecondApprover(99L));
+        assertTrue(missing.getMessage().contains("不存在"));
     }
 }

@@ -16,7 +16,6 @@ import com.macro.mall.model.UmsAdmin;
 import com.macro.mall.service.base.BaseService;
 import com.macro.mall.service.impl.UmsAdminServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,10 +49,6 @@ public class ApprovalFlowNodeService extends BaseService<ApprovalFlowNodeMapper,
     @Autowired
     @Lazy
     UmsAdminServiceImpl umsAdminService;
-
-    /** 当天请假的二级审批人（总部CEO）后台账号 id；0/空表示未配置。 */
-    @Value("${approval.leave.second-approver-admin-id:0}")
-    Long leaveSecondApproverAdminId;
 
     public List<ApprovalFlowNode> listByCategoryId(Long categoryId) {
         if (ObjUtil.isEmpty(categoryId)) return Collections.emptyList();
@@ -215,13 +210,16 @@ public class ApprovalFlowNodeService extends BaseService<ApprovalFlowNodeMapper,
      * 请假流程的内置规则（审批设置里没给请假分类配节点时生效）：
      * <ul>
      *     <li>提前请假：本店店长审批（或签，一级结束）；</li>
-     *     <li>当天请假：店长审批 → 二级审批人（总部CEO，配置项 approval.leave.second-approver-admin-id 指定账号）。</li>
+     *     <li>当天请假：店长审批 → 二级审批人（总部CEO）。</li>
      * </ul>
      *
-     * <p>店长取的是疗愈师身份里的“店长”，算本店在职或暂挂且后台账号启用的（暂挂的店长仍在处理门店事务，
-     * 不能因此卡住全店请假；离职不算）；取不到直接拦下，免得请假落不到人、单据自动完成。</p>
+     * <p>二级审批人取自「审批设置 → 请假」里配置的总部CEO账号，不再走配置文件，
+     * 管理员在页面上就能换人。店长取的是疗愈师身份里的“店长”，算本店在职或暂挂且后台账号启用的
+     * （暂挂的店长仍在处理门店事务，不能因此卡住全店请假；离职不算）；取不到直接拦下，
+     * 免得请假落不到人、单据自动完成。</p>
      */
-    public List<ApprovalResolvedNode> resolveLeaveChain(Long shopId, Long requesterAdminId, boolean sameDayLeave) {
+    public List<ApprovalResolvedNode> resolveLeaveChain(Long shopId, Long requesterAdminId, boolean sameDayLeave,
+                                                        Long secondApproverAdminId) {
         List<Long> shopManagers = massagistIdentityService.resolveAdminIds(MassagistIdentityCode.SHOP_MANAGER,
                 ApprovalTargetScope.SHOP, shopId, null);
         if (CollectionUtils.isEmpty(shopManagers)) {
@@ -230,33 +228,46 @@ public class ApprovalFlowNodeService extends BaseService<ApprovalFlowNodeMapper,
         List<ApprovalResolvedNode> chain = new ArrayList<>();
         // 店长本人请假：本店没有更高层级，直接交总部CEO
         if (shopManagers.contains(requesterAdminId)) {
-            Long ceoId = requireSecondApprover(requesterAdminId);
+            Long ceoId = requireSecondApprover(secondApproverAdminId);
             chain.add(buildNode("总部CEO审批", Collections.singletonList(ceoId)));
             return chain;
         }
         List<Long> managerIds = new ArrayList<>(shopManagers);
         chain.add(buildNode("店长审批", managerIds));
         if (!sameDayLeave) return chain;
-        Long ceoId = requireSecondApprover(requesterAdminId);
+        Long ceoId = requireSecondApprover(secondApproverAdminId);
         // 二级审批人兼任本店店长时不再重复挂一级
         if (managerIds.contains(ceoId)) return chain;
         chain.add(buildNode("总部CEO审批", Collections.singletonList(ceoId)));
         return chain;
     }
 
-    /** 当天请假/店长请假的二级审批人（总部CEO）：必须已配置且账号启用。 */
-    private Long requireSecondApprover(Long requesterAdminId) {
-        Long ceoId = leaveSecondApproverAdminId;
+    /** 当天请假/店长请假的二级审批人（总部CEO）：必须在「审批设置」里指定且账号启用。 */
+    private Long requireSecondApprover(Long ceoId) {
         if (ObjUtil.isEmpty(ceoId) || ceoId <= 0) {
-            throw new BusinessException("请假需要二级审批人（总部CEO）审批，但系统还没配置该二级审批人，请联系管理员设置 approval.leave.second-approver-admin-id");
+            throw new BusinessException("请假需要二级审批人（总部CEO）审批，但「审批设置 → 请假」里还没指定，请管理员先指定后再提交");
         }
         // 二级审批人一般挂在总部账号上，门店店长提交请假时不能被门店行级校验拦下
         UmsAdmin ceo = mapAdmins(Collections.singletonList(ceoId)).get(ceoId);
         if (ceo == null || !Integer.valueOf(1).equals(ceo.getStatus())) {
-            throw new BusinessException("请假的二级审批人（总部CEO）账号不存在或已停用，请联系管理员调整");
+            throw new BusinessException("请假指定的二级审批人（总部CEO）账号不存在或已停用，请管理员到「审批设置 → 请假」重新指定");
         }
         // 允许自己提交自己审批：二级审批人就是请假人本人时不再拦，由本人审批即可
         return ceoId;
+    }
+
+    /**
+     * 保存审批设置时校验「请假二级审批人」：必须是存在且启用的后台账号。
+     * 空值交给调用方决定（内置规则必填，配了自定义节点的可以不填）。
+     */
+    public void validateSecondApprover(Long adminId) {
+        if (ObjUtil.isEmpty(adminId)) return;
+        if (adminId <= 0) throw new BusinessException("请选择有效的二级审批人（总部CEO）");
+        UmsAdmin admin = mapAdmins(Collections.singletonList(adminId)).get(adminId);
+        if (admin == null) throw new BusinessException("指定的二级审批人（总部CEO，id=" + adminId + "）不存在，请重新选择");
+        if (!Integer.valueOf(1).equals(admin.getStatus())) {
+            throw new BusinessException("指定的二级审批人（总部CEO）「" + adminLabel(admin) + "」账号已停用，请重新选择");
+        }
     }
 
     private ApprovalResolvedNode buildNode(String nodeName, Collection<Long> adminIds) {

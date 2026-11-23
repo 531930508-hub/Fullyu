@@ -101,4 +101,28 @@ class ApprovalGlobalConfigTest {
         assertEquals(1, result.size());
         assertSame(config, result.get(0));
     }
+    @Test void builtinLeaveRuleRequiresConfiguredSecondApprover() {
+        config.setCode("askForLeave"); config.setTitle("请假");
+        config.setApprovalIdList(Collections.emptyList());
+        // 走内置规则（没配节点）却没指定二级审批人：保存时就拦下，别等到店长当天请假才报错
+        assertThrows(BusinessException.class, () -> service.add(config));
+        verify(service, never()).save(any());
+        config.setSecondApproverAdminId(20L);
+        assertDoesNotThrow(() -> service.add(config));
+        // 内置规则不靠旧版审批人，approvalIds 留空即可
+        verify(service).save(argThat(value -> Long.valueOf(20L).equals(value.getSecondApproverAdminId())
+                && "[]".equals(value.getApprovalIds())));
+    }
+    @Test void leaveWithCustomNodesKeepsSecondApproverOptional() {
+        config.setCode("askForLeave"); config.setTitle("请假");
+        config.setApprovalIdList(Collections.emptyList());
+        config.setNodes(Collections.singletonList(new com.macro.mall.entity.ApprovalFlowNode()));
+        assertDoesNotThrow(() -> service.add(config));
+        verify(service).save(argThat(value -> value.getSecondApproverAdminId() == null));
+    }
+    @Test void secondApproverIsClearedForNonLeaveCategories() {
+        config.setSecondApproverAdminId(20L);
+        assertDoesNotThrow(() -> service.add(config));
+        verify(service).save(argThat(value -> value.getSecondApproverAdminId() == null));
+    }
 }

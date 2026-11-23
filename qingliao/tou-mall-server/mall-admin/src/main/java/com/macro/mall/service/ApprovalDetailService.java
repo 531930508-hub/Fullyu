@@ -181,7 +181,8 @@ public class ApprovalDetailService extends BaseService<ApprovalDetailMapper, App
         }
         // 没配节点：请假走内置规则（取不到店长/二级审批人时由内置规则直接拦下）
         if (FlowCategoryCode.ASK_FOR_LEAVE.getCode().equals(category.getCode())) {
-            return approvalFlowNodeService.resolveLeaveChain(shopId, createUser, sameDayLeave);
+            return approvalFlowNodeService.resolveLeaveChain(shopId, createUser, sameDayLeave,
+                    category.getSecondApproverAdminId());
         }
         List<ApprovalResolvedNode> resolved = legacyNodes(category, createUser, null);
         if (resolved.isEmpty()) {
