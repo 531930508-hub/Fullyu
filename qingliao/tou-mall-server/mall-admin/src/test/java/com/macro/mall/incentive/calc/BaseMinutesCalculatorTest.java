@@ -93,6 +93,63 @@ class BaseMinutesCalculatorTest {
         assertMoney("0.00", minutes.getReceptionMinutes());
     }
 
+    /**
+     * 跨店合并额度：两家店都是 20%，各自排班上限 60 / 180，合计 240。
+     * 接待集中在 A 店（300 分钟，超过 A 店自己的 60 分钟上限），合并后只按 240 封顶。
+     */
+    @Test
+    void receptionCapIsPooledAcrossShopsWithSamePercent() {
+        List<SalaryDetailRow> rows = Arrays.asList(
+                row(2, SHOP, 120, "0.50", "2026-10-03T10:00:00"),
+                row(2, SHOP, 180, "0.50", "2026-10-04T10:00:00"),
+                row(2, 2L, 60, "0.50", "2026-10-05T10:00:00"));
+        Map<Long, Integer> schedules = new HashMap<>();
+        schedules.put(SHOP, 300);
+        schedules.put(2L, 900);
+        BaseMinutes minutes = BaseMinutesCalculator.calculate(rows, schedules, capByPercent(20, 20));
+
+        assertTrue(minutes.getReceptionCapApplied());
+        assertMoney("240.00", minutes.getReceptionCapMinutes());
+        assertMoney("360.00", minutes.getReceptionMinutes());
+        assertMoney("240.00", minutes.getReceptionCountedMinutes());
+        assertMoney("120.00", minutes.getReceptionCountedWeightedMinutes());
+        assertMoney("120.00", minutes.getReceptionExcessMinutes());
+    }
+
+    /** 比例不同（20% / 30%）时不合并：A 店超出的 60 分钟不能借用 B 店的额度。 */
+    @Test
+    void receptionCapIsNotPooledWhenPercentsDiffer() {
+        List<SalaryDetailRow> rows = Arrays.asList(
+                row(2, SHOP, 120, "0.50", "2026-10-03T10:00:00"),
+                row(2, 2L, 60, "0.50", "2026-10-05T10:00:00"));
+        Map<Long, Integer> schedules = new HashMap<>();
+        schedules.put(SHOP, 300);
+        schedules.put(2L, 300);
+        BaseMinutes minutes = BaseMinutesCalculator.calculate(rows, schedules, capByPercent(20, 30));
+
+        assertMoney("150.00", minutes.getReceptionCapMinutes());
+        assertMoney("60.00", minutes.getReceptionCountedMinutes());
+        assertMoney("60.00", minutes.getReceptionExcessMinutes());
+    }
+
+    /** 该店当月无排班不封顶，且不参与其它门店的合并池。 */
+    @Test
+    void shopWithoutScheduleStaysUncappedWhileOthersPool() {
+        List<SalaryDetailRow> rows = Arrays.asList(
+                row(2, SHOP, 120, "0.50", "2026-10-03T10:00:00"),
+                row(2, 2L, 120, "0.50", "2026-10-04T10:00:00"),
+                row(2, 3L, 90, "0.50", "2026-10-05T10:00:00"));
+        Map<Long, Integer> schedules = new HashMap<>();
+        schedules.put(SHOP, 300);
+        schedules.put(2L, 300);
+        BaseMinutes minutes = BaseMinutesCalculator.calculate(rows, schedules, capByPercent(20, 20, 20));
+
+        // A+B 合并上限 60+60=120，实接待 240 → 计入 120；C 店无排班，90 分钟全额计入
+        assertMoney("120.00", minutes.getReceptionCapMinutes());
+        assertMoney("210.00", minutes.getReceptionCountedMinutes());
+        assertMoney("120.00", minutes.getReceptionExcessMinutes());
+    }
+
     @Test
     void salaryDetailsQueryKeepsReceptionOrders() throws Exception {
         String sql = selectSalaryDetailsSql();
@@ -118,11 +175,15 @@ class BaseMinutesCalculatorTest {
     }
 
     private static SalaryDetailRow row(int orderType, int duration, String coefficient, String start) {
+        return row(orderType, SHOP, duration, coefficient, start);
+    }
+
+    private static SalaryDetailRow row(int orderType, long shopId, int duration, String coefficient, String start) {
         SalaryDetailRow row = new SalaryDetailRow();
         row.setDetailId(System.nanoTime());
         row.setOrderId(System.nanoTime());
         row.setMassagistId(12L);
-        row.setShopId(SHOP);
+        row.setShopId(shopId);
         row.setDetailType(orderType);
         row.setDuration(duration);
         row.setProjectCoefficient(coefficient == null ? null : new BigDecimal(coefficient));
@@ -138,8 +199,15 @@ class BaseMinutesCalculatorTest {
     }
 
     private static Map<Long, Integer> capByShop(int percent) {
+        return capByPercent(percent);
+    }
+
+    /** 按门店顺序（1、2、3 …）配置比例，配合 {@link #row(int, long, int, String, String)} 里的门店号。 */
+    private static Map<Long, Integer> capByPercent(int... percents) {
         Map<Long, Integer> map = new HashMap<>();
-        map.put(SHOP, percent);
+        for (int i = 0; i < percents.length; i++) {
+            map.put(i == 0 ? SHOP : (long) (i + 1), percents[i]);
+        }
         return map;
     }
 

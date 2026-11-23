@@ -226,8 +226,10 @@ public class StatisticsService {
 
     /**
      * 计算某位疗愈师某月的接待工时封顶结果。
-     * <p>按订单所属门店分别计算：上限 = 该门店当月排班在岗分钟 × 门店比例；
-     * 接待分钟按开始时间先后计入，超过上限的部分工时系数按 0 计。
+     * <p>上限 = 排班在岗分钟 × 门店比例（默认 20%）。
+     * <b>比例相同的门店合并成一个额度池</b>：池上限为各店上限之和，接待分钟按开始时间先后在池内计入，
+     * 因此调店/支援期间各店之间可以互相借用额度；比例不同的门店各自成池，互不借用。
+     * 超过上限的部分工时系数按 0 计。
      * 若该疗愈师当月完全没有任何排班记录，则不封顶；
      * 若仅某门店当月无排班（如调店未补排班），该门店接待不封顶，避免数据缺口导致工资被清零。</p>
      */
@@ -244,46 +246,41 @@ public class StatisticsService {
         Map<Long, List<OrderDetail>> shopDetailMap = receptionList.stream()
                 .collect(Collectors.groupingBy(s -> s.getShopId() == null ? 0L : s.getShopId(),
                         LinkedHashMap::new, Collectors.toList()));
-        boolean hasSchedule = shopDetailMap.keySet().stream()
-                .anyMatch(shopId -> scheduleMinutesMap.getOrDefault(scheduleKey(periodCode, massagistId, shopId), 0) > 0);
-        if (!hasSchedule) {
-            result.countedMinutes = receptionList.stream().mapToInt(OrderDetail::getDuration).sum();
-            result.countedWorkingHours = receptionList.stream().mapToDouble(OrderDetail::getWorkingHours).sum();
-            result.countedWorkingHours = BigDecimal.valueOf(result.countedWorkingHours)
-                    .setScale(2, RoundingMode.HALF_UP).doubleValue();
-            return result;
-        }
-        shopDetailMap.forEach((shopId, shopDetails) -> {
+        // 按门店比例分池：比例一致的门店共用一个额度池（跨店合并），比例不一致则各店独立成池。
+        Map<Integer, List<Long>> poolShopIdsByPercent = new LinkedHashMap<>();
+        List<Long> uncappedShopIds = new ArrayList<>();
+        for (Long shopId : shopDetailMap.keySet()) {
             int scheduledMinutes = scheduleMinutesMap.getOrDefault(scheduleKey(periodCode, massagistId, shopId), 0);
-            int percent = percentMap.getOrDefault(shopId, DEFAULT_RECEPTION_CAP_PERCENT);
-            // 该门店当月无排班（常见于调店未补排班）：本店接待不封顶，避免数据缺口导致工资被清零。
-            int capMinutes = scheduledMinutes <= 0 ? Integer.MAX_VALUE
-                    : BigDecimal.valueOf(scheduledMinutes)
-                    .multiply(BigDecimal.valueOf(percent))
-                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN).intValue();
-            if (scheduledMinutes > 0) {
-                result.capApplied = true;
-                result.capMinutes += capMinutes;
+            if (scheduledMinutes <= 0) {
+                // 该门店当月无排班（常见于调店未补排班）：本店接待不封顶，避免数据缺口导致工资被清零。
+                uncappedShopIds.add(shopId);
+                continue;
             }
-            int remaining = capMinutes;
-            List<OrderDetail> sortedDetails = new ArrayList<>(shopDetails);
-            sortedDetails.sort(Comparator.comparing(OrderDetail::getStartTime,
-                    Comparator.nullsLast(Comparator.<LocalDateTime>naturalOrder())));
-            for (OrderDetail detail : sortedDetails) {
+            int percent = percentMap.getOrDefault(shopId, DEFAULT_RECEPTION_CAP_PERCENT);
+            poolShopIdsByPercent.computeIfAbsent(percent, k -> new ArrayList<>()).add(shopId);
+        }
+        // 当月完全没有任何排班：不封顶，全部计入。
+        uncappedShopIds.forEach(shopId -> receptionDetailOrder(shopDetailMap.get(shopId))
+                .forEach(detail -> accumulateReception(result, detail,
+                        detail.getDuration() == null ? 0 : detail.getDuration())));
+        poolShopIdsByPercent.forEach((percent, shopIds) -> {
+            int poolCapMinutes = 0;
+            List<OrderDetail> poolDetails = new ArrayList<>();
+            for (Long shopId : shopIds) {
+                int scheduledMinutes = scheduleMinutesMap.getOrDefault(scheduleKey(periodCode, massagistId, shopId), 0);
+                poolCapMinutes += BigDecimal.valueOf(scheduledMinutes)
+                        .multiply(BigDecimal.valueOf(percent))
+                        .divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN).intValue();
+                poolDetails.addAll(shopDetailMap.get(shopId));
+            }
+            result.capApplied = true;
+            result.capMinutes += poolCapMinutes;
+            int remaining = poolCapMinutes;
+            for (OrderDetail detail : receptionDetailOrder(poolDetails)) {
                 int duration = detail.getDuration() == null ? 0 : detail.getDuration();
                 int countedMinutes = Math.min(duration, Math.max(remaining, 0));
-                int excessMinutes = duration - countedMinutes;
                 remaining -= countedMinutes;
-                BigDecimal coefficient = detail.getCoefficient() == null ? BigDecimal.ONE : detail.getCoefficient();
-                double countedWorking = coefficient.multiply(BigDecimal.valueOf(countedMinutes))
-                        .setScale(2, RoundingMode.HALF_UP).doubleValue();
-                double detailWorking = coefficient.multiply(BigDecimal.valueOf(duration))
-                        .setScale(2, RoundingMode.HALF_UP).doubleValue();
-                result.countedMinutes += countedMinutes;
-                result.excessMinutes += excessMinutes;
-                result.countedWorkingHours += countedWorking;
-                // 用「整单工时 - 计入工时」得到超出工时，保证计入 + 超出 = 整单，避免逐项四舍五入产生分位差
-                result.excessWorkingHours += detailWorking - countedWorking;
+                accumulateReception(result, detail, countedMinutes);
             }
         });
         result.countedWorkingHours = BigDecimal.valueOf(result.countedWorkingHours)
@@ -291,6 +288,30 @@ public class StatisticsService {
         result.excessWorkingHours = BigDecimal.valueOf(result.excessWorkingHours)
                 .setScale(2, RoundingMode.HALF_UP).doubleValue();
         return result;
+    }
+
+    /** 接待单按开始时间先后计入；跨店合并后同一时刻的单按门店、明细 id 固定顺序，避免结果抖动。 */
+    private List<OrderDetail> receptionDetailOrder(List<OrderDetail> details) {
+        List<OrderDetail> sorted = new ArrayList<>(details);
+        sorted.sort(Comparator.comparing(OrderDetail::getStartTime,
+                        Comparator.nullsLast(Comparator.<LocalDateTime>naturalOrder()))
+                .thenComparing(detail -> detail.getShopId() == null ? 0L : detail.getShopId())
+                .thenComparing(detail -> detail.getId() == null ? 0L : detail.getId()));
+        return sorted;
+    }
+
+    private void accumulateReception(ReceptionCapResult result, OrderDetail detail, int countedMinutes) {
+        int duration = detail.getDuration() == null ? 0 : detail.getDuration();
+        BigDecimal coefficient = detail.getCoefficient() == null ? BigDecimal.ONE : detail.getCoefficient();
+        double countedWorking = coefficient.multiply(BigDecimal.valueOf(countedMinutes))
+                .setScale(2, RoundingMode.HALF_UP).doubleValue();
+        double detailWorking = coefficient.multiply(BigDecimal.valueOf(duration))
+                .setScale(2, RoundingMode.HALF_UP).doubleValue();
+        result.countedMinutes += countedMinutes;
+        result.excessMinutes += duration - countedMinutes;
+        result.countedWorkingHours += countedWorking;
+        // 用「整单工时 - 计入工时」得到超出工时，保证计入 + 超出 = 整单，避免逐项四舍五入产生分位差
+        result.excessWorkingHours += detailWorking - countedWorking;
     }
 
     private String scheduleKey(String periodCode, Long massagistId, Long shopId) {

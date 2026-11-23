@@ -16,6 +16,8 @@ import java.util.Map;
 /**
  * 基础薪资折算分钟的计算口径：服务单按项目系数折算，接待单按排班时长比例封顶后折算，
  * 与薪资统计（服务时长）口径保持一致。订单是否计入只看是否有效完成，与客户是否留手机无关。
+ * <p>接待封顶按「门店比例」分池：比例相同的门店合并成一个额度池，调店/支援期间可以跨店借用，
+ * 比例不同的门店各自成池、互不借用。</p>
  */
 public final class BaseMinutesCalculator {
 
@@ -50,6 +52,8 @@ public final class BaseMinutesCalculator {
                         .computeIfAbsent(row.getShopId() == null ? 0L : row.getShopId(),
                                 k -> new ArrayList<>())
                         .add(row);
+                result.setReceptionMinutes(result.getReceptionMinutes().add(BigDecimal.valueOf(row.getDuration())));
+                result.setReceptionOrderCount(result.getReceptionOrderCount() + 1);
             } else {
                 serviceRows.add(row);
             }
@@ -68,54 +72,62 @@ public final class BaseMinutesCalculator {
                 ? new LinkedHashMap<>() : scheduleMinutesByShop;
         Map<Long, Integer> percents = capPercentByShop == null
                 ? new LinkedHashMap<>() : capPercentByShop;
-        boolean hasSchedule = receptionByShop.keySet().stream()
-                .anyMatch(shopId -> schedules.getOrDefault(shopId, 0) > 0);
-        for (Map.Entry<Long, List<SalaryDetailRow>> entry : receptionByShop.entrySet()) {
-            List<SalaryDetailRow> shopRows = new ArrayList<>(entry.getValue());
-            shopRows.sort(Comparator.comparing(SalaryDetailRow::getStartTime,
-                    Comparator.nullsLast(Comparator.<LocalDateTime>naturalOrder())));
-            int duration = 0;
-            int excess = 0;
-            for (SalaryDetailRow row : shopRows) {
-                duration += row.getDuration();
-            }
-            if (!hasSchedule) {
-                // 该疗愈师本月完全没有排班：不封顶，避免排班数据缺失导致工资被清零。
-                for (SalaryDetailRow row : shopRows) {
-                    result.setReceptionCountedMinutes(result.getReceptionCountedMinutes()
-                            .add(BigDecimal.valueOf(row.getDuration())));
-                    result.setReceptionCountedWeightedMinutes(result.getReceptionCountedWeightedMinutes()
-                            .add(weighted(row, row.getDuration())));
-                    result.setReceptionOrderCount(result.getReceptionOrderCount() + 1);
-                }
-                result.setReceptionMinutes(result.getReceptionMinutes().add(BigDecimal.valueOf(duration)));
+        // 按门店比例分池：比例一致的门店共用一个额度池（跨店合并），比例不一致则各店独立成池。
+        Map<Integer, List<Long>> poolShopIdsByPercent = new LinkedHashMap<>();
+        List<Long> uncappedShopIds = new ArrayList<>();
+        for (Long shopId : receptionByShop.keySet()) {
+            if (schedules.getOrDefault(shopId, 0) <= 0) {
+                // 该门店本月无排班（常见于调店未补排班）：本店接待不封顶；
+                // 该疗愈师本月完全没有排班时也走这里，避免排班数据缺失导致工资被清零。
+                uncappedShopIds.add(shopId);
                 continue;
             }
-            int scheduledMinutes = schedules.getOrDefault(entry.getKey(), 0);
-            // 该门店本月无排班（常见于调店未补排班）：本店接待不封顶。
-            int remaining = scheduledMinutes <= 0
-                    ? Integer.MAX_VALUE
-                    : capMinutes(scheduledMinutes, percents.getOrDefault(entry.getKey(),
-                    DEFAULT_RECEPTION_CAP_PERCENT));
-            if (scheduledMinutes > 0) {
-                result.setReceptionCapApplied(true);
-                result.setReceptionCapMinutes(result.getReceptionCapMinutes().add(BigDecimal.valueOf(remaining)));
+            poolShopIdsByPercent
+                    .computeIfAbsent(percents.getOrDefault(shopId, DEFAULT_RECEPTION_CAP_PERCENT),
+                            k -> new ArrayList<>())
+                    .add(shopId);
+        }
+        for (Long shopId : uncappedShopIds) {
+            for (SalaryDetailRow row : sortedByStartTime(receptionByShop.get(shopId))) {
+                countReception(result, row, row.getDuration());
             }
-            for (SalaryDetailRow row : shopRows) {
+        }
+        for (Map.Entry<Integer, List<Long>> entry : poolShopIdsByPercent.entrySet()) {
+            int poolCapMinutes = 0;
+            List<SalaryDetailRow> poolRows = new ArrayList<>();
+            for (Long shopId : entry.getValue()) {
+                poolCapMinutes += capMinutes(schedules.getOrDefault(shopId, 0), entry.getKey());
+                poolRows.addAll(receptionByShop.get(shopId));
+            }
+            result.setReceptionCapApplied(true);
+            result.setReceptionCapMinutes(result.getReceptionCapMinutes().add(BigDecimal.valueOf(poolCapMinutes)));
+            int remaining = poolCapMinutes;
+            int excess = 0;
+            for (SalaryDetailRow row : sortedByStartTime(poolRows)) {
                 int counted = Math.min(row.getDuration(), Math.max(remaining, 0));
-                int missed = row.getDuration() - counted;
                 remaining -= counted;
-                excess += missed;
-                result.setReceptionCountedMinutes(result.getReceptionCountedMinutes()
-                        .add(BigDecimal.valueOf(counted)));
-                result.setReceptionCountedWeightedMinutes(result.getReceptionCountedWeightedMinutes()
-                        .add(weighted(row, counted)));
-                result.setReceptionOrderCount(result.getReceptionOrderCount() + 1);
+                excess += row.getDuration() - counted;
+                countReception(result, row, counted);
             }
-            result.setReceptionMinutes(result.getReceptionMinutes().add(BigDecimal.valueOf(duration)));
             result.setReceptionExcessMinutes(result.getReceptionExcessMinutes().add(BigDecimal.valueOf(excess)));
         }
         return result;
+    }
+
+    /** 接待单按开始时间先后计入；跨店合并后同一时刻的单按门店固定顺序，避免结果抖动。 */
+    private static List<SalaryDetailRow> sortedByStartTime(List<SalaryDetailRow> rows) {
+        List<SalaryDetailRow> sorted = new ArrayList<>(rows);
+        sorted.sort(Comparator.comparing(SalaryDetailRow::getStartTime,
+                        Comparator.nullsLast(Comparator.<LocalDateTime>naturalOrder()))
+                .thenComparing(row -> row.getShopId() == null ? 0L : row.getShopId()));
+        return sorted;
+    }
+
+    private static void countReception(BaseMinutes result, SalaryDetailRow row, int counted) {
+        result.setReceptionCountedMinutes(result.getReceptionCountedMinutes()
+                .add(BigDecimal.valueOf(counted)));
+        result.setReceptionCountedWeightedMinutes(result.getReceptionCountedWeightedMinutes()
+                .add(weighted(row, counted)));
     }
 
     private static int capMinutes(int scheduledMinutes, int percent) {
