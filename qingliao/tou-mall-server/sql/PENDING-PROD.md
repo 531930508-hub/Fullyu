@@ -571,17 +571,21 @@ STATISTICS` 判存量，可重复执行；`sql/prod/` 已由 `scripts/make-prod-
   `/health`、`/`、`/api/product/list` 均 200（冒烟首轮的 503 是重启窗口内 `no live upstreams`，1 分钟后复测通过）。
   tag `prod-qingliao-mall-20261122-0044`。
 
-### 二十（2026-11-23）请假二级审批人（总部CEO）改由「审批设置」指定
+### 二十（2026-11-23）请假二级审批人（总部CEO）改由「审批设置」指定 —— **当晚已上线**
 
-- **SQL 待执行**：`sql/2026-11-23-approval-leave-second-approver.sql`（生产版已生成，加列可重复执行）——
-  `f_approval_category ADD COLUMN second_approver_admin_id bigint NULL`。MyBatis-Plus 会把这一列拼进审批设置的每条查询，
-  **不跑脚本就换 jar，审批设置页会 Unknown column**；执行后跑 `./scripts/sql-audit.py` 复核。
+- **SQL 已执行（2026-11-23 23:1x，生产）**：`sql/2026-11-23-approval-leave-second-approver.sql` ——
+  `f_approval_category ADD COLUMN second_approver_admin_id bigint NULL`。执行前快照
+  `test-cityretreat:/opt/fullyu-mall-backups/db/tou_mall_current-20261123T151859Z.sql.gz`；执行后 `./scripts/sql-audit.py` → **✅ 表/列一致**。
+  这一列 MyBatis-Plus 会拼进审批设置的每条查询，**不跑脚本就换 jar 会 Unknown column**。
 - **代码**：请假没配流程节点时的内置规则（提前 → 店长；当天 / 店长本人 → 店长 → 总部CEO）原来读配置项
   `approval.leave.second-approver-admin-id`，现在读审批配置上的 `second_approver_admin_id`；保存审批设置时校验账号必须存在且启用，
   走内置规则却没指定二审人直接拦下。前端「审批设置 → 请假」多一个「请假审批方式：系统内置规则 / 自定义流程节点」和二审人下拉。
 - **上线顺序**：先跑 SQL，再换 jar + 前端。
-- **旧配置项**：生产 `application-prod.yml` 里若手工设过 `approval.leave.second-approver-admin-id`，留着无害（新 jar 不读），
-  想清理可以删掉；不要指望它兜底。
-- **上线后必做**：到「设置 → 审批设置 → 请假 → 配置」里指定二级审批人（总部CEO 账号）。不指定时当天请假、店长本人请假会报
-  「「审批设置 → 请假」里还没指定」并被拦下（不会静默生成无审批人的单据）；提前请假不受影响。
+- **旧配置项**：生产 `/etc/fullyu/qingliao.env`（52 行）与 `application-prod.yml` 均无 `approval.*` 键，无需清理；新 jar 只读新列。
+- **二审人已指定（2026-11-23）**：`f_approval_category` id **5**（店1）/ **6**（店8）→ `second_approver_admin_id=20`（Fiona，13671661152，启用），
+  两行 `f_approval_flow_node` 均为 0 条 → 内置规则生效；当天请假、店长本人请假会落到 Fiona。
+- **发布（2026-11-23 23:04 dist / 23:22 jar，`5025d02`）**：jar `977d99e5…`（311,694,795 B）替换 `6b4f649f…`，
+  备份 `/server/java/fully/backup/20261123-232136/`；dist 备份 `dist.bak-20261123-230430`；`/health`、`/`、`/api/product/list` 200；
+  23:25 真实顾客小程序登录建号成功（顺带验证新 jar）。完整记录见 `docs/ops/生产上线手册.md` §21。
+- **仍未验证**：① 生产「审批设置 → 请假 → 配置」页实际保存一遍；② 真发起一张**当天**请假看它是否落到 Fiona。
 - **回滚**：旧 jar 不读新列，回滚代码即可；`second_approver_admin_id` 可留可删。
