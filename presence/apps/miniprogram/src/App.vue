@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onLaunch } from '@dcloudio/uni-app'
+import { onLaunch, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from './stores/user'
 import { updateTabBarLanguage } from './locale'
 import { hydrateDicts, warmupDicts } from './utils/dict'
@@ -12,6 +12,43 @@ onLaunch(() => {
   hydrateDicts()
   warmupDicts()
 })
+
+/**
+ * 未登录冷启动先引导去登录页（现场反馈：进小程序不知道要先登录，看不到预约与会员卡）。
+ * - 只判断一次：登录态进来、或者主动点了「先逛逛」都不再被弹回去
+ * - 登录页、法务页、分享落地页、导师门户本身是流程入口，不能再被引导走（否则死循环或打断外部跳转）
+ * - 原入口连同参数记进 redirect，登录成功后回到原页面，不吞掉用户点进来的内容
+ */
+const GUEST_SAFE_ENTRIES = [
+  'pages/login/index',
+  'pages/legal/index',
+  'pages/share-landing/index',
+  'pages/trainer-portal/login/index',
+  'pages/trainer-portal/apply/index',
+]
+let guestGuided = false
+
+function guideGuestToLogin() {
+  if (guestGuided) return
+  guestGuided = true
+  const userStore = useUserStore()
+  if (userStore.isLoggedIn) return
+  let launch: any = {}
+  try { launch = uni.getLaunchOptionsSync() || {} } catch { launch = {} }
+  const entry = String(launch.path || '').replace(/^\//, '')
+  if (!entry || GUEST_SAFE_ENTRIES.indexOf(entry) !== -1) return
+  const query = launch.query || {}
+  const queryString = Object.keys(query)
+    .map(key => `${key}=${encodeURIComponent(String(query[key]))}`)
+    .join('&')
+  const redirect = encodeURIComponent(`/${entry}${queryString ? `?${queryString}` : ''}`)
+  // 首屏页面此刻正在加载，等当前帧过去再切，避免 reLaunch 被启动流程覆盖
+  setTimeout(() => {
+    uni.reLaunch({ url: `/pages/login/index?redirect=${redirect}` })
+  }, 0)
+}
+
+onShow(() => guideGuestToLogin())
 </script>
 
 <style>

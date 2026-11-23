@@ -27,10 +27,17 @@ function loadPhoneAuth() {
   return exports
 }
 
-/** 只替换平台/网络边界，其余执行真实页面脚本 */
-function loadProfile(overrides = {}, { consent = true } = {}) {
-  const source = parse(profileSource).descriptor.scriptSetup.content
-  const ast = ts.createSourceFile('page.ts', source, ts.ScriptTarget.Latest, true)
+const pageSources = {
+  profile: 'src/pages/profile/index.vue',
+  login: 'src/pages/login/index.vue',
+  app: 'src/App.vue',
+}
+const readSource = name => fs.readFileSync(path.join(__dirname, pageSources[name]), 'utf8')
+const pagesConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'src/pages.json'), 'utf8'))
+
+/** 模块自身声明的名字（页面脚本里的 ref/函数），运行时导出给用例直接调用 */
+function collectNames(source) {
+  const ast = ts.createSourceFile('module.ts', source, ts.ScriptTarget.Latest, true)
   const names = []
   for (const statement of ast.statements) {
     if (ts.isVariableStatement(statement)) {
@@ -41,70 +48,111 @@ function loadProfile(overrides = {}, { consent = true } = {}) {
     }
     if (ts.isFunctionDeclaration(statement) && statement.name) names.push(statement.name.text)
   }
-  const compiled = ts.transpileModule(`${source}\nexport { ${names.join(',')} }`, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-  }).outputText
+  return names
+}
 
+/**
+ * 只替换平台/网络边界，其余执行真实源码：页面脚本与 usePhoneLogin 组合式函数都是真身，
+ * 这样「登录页」与「我的」弹层是不是同一套协议闸门，用例能直接跑出来。
+ */
+function createHarness(overrides = {}, { consent = true } = {}) {
   const calls = []
   const logins = []
   const warns = []
   const store = vue.reactive({
     token: '', isLoggedIn: false, isTrainer: false, userInfo: null, language: 'zh', activeView: 'student',
+    initFromStorage() {},
     login: async code => { logins.push(code); return { token: 't', user: { id: 'u', phone: '13812345678' } } },
+    devLogin: async phone => { logins.push(`dev:${phone}`) },
     logout() { this.token = ''; this.isLoggedIn = false; this.userInfo = null },
   })
   const api = {
-    getPoints: async () => ({ balance: 0 }), peekPendingGift: () => '', takePendingGift: () => '',
+    getPoints: async () => ({ balance: 0 }), peekPendingGift: () => '', takePendingGift: () => '', claimGiftCode: async () => null,
     loadBrandMember: async () => null, listMyOrders: async () => [], listMyVouchers: async () => [],
     ...overrides,
   }
-  // 协议确认框：默认按「同意并登录」（模拟顾客同意），个别用例传 consent:false 模拟点取消
+  const state = { consent, stack: [], launch: { path: '', query: {} }, shareJump: '' }
+  const hooks = { launch: [], show: [], load: [] }
+  // 协议确认框：默认按「同意并登录」（模拟顾客同意），传 consent:false 模拟点取消
   const uni = new Proxy({
     getStorageSync: () => store.token,
     setStorageSync: () => {},
+    getLaunchOptionsSync: () => state.launch,
     showModal: opts => {
       calls.push(['showModal', opts])
-      opts?.success?.({ confirm: consent, cancel: !consent })
+      opts?.success?.({ confirm: state.consent, cancel: !state.consent })
     },
   }, {
     get(target, prop) { return target[prop] || (args => { calls.push([prop, args]); return '' }) },
   })
-  const exports = {}
+
   const sandbox = {
-    exports, uni, console: { ...console, warn: (...a) => warns.push(a) }, setTimeout: fn => fn(), getCurrentPages: () => [],
+    exports: {}, uni, console: { ...console, warn: (...a) => warns.push(a) },
+    setTimeout: fn => fn(), getCurrentPages: () => state.stack,
   }
   const context = vm.createContext(sandbox)
+
   let composableModule = null
-  // 登录页与「我的」登录弹层共用 usePhoneLogin，页面用例必须跑真实组合式函数，不能再拿空对象糊过去
   const loadComposable = () => {
-    if (composableModule) return composableModule.exports
+    if (composableModule) return composableModule
     const source = fs.readFileSync(path.join(__dirname, 'src/composables/usePhoneLogin.ts'), 'utf8')
     const cjs = ts.transpileModule(source, {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
     }).outputText
     const module = { exports: {} }
     vm.runInContext(`(function(require, module, exports){${cjs}\n})`, context)(requireShim, module, module.exports)
-    composableModule = module
-    return module.exports
+    composableModule = module.exports
+    return composableModule
   }
   const requireShim = id => {
     if (id === 'vue') return vue
-    if (id === '@dcloudio/uni-app') return { onShow: () => {}, onLoad: () => {} }
+    if (id === '@dcloudio/uni-app') {
+      return {
+        onLaunch: fn => hooks.launch.push(fn),
+        onShow: fn => hooks.show.push(fn),
+        onLoad: fn => hooks.load.push(fn),
+      }
+    }
     if (id === 'pinia') return { storeToRefs: s => vue.toRefs(s) }
     if (id.includes('stores/user')) return { useUserStore: () => store }
     if (id.includes('utils/phone-auth')) return loadPhoneAuth()
     if (id.includes('composables/usePhoneLogin')) return loadComposable()
     if (id.includes('locale')) return { t: key => key, tr: zh => zh, isEnglish: () => false, updateTabBarLanguage: () => {} }
     if (id.includes('utils/capsule')) return { readCapsuleLayout: () => ({ statusBarHeight: 0, headerTop: 16, capsuleRight: 0, navBarHeight: 44, hasCapsule: false }) }
-    if (id.includes('utils/share')) return { consumeShareJump: () => '' }
+    if (id.includes('utils/share')) return { consumeShareJump: () => state.shareJump }
     if (id.includes('utils/trainer-request')) return { getTrainerToken: () => '' }
+    if (id.includes('utils/dict')) return { hydrateDicts: () => {}, warmupDicts: () => {} }
     if (id.endsWith('.vue')) return {}
     return api
   }
   sandbox.require = requireShim
-  vm.runInContext(compiled, context, { filename: 'profile.js' })
+
   const toasts = () => calls.filter(c => c[0] === 'showToast').map(c => c[1].title)
-  return { page: exports, calls, logins, warns, toasts, store }
+  return {
+    store, calls, logins, warns, state, hooks, toasts,
+    modals: () => calls.filter(c => c[0] === 'showModal').map(c => c[1]),
+    loadPage(name) {
+      const source = parse(readSource(name)).descriptor.scriptSetup.content
+      const names = collectNames(source)
+      const compiled = ts.transpileModule(`${source}\nexport { ${names.join(',')} }`, {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+      }).outputText
+      const exports = {}
+      sandbox.exports = exports
+      sandbox.module = { exports }
+      vm.runInContext(compiled, context, { filename: `${name}.js` })
+      return exports
+    },
+  }
+}
+
+/** 「我的」页用例的旧签名：直接拿到 page 与采集数组 */
+function loadProfile(overrides = {}, opts = {}) {
+  const harness = createHarness(overrides, opts)
+  return {
+    page: harness.loadPage('profile'),
+    calls: harness.calls, logins: harness.logins, warns: harness.warns, toasts: harness.toasts, store: harness.store,
+  }
 }
 
 const okEvent = { detail: { errMsg: 'getPhoneNumber:ok', code: 'phone-code-1' } }
@@ -219,4 +267,82 @@ test('profile: 同意并登录后不再二次确认，成功后协议勾选重�
   await page.onGetPhone(okEvent)
   assert.equal(calls.filter(c => c[0] === 'showModal').length, 1, '点一次同意就直接继续登录')
   assert.equal(page.agreed.value, false, '登录成功后重置，下次登录重新征求同意')
+})
+
+test('登录页: 与「我的」弹层共用 usePhoneLogin，未勾选同样先弹协议确认框', async () => {
+  const harness = createHarness()
+  const page = harness.loadPage('login')
+  await page.onPhoneAuth(okEvent)
+  assert.equal(harness.modals().length, 1, '登录页也要先征得协议同意')
+  assert.deepEqual(harness.logins, ['phone-code-1'], '同意后直接登录，不需要再点第二次')
+  assert.equal(page.agreed.value, false)
+})
+
+test('登录页: 已在 pages.json 注册、不进底栏，且保留「先逛逛」兜底', () => {
+  const registered = pagesConfig.pages.map(item => item.path)
+  assert.ok(registered.includes('pages/login/index'), '登录页必须注册')
+  assert.equal(pagesConfig.pages[0].path, 'pages/index/index', '启动页仍是首页，登录态判断交给 App.vue')
+  assert.ok(!pagesConfig.tabBar.list.some(item => String(item.pagePath).includes('login')), '登录页不进底栏')
+  const source = readSource('login')
+  assert.match(source, /open-type="getPhoneNumber"/)
+  assert.match(source, /@getphonenumber="onPhoneAuth"/)
+  assert.match(source, /先逛逛/)
+  assert.match(source, /toggleAgreement/)
+})
+
+test('登录页: 登录成功后回到 redirect 指向的原入口', async () => {
+  const harness = createHarness()
+  const page = harness.loadPage('login')
+  harness.hooks.load[0]({ redirect: encodeURIComponent('/pages/course-detail/index?id=c1') })
+  assert.equal(page.redirect.value, '/pages/course-detail/index?id=c1')
+  await page.onPhoneAuth(okEvent)
+  const relaunch = harness.calls.find(c => c[0] === 'reLaunch')
+  assert.equal(relaunch[1].url, '/pages/course-detail/index?id=c1')
+})
+
+test('登录页: redirect 只接受站内路径，外部地址丢弃后「先逛逛」回首页', () => {
+  const harness = createHarness()
+  const page = harness.loadPage('login')
+  harness.hooks.load[0]({ redirect: encodeURIComponent('https://evil.example.com/x') })
+  assert.equal(page.redirect.value, '', 'redirect 不能被用来跳外部地址')
+  page.browseAsGuest()
+  assert.equal(harness.calls.find(c => c[0] === 'switchTab')[1].url, '/pages/index/index')
+})
+
+test('冷启动: 未登录进业务页先引导到登录页，并带上原入口与参数', () => {
+  const harness = createHarness()
+  harness.state.launch = { path: 'pages/course-detail/index', query: { id: 'c1' } }
+  harness.loadPage('app')
+  harness.hooks.launch[0]()
+  harness.hooks.show[0]()
+  const relaunch = harness.calls.find(c => c[0] === 'reLaunch')
+  assert.ok(relaunch, '未登录冷启动必须引导去登录页')
+  assert.match(relaunch[1].url, /^\/pages\/login\/index\?redirect=/)
+  assert.equal(
+    decodeURIComponent(relaunch[1].url.split('redirect=')[1]),
+    '/pages/course-detail/index?id=c1',
+    '原入口与参数要带过去，登录后能回到原页面',
+  )
+})
+
+test('冷启动: 已登录不打扰；登录页/法务页/分享落地页/导师门户不被引导走', () => {
+  const loggedIn = createHarness()
+  loggedIn.store.isLoggedIn = true
+  loggedIn.state.launch = { path: 'pages/index/index', query: {} }
+  loggedIn.loadPage('app')
+  loggedIn.hooks.launch[0]()
+  loggedIn.hooks.show[0]()
+  assert.equal(loggedIn.calls.filter(c => c[0] === 'reLaunch').length, 0)
+
+  for (const entry of ['pages/login/index', 'pages/legal/index', 'pages/share-landing/index', 'pages/trainer-portal/login/index']) {
+    const harness = createHarness()
+    harness.state.launch = { path: entry, query: {} }
+    harness.loadPage('app')
+    harness.hooks.launch[0]()
+    harness.hooks.show[0]()
+    assert.equal(
+      harness.calls.filter(c => c[0] === 'reLaunch').length, 0,
+      `${entry} 本身是流程入口，再被引导会死循环或打断外部跳转`,
+    )
+  }
 })

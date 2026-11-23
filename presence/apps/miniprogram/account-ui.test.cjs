@@ -55,6 +55,15 @@ function loadPage(name, overrides = {}, loggedIn = true) {
       if (id === 'pinia') return { storeToRefs: s => vue.toRefs(s) }
       if (id.includes('stores/user')) return { useUserStore: () => store }
       if (id.includes('utils/capsule')) return { readCapsuleLayout: () => ({ statusBarHeight: 0, headerTop: 16, capsuleRight: 0, navBarHeight: 44, hasCapsule: false }) }
+      if (id.includes('composables/usePhoneLogin')) {
+        return {
+          usePhoneLogin: () => ({
+            agreed: vue.ref(false), loggingIn: vue.ref(false), loginError: vue.ref(''), loginPhone: vue.ref(''),
+            resetLoginState() {}, toggleAgreement() {}, ensureConsent: async () => true,
+            handlePhoneAuth: async () => false, handleDevLogin: async () => false,
+          }),
+        }
+      }
       if (id.includes('locale')) return { t: key => key, tr: zh => zh, isEnglish: () => false, updateTabBarLanguage: () => {} }
       if (id.endsWith('.vue')) return {}
       return api
@@ -140,7 +149,11 @@ test('profile: guest hides statistics, quick-edit routes to the supported editor
   assert.match(source, /\/pages\/profile-edit\/index/)
   assert.doesNotMatch(source, /showEditPopup|editVisible|profile\.memberActive/)
   assert.match(source, /open-type="getPhoneNumber"/)
-  assert.match(source, /\.devLogin\(/)
+  // 登录流程与登录页共用 usePhoneLogin（协议闸门、失败分档只有一处实现）
+  assert.match(source, /usePhoneLogin\(\)/)
+  const loginComposable = fs.readFileSync(path.join(__dirname, 'src/composables/usePhoneLogin.ts'), 'utf8')
+  assert.match(loginComposable, /\.devLogin\(/)
+  assert.match(loginComposable, /\.login\(auth\.code\)/)
 })
 
 test('profile: real membership expiry and only course orders feed overview', async () => {

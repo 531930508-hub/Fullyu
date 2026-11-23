@@ -5,6 +5,10 @@
       "style": { "navigationStyle": "custom", "enablePullDownRefresh": true, "backgroundTextStyle": "dark" }
     },
     {
+      "path": "pages/login/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
       "path": "pages/course-detail/index",
       "style": { "navigationStyle": "custom" }
     },

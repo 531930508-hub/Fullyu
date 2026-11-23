@@ -69,7 +69,7 @@
       <view v-if="isLoggedIn" class="logout-foot" @tap="confirmLogout">{{ tr('退出登录', 'Sign out') }}</view>
     </view>
     <BottomSheet :show="!!sheet" :title="sheetTitle" :busy="loggingIn" :center="sheet === 'signin'" @close="closeSheet">
-      <!-- 登录弹窗（已批准提案）：居中品牌眉题 + 欢迎标题 + 一句说明 + 整宽一键登录 + 两行协议区，未勾选时行内提示 -->
+      <!-- 登录弹窗（已批准提案）：居中品牌眉题 + 欢迎标题 + 一句说明 + 整宽一键登录 + 两行协议区 -->
       <template v-if="sheet === 'signin'">
         <view class="signin-hero">
           <text class="signin-eyebrow">Full愈 · 在场</text>
@@ -78,7 +78,7 @@
         </view>
         <view class="signin-agreement">
           <view class="agreement-checkline" @tap="toggleAgreement">
-            <view class="agreement-check" :class="{ checked: agreed, alert: consentHint }" :aria-label="tr('同意用户协议与隐私政策', 'Agree to terms and privacy policy')"><text v-if="agreed" class="check-mark">✓</text></view>
+            <view class="agreement-check" :class="{ checked: agreed }" :aria-label="tr('同意用户协议与隐私政策', 'Agree to terms and privacy policy')"><text v-if="agreed" class="check-mark">✓</text></view>
             <text class="agreement-text">{{ tr('我已阅读并同意', 'I have read and agree to') }}</text>
           </view>
           <view class="agreement-docs">
@@ -87,7 +87,6 @@
             <text class="agreement-link" @tap.stop="openLegal('privacy')">{{ tr('《隐私政策》', 'Privacy Policy') }}</text>
           </view>
         </view>
-        <text v-if="consentHint" class="consent-hint" role="alert">{{ tr('请先勾选同意协议', 'Please agree to the terms first') }}</text>
         <text v-if="loginError" class="feedback" role="alert">{{ loginError }}</text>
       </template>
       <template v-else-if="sheet === 'login'">
@@ -100,11 +99,10 @@
       <view v-else class="sheet-copy"><text class="serif about-brand">{{ tr('Full愈 · 在场', 'Full愈 · Presence') }}</text><text>{{ tr('身心在场 · 向内生长', 'Be present · grow inward') }}</text><text class="secondary">{{ tr('正念冥想、声音疗愈与身心整合课程', 'Mindfulness, sound healing and integrative mind-body classes') }}</text></view>
       <template #actions>
         <view v-if="sheet === 'signin'" class="signin-actions">
+          <!-- 授权按钮用静态 open-type：未勾选协议时 usePhoneLogin 先弹协议确认框（系统弹框不会被本弹层遮住），
+               点「同意并登录」即记为已同意并直接继续登录，不再出现旧版「点了没反应」 -->
           <!-- #ifndef H5 -->
-          <!-- 两态各用一个按钮：微信按钮的 open-type 在节点创建后改值并不可靠，
-               勾选后才新建带 open-type 的按钮，授权能力才真的挂上；未勾选时点按只给行内提示 -->
-          <button v-if="!agreed" class="primary-button sheet-button signin-button" :disabled="loggingIn" @tap="onTapLogin">{{ tr('手机号一键登录', 'Continue with phone number') }}</button>
-          <button v-else class="primary-button sheet-button signin-button" open-type="getPhoneNumber" :loading="loggingIn" :disabled="loggingIn" @getphonenumber="onGetPhone">{{ loggingIn ? tr('正在登录…', 'Signing in…') : tr('手机号一键登录', 'Continue with phone number') }}</button>
+          <button class="primary-button sheet-button signin-button" open-type="getPhoneNumber" :loading="loggingIn" :disabled="loggingIn" @getphonenumber="onGetPhone">{{ loggingIn ? tr('正在登录…', 'Signing in…') : tr('手机号一键登录', 'Continue with phone number') }}</button>
           <!-- #endif -->
           <!-- #ifdef H5 -->
           <button class="primary-button sheet-button signin-button" :disabled="loggingIn" @tap="onTapDevLogin">{{ loggingIn ? tr('正在登录…', 'Signing in…') : tr('手机号一键登录', 'Continue with phone number') }}</button>
@@ -128,7 +126,7 @@ import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import { t, tr, isEnglish, updateTabBarLanguage } from '@/locale'
 import { readCapsuleLayout } from '@/utils/capsule'
-import { readPhoneAuthEvent, phoneAuthMessage } from '@/utils/phone-auth'
+import { usePhoneLogin } from '@/composables/usePhoneLogin'
 import { consumeShareJump } from '@/utils/share'
 import { getTrainerToken } from '@/utils/trainer-request'
 import { getPoints } from '@/api/user'
@@ -161,16 +159,12 @@ const brandLoadFailed = ref(false)
 let giftLoginPrompted = false
 const loading = ref(false)
 const loadError = ref(false)
-const loggingIn = ref(false)
-const loginPhone = ref('')
-const loginError = ref('')
+// 登录相关状态集中在 usePhoneLogin：协议闸门、失败分档与登录页共用同一套行为
+const { agreed, loggingIn, loginError, loginPhone, resetLoginState, toggleAgreement, handlePhoneAuth, handleDevLogin } = usePhoneLogin()
 // 门户令牌与学员登录分开存；onShow 里刷新，退出门户后入口文案会恢复
 const portalSignedIn = ref(false)
 const sheet = ref<'' | 'signin' | 'login' | 'contact' | 'about'>('')
 const sheetTitle = computed(() => sheet.value === 'signin' ? tr('会员登录', 'Member sign-in') : sheet.value === 'login' ? tr('手机号登录', 'Phone login') : sheet.value === 'contact' ? tr('联系客服', 'Contact support') : tr('关于在场', 'About Presence'))
-/** 登录前协议同意：不默认勾选（合规要求）；未勾选时点登录在协议区下方给行内提示 */
-const agreed = ref(false)
-const consentHint = ref(false)
 const avatarText = computed(() => userInfo.value?.nickname?.charAt(0) || (isEnglish() ? 'F' : '愈'))
 const maskedPhone = computed(() => { const p = userInfo.value?.phone || ''; return p.length === 11 ? `${p.slice(0, 3)}****${p.slice(7)}` : p })
 const brandActive = computed(() => ['ACTIVE', 'EXPIRING', 'PENDING'].includes(brandMember.value?.card?.state || ''))
@@ -233,76 +227,26 @@ async function loadUserData() {
 /** 访客态点按头像行：弹出屏幕居中的登录弹窗 */
 function openSignIn() {
   if (loggingIn.value) return
-  loginError.value = ''
-  consentHint.value = false
+  resetLoginState()
   sheet.value = 'signin'
 }
-/** 未勾选协议时点登录：协议区下方行内红字提示 + 勾选框红圈，不再弹第二层确认 */
-function onTapLogin() {
-  if (loggingIn.value) return
-  if (agreed.value) { consentHint.value = false; return }
-  consentHint.value = true
+/** 登录成功：关弹层、刷新账户数据，并继续被打断的分享/会员码流程 */
+async function onLoginSuccess() {
+  sheet.value = ''
+  await loadUserData()
+  resumePendingShare()
+  void resumePendingGift()
 }
 async function onGetPhone(e: any) {
-  if (loggingIn.value) return
-  const auth = readPhoneAuthEvent(e)
-  if (!auth.code) {
-    // 微信把「用户取消」和「手机号快速验证不可用（隐私指引未声明手机号 / 未开通 / 未认证 / 额度不足）」
-    // 都从这个回调返回，且都没有 code。所有情况都报「已取消登录」= 当场断案成用户的问题，
-    // 顾客只会反复点同一个按钮，门店也拿不到线索；这里必须分档，并把微信原文写进日志。
-    console.warn('[login] getPhoneNumber 未返回 code', auth.reason, auth.errno ?? '', auth.raw)
-    const message = phoneAuthMessage(auth)
-    if (auth.reason === 'cancelled') {
-      uni.showToast({ title: tr(message.zh, message.en), icon: 'none' })
-      return
-    }
-    // 配置类失败停在弹层里给原因，勾选与按钮都保留，修好后可直接重试
-    loginError.value = tr(message.zh, message.en)
-    return
-  }
-  loginError.value = ''
-  loggingIn.value = true
-  try {
-    await userStore.login(auth.code)
-    agreed.value = false
-    consentHint.value = false
-    sheet.value = ''
-    uni.showToast({ title: tr('登录成功', 'Logged in'), icon: 'success' })
-    await loadUserData()
-    resumePendingShare()
-    void resumePendingGift()
-  } catch (error: any) {
-    // 服务端已按微信 errcode 归类（微信登录失败 / 获取手机号失败 / 会员身份冲突），
-    // 这里再糊成一句「登录未完成」会把唯一可执行的线索也丢掉；弹层保持打开，可直接重试。
-    loginError.value = (error && error.message) || tr('登录未完成，请重试', 'Login was not completed. Please retry.')
-  }
-  finally { loggingIn.value = false }
+  if (await handlePhoneAuth(e)) await onLoginSuccess()
 }
 // #ifdef H5
 function onTapDevLogin() {
-  loginError.value = ''
-  if (!agreed.value) { consentHint.value = true; return }
-  consentHint.value = false
-  onDevLogin()
+  resetLoginState()
+  sheet.value = 'login'
 }
-function onDevLogin() { loginError.value = ''; sheet.value = 'login' }
 async function submitDevLogin() {
-  if (loggingIn.value) return
-  const phone = loginPhone.value.trim()
-  if (!/^1\d{10}$/.test(phone)) { loginError.value = tr('请输入正确的11位手机号', 'Enter a valid 11-digit phone number'); return }
-  loggingIn.value = true
-  loginError.value = ''
-  try {
-    await userStore.devLogin(phone)
-    agreed.value = false
-    consentHint.value = false
-    sheet.value = ''; loginPhone.value = ''
-    uni.showToast({ title: tr('登录成功', 'Logged in'), icon: 'success' })
-    await loadUserData()
-    resumePendingShare()
-    void resumePendingGift()
-  } catch { loginError.value = tr('登录未完成，请确认当前环境支持手机号快捷登录后重试', 'Login was not completed. Confirm this environment supports phone login and retry.') }
-  finally { loggingIn.value = false }
+  if (await handleDevLogin()) await onLoginSuccess()
 }
 // #endif
 function requireLogin() {
@@ -372,11 +316,6 @@ function toggleLang() {
 }
 function showAbout() { sheet.value = 'about' }
 function closeSheet() { if (!loggingIn.value) sheet.value = '' }
-function toggleAgreement() {
-  agreed.value = !agreed.value
-  // 勾选即消除「请先勾选同意协议」提示，提示只在未勾选点登录时出现
-  if (agreed.value) consentHint.value = false
-}
 function openLegal(tab: 'terms' | 'privacy') {
   uni.navigateTo({ url: `/pages/legal/index?tab=${tab}` })
 }
@@ -391,7 +330,7 @@ function confirmLogout() {
       if (res.confirm) {
         userStore.logout()
         points.value = 0; completedCount.value = 0; upcomingCount.value = 0; voucherCount.value = 0; brandMember.value = null
-        agreed.value = false; consentHint.value = false
+        agreed.value = false
         uni.showToast({ title: tr('已退出登录', 'Signed out'), icon: 'none' })
       }
     }
@@ -450,12 +389,10 @@ button::after { border: none; }
 .agreement-checkline { display: flex; align-items: center; justify-content: center; gap: 10rpx; min-height: 44rpx; }
 .agreement-check { width: 32rpx; height: 32rpx; flex-shrink: 0; border: 2rpx solid var(--c-muted); border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--c-card); }
 .agreement-check.checked { background: var(--c-primary); border-color: var(--c-primary); }
-.agreement-check.alert { border-color: var(--c-error); }
 .check-mark { color: var(--c-rice); font-size: 22rpx; line-height: 1; }
 .agreement-text { color: var(--c-muted); font-size: 24rpx; line-height: 44rpx; }
 .agreement-docs { display: flex; align-items: center; justify-content: center; gap: 8rpx; min-height: 44rpx; }
 .agreement-link { color: var(--c-brown); text-decoration: underline; font-size: 24rpx; line-height: 44rpx; }
-.consent-hint { display: block; text-align: center; color: var(--c-error); font-size: 24rpx; line-height: 1.6; margin-top: 8rpx; }
 /* 退出登录：弱化小字，仅登录态显示 */
 .logout-foot { text-align: center; color: var(--c-muted); font-size: 24rpx; padding: 24rpx 0 16rpx; }
 .logout-foot:active { opacity: .7; }
