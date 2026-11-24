@@ -44,7 +44,7 @@ const PROJECTS = {
     prod: 'https://cityretreat.fullyu.cn/api',
     test: 'https://test-cityretreat.fullyu.cn/api',
     entry: 'apps/miniprogram/unpackage/dist/build/mp-weixin/utils/appConfig.js',
-    build: 'pnpm --filter tou-mall-miniprogram build:mp',
+    build: 'cd qingliao/apps/miniprogram && pnpm build:mp',
   },
 }
 
