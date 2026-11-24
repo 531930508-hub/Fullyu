@@ -462,7 +462,13 @@ public class BrandCardPaymentService {
         LocalDateTime now = LocalDateTime.now();
         order.setState(MemberCardOrder.STATE_PAID);
         order.setCardId(card.getId());
-        order.setCrmCardId(cardNode.path("cardId").asText(""));
+        String crmCardId = cardNode.path("cardId").asText("");
+        order.setCrmCardId(crmCardId);
+        // 本地权益期同步记上 CRM cardId：卡账本对账按它幂等，退款/对账也靠它对得上
+        if (!crmCardId.isEmpty() && !crmCardId.equals(card.getCrmCardId())) {
+            card.setCrmCardId(crmCardId);
+            memberCardService.updateById(card);
+        }
         fillPaymentRefs(order, merOrdId, hfSeqId, partyOrderId, outTransId, payType, payChannel);
         order.setPayTime(now);
         order.setPayError(null);

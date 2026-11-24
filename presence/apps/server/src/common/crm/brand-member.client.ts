@@ -138,14 +138,6 @@ export type BrandOrderRefund = {
   occurredAt: string
 }
 
-export type BrandPassBundle = {
-  /** 本地畅练卡 id；续期/改期时同一 passRef 重报，CRM 按 passRef 幂等 */
-  passRef: string
-  /** 上海日期 YYYY-MM-DD，首尾含 */
-  validFrom: string
-  validUntil: string
-}
-
 export type BrandInviteList = {
   /** 名额周期键：自然季（如 2026-Q4） */
   periodKey: string
@@ -473,27 +465,6 @@ export class BrandMemberClient {
       '/api/v1/brand-member/orders/refund',
       { localUserId, ...refund },
       `presence:refund:${refund.orderRef}:${refund.refundCents}`,
-    )
-  }
-
-  /**
-   * 畅练卡有效期内附赠同期品牌会员（CRM 侧 FY_BUNDLE 卡）。
-   * CRM 按 passRef 幂等：同日期重放、改日期即更新、撤销后可再次附赠，
-   * 所以这里不带 Idempotency-Key，避免「撤销→重新附赠→再撤销」被旧响应重放。
-   */
-  async bundlePass(localUserId: string, pass: BrandPassBundle) {
-    return this.request<{ card?: BrandCardView; replayed?: boolean }>(
-      'POST',
-      '/api/v1/brand-member/bundle',
-      { localUserId, ...pass },
-    )
-  }
-
-  async revokeBundle(localUserId: string, passRef: string, reason?: string) {
-    return this.request<{ card?: BrandCardView; replayed?: boolean }>(
-      'POST',
-      '/api/v1/brand-member/bundle/revoke',
-      { localUserId, passRef, ...(reason ? { reason } : {}) },
     )
   }
 

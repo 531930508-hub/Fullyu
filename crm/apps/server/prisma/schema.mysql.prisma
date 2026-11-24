@@ -277,6 +277,8 @@ model MemberBrandCard {
 
   @@unique([soldBy, orderRef])
   @@index([memberId, state, validUntil])
+  // 卡账本下发（GET /v1/brand-member/cards）按 updatedAt+id keyset 分页
+  @@index([updatedAt, id])
   @@map("member_brand_cards")
 }
 

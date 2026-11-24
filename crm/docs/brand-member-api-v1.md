@@ -96,7 +96,7 @@
 
 1C 实现补充：响应 `card` 另带 `cardId`；已有生效卡且又有续费时，`card` 是当前卡，`pendingCard` 是待生效卡。`savedCents` 尚无账本来源，暂返回 0。`game.url` 在 `CRM_GAME_URL` 未配置时为 `null`，不伪造可玩。
 
-`benefits`、`points.spend`、`perks` 与 `game.enabled` 对已发出的卡实时读取卡产品当前生效版本；赠送卡（`FY_GIFT`）与畅练卡附赠会员（`FY_BUNDLE`）没有独立产品，统一跟随年卡当前版本。卡期、价格仍是开卡快照。后台保存新版本后，业务端下次刷新即生效。
+`benefits`、`points.spend`、`perks` 与 `game.enabled` 对已发出的卡实时读取卡产品当前生效版本；赠送卡（`FY_GIFT`）与历史畅练卡附赠会员（`FY_BUNDLE`）没有独立产品，统一跟随年卡当前版本。卡期、价格仍是开卡快照。后台保存新版本后，业务端下次刷新即生效。
 
 ## 3.1 产品目录
 
@@ -131,6 +131,57 @@
 - `business` 为 `all` 或当前业务才下发；
 - 只下发 `PUBLISHED` 且未过期的公告，按 `pinned DESC, publishedAt DESC` 排序，最多 20 条；
 - 后台保存时封面只接受 `https://` 地址；已过期公告不能重新发布，需先修改有效期。
+
+## 3.3 卡账本下发（业务端对账）
+
+`GET /v1/brand-member/cards?business={business}&since={ISO}&cursor={cursor}&limit={n}`
+
+业务端把本地会员卡（如轻疗 `c_customer_member_card`）与 CRM 对账时用。**只下发在本业务有身份的会员的卡**：轻疗、时叙、在场的密钥各看各的，一端看不到另一端的会员。
+
+| 参数 | 说明 |
+| --- | --- |
+| `business` | 必填，与密钥绑定的业务一致，否则 `403 BUSINESS_MISMATCH` |
+| `since` | 可选，只下发 `updatedAt >= since` 的卡，用于小时级增量；格式 ISO 8601 |
+| `cursor` | 可选，上一页返回的 `nextCursor`，原样回传（`encodeURIComponent` 后拼进查询串） |
+| `limit` | 可选，1–500，默认 200 |
+
+```json
+{
+  "business": "retreat",
+  "cards": [
+    {
+      "cardId": "MBC-...",
+      "memberNo": "FY-2605-000927",
+      "localUserId": "local-m-tang",
+      "productCode": "FY_ANNUAL",
+      "productName": "Full愈大会员",
+      "source": "PAID",
+      "state": "ACTIVE",
+      "validFrom": "2026-10-30",
+      "validUntil": "2027-10-29",
+      "validDays": 365,
+      "priceCents": 36500,
+      "paidCents": 36500,
+      "paidAt": "2026-10-30T02:00:00+08:00",
+      "orderRef": "T-20261030-001",
+      "soldBy": "retreat",
+      "refund": null,
+      "updatedAt": "2026-11-20T02:00:00.000Z"
+    }
+  ],
+  "nextCursor": "2026-11-20T02:00:00.000Z|MBC-...",
+  "updatedAt": "2026-11-24T10:42:00+08:00"
+}
+```
+
+规则：
+
+- 按 `updatedAt ASC, id ASC` 做 keyset 分页，`nextCursor` 为 `null` 表示翻完；翻页期间有新卡写入也不会重复或漏卡。
+- **返回全部状态**，含 `REFUNDED` / `REFUND_LOCKED`（`refund` 字段给出类型、金额、时间、原因）；落地不落地由消费端决定。
+- `state` 是库里存的卡状态，**过期不落库**：消费端要按 `validFrom` / `validUntil` 自己判定「待生效 / 生效 / 已到期」。
+- `source`：`PAID` 付费开通、`GIFT` 会员码赠送、`MANUAL` 后台手工发卡；`BUNDLE` 为已下线的畅练卡附赠（仅历史数据）。
+- 同一会员的多张卡按行下发，消费端按 `validFrom`/`validUntil` 各自落一行，不要把年卡和月卡合并。
+- `localUserId` 是该业务下的本地用户 id；会员在 CRM 没有本业务身份时该卡不会出现在结果里。
 
 ## 4. 报价与开卡（本地 mock 只实现报价/开卡的成功路径）
 
@@ -190,7 +241,7 @@
 ## 6. 在场双卡
 
 - 品牌卡：CRM 卡期，在场权益 = 热门课优先排位 + 课程阶梯价（卡版本 `perks.presence`）+ 每季邀请好友 1 张。
-- 在场畅练卡：在场自有卡期，权益 = 有效期内 0 元报课；有效期内附赠同期品牌会员（§9.5），附赠资格不可退款。
+- 在场畅练卡：在场自有卡期，权益 = 有效期内 0 元报课；**不再附赠品牌会员**（附赠接口已下线）。
 - 在场畅练卡页面不展示年卡信息；只有畅练卡快到期或没有畅练卡时才露出年卡入口。
 - 课程详情/结算：
   1. 有有效畅练卡 → 免费；
@@ -251,17 +302,16 @@
 - 同一会员重复领取同一活动返回 `409 GIFT_ALREADY_CLAIMED`，`message` 为「本活动已领取过（会员有效期至 YYYY-MM-DD），不能重复领取」。
 - 失败：`GIFT_CODE_INVALID`（不存在/待审批/已驳回）、`GIFT_CODE_PAUSED`、`GIFT_CODE_EXPIRED`、`GIFT_CODE_FULL`（界面显示「已满」）、`GIFT_ALREADY_CLAIMED`、`GIFT_NEW_MEMBER_ONLY`。
 - 码由后台「会员码」创建：名称、渠道标签、推荐人（STAFF / THERAPIST / PARTNER）、天数（默认 30，>30 天进入待审批且发起人不能自审）、名额（留空不限）、领取截止日、领取对象。
-- `newMemberOnly=true`：仅限从未持有付费卡的会员领取。付费卡指线上实付 `PAID` 或线下实收 `MANUAL`（`paidCents > 0`）；已退款、已过期也算买过；赠送卡 `GIFT` 与畅练卡附赠 `BUNDLE` 不算购买。不满足返回 `409 GIFT_NEW_MEMBER_ONLY`。
+- `newMemberOnly=true`：仅限从未持有付费卡的会员领取。付费卡指线上实付 `PAID` 或线下实收 `MANUAL`（`paidCents > 0`）；已退款、已过期也算买过；赠送卡 `GIFT` 与历史畅练卡附赠 `BUNDLE` 不算购买。不满足返回 `409 GIFT_NEW_MEMBER_ONLY`。
 
 ### 9.4 意见反馈与会员故事（仅有效品牌会员）
 
 - `POST /v1/brand-member/feedback`：`{ localUserId, content(5–1000 字), allowQuote }`；每人每天最多 5 条（`429 FEEDBACK_RATE_LIMIT`）。
 - `GET /v1/brand-member/stories?localUserId=...`：返回已发布故事 `{ stories:[{ id, title, quote, quoteBy, story, business, publishedAt }] }`。只有会员勾选 `allowQuote` 的反馈才能关联成故事。
 
-### 9.5 在场：畅练卡附赠与邀请好友（仅在场密钥）
+### 9.5 在场：邀请好友（仅在场密钥）
 
-- `POST /v1/brand-member/bundle`：`{ localUserId, passRef, validFrom, validUntil }`（日期 `YYYY-MM-DD`）。畅练卡有效期内附赠同期品牌会员（`FY_BUNDLE`）；续期以同一 `passRef` 重新上报，日期不变视为重放。
-- `POST /v1/brand-member/bundle/revoke`：`{ localUserId, passRef, reason }`，畅练卡退卡时撤销附赠资格（不涉及退款）。
+> 畅练卡附赠品牌会员的 `POST /v1/brand-member/bundle`、`POST /v1/brand-member/bundle/revoke` 已于 2026-11 下线，历史 `FY_BUNDLE` 卡仍按下发接口（§3.3）正常返回。
 - `GET /v1/brand-member/invites?localUserId=...` → `{ periodKey, monthKey, quota, used, remaining, invites }`；名额按自然季计算（`periodKey` 形如 `2026-Q4`），`quota` 取卡版本 `perks.presence.invitesPerQuarter`（旧快照的 `invitesPerMonth` 按每季读）。`monthKey` 保留一版，值与 `periodKey` 相同。
 - `POST /v1/brand-member/invites/create`：`{ localUserId }` → `{ code, periodKey, monthKey, quota, used, remaining, expiresAt }`，邀请 30 天有效；生成即扣名额，同一周期内 `(inviterId, periodKey, slot)` 唯一键兜住并发，超额 `409 INVITE_QUOTA_EXCEEDED`。
 - `POST /v1/brand-member/invites/claim`：`{ localUserId, code }` → `{ claimed, replayed, voucher:{ kind:'PRESENCE_BOGO_CLASS', title, validMonths:3, usage }, inviter:{ localUserId, memberNo, nickname } }`。

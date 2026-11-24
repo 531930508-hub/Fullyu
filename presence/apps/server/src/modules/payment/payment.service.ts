@@ -299,7 +299,7 @@ export class PaymentService {
       include: { course: true },
     })
 
-    // 支付成功后立即把该用户的畅练卡附赠与订单上报同步到 CRM，不必等下一轮定时任务。
+    // 支付成功后立即把该用户的会员卡与订单上报同步到 CRM，不必等下一轮定时任务。
     if (order) {
       void this.brandSync.syncUser(order.userId).catch((error) => {
         this.logger.warn(

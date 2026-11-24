@@ -26,7 +26,6 @@ export interface FakeBrandCrm {
   delayMs: number
   perks: { prioritySeat: boolean; tierPrice: boolean; invitesPerQuarter: number }
   /** passRef → 附赠卡（含撤销状态） */
-  bundles: Map<string, { localUserId: string; validFrom: string; validUntil: string; state: string }>
   /** orderRef → 已上报订单 */
   orders: Map<string, { localUserId: string; paidCents: number; savedCents: number; refundCents: number }>
   /** code → 邀请 */
@@ -93,7 +92,6 @@ export async function startFakeBrandCrm(options: {
     failNext: null,
     delayMs: 0,
     perks: { prioritySeat: true, tierPrice: true, invitesPerQuarter: 2 },
-    bundles: new Map(),
     orders: new Map(),
     invites: new Map(),
     feedback: [],
@@ -402,36 +400,6 @@ export async function startFakeBrandCrm(options: {
         voucher,
         inviter: { localUserId: invite.inviter, nickname: '好友' },
       })
-      return
-    }
-
-    if (req.method === 'POST' && route === '/api/v1/brand-member/bundle') {
-      const prior = state.bundles.get(input.passRef)
-      const replayed = Boolean(
-        prior &&
-          prior.state !== 'REFUNDED' &&
-          prior.validFrom === input.validFrom &&
-          prior.validUntil === input.validUntil,
-      )
-      state.bundles.set(input.passRef, {
-        localUserId,
-        validFrom: input.validFrom,
-        validUntil: input.validUntil,
-        state: 'ACTIVE',
-      })
-      reply(res, 201, { card: { state: 'ACTIVE', productCode: 'FY_BUNDLE' }, replayed })
-      return
-    }
-
-    if (req.method === 'POST' && route === '/api/v1/brand-member/bundle/revoke') {
-      const prior = state.bundles.get(input.passRef)
-      if (!prior) {
-        reply(res, 404, { error: 'CARD_NOT_FOUND', message: '没有对应的附赠会员' })
-        return
-      }
-      const replayed = prior.state === 'REFUNDED'
-      prior.state = 'REFUNDED'
-      reply(res, 201, { card: { state: 'REFUNDED' }, replayed })
       return
     }
 

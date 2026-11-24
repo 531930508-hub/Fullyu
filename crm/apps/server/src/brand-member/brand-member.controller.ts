@@ -16,6 +16,7 @@ import {
 } from './brand-member.guard';
 import {
   BrandMemberService,
+  type CardsQuery,
   type IssueInput,
   type MeQuery,
   type ProfileInput,
@@ -41,6 +42,12 @@ export class BrandMemberController {
   @Get('products')
   products() {
     return this.service.products();
+  }
+
+  /** 卡账本增量下发：业务端会员卡对账用，只含本业务有身份的会员。 */
+  @Get('cards')
+  cards(@Query() query: CardsQuery, @Req() req: BrandMemberRequest) {
+    return this.service.cards(query, req.fy!);
   }
 
   /** 小程序「我的资料」编辑：昵称/头像/性别/生日以 CRM 为唯一归档。 */

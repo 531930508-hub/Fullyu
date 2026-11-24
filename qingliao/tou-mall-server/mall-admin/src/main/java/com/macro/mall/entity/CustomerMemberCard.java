@@ -29,6 +29,12 @@ public class CustomerMemberCard extends BaseEntity {
     public static final int STATUS_EXPIRED = 2;
     public static final int STATUS_REFUNDED = 3;
 
+    public static final int CHANNEL_MINI = 1;
+    public static final int CHANNEL_ADMIN = 2;
+    public static final int CHANNEL_REWARD = 3;
+    /** CRM 卡账本同步（CRM 手工发卡/赠送等非本端支付来源）。 */
+    public static final int CHANNEL_CRM = 4;
+
     @ApiModelProperty("卡号")
     private String cardNo;
 
@@ -71,8 +77,11 @@ public class CustomerMemberCard extends BaseEntity {
     @ApiModelProperty("开卡支付单id")
     private Long payOrderId;
 
-    @ApiModelProperty("1小程序 2后台手工 3预付券包耗尽赠送")
+    @ApiModelProperty("1小程序 2后台手工 3预付券包耗尽赠送 4CRM卡账本同步")
     private Integer channel;
+
+    @ApiModelProperty("CRM 卡账本 cardId，同步幂等键")
+    private String crmCardId;
 
     @ApiModelProperty("耗尽赠会员对应购买订单，数据库唯一约束防重复赠送")
     private Long rewardSourceOrderId;
@@ -120,4 +129,8 @@ public class CustomerMemberCard extends BaseEntity {
     @TableField(exist = false)
     @ApiModelProperty("客户手机号（后台返回）")
     private String customerPhone;
+
+    @TableField(exist = false)
+    @ApiModelProperty("来源文案（后台列表用）")
+    private String channelText;
 }

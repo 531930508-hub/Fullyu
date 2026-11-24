@@ -8,7 +8,7 @@ import type { StaffContext } from '../common/auth.types';
 import { ProgramService } from './program.service';
 import { GiftQrService } from './gift-qr.service';
 
-/** 三端调用：订单上报、会员码、反馈/故事、在场附赠与邀请、退款试算。 */
+/** 三端调用：订单上报、会员码、反馈/故事、在场邀请、退款试算。 */
 @Controller('v1/brand-member')
 @UseGuards(BrandMemberGuard)
 export class ProgramExternalController {
@@ -46,18 +46,6 @@ export class ProgramExternalController {
   @Get('stories')
   stories(@Query() query: unknown, @Req() req: BrandMemberRequest) {
     return this.program.memberStories(query, req.fy!);
-  }
-
-  @Post('bundle')
-  @HttpCode(200)
-  bundle(@Body() body: unknown, @Req() req: BrandMemberRequest) {
-    return this.program.bundlePass(body, req.fy!);
-  }
-
-  @Post('bundle/revoke')
-  @HttpCode(200)
-  revokeBundle(@Body() body: unknown, @Req() req: BrandMemberRequest) {
-    return this.program.revokeBundle(body, req.fy!);
   }
 
   @Get('invites')

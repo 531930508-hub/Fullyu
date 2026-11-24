@@ -853,4 +853,129 @@ describe('CRM 1C：品牌会员签名接口、卡期与愈行之旅', () => {
     const noToken = await request(server()).get('/api/v1/brand-member/game/session');
     expect(noToken.status).toBe(401);
   });
+
+  it('卡账本下发：keyset 分页不重不漏，退款卡照发，只含本业务会员', async () => {
+    const at = (iso: string) => new Date(iso);
+    const seedCard = (
+      id: string,
+      memberId: string,
+      soldBy: string,
+      updatedAt: string,
+      extra: Record<string, unknown> = {}
+    ) =>
+      h.prisma.memberBrandCard.create({
+        data: {
+          id,
+          memberId,
+          productCode: 'FY_ANNUAL',
+          version: 1,
+          productName: 'Full愈大会员',
+          priceCents: 36500,
+          validDays: 365,
+          validFrom: at('2026-10-30T00:00:00+08:00'),
+          validUntil: at('2027-10-29T00:00:00+08:00'),
+          soldBy,
+          soldByName: '轻疗',
+          orderRef: `SYNC-${id}`,
+          paidCents: 36500,
+          paidAt: at('2026-10-30T02:00:00+08:00'),
+          updatedAt: at(updatedAt),
+          ...extra
+        }
+      });
+
+    // 轻疗会员三张卡，故意乱序插入，验证排序只看 updatedAt；
+    // 时间取远期，免得和本文件其它用例现发的卡混在同一页。
+    await seedCard('MBC-sync-2', 'm-tang', 'ql', '2030-01-02T10:00:00+08:00');
+    await seedCard('MBC-sync-1', 'm-tang', 'ql', '2030-01-01T10:00:00+08:00');
+    await seedCard('MBC-sync-3', 'm-tang', 'ql', '2030-01-03T10:00:00+08:00', {
+      state: 'REFUNDED',
+      refundType: 'WITHIN_7D',
+      refundCents: 36500,
+      refundedAt: at('2030-01-03T10:00:00+08:00')
+    });
+    // 时叙会员的卡：轻疗密钥不应看到
+    await seedCard('MBC-sync-sx', 'm-lin', 'sx', '2029-12-31T10:00:00+08:00');
+
+    const floor = encodeURIComponent('2030-01-01T00:00:00+08:00');
+    const first = await signed(
+      'get',
+      `/v1/brand-member/cards?business=retreat&since=${floor}&limit=2`,
+      { key: 'ql-test' }
+    );
+    expect(first.status).toBe(200);
+    expect(first.body.business).toBe('retreat');
+    expect(first.body.cards.map((c: { cardId: string }) => c.cardId)).toEqual([
+      'MBC-sync-1',
+      'MBC-sync-2'
+    ]);
+    expect(first.body.cards[0]).toMatchObject({
+      localUserId: 'local-m-tang',
+      memberNo: 'FY-2605-000927',
+      soldBy: 'retreat',
+      state: 'ACTIVE',
+      productCode: 'FY_ANNUAL',
+      validFrom: '2026-10-30',
+      validUntil: '2027-10-29',
+      paidCents: 36500,
+      refund: null
+    });
+    expect(first.body.nextCursor).not.toBeNull();
+
+    const cursor = encodeURIComponent(first.body.nextCursor as string);
+    const second = await signed(
+      'get',
+      `/v1/brand-member/cards?business=retreat&limit=2&cursor=${cursor}`,
+      { key: 'ql-test' }
+    );
+    expect(second.status).toBe(200);
+    expect(second.body.cards).toHaveLength(1);
+    expect(second.body.cards[0]).toMatchObject({
+      cardId: 'MBC-sync-3',
+      state: 'REFUNDED',
+      refund: { type: 'WITHIN_7D', cents: 36500, reason: null }
+    });
+    expect(second.body.nextCursor).toBeNull();
+    // 两页并集恰好是全部卡：不重不漏
+    const seen = new Set([
+      ...first.body.cards.map((c: { cardId: string }) => c.cardId),
+      ...second.body.cards.map((c: { cardId: string }) => c.cardId)
+    ]);
+    expect([...seen].sort()).toEqual(['MBC-sync-1', 'MBC-sync-2', 'MBC-sync-3']);
+  });
+
+  it('卡账本下发：since 增量、跨业务 403、参数非法 400', async () => {
+    const since = encodeURIComponent('2030-01-02T00:00:00+08:00');
+    const res = await signed('get', `/v1/brand-member/cards?business=retreat&since=${since}`, {
+      key: 'ql-test'
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.cards.map((c: { cardId: string }) => c.cardId)).toEqual([
+      'MBC-sync-2',
+      'MBC-sync-3'
+    ]);
+
+    const mismatch = await signed('get', '/v1/brand-member/cards?business=presence', {
+      key: 'ql-test'
+    });
+    expect(mismatch.status).toBe(403);
+    expect(mismatch.body.error).toBe('BUSINESS_MISMATCH');
+
+    const badLimit = await signed('get', '/v1/brand-member/cards?business=retreat&limit=0', {
+      key: 'ql-test'
+    });
+    expect(badLimit.status).toBe(400);
+
+    const badCursor = await signed(
+      'get',
+      `/v1/brand-member/cards?business=retreat&cursor=${encodeURIComponent('not-a-cursor')}`,
+      { key: 'ql-test' }
+    );
+    expect(badCursor.status).toBe(400);
+
+    const badSince = await signed('get', '/v1/brand-member/cards?business=retreat&since=nope', {
+      key: 'ql-test'
+    });
+    expect(badSince.status).toBe(400);
+  });
 });

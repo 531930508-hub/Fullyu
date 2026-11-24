@@ -122,6 +122,12 @@ brand-crm:
   # 消费订单上报（每满 ¥300 得一颗骰子、累计会员已享优惠，影响 7 天后退款金额），默认关闭。
   # 品牌卡对外开售前必须开启，否则 CRM 退款试算缺少轻疗优惠记录。
   order-report-enabled: ${BRAND_ORDER_REPORT_ENABLED:}
+  # 卡账本对账（CRM → 本端权益期，按 crmCardId 幂等）：跟随 brand-crm.enabled，
+  # 每小时增量同步；进程首轮自动全量回填，不另设开关。
+  card-sync-page-size: ${BRAND_CRM_CARD_SYNC_PAGE_SIZE:200}
+  card-sync-max-pages: ${BRAND_CRM_CARD_SYNC_MAX_PAGES:50}
+  # 每次从「上次成功时间 - 回看天数」重扫，兜住时钟偏差与上一轮的尾部漏项。
+  card-sync-lookback-days: ${BRAND_CRM_CARD_SYNC_LOOKBACK_DAYS:2}
 
 # CRM → 轻疗内部支付接口（仅供 CRM 服务端调用），默认关闭。
 # 配置 key-id 与 secret 即启用；密钥只通过环境变量注入，不写入仓库。
