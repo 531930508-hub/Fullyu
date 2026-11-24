@@ -25,6 +25,7 @@ import {createSSRApp} from 'vue'
 import installFilter from '@/filters'
 import { t, syncNavTitle, localeClass } from './utils/locale'
 import { img } from './utils/imageLocale'
+import { defaultShareTimeline, resolveShareMessage } from './utils/share'
 
 export function createApp() {
     const app = createSSRApp(App)
@@ -38,6 +39,10 @@ export function createApp() {
     // 全局 mixin：导航标题跟随语言；页面停留时长埋点（静默、不阻塞）
     app.mixin({
         methods: { t, img, localeClass },
+        // #ifdef MP-WEIXIN
+        onShareAppMessage(res) { return resolveShareMessage(res) },
+        onShareTimeline() { return defaultShareTimeline() },
+        // #endif
         onShow() { syncNavTitle(); trackPageEnter() },
         onHide() { trackPageLeave() },
         onUnload() { trackPageLeave() }

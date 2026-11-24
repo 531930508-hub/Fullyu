@@ -324,9 +324,7 @@
 	import {
 		onLoad,
 		onShow,
-		onUnload,
-		onShareAppMessage,
-		onShareTimeline
+		onUnload
 	} from '@dcloudio/uni-app'
 	import {
 		claimGiftCode,
@@ -1243,15 +1241,6 @@
 	onUnload(() => {
 		disposed = true
 	})
-
-	onShareAppMessage(() => ({
-		title: tt('Full愈大会员 · 时叙、在场、轻疗三店通用', 'Full Yu Member · one card for three spaces'),
-		path: '/pages/user/brand-member/brand-member'
-	}))
-
-	onShareTimeline(() => ({
-		title: tt('Full愈大会员 · 三店通用', 'Full Yu Member · one card for three spaces')
-	}))
 </script>
 
 <style lang="less" scoped>

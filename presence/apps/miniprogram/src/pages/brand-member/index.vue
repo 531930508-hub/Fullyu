@@ -239,7 +239,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad, onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import PageState from '@/components/PageState.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
@@ -248,7 +248,7 @@ import BrandPurchaseSheet from '@/components/BrandPurchaseSheet.vue'
 import FloatingBack from '@/components/FloatingBack.vue'
 import { readCapsuleLayout } from '@/utils/capsule'
 import { tr, isEnglish } from '@/locale'
-import { brandShareMessage, brandShareTimeline } from '@/utils/share'
+import { brandShareMessage, registerShareHandler } from '@/utils/share'
 import { useUserStore } from '@/stores/user'
 import {
   formatDate,
@@ -569,9 +569,10 @@ async function openGame() {
 }
 
 const shareTitle = () => tr('Full愈大会员｜一张卡，三店通用', 'Full Yu Member | One card across three places')
-onShareAppMessage((res: any) => {
+registerShareHandler((res: any) => {
+  if (res?.from !== 'button') return brandShareMessage()
   // 「发给好友」按钮带邀请码：好友打开落地页，登录后领取在场买一赠一券（与邀请人同上一节课）。
-  const code = res?.from === 'button' ? res?.target?.dataset?.code : ''
+  const code = res?.target?.dataset?.code
   if (code) {
     return brandShareMessage(
       tr(`${data.value?.member?.name || '朋友'}请你在在场一起上一节课`, 'A friend invites you to take a class together at Presence'),
@@ -580,9 +581,6 @@ onShareAppMessage((res: any) => {
   }
   return brandShareMessage(shareTitle())
 })
-// #ifdef MP-WEIXIN
-onShareTimeline(() => brandShareTimeline(shareTitle()))
-// #endif
 </script>
 
 <style scoped>

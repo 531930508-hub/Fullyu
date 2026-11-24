@@ -105,7 +105,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onShow, onPullDownRefresh, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { onShow, onPullDownRefresh } from '@dcloudio/uni-app'
 import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import { listCourses } from '@/api/course'
@@ -126,7 +126,6 @@ import BrandCover from '@/components/BrandCover.vue'
 import PageState from '@/components/PageState.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
 import BrandPurchaseSheet from '@/components/BrandPurchaseSheet.vue'
-import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 
 const userStore = useUserStore()
 const { isTrainer, activeView } = storeToRefs(userStore)
@@ -439,12 +438,6 @@ function goCommunityDetail(id: string) { uni.navigateTo({ url: `/pages/community
 function goCommunityWorkspace(id: string) { uni.navigateTo({ url: `/pages/community-workspace/index?id=${id}` }) }
 function goCommunityCreate() { uni.navigateTo({ url: '/pages/community-create/index' }) }
 function goCommunityMine() { uni.navigateTo({ url: '/pages/community-mine/index' }) }
-
-const shareTitle = () => tr('Full愈 · 在场｜给自己一点在场的时间', 'Full愈 · Presence | Make a little time for yourself')
-onShareAppMessage(() => brandShareMessage(shareTitle()))
-// #ifdef MP-WEIXIN
-onShareTimeline(() => brandShareTimeline(shareTitle()))
-// #endif
 </script>
 
 <style scoped>

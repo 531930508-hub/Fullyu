@@ -51,11 +51,10 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { onLoad } from '@dcloudio/uni-app'
 import { getTrainer } from '@/api/trainer'
 import { getTrainerReviews, type TrainerReviewsResult } from '@/api/review'
 import { tr, isEnglish } from '@/locale'
-import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
 import PageState from '@/components/PageState.vue'
@@ -113,16 +112,6 @@ function formatDate(value: string) {
 onLoad((options) => { loadTrainer(options?.id || '') })
 function goBack() { if (getCurrentPages().length > 1) uni.navigateBack(); else uni.switchTab({ url: '/pages/index/index' }) }
 function goDetail(id: string) { if (id) uni.navigateTo({ url: `/pages/course-detail/index?id=${id}` }) }
-
-const shareTitle = () =>
-  trainer.value?.displayName
-    ? tr(`Full愈 · ${trainer.value.displayName}｜导师主页`, `Full愈 · ${trainer.value.displayName} | Guide profile`)
-    : tr('Full愈 · 导师主页', 'Full愈 · Guide profile')
-onShareAppMessage(() => brandShareMessage(shareTitle()))
-// #ifdef MP-WEIXIN
-onShareTimeline(() => brandShareTimeline(shareTitle()))
-// #endif
-
 </script>
 
 <style scoped>

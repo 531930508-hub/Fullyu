@@ -32,7 +32,7 @@ function mount(page = 'course-detail', overrides = {}) {
     exports: {}, console, setTimeout, clearTimeout,
     getCurrentPages: () => [],
     uni: { showModal: o => calls.modals.push(o), showToast() {}, switchTab: o => calls.tabs.push(o.url), navigateBack() {}, navigateTo() {}, previewImage() {}, pageScrollTo() {} },
-    require: id => id === 'vue' ? vue : id.includes('uni-app') ? { onLoad() {}, onShow() {} } : id.includes('stores/user') ? { useUserStore: () => store } : id.includes('locale') ? { t: key => key, tr: zh => zh, isEnglish: () => false } : id.includes('utils/capsule') ? { readCapsuleLayout: () => ({ statusBarHeight: 0, headerTop: 16, capsuleRight: 0, navBarHeight: 44, hasCapsule: false }) } : id.endsWith('.vue') ? {} : api,
+    require: id => id === 'vue' ? vue : id.includes('uni-app') ? { onLoad() {}, onShow() {} } : id.includes('stores/user') ? { useUserStore: () => store } : id.includes('locale') ? { t: key => key, tr: zh => zh, isEnglish: () => false } : id.includes('utils/capsule') ? { readCapsuleLayout: () => ({ statusBarHeight: 0, headerTop: 16, capsuleRight: 0, navBarHeight: 44, hasCapsule: false }) } : id.includes('utils/share') ? { brandShareMessage: title => ({ title }), registerShareHandler: () => {} } : id.endsWith('.vue') ? {} : api,
   }
   const state = vm.runInNewContext(js + '\n;({' + names.map(n => `${n}:typeof ${n} === 'undefined' ? undefined : ${n}`).join(',') + '})', ctx)
   return { state, calls, course, quote, store }

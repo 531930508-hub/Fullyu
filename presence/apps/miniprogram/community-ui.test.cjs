@@ -63,6 +63,7 @@ function mount(name, overrides = {}, token = 'token') {
       if (id.includes('utils/capsule')) return { readCapsuleLayout: () => ({ statusBarHeight: 0, headerTop: 16, capsuleRight: 0, navBarHeight: 44, hasCapsule: false }) }
       if (id.includes('utils/dict')) return dict
       if (id.includes('utils/share')) return {
+        registerShareHandler: () => {},
         brandShareMessage: title => ({ title }),
         brandShareTimeline: title => ({ title }),
         shareTargetPath: (type, id) => `/pages/share/index?type=${type}&id=${id}`,

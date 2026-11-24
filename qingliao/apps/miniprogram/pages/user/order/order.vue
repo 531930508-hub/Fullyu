@@ -291,8 +291,6 @@
 	import { img } from '../../../utils/imageLocale'
 	import {
 		onLoad,
-		onShareAppMessage,
-		onShareTimeline,
 		onShow,
 		onPageScroll,
 		onReachBottom
@@ -319,6 +317,7 @@
 	import cookie from "../../../utils/cookieUtil"
 	import constant from '@/consts/constant'
 	import { shareImg } from '../../../utils/image'
+	import { defaultShareMessage, registerShareHandler } from '@/utils/share'
 	import CommentFisrtModel from '../../../components/CommentFisrtModel'
 	import debounce from "../../../utils/debounce";
 	import productApi from "../../../api/product";
@@ -1097,7 +1096,8 @@
 
 	]);
 	const shop=ref([])
-	onShareAppMessage(async (res) => {
+	registerShareHandler(async (res) => {
+		if (res?.from !== 'button') return defaultShareMessage()
 		console.log(res)
 		let shopList = cookie.getStoreList()
 		

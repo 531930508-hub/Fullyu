@@ -32,11 +32,11 @@
 <script setup>
 	import { t } from '../../utils/locale'
 import { ref, onMounted, computed } from 'vue'
-import { onShareAppMessage } from '@dcloudio/uni-app'
 import cookie from '../../utils/cookieUtil'
 import api from '@/api/customer'
 import { img } from '../../utils/image'
 import constant from '@/consts/constant'
+import { defaultShareMessage, registerShareHandler } from '@/utils/share'
 
 // 邀请码
 const invitationCode = ref(cookie.getInvitationCode())
@@ -57,7 +57,8 @@ const headerHeight = computed(() => {
 })
 
 // 分享配置
-onShareAppMessage((res) => {
+registerShareHandler((res) => {
+  if (res?.from !== 'button') return defaultShareMessage()
   return {
     title: t('邀请好友共同Full愈'),
     path: '/pages/login/login?invitationCode=' + encodeURIComponent(invitationCode.value),

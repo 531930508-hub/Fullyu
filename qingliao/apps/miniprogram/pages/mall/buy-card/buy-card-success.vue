@@ -86,11 +86,10 @@
 	import { img } from '../../../utils/imageLocale'
 	import {
 		onLoad,
-		onShareAppMessage,
-		onShareTimeline,
 		onShow,
 		onPageScroll
 	} from "@dcloudio/uni-app"
+	import { defaultShareMessage, registerShareHandler } from '@/utils/share'
 	import {
 		ref,
 		reactive,
@@ -155,7 +154,8 @@ console.log(topiconStr.value)
 	const handleInputTitleVal = (e) => {
 		inputTitleVal.value=e.detail.value
 	}
-	onShareAppMessage(async (res) => {
+	registerShareHandler(async (res) => {
+		if (res?.from !== 'button') return defaultShareMessage()
 		let data=await orderApi.shareFriend(orderidStr.value,inputTitleVal.value)
 		 console.log(data)
 		return {

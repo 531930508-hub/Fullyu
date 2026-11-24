@@ -77,9 +77,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { onLoad } from '@dcloudio/uni-app'
 import { fetchEvent, signupEvent, cancelEventSignup, type CommunityEvent } from '@/api/skool'
-import { goLoginFor } from '@/utils/share'
+import { brandShareMessage, goLoginFor, registerShareHandler } from '@/utils/share'
 import { tr, isEnglish } from '@/locale'
 import { readCapsuleLayout } from '@/utils/capsule'
 import PageState from '@/components/PageState.vue'
@@ -120,19 +120,14 @@ onLoad((query) => {
   load()
 })
 
-onShareAppMessage(() => ({
-  title: sharePayload.value?.title || event.value?.title || tr('Full愈 · 社群活动', 'Full愈 · Community event'),
-  path: sharePayload.value?.path || `/pages/community-event-detail/index?id=${encodeURIComponent(eventId.value)}&cid=${encodeURIComponent(communityId.value)}`,
-  imageUrl: sharePayload.value?.imageUrl,
-}))
-
-// #ifdef MP-WEIXIN
-onShareTimeline(() => ({
-  title: sharePayload.value?.title || event.value?.title || tr('Full愈 · 社群活动', 'Full愈 · Community event'),
-  query: `id=${encodeURIComponent(eventId.value)}&cid=${encodeURIComponent(communityId.value)}`,
-  imageUrl: sharePayload.value?.imageUrl,
-}))
-// #endif
+registerShareHandler((res: any) => {
+  if (res?.from !== 'button') return brandShareMessage()
+  return {
+    title: sharePayload.value?.title || event.value?.title || tr('Full愈 · 社群活动', 'Full愈 · Community event'),
+    path: sharePayload.value?.path || `/pages/community-event-detail/index?id=${encodeURIComponent(eventId.value)}&cid=${encodeURIComponent(communityId.value)}`,
+    imageUrl: sharePayload.value?.imageUrl,
+  }
+})
 
 async function load() {
   guest.value = !uni.getStorageSync('token')

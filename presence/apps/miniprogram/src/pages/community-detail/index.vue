@@ -391,7 +391,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad, onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import {
   fetchCommunity, fetchMembership, fetchEvents, fetchPosts, fetchMembers, fetchMemberCard, fetchHostCard,
   joinCommunity, submitPost, postComment, togglePostLike, moderateContent, applyJoin, updatePrivacy,
@@ -402,7 +402,7 @@ import { payOrder } from '@/utils/wechat'
 import { tr, isEnglish } from '@/locale'
 import { communityCategoryLabel, communityTagLabel } from '@/utils/community-labels'
 import { readCapsuleLayout } from '@/utils/capsule'
-import { goLoginFor, type ShareTargetOption } from '@/utils/share'
+import { brandShareMessage, goLoginFor, registerShareHandler, type ShareTargetOption } from '@/utils/share'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
 import PageState from '@/components/PageState.vue'
@@ -458,19 +458,14 @@ onLoad((options) => {
 
 onShow(load)
 
-onShareAppMessage(() => ({
-  title: sharePayload.value?.title || community.value?.name || tr('Full愈 · 社群', 'Full愈 · Community'),
-  path: sharePayload.value?.path || `/pages/community-detail/index?id=${encodeURIComponent(communityId.value)}`,
-  imageUrl: sharePayload.value?.imageUrl,
-}))
-
-// #ifdef MP-WEIXIN
-onShareTimeline(() => ({
-  title: sharePayload.value?.title || community.value?.name || tr('Full愈 · 社群', 'Full愈 · Community'),
-  query: `id=${encodeURIComponent(communityId.value)}`,
-  imageUrl: sharePayload.value?.imageUrl,
-}))
-// #endif
+registerShareHandler((res: any) => {
+  if (res?.from !== 'button') return brandShareMessage()
+  return {
+    title: sharePayload.value?.title || community.value?.name || tr('Full愈 · 社群', 'Full愈 · Community'),
+    path: sharePayload.value?.path || `/pages/community-detail/index?id=${encodeURIComponent(communityId.value)}`,
+    imageUrl: sharePayload.value?.imageUrl,
+  }
+})
 
 async function load() {
   if (refreshBusy) return

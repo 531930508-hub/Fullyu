@@ -38,6 +38,25 @@ export function brandShareTimeline(
   }
 }
 
+type BrandShareHandler = (
+  res: any,
+) => ReturnType<typeof brandShareMessage> | Promise<ReturnType<typeof brandShareMessage>>
+
+const pageShareHandlers = new WeakMap<object, BrandShareHandler>()
+
+export function registerShareHandler(handler: BrandShareHandler) {
+  const pages = getCurrentPages()
+  const page = pages[pages.length - 1]
+  if (page) pageShareHandlers.set(page, handler)
+}
+
+export function resolveBrandShareMessage(res: any) {
+  const pages = getCurrentPages()
+  const page = pages[pages.length - 1]
+  const handler = page && pageShareHandlers.get(page)
+  return handler ? handler(res) : brandShareMessage()
+}
+
 export interface ShareTarget {
   type: ShareType
   id: string

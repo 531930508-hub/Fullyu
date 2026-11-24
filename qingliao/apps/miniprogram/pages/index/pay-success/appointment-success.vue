@@ -111,11 +111,10 @@
 	import { storeName, storeAddress } from '../../../utils/storeLocale'
 	import {
 		onLoad,
-		onShareAppMessage,
-		onShareTimeline,
 		onShow,
 		onPageScroll
 	} from "@dcloudio/uni-app"
+	import { defaultShareMessage, registerShareHandler } from '@/utils/share'
 	import {
 		ref,
 		computed,
@@ -199,7 +198,8 @@
 				}
 			});
 		}
-	onShareAppMessage(async (res) => {
+	registerShareHandler(async (res) => {
+		if (res?.from !== 'button') return defaultShareMessage()
 		console.log(res.target.dataset.id)
 		//let data=await orderApi.shareOrder(res.target.dataset.id)
 		let name = cookie.getNickname()

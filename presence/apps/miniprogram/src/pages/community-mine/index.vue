@@ -36,10 +36,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad, onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { fetchMine, type Community } from '@/api/skool'
 import { tr, isEnglish } from '@/locale'
-import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 import { readCapsuleLayout } from '@/utils/capsule'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
@@ -89,13 +88,6 @@ function goCreate() { uni.navigateTo({ url: '/pages/community-create/index' }) }
 function goDiscover() { uni.switchTab({ url: '/pages/community-list/index' }) }
 function goLogin() { uni.switchTab({ url: '/pages/profile/index' }) }
 function goBack() { uni.navigateBack({ fail: goLogin }) }
-
-const shareTitle = () => tr('Full愈 · 我的社群｜与同频的人相遇', 'Full愈 · My communities | Meet like-minded people')
-onShareAppMessage(() => brandShareMessage(shareTitle()))
-// #ifdef MP-WEIXIN
-onShareTimeline(() => brandShareTimeline(shareTitle()))
-// #endif
-
 </script>
 
 <style scoped>

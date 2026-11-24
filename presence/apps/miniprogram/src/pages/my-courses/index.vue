@@ -35,7 +35,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onShow, onHide, onUnload, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { onShow, onHide, onUnload } from '@dcloudio/uni-app'
 import { listMyOrders, cancelOrder, previewOrderRefund, type OrderItem } from '@/api/order'
 import { listMyWaitlist } from '@/api/waitlist'
 import { listMyReviews, submitReview } from '@/api/review'
@@ -48,7 +48,6 @@ import FloatingTabBar from '@/components/FloatingTabBar.vue'
 import PresenceIcon from '@/components/PresenceIcon.vue'
 import PageState from '@/components/PageState.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
-import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 import { orderStatusLabel } from '@fullyu/shared'
 
 const userStore = useUserStore()
@@ -274,12 +273,6 @@ onUnload(() => { leavePage(); requestId++ })
 function goDetail(id?: string) { if (id) uni.navigateTo({ url: `/pages/course-detail/index?id=${id}` }) }
 function goLogin() { uni.switchTab({ url: '/pages/profile/index' }) }
 function goHome() { uni.switchTab({ url: '/pages/index/index' }) }
-
-const shareTitle = () => tr('Full愈 · 在场｜一起留一点时间给自己', 'Full愈 · Presence | Make a little time for yourself')
-onShareAppMessage(() => brandShareMessage(shareTitle()))
-// #ifdef MP-WEIXIN
-onShareTimeline(() => brandShareTimeline(shareTitle()))
-// #endif
 </script>
 
 <style scoped>

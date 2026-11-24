@@ -197,7 +197,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onLoad, onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '../../stores/user'
 import { getCourseDetail, fetchSubscribeTemplates } from '@/api/course'
 import { getCourseWishSummary, addCourseWish, removeCourseWish } from '@/api/courseWish'
@@ -211,7 +211,7 @@ import PageState from '@/components/PageState.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
 import FloatingBack from '@/components/FloatingBack.vue'
 import ShareSheet from '@/components/ShareSheet.vue'
-import type { ShareTargetOption } from '@/utils/share'
+import { brandShareMessage, registerShareHandler, type ShareTargetOption } from '@/utils/share'
 import { tr, isEnglish } from '@/locale'
 import { courseTagLabel } from '@/utils/course-labels'
 import { coursePhaseLabel } from '@fullyu/shared'
@@ -581,19 +581,14 @@ onShow(() => {
   if (courseId.value && userStore.isLoggedIn) void loadMyWaitlist()
 })
 
-onShareAppMessage(() => ({
-  title: sharePayload.value?.title || course.value?.title || tr('Full愈 · 在场课程', 'Full愈 · Course'),
-  path: sharePayload.value?.path || `/pages/course-detail/index?id=${encodeURIComponent(courseId.value)}`,
-  imageUrl: sharePayload.value?.imageUrl,
-}))
-
-// #ifdef MP-WEIXIN
-onShareTimeline(() => ({
-  title: sharePayload.value?.title || course.value?.title || tr('Full愈 · 在场课程', 'Full愈 · Course'),
-  query: `id=${encodeURIComponent(courseId.value)}`,
-  imageUrl: sharePayload.value?.imageUrl,
-}))
-// #endif
+registerShareHandler((res: any) => {
+  if (res?.from !== 'button') return brandShareMessage()
+  return {
+    title: sharePayload.value?.title || course.value?.title || tr('Full愈 · 在场课程', 'Full愈 · Course'),
+    path: sharePayload.value?.path || `/pages/course-detail/index?id=${encodeURIComponent(courseId.value)}`,
+    imageUrl: sharePayload.value?.imageUrl,
+  }
+})
 function ensureLogin() {
   if (userStore.isLoggedIn) return true
   uni.showModal({

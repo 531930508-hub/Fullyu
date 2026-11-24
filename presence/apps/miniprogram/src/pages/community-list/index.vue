@@ -57,7 +57,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { onShow, onUnload, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { onShow, onUnload } from '@dcloudio/uni-app'
 import { fetchCommunities, fetchMine, type Community, type CommunitySort } from '@/api/skool'
 import { tr } from '@/locale'
 import { communityCategoryLabel, communityTagLabel } from '@/utils/community-labels'
@@ -67,7 +67,6 @@ import PresenceIcon from '@/components/PresenceIcon.vue'
 import BrandCover from '@/components/BrandCover.vue'
 import PageState from '@/components/PageState.vue'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
-import { brandShareMessage, brandShareTimeline } from '@/utils/share'
 
 const capsule = readCapsuleLayout()
 const statusBarHeight = capsule.statusBarHeight
@@ -151,11 +150,6 @@ onUnload(() => { requestId++ })
 function goDetail(id: string) { uni.navigateTo({ url: `/pages/community-detail/index?id=${encodeURIComponent(id)}` }) }
 function goMine() { uni.navigateTo({ url: '/pages/community-mine/index' }) }
 
-const shareTitle = () => tr('Full愈 · 在场社群｜与同路人相遇', 'Full愈 · Presence Communities | Meet your people')
-onShareAppMessage(() => brandShareMessage(shareTitle()))
-// #ifdef MP-WEIXIN
-onShareTimeline(() => brandShareTimeline(shareTitle()))
-// #endif
 </script>
 
 <style scoped>

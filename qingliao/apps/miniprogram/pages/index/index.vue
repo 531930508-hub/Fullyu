@@ -331,11 +331,8 @@
 	import customerNoticeApi from '../../api/customerNotice'
 	import { applyUnpaidCountdowns, buildUnpaidQueue, tickUnpaidCountdowns, payDeadlineMs, formatCountdownClock } from '../../utils/unpaidOrders'
 	import { storeName, storeShortAddress } from '../../utils/storeLocale'
-	import constant from '@/consts/constant'
 	import {
 		onLoad,
-		onShareAppMessage,
-		onShareTimeline,
 		onShow,
 		onPageScroll
 	} from "@dcloudio/uni-app"
@@ -1223,22 +1220,6 @@
 
 	}
 
-	// 分享配置
-	onShareAppMessage((res) => {
-		return {
-			title: t('邀请好友共同Full愈'),
-			path: '/pages/index/index',
-			imageUrl: constant.shareCardImage
-		}
-	})
-
-	onShareTimeline((res) => {
-		return {
-			imageUrl: constant.shareCardImage,
-			// query: (this.currentUser ? 'invitationCode=' + this.currentUser.invitationCode : ''),
-		}
-	});
-	
 	const fetchBannerList = async () => {
 		bannerList.value = await miniImageApi.bannerList()
 		bannerImageStr.value = bannerList.value[0].url

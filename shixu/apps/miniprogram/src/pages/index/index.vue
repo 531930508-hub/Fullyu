@@ -1372,7 +1372,7 @@
 
 <script setup>
 import { computed, getCurrentInstance, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
-import { onShareAppMessage, onShareTimeline, onShow } from '@dcloudio/uni-app';
+import { onShow } from '@dcloudio/uni-app';
 import { api } from '@/api';
 import {
   state,
@@ -3662,27 +3662,6 @@ async function onScene(payload) {
     notify(tt('桌签上的门店暂不可用，请手动选择', 'That store is unavailable. Please choose manually.'), 'danger');
   }
 }
-
-/* ------------------------------ 分享给朋友 ------------------------------ */
-
-const SHARE_TITLES = {
-  zh: 'Full愈·时叙｜一杯茶，回到此刻。',
-  en: 'Full愈 · Tea Hour — a moment, all yours.'
-};
-
-const shareTitle = () => SHARE_TITLES[locale.value] || SHARE_TITLES.zh;
-
-// 右上角「…」转发：卡片落到首页。个人中心另有海报入口，两者互不替代。
-onShareAppMessage(() => ({
-  title: shareTitle(),
-  path: '/pages/index/index',
-  imageUrl: '/static/tea.webp'
-}));
-
-onShareTimeline(() => ({
-  title: shareTitle(),
-  imageUrl: '/static/tea.webp'
-}));
 
 function openShare() {
   shareOpen.value = true;
