@@ -9,7 +9,8 @@
     "h5": "node scripts/h5.mjs build",
     "h5:check": "node scripts/h5.mjs check",
     "build:h5": "UNI_INPUT_DIR=\"$PWD\" UNI_OUTPUT_DIR=\"$PWD/unpackage/dist/build/h5\" uni build -p h5",
-    "build:mp": "UNI_INPUT_DIR=\"$PWD\" UNI_OUTPUT_DIR=\"$PWD/unpackage/dist/build/mp-weixin\" uni build -p mp-weixin",
+    "build:mp": "UNI_INPUT_DIR=\"$PWD\" UNI_OUTPUT_DIR=\"$PWD/unpackage/dist/build/mp-weixin\" uni build -p mp-weixin && node ../../../scripts/mp-release-gate.mjs qingliao",
+    "verify:mp-release": "node ../../../scripts/mp-release-gate.mjs qingliao",
     "h5:deploy": "node scripts/h5.mjs deploy"
   },
   "devDependencies": {

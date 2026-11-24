@@ -1,0 +1,40 @@
+name: 小程序环境门禁
+
+# 三个小程序的「运行时选环境 + 发布包门禁」回归；不需要安装依赖，秒级完成。
+# 背景：2026-11-24 在场用测试构建包发布，正式版整站读测试库。
+# 规则见根目录 AGENTS.md §2 第 4 条、scripts/mp-release-gate.mjs。
+
+on:
+  push:
+    paths:
+      - 'presence/apps/miniprogram/**'
+      - 'shixu/apps/miniprogram/**'
+      - 'qingliao/apps/miniprogram/**'
+      - 'scripts/mp-release-gate.mjs'
+      - '.github/workflows/mp-env-gate.yml'
+  pull_request:
+    paths:
+      - 'presence/apps/miniprogram/**'
+      - 'shixu/apps/miniprogram/**'
+      - 'qingliao/apps/miniprogram/**'
+      - 'scripts/mp-release-gate.mjs'
+
+concurrency:
+  group: mp-env-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: 三端环境切换回归
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 在场
+        run: node --test presence/apps/miniprogram/env-switch.test.cjs
+      - name: 时叙
+        run: node --test shixu/apps/miniprogram/env-switch.test.cjs
+      - name: 轻疗
+        run: node --test qingliao/apps/miniprogram/tests/envSwitch.test.mjs

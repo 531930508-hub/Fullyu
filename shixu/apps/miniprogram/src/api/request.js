@@ -6,7 +6,8 @@
 //   trial（体验版） / develop（预览码）  → 测试 test-teahour.fullyu.cn
 // 判定依据 wx.getAccountInfoSync().miniProgram.envVersion。
 // 公众平台需把两个域名都加进 request / uploadFile 合法域名（白名单不分版本，一份配置对所有版本生效）。
-// VITE_API_BASE 仍是最高优先级的显式注入（本地联调、临时指向某环境）。
+// ⚠️ 生产构建一律忽略 VITE_API_BASE：环境只由 envVersion 决定，测试包被误发布也不会指向测试库
+// （2026-11-24 在场事故）。只有 dev 构建允许注入，用于本地联调 / 局域网真机。
 // #ifdef MP-WEIXIN
 const PROD_API_BASE = 'https://teahour.fullyu.cn/api';
 const TEST_API_BASE = 'https://test-teahour.fullyu.cn/api';
@@ -19,17 +20,17 @@ const ENV_VERSION = (() => {
     return 'develop';
   }
 })();
-// 开发构建（开发者工具 dev）连本地；打包产物 release 走生产、trial/develop 走测试。
-const DEFAULT_BASE = !import.meta.env.PROD
-  ? DEV_API_BASE
-  : ENV_VERSION === 'release' ? PROD_API_BASE : TEST_API_BASE;
+const INJECTED_BASE = (import.meta.env && import.meta.env.VITE_API_BASE) || '';
+const RESOLVED_BASE = import.meta.env.PROD
+  ? ENV_VERSION === 'release' ? PROD_API_BASE : TEST_API_BASE
+  : INJECTED_BASE || DEV_API_BASE;
 // #endif
 // #ifndef MP-WEIXIN
-const DEFAULT_BASE = 'http://localhost:8787/api';
 const ENV_VERSION = 'h5';
+const RESOLVED_BASE = (import.meta.env && import.meta.env.VITE_API_BASE) || 'http://localhost:8787/api';
 // #endif
 export { ENV_VERSION };
-export const API_BASE = (import.meta.env && import.meta.env.VITE_API_BASE) || DEFAULT_BASE;
+export const API_BASE = RESOLVED_BASE;
 console.info(`[env] envVersion=${ENV_VERSION} api=${API_BASE}`);
 
 const TOKEN_KEY = 'teahour.customer.token';

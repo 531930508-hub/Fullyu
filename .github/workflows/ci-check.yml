@@ -92,6 +92,10 @@ jobs:
       - name: Build admin
         run: pnpm --filter @teahour/admin build
 
+      # 小程序发布包门禁：生产构建必须保留运行时 envVersion 选环境（2026-11-24 测试包误发布事故）
+      - name: Build miniprogram (release gate)
+        run: pnpm --filter @teahour/miniprogram build:mp-weixin
+
   crm:
     name: CRM 构建与测试
     needs: detect

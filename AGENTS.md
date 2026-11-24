@@ -20,11 +20,12 @@
 
 没有部署授权，就停在"发布完成 + 产物路径 + 回滚方式"。**禁止**把"构建通过"说成"已上线"。
 
-## 2. 三条硬规则
+## 2. 四条硬规则
 
 1. **`main` 是唯一可发布分支。** 系统边界靠目录和 CI 的 `paths`，不靠分支。发布单位是 `(项目, commit)`，每次生产发布打 `prod-<项目>-<时间>` tag。历史分支不得用于发布（布局对不上、落后 main、CI 不触发）。
 2. **服务器不是源码副本。** 改代码只能走"本地 → Git → 部署通道"，不许 SSH 上去改文件救火（`.env` 除外）。服务器上允许与仓库不同的只有：`.env*`、`node_modules`、上传/备份目录。其他任何差异按事故处理。
 3. **没有证据不算完成。** 收尾必须给出：目标环境、commit、CI/构建结论、探针前后值、回滚命令、遗留人工项。
+4. **小程序环境只由运行时 `envVersion` 决定，生产包禁止被编译期注入改写。** 三个小程序（在场 `presence/apps/miniprogram`、时叙 `shixu/apps/miniprogram`、轻疗 `qingliao/apps/miniprogram`）必须保持：`release` → 生产域名，`trial/develop` → 测试域名；`import.meta.env.PROD` 构建一律忽略 `VITE_API_BASE`（只允许 dev 构建注入）。发布构建必须串 `scripts/mp-release-gate.mjs`（在场 `build:mp-weixin`、时叙 `build:mp-weixin`、轻疗 `build:mp`）；测试包禁止上传、提审、发布。改请求层必须同步跑各自的环境回归测试（`env-switch.test.cjs` / `envSwitch.test.mjs`）。2026-11-24 在场测试包被发布成正式版、线上读测试库，就是踩了这条。
 
 ## 3. 做什么之前先跑一遍
 
