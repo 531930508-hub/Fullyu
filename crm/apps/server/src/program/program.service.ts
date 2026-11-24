@@ -108,7 +108,7 @@ const cardBrief = (card: MemberBrandCard) => ({
 /**
  * 2026-11-08 会议落地的会员运营能力：
  * 订单上报（净消费/节省/得骰）、赠送会员码、提货券、意见反馈与会员故事、
- * 在场畅练卡附赠品牌会员、邀请好友、退款试算与后台协商退款。
+ * 在场邀请好友、退款试算与后台协商退款。
  */
 @Injectable()
 export class ProgramService {
@@ -1686,128 +1686,13 @@ export class ProgramService {
     };
   }
 
-  // ───────────────────────── 在场畅练卡附赠 ─────────────────────────
+  // ───────────────────────── 在场邀请好友 ─────────────────────────
 
   private requirePresence(ctx: BrandMemberContext) {
     if (ctx.business !== 'zc') {
       throw new ApiError(403, '该接口仅供在场调用', { code: 'BUSINESS_MISMATCH' });
     }
   }
-
-  /** 畅练卡有效期内附赠同等有效期的品牌会员；畅练卡续期时以同一 passRef 重新上报。 */
-  async bundlePass(body: unknown, ctx: BrandMemberContext) {
-    this.requirePresence(ctx);
-    const input = obj(body);
-    const member = await memberByLocal(this.prisma, ctx, input.localUserId);
-    const passRef = orderRefOf(input.passRef);
-    const validFrom = dayOf(input.validFrom, 'validFrom');
-    const validUntil = dayOf(input.validUntil, 'validUntil');
-    if (validUntil < validFrom) throw badRequest('validUntil 不能早于 validFrom');
-    const days = Math.round((validUntil.getTime() - validFrom.getTime()) / DAY_MS) + 1;
-    if (days > 800) throw badRequest('畅练卡有效期过长');
-    const orderRef = `zc-pass:${passRef}`;
-    const now = new Date();
-    return this.prisma.$transaction(async (tx) => {
-      const prior = await tx.memberBrandCard.findUnique({
-        where: { soldBy_orderRef: { soldBy: 'zc', orderRef } }
-      });
-      if (prior && prior.memberId !== member.id) {
-        throw conflict('该畅练卡已绑定其他会员', { code: 'IDEMPOTENCY_CONFLICT' });
-      }
-      const state = validFrom > shanghaiDayStart(now) ? 'PENDING' : 'ACTIVE';
-      if (
-        prior &&
-        prior.state !== 'REFUNDED' &&
-        prior.validFrom.getTime() === validFrom.getTime() &&
-        prior.validUntil.getTime() === validUntil.getTime()
-      ) {
-        return { card: cardBrief(prior), replayed: true };
-      }
-      const template = await this.annualTemplate(tx);
-      const data = {
-        validFrom,
-        validUntil,
-        validDays: days,
-        state,
-        refundType: null,
-        refundCents: null,
-        refundedAt: null,
-        refundReason: null
-      };
-      const card = prior
-        ? await tx.memberBrandCard.update({ where: { id: prior.id }, data })
-        : await tx.memberBrandCard.create({
-            data: {
-              id: newId('MBC'),
-              memberId: member.id,
-              productCode: 'FY_BUNDLE',
-              version: template.version,
-              productName: '在场畅练卡 · 免费赠送品牌大会员',
-              priceCents: 0,
-              benefitsJson: template.benefitsJson,
-              pointsSpendJson: template.pointsSpendJson,
-              perksJson: template.perksJson,
-              gameEnabled: template.gameEnabled,
-              soldBy: 'zc',
-              soldByName: businessName('zc'),
-              orderRef,
-              paidCents: 0,
-              paidAt: now,
-              source: 'BUNDLE',
-              ...data
-            }
-          });
-      await audit(tx, {
-        actor: extActor(ctx),
-        action: prior ? '更新畅练卡附赠会员' : '畅练卡免费赠送品牌大会员',
-        target: member.memberNo,
-        detail: `${passRef} · ${formatDate(validFrom)} → ${formatDate(validUntil)}`
-      });
-      await emitCardEvent(tx, 'brand_card.issued', card, member.memberNo, { soldBy: 'presence' });
-      return { card: cardBrief(card), replayed: false };
-    });
-  }
-
-  async revokeBundle(body: unknown, ctx: BrandMemberContext) {
-    this.requirePresence(ctx);
-    const input = obj(body);
-    const member = await memberByLocal(this.prisma, ctx, input.localUserId);
-    const passRef = orderRefOf(input.passRef);
-    const reason = optText(input.reason, 200) || '畅练卡退卡';
-    return this.prisma.$transaction(async (tx) => {
-      const card = await tx.memberBrandCard.findUnique({
-        where: { soldBy_orderRef: { soldBy: 'zc', orderRef: `zc-pass:${passRef}` } }
-      });
-      if (!card || card.memberId !== member.id) {
-        throw new ApiError(404, '未找到该畅练卡附赠的会员资格', { code: 'CARD_NOT_FOUND' });
-      }
-      if (card.state === 'REFUNDED') return { card: cardBrief(card), replayed: true };
-      const updated = await tx.memberBrandCard.update({
-        where: { id: card.id },
-        data: {
-          state: 'REFUNDED',
-          refundType: 'BUNDLE_REVOKED',
-          refundCents: 0,
-          refundedAt: new Date(),
-          refundReason: reason
-        }
-      });
-      await audit(tx, {
-        actor: extActor(ctx),
-        action: '撤销畅练卡附赠会员',
-        target: member.memberNo,
-        detail: `${passRef} · ${reason}`
-      });
-      await emitCardEvent(tx, 'brand_card.refunded', updated, member.memberNo, {
-        refundType: 'BUNDLE_REVOKED',
-        refundCents: 0,
-        soldBy: 'presence'
-      });
-      return { card: cardBrief(updated), replayed: false };
-    });
-  }
-
-  // ───────────────────────── 在场邀请好友 ─────────────────────────
 
   private async inviteQuota(memberId: string, now: Date) {
     const card = await cardActiveAt(this.prisma, memberId, now);

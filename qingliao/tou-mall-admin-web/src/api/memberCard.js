@@ -42,5 +42,9 @@ export default {
   },
   unlockCustomer(customerId) {
     return request({ url: '/memberCard/customer/unlock', method: 'post', data: { customerId } })
+  },
+  // CRM 卡账本对账：dryRun=true 只返回差异（新增/更新/未变/跳过），不落库
+  syncCrmCards(dryRun) {
+    return request({ url: '/memberCard/syncCrmCards', method: 'post', data: { dryRun: !!dryRun } })
   }
 }

@@ -27,6 +27,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -34,6 +36,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -640,6 +643,24 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         }
     }
 
+    private String channelText(Integer channel) {
+        if (channel == null) {
+            return "";
+        }
+        switch (channel) {
+            case CustomerMemberCard.CHANNEL_MINI:
+                return "小程序支付";
+            case CustomerMemberCard.CHANNEL_ADMIN:
+                return "后台发卡";
+            case CustomerMemberCard.CHANNEL_REWARD:
+                return "券包赠送";
+            case CustomerMemberCard.CHANNEL_CRM:
+                return "CRM 同步";
+            default:
+                return "";
+        }
+    }
+
     private long remainingDays(LocalDateTime endTime, LocalDateTime now) {
         if (endTime == null) {
             return 0;
@@ -763,6 +784,28 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         return BigDecimal.valueOf(((Number) cents).longValue()).movePointLeft(2).setScale(2, RoundingMode.HALF_UP);
     }
 
+    private void applyRefund(CustomerMemberCard card, BigDecimal amount, LocalDateTime at, String reason) {
+        card.setRefundAmount(amount);
+        card.setRefundTime(at);
+        card.setRefundReason(reason);
+    }
+
+    private boolean equalsMoney(BigDecimal left, BigDecimal right) {
+        return left == null ? right == null : left.compareTo(right) == 0;
+    }
+
+    private LocalDateTime crmDateTime(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return OffsetDateTime.parse(value.trim())
+                    .atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+        } catch (Exception e) {
+            return toDateTime(value, false);
+        }
+    }
+
     /**
      * 取年卡 CRM 报价（分→元）；CRM 未接入、超时或报价异常都返回 null，由调用方回落目录价。
      *
@@ -863,6 +906,222 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
         result.put("orders", orderMapper.selectList(lqw));
         result.put("customer", customerService.getById(card.getCustomerId()));
         return result;
+    }
+
+    /**
+     * CRM 卡账本一行 → 本地权益期 upsert（按 crmCardId 幂等，可重复执行）。
+     *
+     * <p>CRM 是会员卡的唯一真源：卡期、状态、金额一律以 CRM 下发为准，本端只补客户、支付单这类本地维度。
+     * 小程序支付的卡本地已有支付单对账，同步不覆盖金额与支付单号，只对齐卡期与状态；
+     * CRM 已终止（REFUNDED / REFUND_LOCKED）的卡直接对齐本地「已终止」，本地已终止的卡不会被复活。</p>
+     *
+     * @param apply false 只算差异不落库（后台「演练」与上线前核对）
+     * @return action = insert / update / unchanged / skip，附本地卡号与差异项
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> syncCrmCard(JsonNode row, boolean apply) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        String crmCardId = text(row, "cardId");
+        result.put("crmCardId", crmCardId == null ? "" : crmCardId);
+        result.put("action", "skip");
+        if (crmCardId == null || crmCardId.length() > 100) {
+            result.put("reason", "CRM cardId 缺失或超长");
+            return result;
+        }
+        Long customerId = parseLong(text(row, "localUserId"));
+        if (customerId == null) {
+            result.put("reason", "localUserId 不是本地客户 id");
+            return result;
+        }
+        result.put("customerId", customerId);
+        if (customerService.getById(customerId) == null) {
+            result.put("reason", "本地无此客户");
+            return result;
+        }
+        LocalDateTime start = toDateTime(text(row, "validFrom"), false);
+        LocalDateTime end = toDateTime(text(row, "validUntil"), true);
+        if (start == null || end == null || !end.isAfter(start)) {
+            result.put("reason", "validFrom / validUntil 缺失或顺序不对");
+            return result;
+        }
+        int validDays = row.path("validDays").asInt(0);
+        if (validDays < 1) {
+            validDays = (int) Math.max(1, ChronoUnit.DAYS.between(start.toLocalDate(), end.toLocalDate()) + 1);
+        }
+        String cardType = cardTypeOf(text(row, "productCode"));
+        MemberCardConfig config = getConfigByType(cardType);
+        BigDecimal amount = centsToYuan(row.path("paidCents").asInt(0));
+        JsonNode refund = row.path("refund");
+        BigDecimal refundAmount = refund.isObject() ? centsToYuan(refund.path("cents").asInt(0)) : null;
+        LocalDateTime refundTime = crmDateTime(text(refund, "at"));
+        String refundReason = text(refund, "reason");
+
+        CustomerMemberCard existing = getOne(new LambdaQueryWrapper<CustomerMemberCard>()
+                .eq(CustomerMemberCard::getCrmCardId, crmCardId)
+                .orderByAsc(CustomerMemberCard::getId)
+                .last("limit 1"), false);
+        int status = resolveSyncStatus(text(row, "state"), start, end, existing);
+
+        if (existing == null) {
+            result.put("action", "insert");
+            result.put("startTime", start.toString());
+            result.put("endTime", end.toString());
+            if (!apply) {
+                return result;
+            }
+            CustomerMemberCard card = createCard(customerId, config, start, validDays, amount,
+                    null, CustomerMemberCard.CHANNEL_CRM, countPeriods(customerId) + 1, null);
+            card.setEndTime(end);
+            card.setValidDays(validDays);
+            card.setCrmCardId(crmCardId);
+            card.setStatus(status);
+            applyRefund(card, refundAmount, refundTime, refundReason);
+            card.setRemark("CRM 同步：" + sourceText(text(row, "source")));
+            if (!save(card)) {
+                throw new BusinessException("会员权益保存失败");
+            }
+            result.put("localCardId", card.getId());
+            result.put("cardNo", card.getCardNo());
+            return result;
+        }
+
+        List<String> changes = new ArrayList<>();
+        if (!equalsTime(existing.getStartTime(), start)) {
+            changes.add("startTime");
+        }
+        if (!equalsTime(existing.getEndTime(), end)) {
+            changes.add("endTime");
+        }
+        if (!Integer.valueOf(validDays).equals(existing.getValidDays())) {
+            changes.add("validDays");
+        }
+        if (!cardType.equals(normalizeType(existing.getCardType()))) {
+            changes.add("cardType");
+        }
+        if (existing.getStatus() == null || existing.getStatus() != status) {
+            changes.add("status");
+        }
+        boolean crmOwned = Integer.valueOf(CustomerMemberCard.CHANNEL_CRM).equals(existing.getChannel());
+        if (crmOwned && !equalsMoney(existing.getAmount(), amount)) {
+            changes.add("amount");
+        }
+        boolean hasRefund = refundAmount != null || refundTime != null || refundReason != null;
+        if (hasRefund && !equalsMoney(existing.getRefundAmount(), refundAmount)) {
+            changes.add("refundAmount");
+        }
+        if (hasRefund && !equalsTime(existing.getRefundTime(), refundTime)) {
+            changes.add("refundTime");
+        }
+        if (hasRefund && !java.util.Objects.equals(existing.getRefundReason(), refundReason)) {
+            changes.add("refundReason");
+        }
+        result.put("localCardId", existing.getId());
+        result.put("cardNo", existing.getCardNo());
+        result.put("startTime", start.toString());
+        result.put("endTime", end.toString());
+        if (changes.isEmpty()) {
+            result.put("action", "unchanged");
+            return result;
+        }
+        result.put("action", "update");
+        result.put("changes", changes);
+        if (!apply) {
+            return result;
+        }
+        existing.setStartTime(start);
+        existing.setEndTime(end);
+        existing.setValidDays(validDays);
+        existing.setCardType(cardType);
+        existing.setCardName(config.getCardName());
+        existing.setStatus(status);
+        if (crmOwned) {
+            existing.setAmount(amount);
+        }
+        if (hasRefund) {
+            applyRefund(existing, refundAmount, refundTime, refundReason);
+        }
+        if (!updateById(existing)) {
+            throw new BusinessException("会员权益更新失败");
+        }
+        return result;
+    }
+
+    /** 账本里的状态是 CRM 的库内态（过期不落库），本地按日期算，过期/生效口径与结算一致。 */
+    private int resolveSyncStatus(String crmState, LocalDateTime start, LocalDateTime end,
+                                  CustomerMemberCard existing) {
+        if ("REFUNDED".equals(crmState) || "REFUND_LOCKED".equals(crmState)) {
+            return CustomerMemberCard.STATUS_REFUNDED;
+        }
+        // 本地已终止的卡不因 CRM 仍是 ACTIVE 而复活（退款只走本端退款流程）
+        if (existing != null && Integer.valueOf(CustomerMemberCard.STATUS_REFUNDED).equals(existing.getStatus())) {
+            return CustomerMemberCard.STATUS_REFUNDED;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isBefore(start)) {
+            return CustomerMemberCard.STATUS_PENDING;
+        }
+        if (now.isAfter(end)) {
+            return CustomerMemberCard.STATUS_EXPIRED;
+        }
+        return CustomerMemberCard.STATUS_ACTIVE;
+    }
+
+    /** 账本 source → 备注里的开通途径，后台卡片列表一眼看出这张卡怎么来的。 */
+    private String sourceText(String source) {
+        if (source == null) {
+            return "账本同步";
+        }
+        switch (source) {
+            case "PAID":
+                return "付费开通";
+            case "GIFT":
+                return "会员码赠送";
+            case "MANUAL":
+                return "后台发卡";
+            case "BUNDLE":
+                return "附赠";
+            default:
+                return source;
+        }
+    }
+
+    /** 卡类型由 CRM 产品编码决定（在售只有 FY_MONTH / FY_ANNUAL，未知编码按年卡对待）。 */
+    private String cardTypeOf(String productCode) {
+        String code = productCode == null ? "" : productCode.toUpperCase(Locale.ROOT);
+        return code.contains("MONTH") ? TYPE_MONTH : TYPE_YEAR;
+    }
+
+    private int countPeriods(Long customerId) {
+        return (int) count(new LambdaQueryWrapper<CustomerMemberCard>()
+                .eq(CustomerMemberCard::getCustomerId, customerId));
+    }
+
+    private boolean equalsTime(LocalDateTime left, LocalDateTime right) {
+        if (left == null || right == null) {
+            return left == right;
+        }
+        return ChronoUnit.SECONDS.between(left, right) == 0;
+    }
+
+    private String text(JsonNode node, String field) {
+        JsonNode value = node == null ? null : node.get(field);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        String text = value.asText("").trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private Long parseLong(String text) {
+        if (text == null) {
+            return null;
+        }
+        try {
+            long value = Long.parseLong(text);
+            return value > 0 ? value : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**
@@ -1191,6 +1450,7 @@ public class MemberCardService extends BaseService<CustomerMemberCardMapper, Cus
                 && (card.getStatus() == null || card.getStatus() != CustomerMemberCard.STATUS_REFUNDED);
         card.setCurrent(current);
         card.setStatusText(statusText(card.getStatus()));
+        card.setChannelText(channelText(card.getChannel()));
         if (card.getCardType() == null) {
             card.setCardType(TYPE_YEAR);
         }

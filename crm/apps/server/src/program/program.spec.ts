@@ -4,7 +4,7 @@ import { ACCOUNTS, createHarness, type Harness } from '../testing/harness';
 
 /**
  * 2026-11-08 会议落地：订单上报与节省账本、赠送会员码、提货券核销、
- * 意见反馈与会员故事、在场畅练卡附赠会员与邀请好友。
+ * 意见反馈与会员故事、在场邀请好友。
  */
 const SECRETS = {
   'ql-test': { business: 'ql', secret: 'ql-secret-for-jest-0001' },
@@ -25,7 +25,7 @@ const signFy = (secret: string, ts: string, nonce: string, method: string, url: 
     )
     .digest('hex');
 
-describe('会员运营：订单账本、会员码、提货券、反馈故事、在场附赠与邀请', () => {
+describe('会员运营：订单账本、会员码、提货券、反馈故事、在场邀请', () => {
   let h: Harness;
   let admin: string;
   let ops: string;
@@ -80,6 +80,40 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
       req = req.set('Content-Type', 'application/json').send(options.body as object);
     }
     return req;
+  };
+
+  /** 直接落一张在场会员的年卡：附赠接口已下线，测试不再绕 /v1/brand-member/bundle。 */
+  const grantPresenceCard = async (memberId: string, days = 90) => {
+    const product = await h.prisma.brandCardProduct.findUniqueOrThrow({ where: { code: 'FY_ANNUAL' } });
+    const version = await h.prisma.brandCardVersion.findUniqueOrThrow({
+      where: { productCode_version: { productCode: 'FY_ANNUAL', version: product.currentVersion! } }
+    });
+    const now = Date.now();
+    const start = new Date(`${new Date(now + 8 * 3600000).toISOString().slice(0, 10)}T00:00:00+08:00`);
+    return h.prisma.memberBrandCard.create({
+      data: {
+        id: `MBC-TEST-${memberId}-${++seq}`,
+        memberId,
+        productCode: 'FY_ANNUAL',
+        version: version.version,
+        productName: 'Full愈大会员',
+        priceCents: 0,
+        validDays: days,
+        validFrom: start,
+        validUntil: new Date(start.getTime() + (days - 1) * 86400000),
+        state: 'ACTIVE',
+        benefitsJson: version.benefitsJson,
+        pointsSpendJson: version.pointsSpendJson,
+        perksJson: version.perksJson,
+        gameEnabled: version.gameEnabled,
+        soldBy: 'zc',
+        soldByName: '在场',
+        orderRef: `zc-test:${memberId}:${now}-${seq}`,
+        paidCents: 0,
+        paidAt: new Date(),
+        source: 'MANUAL'
+      }
+    });
   };
 
   it('订单上报：记录净消费与节省，¥300 累计得骰；同单重放幂等、不同金额冲突；全额退款收回骰子', async () => {
@@ -588,14 +622,8 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     expect(board.body.notices).toHaveLength(5);
     expect(board.body.notices.some((row: { title: string }) => row.title === '已过期的公告')).toBe(false);
 
-    // 在场会员拿到畅练卡附赠会员后，也不应该看到只发给时叙会员的公告。
-    const today = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
-    const until = new Date(Date.now() + 8 * 3600000 + 90 * 86400000).toISOString().slice(0, 10);
-    const presenceBundle = await signed('post', '/v1/brand-member/bundle', {
-      key: 'zc-test',
-      body: { localUserId: 'local-m-zc-new', passRef: 'ZC-NOTICE-1', validFrom: today, validUntil: until }
-    });
-    expect(presenceBundle.status).toBe(200);
+    // 在场会员也不应该看到只发给时叙会员的公告。
+    await grantPresenceCard('m-zc-new');
     const other = await signed('get', '/v1/brand-member/me?localUserId=local-m-zc-new&business=presence', {
       key: 'zc-test'
     });
@@ -623,27 +651,8 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     expect(gone.body.notices.some((row: { title: string }) => row.title === '冬季会员礼遇')).toBe(false);
   });
 
-  it('在场：畅练卡附赠同有效期品牌会员；每季邀请名额按配置；好友领买一赠一券；退畅练卡撤销附赠', async () => {
-    const wrongBiz = await signed('post', '/v1/brand-member/bundle', {
-      body: { localUserId: 'local-m-lin', passRef: 'X1', validFrom: '2026-11-01', validUntil: '2026-12-01' }
-    });
-    expect(wrongBiz.status).toBe(403);
-
-    const today = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
-    const until = new Date(Date.now() + 8 * 3600000 + 90 * 86400000).toISOString().slice(0, 10);
-    const bundle = await signed('post', '/v1/brand-member/bundle', {
-      key: 'zc-test',
-      body: { localUserId: 'local-m-su', passRef: 'ZC-PASS-1', validFrom: today, validUntil: until }
-    });
-    expect(bundle.status).toBe(200);
-    expect(bundle.body.card).toMatchObject({ source: 'BUNDLE', state: 'ACTIVE', validUntil: until });
-
-    const bundleAgain = await signed('post', '/v1/brand-member/bundle', {
-      key: 'zc-test',
-      body: { localUserId: 'local-m-su', passRef: 'ZC-PASS-1', validFrom: today, validUntil: until }
-    });
-    expect(bundleAgain.status).toBe(200);
-    expect(await h.prisma.memberBrandCard.count({ where: { orderRef: 'zc-pass:ZC-PASS-1' } })).toBe(1);
+  it('在场：每季邀请名额按配置；好友领买一赠一券', async () => {
+    await grantPresenceCard('m-su');
 
     const quota = await signed('get', '/v1/brand-member/invites?localUserId=local-m-su', { key: 'zc-test' });
     expect(quota.status).toBe(200);
@@ -652,7 +661,7 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     expect(quota.body.periodKey).toMatch(/^\d{4}-Q[1-4]$/);
     expect(quota.body.monthKey).toBe(quota.body.periodKey);
 
-    // 附赠卡同样跟随年卡当前版本：后台把每季名额改成 2，旧卡下一刷即读到 2。
+    // 会员卡权益跟随年卡当前版本：后台把每季名额改成 2，已发的卡下一刷即读到 2。
     const annual = await h.prisma.brandCardProduct.findUniqueOrThrow({
       where: { code: 'FY_ANNUAL' }
     });
@@ -728,19 +737,6 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
       body: { localUserId: 'local-m-zc-new2', code: invite.body.code }
     });
     expect(taken.body.error).toBe('INVITE_USED');
-
-    const revoke = await signed('post', '/v1/brand-member/bundle/revoke', {
-      key: 'zc-test',
-      body: { localUserId: 'local-m-su', passRef: 'ZC-PASS-1', reason: '畅练卡退卡' }
-    });
-    expect(revoke.status).toBe(200);
-    const card = await h.prisma.memberBrandCard.findFirstOrThrow({ where: { orderRef: 'zc-pass:ZC-PASS-1' } });
-    expect(card.state).toBe('REFUNDED');
-    expect(card.refundType).toBe('BUNDLE_REVOKED');
-    const me = await signed('get', '/v1/brand-member/me?business=presence&localUserId=local-m-su', {
-      key: 'zc-test'
-    });
-    expect(me.body.card.state).toBe('NONE');
   });
 
   it('邀请额度：好友可反复领取不同人的邀请各得一张；同周期 slot 唯一键兜住并发超额', async () => {
@@ -754,16 +750,12 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
         data: { id: `id-${id}`, business: 'zc', localUserId: `local-${id}`, memberId: id }
       });
     };
-    for (const [id, pass, tail] of [
-      ['m-inv-a', 'ZC-INV-A', '901'],
-      ['m-inv-b', 'ZC-INV-B', '902']
+    for (const [id, tail] of [
+      ['m-inv-a', '901'],
+      ['m-inv-b', '902']
     ] as const) {
       await makeMember(id, tail);
-      const card = await signed('post', '/v1/brand-member/bundle', {
-        key: 'zc-test',
-        body: { localUserId: `local-${id}`, passRef: pass, validFrom: day(0), validUntil: day(90) }
-      });
-      expect(card.status).toBe(200);
+      await grantPresenceCard(id);
     }
     await makeMember('m-friend-loop', '903');
 
@@ -813,65 +805,4 @@ describe('会员运营：订单账本、会员码、提货券、反馈故事、�
     ).rejects.toThrow();
   });
 
-  it('畅练卡与已有品牌会员取较晚的到期日：已有更晚则保留，已有更早则接续到畅练卡截止日', async () => {
-    const day = (offset: number) =>
-      new Date(Date.now() + 8 * 3600000 + offset * 86400000).toISOString().slice(0, 10);
-    const makeMember = async (id: string, phoneTail: string) => {
-      await h.prisma.member.create({
-        data: { id, memberNo: `FY-TEST-${id}`, phone: `1370000${phoneTail}`, name: '顺延测试' }
-      });
-      await h.prisma.memberIdentity.create({
-        data: { id: `id-${id}`, business: 'zc', localUserId: `local-${id}`, memberId: id }
-      });
-    };
-    const paidCard = (id: string, from: string, until: string) =>
-      h.prisma.memberBrandCard.create({
-        data: {
-          id: `MBC-${id}-paid`,
-          memberId: id,
-          productCode: 'FY_ANNUAL',
-          version: 1,
-          productName: 'Full愈大会员',
-          priceCents: 36500,
-          validDays: 200,
-          validFrom: new Date(`${from}T00:00:00+08:00`),
-          validUntil: new Date(`${until}T00:00:00+08:00`),
-          state: 'ACTIVE',
-          soldBy: 'sx',
-          soldByName: '时叙',
-          orderRef: `paid-test:${id}`,
-          paidCents: 36500,
-          paidAt: new Date(),
-          source: 'PAID'
-        }
-      });
-
-    // 已有会员更晚：以原会员为准，畅练卡附赠卡不能把它顶掉。
-    await makeMember('m-later', '9901');
-    await paidCard('m-later', day(0), day(200));
-    const later = await signed('post', '/v1/brand-member/bundle', {
-      key: 'zc-test',
-      body: { localUserId: 'local-m-later', passRef: 'ZC-PASS-LATER', validFrom: day(0), validUntil: day(90) }
-    });
-    expect(later.status).toBe(200);
-    const laterMe = await signed('get', '/v1/brand-member/me?business=presence&localUserId=local-m-later', {
-      key: 'zc-test'
-    });
-    expect(laterMe.body.card.source).toBe('PAID');
-    expect(laterMe.body.card.validUntil).toBe(day(200));
-
-    // 已有会员更早：品牌会员有效期接续到畅练卡截止日。
-    await makeMember('m-earlier', '9902');
-    await paidCard('m-earlier', day(0), day(30));
-    const earlier = await signed('post', '/v1/brand-member/bundle', {
-      key: 'zc-test',
-      body: { localUserId: 'local-m-earlier', passRef: 'ZC-PASS-EARLIER', validFrom: day(0), validUntil: day(120) }
-    });
-    expect(earlier.status).toBe(200);
-    const earlierMe = await signed('get', '/v1/brand-member/me?business=presence&localUserId=local-m-earlier', {
-      key: 'zc-test'
-    });
-    expect(earlierMe.body.card.source).toBe('BUNDLE');
-    expect(earlierMe.body.card.validUntil).toBe(day(120));
-  });
 });

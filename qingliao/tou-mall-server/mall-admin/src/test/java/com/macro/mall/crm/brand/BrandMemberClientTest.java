@@ -345,4 +345,34 @@ class BrandMemberClientTest {
         assertTrue(conflict.getMessage().contains("刷新"));
         assertFalse(conflict.getMessage().contains("mismatch"));
     }
+
+    @Test
+    void cardsPagesByUpdatedAtWithEncodedCursor() {
+        nextBody = "{\"business\":\"retreat\",\"cards\":[{\"cardId\":\"BC-1\",\"localUserId\":\"42\","
+                + "\"productCode\":\"FY_ANNUAL\",\"state\":\"ACTIVE\",\"validFrom\":\"2026-11-01\","
+                + "\"validUntil\":\"2027-10-31\",\"validDays\":365,\"paidCents\":29900,"
+                + "\"updatedAt\":\"2026-11-20T10:00:00+08:00\",\"orderRef\":\"QL-1001\"}],"
+                + "\"hasMore\":true,\"nextCursor\":\"2026-11-20T10:00:00+08:00#BC-1\"}";
+        BrandMemberClient client = new BrandMemberClient(properties());
+
+        JsonNode first = client.cards(null, null, 200);
+        assertEquals("BC-1", first.path("cards").get(0).path("cardId").asText());
+        assertEquals("/api/v1/brand-member/cards?business=retreat&limit=200", captured.get(0).path);
+        assertEquals("GET", captured.get(0).method);
+
+        client.cards("2026-11-22T10:00:00Z", "2026-11-20T10:00:00+08:00#BC-1", 50);
+        assertEquals("/api/v1/brand-member/cards?business=retreat&limit=50"
+                        + "&since=2026-11-22T10%3A00%3A00Z"
+                        + "&cursor=2026-11-20T10%3A00%3A00%2B08%3A00%23BC-1",
+                captured.get(1).path);
+    }
+
+    @Test
+    void cardsWithoutArrayIsUnavailable() {
+        nextBody = "{\"business\":\"retreat\"}";
+        BrandMemberClient client = new BrandMemberClient(properties());
+        BrandMemberException error = assertThrows(BrandMemberException.class,
+                () -> client.cards(null, null, 200));
+        assertEquals(BrandMemberException.UNAVAILABLE, error.getCode());
+    }
 }

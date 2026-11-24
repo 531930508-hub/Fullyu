@@ -45,6 +45,16 @@ const PRODUCT_CODE = /^FY_[A-Z0-9_]{2,30}$/;
 const ORDER_REF = /^[A-Za-z0-9._:-]{1,80}$/;
 
 export type MeQuery = { business?: string; localUserId?: string };
+/**
+ * 卡账本下发（业务端对账）查询参数。
+ * cursor 与 since 同给时以 cursor 为准：cursor 已经隐含了上次的最大 updatedAt。
+ */
+export type CardsQuery = {
+  business?: string;
+  since?: string;
+  cursor?: string;
+  limit?: number | string;
+};
 export type ProfileInput = {
   business?: string;
   localUserId?: string;
@@ -69,6 +79,14 @@ export type RefundInput = {
 export type TicketInput = { business?: string; localUserId?: string };
 
 type BenefitRow = { business: string; title: string; desc: string };
+
+/** 卡账本下发的一行：卡 + 本业务下的 localUserId，避免消费端再回查身份表。 */
+type CardWithIdentity = MemberBrandCard & {
+  member: { memberNo: string; identities: Array<{ localUserId: string }> };
+};
+
+const cursorOf = (card: MemberBrandCard): string =>
+  `${card.updatedAt.toISOString()}|${card.id}`;
 
 const shanghaiDayStart = (at: Date): Date => {
   const local = new Date(at.getTime() + TZ_MS);
@@ -297,6 +315,120 @@ export class BrandMemberService {
     };
     if (pendingCard) body.pendingCard = pendingCard;
     return body;
+  }
+
+  /**
+   * 卡账本下发：业务端把本地会员卡与 CRM 对账。
+   *
+   * - 只下发「在本业务有身份」的会员的卡，一端看不到另一端的会员；
+   * - 返回全部状态（含 REFUNDED / REFUND_LOCKED），落地与否由消费端决定；
+   * - state 是库内态，过期不落库，消费端按 validFrom/validUntil 自行判定是否生效；
+   * - 排序 updatedAt+id 升序 keyset 分页，翻页期间有卡更新不会重也不会漏。
+   */
+  async cards(query: CardsQuery, ctx: BrandMemberContext) {
+    const input = parseBody(query);
+    const business = this.businessOf(input.business, ctx);
+    const limit = this.pageLimit(input.limit);
+    const since = this.parseSince(input.since);
+    const cursor = this.parseCursor(input.cursor);
+
+    const rows = (await this.prisma.memberBrandCard.findMany({
+      where: {
+        member: { identities: { some: { business } } },
+        ...(since ? { updatedAt: { gte: since } } : {}),
+        ...(cursor
+          ? {
+              AND: [
+                {
+                  OR: [
+                    { updatedAt: { gt: cursor.at } },
+                    { updatedAt: cursor.at, id: { gt: cursor.id } }
+                  ]
+                }
+              ]
+            }
+          : {})
+      },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: limit + 1,
+      include: {
+        member: {
+          select: {
+            memberNo: true,
+            identities: { where: { business }, select: { localUserId: true } }
+          }
+        }
+      }
+    })) as CardWithIdentity[];
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page[page.length - 1];
+    return {
+      business: toExternalBusiness(business) || business,
+      cards: page.map((card) => this.syncCardView(card)),
+      nextCursor: hasMore && last ? cursorOf(last) : null,
+      updatedAt: formatIso(new Date())
+    };
+  }
+
+  private pageLimit(value: unknown): number {
+    const text = typeof value === 'number' ? String(value) : String(value ?? '').trim();
+    if (!text) return 200;
+    if (!/^\d{1,4}$/.test(text)) throw badRequest('limit 必须是 1-500 的整数');
+    const limit = Number(text);
+    if (limit < 1 || limit > 500) throw badRequest('limit 必须是 1-500 的整数');
+    return limit;
+  }
+
+  private parseSince(value: unknown): Date | null {
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text) return null;
+    const at = new Date(text);
+    if (Number.isNaN(at.getTime())) throw badRequest('since 不是合法时间');
+    return at;
+  }
+
+  private parseCursor(value: unknown): { at: Date; id: string } | null {
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text) return null;
+    const index = text.lastIndexOf('|');
+    const at = index > 0 ? new Date(text.slice(0, index)) : null;
+    const id = index > 0 ? text.slice(index + 1) : '';
+    if (!at || Number.isNaN(at.getTime()) || !/^[A-Za-z0-9_:-]{1,64}$/.test(id)) {
+      throw badRequest('cursor 格式应为 <updatedAt>|<cardId>');
+    }
+    return { at, id };
+  }
+
+  private syncCardView(card: CardWithIdentity) {
+    return {
+      cardId: card.id,
+      memberNo: card.member.memberNo,
+      localUserId: card.member.identities[0]?.localUserId ?? null,
+      productCode: card.productCode,
+      productName: card.productName,
+      source: card.source,
+      state: card.state,
+      validFrom: formatDate(card.validFrom),
+      validUntil: formatDate(card.validUntil),
+      validDays: card.validDays,
+      priceCents: card.priceCents,
+      paidCents: card.paidCents,
+      paidAt: formatIso(card.paidAt),
+      orderRef: card.orderRef,
+      soldBy: toExternalBusiness(card.soldBy) || card.soldBy,
+      refund:
+        card.refundType || card.refundedAt
+          ? {
+              type: card.refundType,
+              cents: card.refundCents ?? 0,
+              at: card.refundedAt ? formatIso(card.refundedAt) : null,
+              reason: card.refundReason
+            }
+          : null,
+      updatedAt: card.updatedAt.toISOString()
+    };
   }
 
   /**

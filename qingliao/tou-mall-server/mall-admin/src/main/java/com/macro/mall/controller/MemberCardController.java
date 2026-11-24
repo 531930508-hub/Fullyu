@@ -4,6 +4,7 @@ import com.macro.mall.bo.AdminUserDetails;
 import com.macro.mall.common.api.CommonResult;
 import com.macro.mall.common.exception.BusinessException;
 import com.macro.mall.config.ContextMixin;
+import com.macro.mall.crm.brand.BrandCardSync;
 import com.macro.mall.entity.MemberCardConfig;
 import com.macro.mall.service.BrandCardPaymentService;
 import com.macro.mall.service.MemberCardService;
@@ -33,6 +34,8 @@ public class MemberCardController implements ContextMixin {
     private MemberCardService service;
     @Autowired
     private BrandCardPaymentService brandCardPaymentService;
+    @Autowired
+    private BrandCardSync brandCardSync;
 
     @GetMapping("/config")
     @ApiOperation("会员卡配置与权益说明（无需登录）")
@@ -157,6 +160,20 @@ public class MemberCardController implements ContextMixin {
         }
         brandCardPaymentService.unlockCustomer(Long.valueOf(customerId.toString()));
         return CommonResult.success(null);
+    }
+
+    @PostMapping("/syncCrmCards")
+    @ApiOperation("后台：同步 CRM 卡账本（默认 dryRun，显式 dryRun=false 才落库）")
+    public CommonResult syncCrmCards(@RequestBody(required = false) Map<String, Object> params) {
+        Object dryRun = params == null ? null : params.get("dryRun");
+        String flag = dryRun == null ? "" : dryRun.toString().trim().toLowerCase(java.util.Locale.ROOT);
+        boolean apply = "false".equals(flag) || "0".equals(flag)
+                || "off".equals(flag) || "no".equals(flag);
+        try {
+            return CommonResult.success(brandCardSync.adminSync(!apply));
+        } catch (IllegalStateException e) {
+            throw new BusinessException(e.getMessage());
+        }
     }
 
     private Long currentAdminId() {

@@ -199,6 +199,29 @@ public class BrandMemberClient {
         return node;
     }
 
+    /**
+     * 卡账本增量下发：CRM 是会员卡的唯一真源，本端按 crmCardId 对账（小程序买的卡、后台发的卡、
+     * 券包兑换的卡都在这里，不区分来源）。按 updatedAt 游标翻页，可重复调用。
+     *
+     * @param since  ISO 时间（含毫秒与 Z）或 null 表示全量；生产按「上次成功同步时间 - 回看窗口」传
+     * @param cursor 上一页返回的 nextCursor，首页传 null
+     */
+    public JsonNode cards(String since, String cursor, int limit) {
+        StringBuilder path = new StringBuilder("/api/v1/brand-member/cards?business=").append(BUSINESS)
+                .append("&limit=").append(limit);
+        if (since != null && !since.trim().isEmpty()) {
+            path.append("&since=").append(encode(since.trim()));
+        }
+        if (cursor != null && !cursor.trim().isEmpty()) {
+            path.append("&cursor=").append(encode(cursor.trim()));
+        }
+        JsonNode node = call("GET", path.toString(), null, null);
+        if (node == null || !node.path("cards").isArray()) {
+            throw unavailable();
+        }
+        return node;
+    }
+
     /** 兑换赠送会员码；名额、截止、暂停与重复领取全部由 CRM 判定。 */
     public JsonNode claimGift(String localUserId, String code) {
         Map<String, Object> payload = new LinkedHashMap<>();
