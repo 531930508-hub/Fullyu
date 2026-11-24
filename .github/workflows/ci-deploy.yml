@@ -78,6 +78,13 @@ jobs:
       - name: Build H5
         run: pnpm --filter @fullyu/miniprogram build:h5
 
+      # 发布包门禁：小程序正式版必须能在运行时按 envVersion 选环境（2026-11-24 测试包被发布事故）
+      - name: Build miniprogram (release gate)
+        run: pnpm --filter @fullyu/miniprogram build:mp-weixin
+
+      - name: Miniprogram env-switch regression
+        run: node --test apps/miniprogram/env-switch.test.cjs
+
       - name: Type-check miniprogram
         run: pnpm --filter @fullyu/miniprogram exec vue-tsc --noEmit -p tsconfig.json
 

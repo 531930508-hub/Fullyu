@@ -15,8 +15,10 @@
 //   release（正式版 / 提审中的版本）  → 生产 presence.fullyu.cn
 //   trial（体验版） / develop（开发者工具·预览）→ 测试 test-presence.fullyu.cn
 // 判定依据 wx.getAccountInfoSync().miniProgram.envVersion。
-// VITE_API_BASE 仍是最高优先级的显式注入（本地联调、临时指向某环境），
-// 因此 pnpm build:mp-weixin 一份产物即可：选为体验版走测试，提交审核/发布走生产。
+// ⚠️ 正式版永远走生产：release 判定放在 VITE_API_BASE 注入之前，任何构建期注入都改不了它。
+// 2026-11-24 事故：QA 用 build:mp-weixin:test 打的包被发布成正式版，线上全部读测试库。
+// 因此 VITE_API_BASE 只对 trial / develop / H5 生效；发布包必须用 pnpm build:mp-weixin，
+// 构建后 scripts/verify-mp-release.mjs 会再校验一次，测试包无法通过。
 const PROD_API_BASE = 'https://presence.fullyu.cn/api/v1'
 const TEST_API_BASE = 'https://test-presence.fullyu.cn/api/v1'
 
@@ -33,6 +35,11 @@ export const ENV_VERSION: string = (() => {
 })()
 
 function resolveBaseUrl(): string {
+  // #ifdef MP
+  // 正式版（含提审版本）锁定生产：先于注入判断，测试包被误发布也不会把线上数据打回测试库
+  if (ENV_VERSION === 'release') return PROD_API_BASE
+  // #endif
+
   const injected = ((import.meta as any).env?.VITE_API_BASE as string | undefined) || ''
   if (injected) return injected
 
@@ -42,7 +49,8 @@ function resolveBaseUrl(): string {
   // #endif
 
   // #ifndef H5
-  return ENV_VERSION === 'release' ? PROD_API_BASE : TEST_API_BASE
+  // 到这里只剩体验版 / 开发者工具：release 已在函数开头返回生产
+  return TEST_API_BASE
   // #endif
 }
 
