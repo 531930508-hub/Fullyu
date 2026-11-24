@@ -1393,11 +1393,11 @@ public class IncentiveDataService {
                     + base.getMinutesToNextBand().stripTrailingZeros().toPlainString()
                     + " 分钟可进入下一档（" + priceText(next.getCoefficient()) + "）"
                     : "再累计 " + base.getMinutesToNextBand().stripTrailingZeros().toPlainString()
-                    + " 分钟，基础薪资单价进入 " + priceText(next.getCoefficient()));
+                    + " 分钟，基础服务费单价进入 " + priceText(next.getCoefficient()));
         } else {
             base.setNextBandHint(newPartner
                     ? "新人合作期单价 " + priceText(unitPrice) + "，暂不参与档位累加"
-                    : "已达最高时长档位，基础薪资单价 " + priceText(unitPrice));
+                    : "已达最高时长档位，基础服务费单价 " + priceText(unitPrice));
         }
         return base;
     }

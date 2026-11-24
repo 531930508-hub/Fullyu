@@ -185,6 +185,26 @@ class IncentiveExportTest {
         assertEquals(Long.valueOf(21), dashboard.getTherapists().get(0).getMassagistId());
     }
 
+    @Test void settlementDetailBandHintsUseBaseServiceFeeUnitPrice() {
+        IncentiveDashboard highest = service.dashboard("2026-11", null, 1, 1, 1);
+        assertEquals("已达最高时长档位，基础服务费单价 1.00 元/分钟",
+                highest.getTherapists().get(0).getBase().getNextBandHint());
+
+        IncentiveConfigService config = (IncentiveConfigService) ReflectionTestUtils.getField(service, "configService");
+        IncentiveConfigBundle bundle = new IncentiveConfigBundle();
+        IncentiveRule rule = new IncentiveRule();
+        com.macro.mall.incentive.model.CoefficientBand band = new com.macro.mall.incentive.model.CoefficientBand();
+        band.setMinMinutes(100);
+        band.setCoefficient(new java.math.BigDecimal("1.20"));
+        rule.setCoefficients(Collections.singletonList(band));
+        bundle.setRule(rule);
+        when(config.bundleForMonth(anyString())).thenReturn(bundle);
+
+        IncentiveDashboard next = service.dashboard("2026-11", null, 1, 1, 1);
+        assertEquals("再累计 100 分钟，基础服务费单价进入 1.20 元/分钟",
+                next.getTherapists().get(0).getBase().getNextBandHint());
+    }
+
     @Test void targetShopNamesAreLoadedInOneBatchNotPerShop() {
         ShopIncentiveTargetMapper targets = mock(ShopIncentiveTargetMapper.class);
         List<ShopIncentiveTarget> rows = new ArrayList<>();
