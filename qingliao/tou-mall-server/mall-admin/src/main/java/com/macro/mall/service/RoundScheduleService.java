@@ -272,7 +272,18 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
         });
         updateBatchById(list);
         // 取消/改期/换人：把人放回上钟前的位置，只回位置，不做别的变更
-        assignedDetailIds.forEach(detailId -> receptionQueueService.revert(queueDay, queueShopId, detailId, null));
+        // 流水里要能分辨是哪种操作引起的回位，复盘时不用再翻订单日志对时间
+        String revertReason;
+        if (RoundScheduleState.UPDATE_DATE.equals(roundScheduleState)) {
+            revertReason = "改期";
+        } else if (RoundScheduleState.CANCEL.equals(roundScheduleState)) {
+            revertReason = "取消";
+        } else if (RoundScheduleState.EXCHANGE.equals(roundScheduleState)) {
+            revertReason = "互换";
+        } else {
+            revertReason = "换人";
+        }
+        assignedDetailIds.forEach(detailId -> receptionQueueService.revert(queueDay, queueShopId, detailId, null, revertReason));
     }
 
     /**

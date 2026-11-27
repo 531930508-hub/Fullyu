@@ -398,12 +398,32 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             return;
         }
         synchronized (lockKey(day, shopId, kind)) {
-            if (detailId != null && assignedLogCount(day, shopId, detailId, kind) > 0) {
-                log.debug("轮牌：明细{}已记录过上钟，跳过", detailId);
+            if (detailId != null && alreadyAssigned(day, shopId, detailId, massagistId, kind)) {
+                log.debug("轮牌：明细{}已记录过{}上钟，跳过", detailId, massagistId);
                 return;
             }
             doAssign(day, shopId, massagistId, detailId, ReceptionQueueAction.ASSIGN, operator, kind);
         }
+    }
+
+    /**
+     * 这条明细是不是「已经记过这个人一次上钟、而且还没回位」——是才跳过，避免同一单重复把人推到队尾。
+     *
+     * <p>不能只看「这条明细有没有上钟日志」：改单换人会把 A 的旧明细行删掉重建，B 的新行<b>沿用同一个
+     * {@code detail_id}</b>，A 那条 ASSIGN 还在库里；若按明细一刀切跳过，就成了 A 回了原位、B 一步没动
+     * （还可能停在队首），换人后的顺序全错。所以判据是「最近一次上钟的人就是他，且这次上钟没有被
+     * REVERT 冲掉」。
+     */
+    boolean alreadyAssigned(String day, Long shopId, Long detailId, Long massagistId, int kind) {
+        ReceptionQueueLog latest = latestAssignLog(day, shopId, detailId);
+        if (latest == null || !massagistId.equals(latest.getMassagistId())) {
+            // 没上过钟，或最近一次上钟的是别人（换人）→ 这一轮该记给他
+            return false;
+        }
+        int assigns = assignedLogCount(day, shopId, detailId, kind);
+        int reverts = countLog(day, shopId, detailId, kind, ReceptionQueueAction.REVERT.getValue());
+        // 已经回位过（取消/改期/换人后再派）：不是重复上钟
+        return reverts < assigns;
     }
 
     /**
@@ -466,6 +486,14 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
      */
     @Transactional(rollbackFor = Exception.class)
     public void revert(String day, Long shopId, Long detailId, String operator) {
+        revert(day, shopId, detailId, operator, null);
+    }
+
+    /**
+     * @param reasonOverride 这次回位的原因（换人/改期/取消/互换），只用于流水文案；为 null 时按「取消/改期回位」记
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void revert(String day, Long shopId, Long detailId, String operator, String reasonOverride) {
         if (detailId == null || day == null || shopId == null) {
             return;
         }
@@ -492,7 +520,8 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             // 这次上钟之后他又接了别的单：位置以最新一次上钟为准，只把计数还回去、不回退位置。
             // 否则取消/改期来回几次，人会从队尾一路被拉回队头，整条顺序就乱了。
             boolean stillLatest = assignLog.getAfterSeq() == null || beforeSeq == nvl(assignLog.getAfterSeq());
-            String reason = "取消/改期回位";
+            String what = reasonOverride == null ? "取消/改期" : reasonOverride;
+            String reason = what + "回位";
             if (stillLatest) {
                 q.setSeq(assignLog.getBeforeSeq() == null ? beforeSeq : assignLog.getBeforeSeq());
                 if (assignLog.getBeforeReceiptNo() != null) {
@@ -500,7 +529,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                 }
                 // 值班状态不回填：值班只由人手动点，撤销上钟不该顺手把人挪出/挪进值班区
             } else {
-                reason = "取消/改期：之后已有新上钟记录，位置不回退";
+                reason = what + "：之后已有新上钟记录，位置不回退";
             }
             q.setAssignCount(Math.max(0, nvl(q.getAssignCount()) - 1));
             updateById(q);
