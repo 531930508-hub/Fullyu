@@ -2392,9 +2392,12 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
     /**
      * 构建订单详情
      *
-     * <p><b>接待单固定计入接待队轮次</b>（不提供开关，也不影响服务单轮次）：前台开接待单时不再让人选
-     * 「计不计入轮次」，系统生成接待单时也不传这个字段。唯一的例外是 {@code ReceptionScheduled}
-     * 每 15 分钟生成的那张系统占位接待——它显式传 false（没有真实客户，占了会把整队空推一轮）。</p>
+     * <p>接待单固定计入接待队轮次（不提供开关，也不影响服务单轮次）：前台开接待单时不再让人选
+     * 「计不计入轮次」。{@code ReceptionScheduled} 每 15 分钟生成的系统占位接待同样会推接待队
+     * （它是接待岗，本来就是一班），只是不挂排班行、不算一张「真接待」。</p>
+     *
+     * <p>真实接待单还要处理「谁在接待岗谁接客」：这个时段挂着占位接待的那位来接这张单，
+     * 占位单作废（不占人、不算工时），接待队里占位推出去的那一轮还给他再推一次，净效果是一轮。</p>
      *
      * @param orderDetailDto
      */
@@ -2404,9 +2407,21 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
         synchronized (key.intern()) {
             Long projectId = projectService.getReceptionProjectId();
             LocalDateTime startTime = orderDetailDto.getStartTime();
-            List<OrderDetail> detailList = buildReceptionDetailList(orderDetailDto.getShopId(), projectId, startTime,
-                    orderDetailDto.getDurationMinutes(),
-                    orderDetailDto.getMassagistIdList(), orderDetailDto.getOrderId(), orderDetailDto.getIsUpdateSort());
+            String day = DateUtil.toYYYYMMDD(startTime);
+            List<Long> massgistIdList = orderDetailDto.getMassagistIdList();
+            Integer durationMinutes = orderDetailDto.getDurationMinutes();
+            if (!Boolean.FALSE.equals(orderDetailDto.getIsUpdateSort()) && durationMinutes != null) {
+                // 顾客到店：把这一时段的占位接待收掉，人让给真实接待。前台没指定疗愈师时，谁在岗谁接客
+                Long dutyMassagistId = releaseReceptionPlaceholders(shopId, startTime,
+                        DateUtil.addTimeByMinutes(startTime, durationMinutes));
+                if (dutyMassagistId != null && CollectionUtils.isEmpty(massgistIdList)) {
+                    massgistIdList = new ArrayList<>();
+                    massgistIdList.add(dutyMassagistId);
+                }
+            }
+            List<OrderDetail> detailList = buildReceptionDetailList(shopId, projectId, startTime,
+                    durationMinutes,
+                    massgistIdList, orderDetailDto.getOrderId(), orderDetailDto.getIsUpdateSort());
             saveBatch(detailList);
             // 接待单也要占轮牌：挂排班行 + 把人排到队尾（口径与 updateMassagistSort 一致：只算计入轮次的明细）
             List<OrderDetail> assignedList = detailList.stream()
@@ -2415,10 +2430,78 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
                     .collect(Collectors.toList());
             if (!CollectionUtils.isEmpty(assignedList)) {
                 // 接待单推的是「接待单轮牌」那一队：服务单队的位置、结果编号不因为接待而变
-                roundScheduleService.updateByDetailList(assignedList, DateUtil.toYYYYMMDD(startTime), shopId, true,
+                roundScheduleService.updateByDetailList(assignedList, day, shopId, true,
                         ReceptionQueueService.KIND_RECEPTION);
             }
+            // 占位接待：只推接待队一轮，不挂排班行、不改上钟状态
+            detailList.stream()
+                    .filter(d -> !Boolean.TRUE.equals(d.getIsUpdateSort()))
+                    .filter(d -> d.getMassagistId() != null && d.getId() != null)
+                    .forEach(d -> roundScheduleService.advanceReceptionTurn(day, shopId, d.getMassagistId(), d.getId()));
         }
+    }
+
+    /**
+     * 把这单时段里重叠的系统占位接待收掉（顾客到店了，占位岗就变成真实接待）。
+     *
+     * <p>占位单作废的同时把它在接待队里推出去的那一轮还回去——新接待卡紧接着会再推一次，
+     * 净效果还是「这个人接了一轮」，不会因为到店反而多退一位。</p>
+     *
+     * @return 到店那一刻在接待岗的那位疗愈师；这段没有占位单时返回 null
+     */
+    private Long releaseReceptionPlaceholders(Long shopId, LocalDateTime startTime, LocalDateTime endTime) {
+        if (shopId == null || startTime == null || endTime == null) {
+            return null;
+        }
+        List<OrderDetail> placeholders = getBaseMapper().findOverlapPlaceholderReceptions(shopId, startTime, endTime);
+        if (CollectionUtils.isEmpty(placeholders)) {
+            return null;
+        }
+        // 到店那一刻正被占位块包住的那张说了算；跨了两块的（长时长接待）取最早开始的那张
+        OrderDetail duty = placeholders.stream()
+                .filter(p -> p.getStartTime() != null && p.getEndTime() != null)
+                .filter(p -> !p.getStartTime().isAfter(startTime) && p.getEndTime().isAfter(startTime))
+                .min(Comparator.comparing(OrderDetail::getStartTime))
+                .orElse(null);
+        if (duty == null) {
+            duty = placeholders.stream()
+                    .filter(p -> p.getStartTime() != null)
+                    .min(Comparator.comparing(OrderDetail::getStartTime))
+                    .orElse(null);
+        }
+        for (OrderDetail placeholder : placeholders) {
+            roundScheduleService.revertReceptionTurn(DateUtil.toYYYYMMDD(placeholder.getStartTime()),
+                    placeholder.getShopId(), placeholder.getId(), "占位接待转真实接待");
+            removeById(placeholder.getId());
+            cancelPlaceholderOrder(placeholder.getOrderId());
+        }
+        return duty == null ? null : duty.getMassagistId();
+    }
+
+    /** 占位单的明细被真实接待顶掉后只剩空壳：订单直接关掉，别在接待单列表里留一张没明细的单 */
+    private void cancelPlaceholderOrder(Long orderId) {
+        if (orderId == null) {
+            return;
+        }
+        Order order = orderService.getById(orderId);
+        if (order == null) {
+            return;
+        }
+        order.setState(OrderState.CANCELED.getValue());
+        order.setAppointmentState(AppointmentState.CANCELED.getValue());
+        order.setCancelReason("占位接待已转真实接待");
+        orderService.updateById(order);
+    }
+
+    /** 接待单改期/换人重建前，把旧明细在接待队里推出去的那一轮还回去（按明细幂等） */
+    public void releaseReceptionTurns(List<OrderDetail> details, String reason) {
+        if (CollectionUtils.isEmpty(details)) {
+            return;
+        }
+        details.stream()
+                .filter(d -> d.getId() != null && d.getShopId() != null && d.getStartTime() != null)
+                .forEach(d -> roundScheduleService.revertReceptionTurn(DateUtil.toYYYYMMDD(d.getStartTime()),
+                        d.getShopId(), d.getId(), reason));
     }
 
     public List<OrderDetail> buildReceptionDetailList(Long shopId, Long projectId, LocalDateTime startTime, Integer durationMinutes, List<Long> massgistIdList, Long orderId, Boolean isUpdateSort) {
@@ -2550,59 +2633,18 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
 
         List<Long> availableMassagistIdList = availableMassagistList.stream().map(MassagistSchedules::getMassagistId).collect(Collectors.toList());
 
-        //疗愈师接待情况
-        Map<Long, Integer> projectCountMap = detailList.stream().filter(s -> projectId.equals(s.getProjectId())).collect(Collectors.groupingBy(OrderDetail::getMassagistId, Collectors.collectingAndThen(Collectors.toList(), List::size)));
-
-        //定义可以接单的列表
-        List<Long> userJiedan=new ArrayList<>();
-        //定义不可以接单的列表
-        List<Long> userNotJiedan=new ArrayList<>();
         // 接待单按「接待单轮牌」的顺序取人：谁先轮到接待谁上，和服务单那一队互不影响；队列还没起来时退回班次顺序
         List<Long> receptionOrder = roundScheduleService.receptionOrder(shopId, date, ReceptionQueueService.KIND_RECEPTION);
         List<Long> schedulesOrder = CollectionUtils.isEmpty(receptionOrder)
                 ? massagistSchedulesService.getMassagistSchedulesList(date, shopId) : receptionOrder;
-        List<Long> sortedMassagistIdList = schedulesOrder;
-        sortedMassagistIdList.forEach(id -> {
-            if(availableMassagistIdList.contains(id)){
-                userJiedan.add(id);
-            }else {
-               /* if(!availableMassagistListNot.contains(id)){
-                    userNotJiedan.add(id);
-                }*/
-            }
-        });
-        //userJiedan和userNotJiedan 相加
-        userJiedan.addAll(userNotJiedan);
-        //availableMassagistIdList循环里面的数据
-        for (Long m : availableMassagistIdList) {
-            if(!userJiedan.contains(m)){
-                userJiedan.add(m);
-            }
-        }
-        if(userJiedan.size()==0){
+        // 队序优先，队里没有但今天在岗的（调店补位）接在队尾
+        List<Long> userJiedan = ReceptionQueueService.queueFirstOrder(schedulesOrder, availableMassagistIdList);
+        if(userJiedan.isEmpty()){
             throw new BusinessException("抱歉，疗愈师不满足人数要求!");
         }
-        //根据接待情况再调整一次排序
-        List<Long> finalSortedMassagistIdList = userJiedan;
-        final  Long shopIdFinal=shopId;
-        sortedMassagistIdList = userJiedan.stream()
-                .sorted((id1, id2) -> {
-                    // 获取两个疗愈师的接单数（默认0）
-                    int count1 = projectCountMap.getOrDefault(id1, 0);
-                    int count2 = projectCountMap.getOrDefault(id2, 0);
-                    //id1 获取此人是否全天上班，不是全天上班的话，需要获取上班时间前  最小接待轮次
-                  //  count1=count1+GetCountNumber(id1,startTime,shopIdFinal);
-                    //id2 获取此人是否全天上班，不是全天上班的话，需要获取上班时间前  最小接待轮次
-                  //  count2=count2+GetCountNumber(id2,startTime,shopIdFinal);
-                    // 接单数少的排前面（若需接单数多的排前面，此处用 count2 - count1 即可）
-                    if (count1 != count2) {
-                        return Integer.compare(count1, count2);
-                    } else {
-                        // 接单数相同时，保持原列表中的顺序（原排序作为第二顺位）
-                        return Integer.compare(finalSortedMassagistIdList.indexOf(id1), finalSortedMassagistIdList.indexOf(id2));
-                    }
-                })
-                .collect(Collectors.toList());
+        // 派单顺序 = 接待队队序（队里没有但今天在岗的补在队尾），不再按「这段窗口里接待单数量」二次排序：
+        // 那条老规则把刚下接待岗的人（窗口里已经数不到他的单了）又拉回队首，和轮牌顺序打架。均衡由队列本身保证
+        List<Long> sortedMassagistIdList = userJiedan;
 
         if (!CollectionUtils.isEmpty(massgistIdList)) {
             // 如果还不足够人数，从availableMassagistList补充
@@ -2651,8 +2693,8 @@ public class OrderDetailService extends BaseService<OrderDetailMapper, OrderDeta
             detail.setStartTime(startTime);
             detail.setEndTime(DateUtil.addTimeByMinutes(startTime, durationMinutes));
             detail.setOrderId(orderId);
-            // 接待单默认计入接待队轮次：调用方不传（老客户端/小程序）就按计入处理，
-            // 只有系统占位接待会显式传 false
+            // 老客户端/小程序不传就按「真接待单」处理；只有系统占位接待显式传 false（不算一张真接待，
+            // 但照样推接待队的一轮，见 createReceptionDetail）
             detail.setIsUpdateSort(!Boolean.FALSE.equals(isUpdateSort));
             orderDetailList.add(detail);
         }

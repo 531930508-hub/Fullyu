@@ -230,6 +230,34 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
     }
 
     /**
+     * 接待单（服务单也一样）的派单顺序：先按队列顺序取这一单时段有空的人，队里没有但今天在岗的
+     * （调店补位、还没进队的人）接在队尾。
+     *
+     * <p>除了队列顺序不再插别的规则。曾经接待单在这里还有一条「这一小段窗口里接待单最少的优先」，
+     * 它会把刚下接待岗的人（窗口里已经数不到他的单了）又拉回队首，队首又不动，结果接待单在固定
+     * 两个人之间来回。接待量的均衡由队列本身（谁上钟谁回队尾）保证，不需要再排一次。
+     * 改这里之前先看 {@code ReceptionQueueReceptionPickOrderTest}。</p>
+     */
+    static List<Long> queueFirstOrder(Collection<Long> queueOrder, Collection<Long> availableIds) {
+        List<Long> order = new ArrayList<>();
+        if (queueOrder != null) {
+            for (Long id : queueOrder) {
+                if (id != null && !order.contains(id) && availableIds != null && availableIds.contains(id)) {
+                    order.add(id);
+                }
+            }
+        }
+        if (availableIds != null) {
+            for (Long id : availableIds) {
+                if (id != null && !order.contains(id)) {
+                    order.add(id);
+                }
+            }
+        }
+        return order;
+    }
+
+    /**
      * 下一位该谁：按队序走一遍，跳过被排除的、不在班的、这一单的时段已有单的人。
      * 值班与否不作为派单条件。
      */
@@ -394,6 +422,15 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
 
     @Transactional(rollbackFor = Exception.class)
     public void assign(String day, Long shopId, Long massagistId, Long detailId, String operator, int kind) {
+        assign(day, shopId, massagistId, detailId, operator, kind, true);
+    }
+
+    /**
+     * @param closeIntent 这次上钟要不要算「值班意向已兑现」。占位接待（系统补的空岗）传 false：
+     *                    人只是挂着接待岗，没有真客户，不能把他排的抢单资格吃掉
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void assign(String day, Long shopId, Long massagistId, Long detailId, String operator, int kind, boolean closeIntent) {
         if (day == null || shopId == null || massagistId == null) {
             return;
         }
@@ -402,7 +439,7 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                 log.debug("轮牌：明细{}已记录过{}上钟，跳过", detailId, massagistId);
                 return;
             }
-            doAssign(day, shopId, massagistId, detailId, ReceptionQueueAction.ASSIGN, operator, kind);
+            doAssign(day, shopId, massagistId, detailId, ReceptionQueueAction.ASSIGN, operator, kind, closeIntent);
         }
     }
 
@@ -440,12 +477,12 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
             return;
         }
         synchronized (lockKey(day, shopId, kind)) {
-            doAssign(day, shopId, massagistId, detailId, ReceptionQueueAction.GRAB, operator, kind);
+            doAssign(day, shopId, massagistId, detailId, ReceptionQueueAction.GRAB, operator, kind, true);
         }
     }
 
     private void doAssign(String day, Long shopId, Long massagistId, Long detailId, ReceptionQueueAction action,
-                          String operator, int kind) {
+                          String operator, int kind, boolean closeIntent) {
         List<ReceptionQueue> all = rows(day, shopId, kind);
         if (all.isEmpty()) {
             ensureDay(day, shopId, Collections.singletonList(massagistId), kind);
@@ -475,8 +512,10 @@ public class ReceptionQueueService extends BaseService<ReceptionQueueMapper, Rec
                 detailId, beforeSeq, q.getSeq(), beforeReceipt, q.getReceiptNo(),
                 reason == null ? "" : " " + reason);
 
-        // 接到活的人，之前挂着的值班意向就算兑现了
-        issueService.closeIntent(parseDay(day), shopId, massagistId, operator);
+        // 接到活的人，之前挂着的值班意向就算兑现了（占位接待不算「接到活」，见 assign 的 closeIntent）
+        if (closeIntent) {
+            issueService.closeIntent(parseDay(day), shopId, massagistId, operator);
+        }
         settleRound(day, shopId, kind);
     }
 

@@ -50,6 +50,21 @@ public interface OrderDetailMapper extends BaseMapper<OrderDetail> {
                                                    @Param("startTime") LocalDateTime startTime,
                                                    @Param("endTime") LocalDateTime endTime);
 
+    /**
+     * 与 [startTime, endTime) 有交集的「系统占位接待」明细（就是 {@code ReceptionScheduled} 每 15 分钟补的
+     * 空岗块）。真实接待单落在同一时段时要把它们收掉，人让给真实接待。
+     *
+     * <p>只认备注标记：{@code is_update_sort = 0} 且订单备注是「系统占位接待」。刻意不带老单
+     * {@code code LIKE '%null%'} 那条——这条查询的结果会被删单，宁可漏认一张旧占位，也不误删历史真接待。</p>
+     */
+    @Select("SELECT d.* from s_order o JOIN oms_order_detail d on d.order_id = o.id " +
+            "where o.type = 2 and o.state in (0,1,2) and d.state in(0,1,2) and o.shop_id = #{shopId} " +
+            "and COALESCE(d.is_update_sort, 0) = 0 and COALESCE(o.comment, '') = '系统占位接待' " +
+            "and d.start_time < #{endTime} and d.end_time > #{startTime}")
+    List<OrderDetail> findOverlapPlaceholderReceptions(@Param("shopId") Long shopId,
+                                                       @Param("startTime") LocalDateTime startTime,
+                                                       @Param("endTime") LocalDateTime endTime);
+
     List<OrderDetail> listBySchedulingParam(SchedulingParam schedulingParam);
 
     @Select("SELECT d.* from s_order o JOIN  oms_order_detail d on d.order_id = o.id where o.type in (0,2) and o.state not in(0,3,4) and d.state in(0,1) and d.massagist_id is NOT null and d.end_time <= #{nowTime}")

@@ -226,6 +226,31 @@ public class RoundScheduleService extends BaseService<RoundScheduleMapper, Round
     }
 
     /**
+     * 占位接待（{@code ReceptionScheduled} 每 15 分钟补的空岗）也占接待队的一轮：只把人排到接待队队尾，
+     * 不挂排班行、不动上钟状态。
+     *
+     * <p>不推的话队首永远不动：空岗一结束队首又空着，下一张（空岗或真实接待）还是派给他，
+     * 接待单就固定在那两个人之间来回（莎莎→别人→莎莎），看着完全不像轮牌。</p>
+     */
+    public void advanceReceptionTurn(String day, Long shopId, Long massagistId, Long detailId) {
+        if (day == null || shopId == null || massagistId == null) {
+            return;
+        }
+        receptionQueueService.assign(day, shopId, massagistId, detailId, null, ReceptionQueueService.KIND_RECEPTION, false);
+    }
+
+    /**
+     * 明细在接待队里推出去的那一轮还回去：占位单被真实接待顶掉、接待单改期重建时用。
+     * 按明细幂等（推过才回，回过的跳过），没推过的不动。
+     */
+    public void revertReceptionTurn(String day, Long shopId, Long detailId, String operator) {
+        if (day == null || shopId == null || detailId == null) {
+            return;
+        }
+        receptionQueueService.revert(day, shopId, detailId, operator);
+    }
+
+    /**
      * 取消更新
      *
      * @param detailIdList

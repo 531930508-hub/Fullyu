@@ -1254,6 +1254,9 @@ public class OrderService extends BaseService<OrderMapper, Order> {
             List<OrderDetail> rebuildable = orderDetails.stream()
                     .filter(d -> !OrderDetailService.isServedDetail(d)).collect(Collectors.toList());
             if (!CollectionUtils.isEmpty(rebuildable)) {
+                // 重建前先把旧明细在接待队里推出去的那一轮还回去：不然同一张接待单改两次到店时间，
+                // 人就被多退两位，后面的人反而插到他前面
+                orderDetailService.releaseReceptionTurns(rebuildable, "改接待重建前回位");
                 orderDetailService.removeByIds(rebuildable.stream()
                         .map(OrderDetail::getId).collect(Collectors.toList()));
             }
